@@ -1,7 +1,7 @@
 {
   "name": "Fluttershy 🦋 Pink & Yellow",
-  "description": "A cozy Fluttershy-inspired combo of buttery yellow, soft mane pink and gentle teal accents with a clear Fluttershy collage chat background, softly dimmed for message readability. Adapted from the Red Cherries theme by ⁷𐌌❟❛❟𝐑𝐢𝐬𝐤.",
-  "version": "1.4",
+  "description": "A cozy Fluttershy-inspired combo of buttery yellow, soft mane pink and gentle teal accents with a clear Fluttershy collage background across Discord Home, Messages and chats, softly dimmed for readability. Adapted from the Red Cherries theme by ⁷𐌌❟❛❟𝐑𝐢𝐬𝐤.",
+  "version": "1.5",
   "authors": [
     {
       "name": "fluttershy_simper",
@@ -16,13 +16,13 @@
       "#F3B6CF33"
     ],
     "CHAT_BACKGROUND": [
-      "#000000"
+      "#00000059"
     ],
     "BACKGROUND_ACCENT": [
       "#392631"
     ],
     "BACKGROUND_FLOATING": [
-      "#000000"
+      "#000000B3"
     ],
     "BACKGROUND_MENTIONED": [
       "#242010"
@@ -46,28 +46,28 @@
       "#000000"
     ],
     "CHANNELTEXTAREA_BACKGROUND": [
-      "#1C1319"
+      "#1C1319CC"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND": [
-      "#000000"
+      "#00000080"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND_PRESSED": [
-      "#271A22"
+      "#271A22CC"
     ],
     "CHANNELS_DEFAULT": [
       "#C5ACB8"
     ],
     "BACKGROUND_MESSAGE_HOVER": [
-      "#171014"
+      "#17101499"
     ],
     "BACKGROUND_NESTED_FLOATING": [
-      "#000000"
+      "#000000A6"
     ],
     "BACKGROUND_MOBILE_PRIMARY": [
-      "#000000"
+      "#00000059"
     ],
     "BACKGROUND_MOBILE_SECONDARY": [
-      "#1C1319"
+      "#1C131980"
     ],
     "BACKGROUND_MODIFIER_ACCENT": [
       "#392631"
@@ -76,37 +76,37 @@
       "#422936"
     ],
     "BACKGROUND_MODIFIER_HOVER": [
-      "#22161D"
+      "#22161D99"
     ],
     "BACKGROUND_MODIFIER_SELECTED": [
-      "#33202B"
+      "#33202BCC"
     ],
     "BACKGROUND_PRIMARY": [
-      "#000000"
+      "#00000059"
     ],
     "BACKGROUND_SECONDARY": [
-      "#000000"
+      "#00000073"
     ],
     "BACKGROUND_SECONDARY_ALT": [
-      "#000000"
+      "#00000080"
     ],
     "BACKGROUND_TERTIARY": [
-      "#1C1319"
+      "#1C131980"
     ],
     "BG_BASE_PRIMARY": [
-      "#000000"
+      "#00000059"
     ],
     "BG_BASE_SECONDARY": [
-      "#000000"
+      "#00000066"
     ],
     "BG_BASE_TERTIARY": [
-      "#000000"
+      "#00000073"
     ],
     "BG_BACKDROP": [
       "#00000099"
     ],
     "HOME_BACKGROUND": [
-      "#000000"
+      "#0000004D"
     ],
     "BORDER_FAINT": [
       "#2B1D25"
@@ -118,16 +118,16 @@
       "#20161C"
     ],
     "CARD_SECONDARY_BG": [
-      "#1C1319"
+      "#1C1319B3"
     ],
     "CARD_PRIMARY_BG": [
-      "#1C1319"
+      "#1C1319B3"
     ],
     "CHANNEL_ICON": [
       "#F3B6CF"
     ],
     "EMBED_BACKGROUND": [
-      "#1C1319"
+      "#1C1319B3"
     ],
     "HEADER_PRIMARY": [
       "#FFF3AD"
@@ -148,7 +148,7 @@
       "#E9C9D7"
     ],
     "MENTION_BACKGROUND": [
-      "#302B14"
+      "#302B14CC"
     ],
     "MENTION_FOREGROUND": [
       "#FFF3AD"
@@ -172,7 +172,7 @@
       "#F5DBE6"
     ],
     "REDESIGN_CHAT_INPUT_BACKGROUND": [
-      "#1C1319"
+      "#1C1319CC"
     ],
     "SPOILER_HIDDEN_BACKGROUND": [
       "#503141"
@@ -190,7 +190,7 @@
       "#30202A"
     ],
     "POLLS_NORMAL_IMAGE_BACKGROUND": [
-      "#1C1319"
+      "#1C1319B3"
     ],
     "POLLS_VICTOR_FILL": [
       "#263D37"
@@ -214,10 +214,10 @@
       "#000000"
     ],
     "PANEL_BG": [
-      "#000000"
+      "#00000080"
     ],
     "BACKGROUND_BASE_LOWEST": [
-      "#000000"
+      "#00000059"
     ]
   },
   "rawColors": {
@@ -236,6 +236,7 @@
     "BLUE_630": "#15373D",
     "BLUE_660": "#112C32",
     "BLUE_700": "#0E2429",
+
     "BRAND_200": "#FFE3EE",
     "BRAND_260": "#FBD0E2",
     "BRAND_300": "#F7C4DA",
@@ -253,6 +254,7 @@
     "BRAND_660": "#431A2A",
     "BRAND_700": "#32141F",
     "BRAND_730": "#271019",
+
     "PLUM_1": "#FFF7E7",
     "PLUM_10": "#AC8B9A",
     "PLUM_11": "#976579",
@@ -271,6 +273,7 @@
     "PLUM_4": "#F3D6E2",
     "PLUM_6": "#D6BFC8",
     "PLUM_9": "#B99EAA",
+
     "PRIMARY_100": "#FFFFFF",
     "PRIMARY_200": "#FFF7E7",
     "PRIMARY_300": "#F5E3DB",
@@ -287,6 +290,7 @@
     "PRIMARY_700": "#100B0E",
     "PRIMARY_730": "#0D090B",
     "PRIMARY_800": "#090608",
+
     "GREEN_260": "#CAF5DF",
     "GREEN_300": "#ADEBCF",
     "GREEN_330": "#96E2C3",
@@ -302,9 +306,11 @@
     "GREEN_630": "#123A2D",
     "GREEN_660": "#0E3025",
     "GREEN_700": "#0B271F",
+
     "GUILD_BOOSTING_PINK": "#F3B6CF",
     "GUILD_BOOSTING_PURPLE": "#C9B4E6",
     "GUILD_BOOSTING_PURPLE_FOR_GRADIENTS": "#C9B4E6",
+
     "RED_260": "#FFD0D7",
     "RED_300": "#FFB9C6",
     "RED_330": "#FFA4B5",
@@ -320,7 +326,9 @@
     "RED_630": "#571B2B",
     "RED_660": "#451622",
     "RED_700": "#331019",
+
     "ROLE_DEFAULT": "#B7A1AB",
+
     "ORANGE_260": "#FFE3C1",
     "ORANGE_300": "#FFD6AA",
     "ORANGE_330": "#FFC992",
@@ -336,6 +344,7 @@
     "ORANGE_630": "#4D301B",
     "ORANGE_660": "#3E2616",
     "ORANGE_700": "#301D11",
+
     "YELLOW_260": "#FFF9D7",
     "YELLOW_300": "#FFF6C4",
     "YELLOW_330": "#FFF3AD",
@@ -351,6 +360,7 @@
     "YELLOW_630": "#4C401A",
     "YELLOW_660": "#3C3315",
     "YELLOW_700": "#2D260F",
+
     "WHITE_500": "#FFFFFF",
     "WHITE_630": "#FFF7E7"
   },
@@ -417,13 +427,13 @@
       "customMessageMentionLineColor": true
     },
     "backgroundImageUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-collage.jpg",
-    "backgroundAlpha": 0.45,
+    "backgroundAlpha": 0.65,
     "blur": 0
   },
   "spec": 2,
   "background": {
     "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-collage.jpg",
-    "alpha": 0.45,
+    "alpha": 0.65,
     "blur": 0
   }
 }
