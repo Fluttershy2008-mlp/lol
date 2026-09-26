@@ -1,7 +1,7 @@
 {
   "name": "Fluttershy 🦋 Pink & Yellow",
-  "description": "A cozy Fluttershy-inspired combo of buttery yellow, soft mane pink and gentle teal accents on pure black. Adapted from the Red Cherries theme by ⁷𐌌❟❛❟𝐑𝐢𝐬𝐤.",
-  "version": "1.2",
+  "description": "A cozy Fluttershy-inspired combo of buttery yellow, soft mane pink and gentle teal accents with a dimmed Fluttershy collage background. Adapted from the Red Cherries theme by ⁷𐌌❟❛❟𝐑𝐢𝐬𝐤.",
+  "version": "1.3",
   "authors": [
     {
       "name": "fluttershy_simper",
@@ -415,7 +415,15 @@
     "themes+": {
       "customIconOverlays": true,
       "customMessageMentionLineColor": true
-    }
+    },
+    "backgroundImageUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-collage.jpg",
+    "backgroundAlpha": 0.25,
+    "blur": 0.75
   },
-  "spec": 2
+  "spec": 2,
+  "background": {
+    "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-collage.jpg",
+    "alpha": 0.25,
+    "blur": 0.75
+  }
 }
