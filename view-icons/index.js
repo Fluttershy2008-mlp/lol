@@ -139,12 +139,12 @@
         if (!openInDiscord(fallbackWidth, fallbackHeight)) openFallback();
     }
 
-    function resolveProfile(user, guildId) {
-        if (!user?.id) return user;
-        let profile = null;
+    function resolveProfile(user, guildId, suppliedProfile) {
+        if (!user?.id) return suppliedProfile ?? user;
+        let profile = suppliedProfile ?? null;
 
         try {
-            if (guildId && UserProfileStore?.getGuildMemberProfile) {
+            if (!profile && guildId && UserProfileStore?.getGuildMemberProfile) {
                 profile = UserProfileStore.getGuildMemberProfile(user.id, guildId);
             }
         } catch {}
@@ -154,6 +154,54 @@
         } catch {}
 
         return profile ? { ...user, ...profile } : user;
+    }
+
+    function getUserBannerUrl(user, suppliedProfile, guildId) {
+        const profile = suppliedProfile ?? resolveProfile(user, guildId);
+
+        // Current Discord mobile exposes the actually displayed banner through
+        // DisplayProfile#getBannerURL. This also handles guild-specific banners.
+        try {
+            if (typeof suppliedProfile?.getBannerURL === "function") {
+                const url = suppliedProfile.getBannerURL({ canAnimate: true, size: 2048 });
+                if (url) return url;
+            }
+        } catch {}
+
+        try {
+            if (typeof profile?.getBannerURL === "function") {
+                const url = profile.getBannerURL({ canAnimate: true, size: 2048 });
+                if (url) return url;
+            }
+        } catch {}
+
+        const banner =
+            safeString(suppliedProfile?.banner)
+            ?? safeString(suppliedProfile?._guildMemberProfile?.banner)
+            ?? safeString(suppliedProfile?._userProfile?.banner)
+            ?? safeString(profile?.banner)
+            ?? safeString(user?.banner);
+
+        const userId =
+            safeString(suppliedProfile?.userId)
+            ?? safeString(profile?.userId)
+            ?? safeString(user?.id);
+
+        if (!banner || !userId) return null;
+
+        try {
+            const url = IconUtils?.getUserBannerURL?.({
+                id: userId,
+                banner,
+                canAnimate: true,
+                size: 2048,
+            });
+            if (url) return url;
+        } catch {}
+
+        // Final CDN fallback in case Discord renames the URL helper.
+        const extension = banner.startsWith("a_") ? "gif" : "webp";
+        return `https://cdn.discordapp.com/banners/${userId}/${banner}.${extension}?size=2048`;
     }
 
     function getDecorationData(user) {
@@ -185,9 +233,9 @@
             : null;
     }
 
-    function userTargets(user, guildId) {
+    function userTargets(user, guildId, suppliedProfile) {
         if (!user?.id || !IconUtils) return [];
-        const profile = resolveProfile(user, guildId);
+        const profile = resolveProfile(user, guildId, suppliedProfile);
         const targets = [];
 
         try {
@@ -196,7 +244,7 @@
         } catch {}
 
         try {
-            const banner = IconUtils.getUserBannerURL?.(profile, true);
+            const banner = getUserBannerUrl(user, suppliedProfile, guildId);
             if (banner) targets.push({ label: "Banner", url: banner, width: 1024, height: 400 });
         } catch {}
 
@@ -217,7 +265,7 @@
             } catch {}
         }
 
-        const decoration = getDecorationData(profile) ?? getDecorationData(user);
+        const decoration = getDecorationData(suppliedProfile) ?? getDecorationData(profile) ?? getDecorationData(user);
         const decorationUrl = getDecorationUrl(decoration);
         if (decorationUrl) {
             targets.push({
@@ -339,8 +387,18 @@
                             ?? safeString(props.channel?.guild_id)
                             ?? safeString(props.channel?.guildId);
 
+                        const displayProfile =
+                            props.displayProfile
+                            ?? props.profile
+                            ?? props.userProfile
+                            ?? null;
+
                         const items = getItemsGroup(rendered);
-                        addPlainItems(items, userTargets(user, guildId), () => LazyActionSheet?.hideActionSheet?.());
+                        addPlainItems(
+                            items,
+                            userTargets(user, guildId, displayProfile),
+                            () => LazyActionSheet?.hideActionSheet?.(),
+                        );
                     } catch (error) {
                         logError(`Failed to patch ${moduleName}`, error);
                     }
@@ -366,7 +424,13 @@
         const explicitUser = menu.user
             ?? (safeString(menu.userId) ? UserStore?.getUser?.(String(menu.userId)) : null)
             ?? (safeString(context.userId) ? UserStore?.getUser?.(String(context.userId)) : null);
-        if (explicitUser?.id) return userTargets(explicitUser, guildId);
+        if (explicitUser?.id) {
+            return userTargets(
+                explicitUser,
+                guildId,
+                menu.displayProfile ?? menu.profile ?? context.displayProfile ?? context.profile ?? null,
+            );
+        }
 
         const explicitChannel = menu.channel
             ?? (safeString(menu.channelId) ? ChannelStore?.getChannel?.(String(menu.channelId)) : null)
@@ -380,7 +444,13 @@
             } catch {}
             try {
                 const user = UserStore?.getUser?.(key);
-                if (user?.id) return userTargets(user, guildId);
+                if (user?.id) {
+                    return userTargets(
+                        user,
+                        guildId,
+                        menu.displayProfile ?? menu.profile ?? context.displayProfile ?? context.profile ?? null,
+                    );
+                }
             } catch {}
             try {
                 const channel = ChannelStore?.getChannel?.(key);
@@ -463,7 +533,9 @@
         if (/^UserProfile/i.test(key)) {
             const user = props?.user
                 ?? (safeString(props?.userId) ? UserStore?.getUser?.(String(props.userId)) : null);
-            return user?.id ? userTargets(user, guildId) : [];
+            return user?.id
+                ? userTargets(user, guildId, props?.displayProfile ?? props?.profile ?? props?.userProfile ?? null)
+                : [];
         }
 
         if (/Guild/i.test(key)) {
