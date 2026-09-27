@@ -10,7 +10,6 @@
     const { before, after } = vendetta.patcher;
     const { getAssetIDByName } = vendetta.ui.assets;
     const { showToast } = vendetta.ui.toasts;
-    const { showInputAlert } = vendetta.ui.alerts;
     const { findInReactTree } = vendetta.utils;
     const { Forms, General, ErrorBoundary } = vendetta.ui.components;
 
@@ -26,6 +25,15 @@
         ?? ReactNative.FlatList;
     const ActionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow;
     const Button = findByProps("TableRow", "Button")?.Button;
+
+    // Discord 346+ removed the legacy FluxContainer(Alert) component that
+    // vendetta.ui.alerts.showInputAlert still depends on. Use the current
+    // AlertModal stack directly so opening the rename prompt cannot crash.
+    const AlertManager = findByProps("openAlert", "dismissAlert");
+    const AlertComponents = findByProps("AlertModal", "AlertActions");
+    const AlertModal = AlertComponents?.AlertModal;
+    const AlertActions = AlertComponents?.AlertActions;
+    const AlertActionButton = AlertComponents?.AlertActionButton;
 
     const GuildStore = findByStoreName("GuildStore");
     const PermissionStore = findByStoreName("PermissionStore");
@@ -267,31 +275,92 @@
         }
     }
 
+    function RenamePrompt({ guild, type, item, alertKey }) {
+        const initialValue = normalizeName(item.name ?? item.alt, type);
+        const [value, setValue] = React.useState(initialValue);
+        const [error, setError] = React.useState("");
+        const dark = ReactNative.Appearance?.getColorScheme?.() !== "light";
+
+        const confirm = () => {
+            const name = String(value ?? "").trim();
+            if (!validateName(name, type)) {
+                setError(type === "Emoji"
+                    ? "Use 2–32 letters, numbers, or underscores."
+                    : "Use a name between 2 and 30 characters.");
+                return;
+            }
+
+            try { AlertManager?.dismissAlert?.(alertKey); } catch {}
+            void doClone(guild, type, item, name);
+        };
+
+        const input = React.createElement(ReactNative.View, {
+            style: { width: "100%", gap: 8 }
+        },
+            React.createElement(ReactNative.TextInput, {
+                value,
+                autoFocus: true,
+                selectTextOnFocus: true,
+                placeholder: type === "Emoji" ? "my_emoji" : "My sticker",
+                placeholderTextColor: dark ? "#949ba4" : "#5c5e66",
+                returnKeyType: "done",
+                onChangeText: text => {
+                    setValue(text);
+                    if (error) setError("");
+                },
+                onSubmitEditing: confirm,
+                style: {
+                    minHeight: 44,
+                    borderWidth: 1,
+                    borderColor: error ? "#da373c" : (dark ? "#4e5058" : "#c4c9ce"),
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    color: dark ? "#f2f3f5" : "#1e1f22",
+                    backgroundColor: dark ? "#1e1f22" : "#f2f3f5"
+                }
+            }),
+            error ? React.createElement(ReactNative.Text, {
+                style: { color: "#da373c", fontSize: 12 }
+            }, error) : null
+        );
+
+        const primary = React.createElement(AlertActionButton, {
+            text: `Clone to ${guild.name}`,
+            variant: "primary",
+            onPress: confirm
+        });
+        const cancel = React.createElement(AlertActionButton, {
+            text: "Cancel",
+            variant: "secondary",
+            onPress: () => {
+                try { AlertManager?.dismissAlert?.(alertKey); } catch {}
+            }
+        });
+
+        return React.createElement(AlertModal, {
+            title: `${type} name`,
+            content: input,
+            actions: AlertActions
+                ? React.createElement(AlertActions, null, primary, cancel)
+                : React.createElement(ReactNative.View, { style: { gap: 8 } }, primary, cancel)
+        });
+    }
+
     function askNameAndClone(guild, type, item) {
         const initialValue = normalizeName(item.name ?? item.alt, type);
-        if (!showInputAlert) {
-            doClone(guild, type, item, initialValue);
+
+        if (!AlertManager?.openAlert || !AlertModal || !AlertActionButton) {
+            showToast(`Rename prompt unavailable; cloning as ${initialValue}`, iconError);
+            void doClone(guild, type, item, initialValue);
             return;
         }
 
-        showInputAlert({
-            title: `${type} name`,
-            initialValue,
-            placeholder: type === "Emoji" ? "my_emoji" : "My sticker",
-            confirmText: `Clone to ${guild.name}`,
-            cancelText: "Cancel",
-            onConfirm: value => {
-                const name = String(value ?? "").trim();
-                if (!validateName(name, type)) {
-                    showToast(type === "Emoji"
-                        ? "Emoji names must be 2–32 characters using letters, numbers, or underscores"
-                        : "Sticker names must be 2–30 characters",
-                    iconError);
-                    return;
-                }
-                void doClone(guild, type, item, name);
-            },
-        });
+        const alertKey = `expression-cloner-${type.toLowerCase()}-${guild.id}-${item.id ?? "item"}`;
+        AlertManager.openAlert(
+            alertKey,
+            React.createElement(RenamePrompt, { guild, type, item, alertKey })
+        );
     }
 
     function GuildRow({ guild, type, item }) {
