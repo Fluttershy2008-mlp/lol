@@ -60,8 +60,6 @@
   const MAX_BYTES = 512 * 1024;
   const SLOT_LIMITS = { 0: 5, 1: 15, 2: 30, 3: 60 };
   const unpatches = [];
-  const hooked = new WeakSet();
-  let retry = null;
 
   const log = (...a) => {
     try { V.logger?.error?.("[SaveAsSticker]", ...a); }
@@ -458,75 +456,109 @@
     } catch (e) { log("inject failed", e); }
   }
 
-  function hook(mod) {
-    if (!mod || hooked.has(mod)) return false;
-    const d = mod.default;
+  function injectImageRow(tree, image) {
+    if (!tree || !image?.url || !Row) return false;
 
-    if (d && typeof d === "object" && typeof d.type === "function") {
-      hooked.add(mod);
-      unpatches.push(after("type", d, (args, rendered) => inject(args?.[0], rendered)));
+    const row = saveRow(image);
+    if (!row) return false;
+
+    const duplicate = children =>
+      Array.isArray(children)
+      && children.some(child =>
+        child?.key === "save-as-sticker-action"
+        || child?.props?.label === "Save as Sticker"
+      );
+
+    // Current Discord groups ActionSheetRow elements inside ActionSheetRowGroup.
+    // Prefer the group that already contains Save Image / Copy Image Link.
+    const groups = findInReactTree(
+      tree,
+      value => Array.isArray(value) && value?.[0]?.type?.name === "ActionSheetRowGroup"
+    );
+
+    if (Array.isArray(groups)) {
+      for (const group of groups) {
+        const children = group?.props?.children;
+        if (!Array.isArray(children)) continue;
+        if (duplicate(children)) return true;
+
+        const saveIndex = children.findIndex(child =>
+          /save image/i.test(String(child?.props?.label ?? ""))
+        );
+        const linkIndex = children.findIndex(child =>
+          /copy image link/i.test(String(child?.props?.label ?? ""))
+        );
+
+        if (saveIndex >= 0 || linkIndex >= 0) {
+          const index = saveIndex >= 0 ? saveIndex + 1 : linkIndex;
+          children.splice(Math.max(0, index), 0, row);
+          return true;
+        }
+      }
+    }
+
+    // Name-independent fallback used by several current Revenge plugins.
+    const actionRows = findInReactTree(
+      tree,
+      value =>
+        Array.isArray(value)
+        && value.some(child =>
+          child?.type === Row
+          || child?.type?.name === "ActionSheetRow"
+          || child?.type?.displayName === "ActionSheetRow"
+        )
+    );
+
+    if (Array.isArray(actionRows)) {
+      if (duplicate(actionRows)) return true;
+      const saveIndex = actionRows.findIndex(child =>
+        /save image/i.test(String(child?.props?.label ?? ""))
+      );
+      if (saveIndex >= 0) actionRows.splice(saveIndex + 1, 0, row);
+      else actionRows.push(row);
       return true;
     }
 
-    if (typeof d === "function") {
-      hooked.add(mod);
-      const unpatch = after("default", mod, (args, rendered) => {
-        try {
-          if (rendered?.type && typeof rendered.type === "function") {
-            let inner;
-            inner = after("type", rendered, (innerArgs, innerRendered) => {
-              inject(innerArgs?.[0] ?? args?.[0], innerRendered);
-              React.useEffect?.(() => () => { try { inner?.(); } catch {} }, []);
-            });
-            unpatches.push(inner);
-          } else inject(args?.[0], rendered);
-        } catch (e) { log("sheet patch failed", e); }
-      });
-      unpatches.push(unpatch);
-      return true;
-    }
     return false;
   }
 
-  function findDirect() {
-    try {
-      const registry = globalThis.modules ?? globalThis.window?.modules;
-      const req = globalThis.__r ?? globalThis.window?.__r;
-      if (!registry || !req) return null;
-      const entries = registry instanceof Map ? [...registry.entries()]
-        : typeof registry.entries === "function" ? [...registry.entries()] : Object.entries(registry);
-      for (const [id, factory] of entries) {
-        const path = factory?.__filePath ?? factory?.definition?.__filePath;
-        if (typeof path !== "string" || !/(^|\/)LongPressMessageActionSheet\.tsx?$/.test(path)) continue;
-        try {
-          const mod = req(Number(id));
-          if (mod?.default) return mod;
-        } catch {}
-      }
-    } catch (e) { log("direct lookup failed", e); }
-    return null;
-  }
-
   function patchMessageSheet() {
-    if (LazySheet?.openLazy) {
-      unpatches.push(before("openLazy", LazySheet, ([promise, name]) => {
-        const key = String(name ?? "");
-        if (key === "SaveAsStickerServerPicker" || !/MessageLongPressActionSheet/i.test(key)) return;
-        Promise.resolve(promise).then(hook).catch(e => log("lazy hook failed", e));
-      }));
-    }
+    if (!LazySheet?.openLazy || !findInReactTree || !Row) return;
 
-    const tryDirect = () => hook(findDirect());
-    if (!tryDirect()) {
-      let attempts = 0;
-      retry = setInterval(() => {
-        attempts++;
-        if (tryDirect() || attempts >= 30) {
-          clearInterval(retry);
-          retry = null;
-        }
-      }, 1000);
-    }
+    const unpatchOpen = before("openLazy", LazySheet, ([component, key, context]) => {
+      if (key !== "MessageLongPressActionSheet" || !component?.then) return;
+
+      // IMPORTANT: selectedMedia lives on openLazy's context object on current
+      // Discord mobile. It is not reliably passed to the rendered component,
+      // which is why the old build could load successfully but show no button.
+      const image = resolveImage(context);
+      if (!image?.url) return;
+
+      Promise.resolve(component).then(instance => {
+        if (!instance || typeof instance.default !== "function") return;
+
+        let unpatchRender;
+        unpatchRender = after("default", instance, (_args, tree) => {
+          try {
+            React.useEffect?.(() => () => {
+              try { unpatchRender?.(); } catch {}
+            }, []);
+          } catch {}
+
+          try {
+            if (!injectImageRow(tree, image)) {
+              log("Could not find an ActionSheetRow group for the selected image");
+            }
+          } catch (e) {
+            log("message action-sheet injection failed", e);
+          }
+
+          return tree;
+        });
+      }).catch(e => log("failed to load MessageLongPressActionSheet", e));
+    });
+
+    unpatches.push(unpatchOpen);
   }
 
   function onLoad() {
@@ -538,7 +570,6 @@
   }
 
   function onUnload() {
-    if (retry) { clearInterval(retry); retry = null; }
     for (const fn of unpatches.splice(0).reverse()) {
       try { fn?.(); } catch (e) { log("unpatch failed", e); }
     }
