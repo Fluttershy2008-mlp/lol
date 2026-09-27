@@ -25,3 +25,7 @@ Add this plugin URL in Revenge:
 - Uses Discord's own cropper and native `createGuildSticker` action.
 - Static image workflow: animated GIF/APNG input may be converted to a static PNG during cropping.
 - No external image-processing service is used.
+
+### 1.0.1
+
+Fixes current Discord Android message-menu injection by reading the selected image directly from the MessageLongPressActionSheet context and patching the lazy-loaded sheet per open.
