@@ -1,7 +1,7 @@
 {
   "name": "ExpressionCloner",
-  "description": "Clone custom emojis and supported stickers to servers you manage from Discord mobile action sheets.",
-  "version": "1.0.1",
+  "description": "Clone custom emojis and supported stickers from their action sheets to servers you manage.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_emoji_24px"
   },
-  "hash": "65e294b9c9daeaa3cafc280f1d7104f813c186f0c123e726c0f5dd230d88d32c"
+  "hash": "3ec34eae7b40d322a7cd51807313e262228fabaca9a65f346f90854494776f0b"
 }
