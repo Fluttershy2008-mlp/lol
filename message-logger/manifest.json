@@ -1,0 +1,1 @@
+{"name":"Message Logger","description":"Temporarily keeps cached deleted messages visible, including bulk deletions. Compatibility fix for Vendetta-based clients.","version":"1.1.0","authors":[{"name":"redstonekasi","id":"265064055490871297"}],"main":"index.js","vendetta":{"icon":"ic_audit_log_24px"},"hash":"47c2a78a2db1216483093774182a046cdb6665508f18ea5479ad5f6baa0ab1a9"}
