@@ -1,0 +1,15 @@
+{
+  "name": "SaveAsSticker",
+  "description": "Adds Save as Sticker to selected image message menus. Pick a server, name and crop the image, then upload it as a Discord sticker.",
+  "version": "1.0.1",
+  "authors": [
+    {
+      "name": "Fluttershy2008-mlp"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_sticker_24px"
+  },
+  "hash": "680027ee46b2ba5b34b2ff79a616f713a4755096b2430afb8e4b4a2d3a8496b0"
+}
