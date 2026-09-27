@@ -1,28 +1,34 @@
 # PingJumper for Revenge Mobile
 
-Quickly jump back to the latest message that directly @mentioned you.
+Navigate your Discord pings with floating arrow buttons directly in chat.
 
 ## Features
 
-- Long-press any chat message and tap **Jump to Last Ping**.
-- Searches the current server for your newest direct @mention and opens the exact message.
-- In DMs, searches the current conversation.
-- Falls back to already-loaded messages if Discord search is unavailable.
-- Also registers `/lastping` on Revenge/Vendetta builds that expose plugin command registration.
-- Ignores messages sent by your own account.
+- Adds two floating chat buttons:
+  - **↑ Older ping**
+  - **↓ Newer ping**
+- Uses Discord's Recent Mentions history.
+- Includes direct @mentions, role mentions, and everyone-style mentions when Discord returns them.
+- Automatically loads another page of older pings when needed.
+- Works across servers and supported DM/group-DM mentions.
+- Long-press a message and use **Jump to Latest Ping**.
+- /lastping still jumps straight to your newest ping on builds that expose plugin commands.
+- Shows your current position, such as Ping 3 of 25+ loaded.
 
 ## Install
 
 Paste this plugin folder URL into Revenge's plugin installer:
 
-`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/`
+https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/
 
 If your Revenge build asks for a manifest URL instead, use:
 
-`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/manifest.json`
+https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/manifest.json
 
-## Notes
+## Controls
 
-This version targets **direct user mentions** (`@you`). Role mentions and `@everyone` / `@here` are not included in the server search.
+Press **↑** repeatedly to move backward through older pings.
 
-Discord/Revenge internals can change between app versions, so the plugin includes fallbacks where practical.
+Press **↓** to move forward toward newer pings. If you are already on the newest ping, pressing it again can refresh the recent-mentions list for newly received pings.
+
+Discord/Revenge internals can change between app versions, so the plugin keeps the message-menu and command fallbacks if the floating ChatView overlay is unavailable.
