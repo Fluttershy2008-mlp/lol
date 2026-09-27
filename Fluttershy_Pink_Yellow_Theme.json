@@ -1,7 +1,7 @@
 {
   "name": "Fluttershy 🦋 Pastel Pink & Yellow",
-  "description": "Fluttershy light theme with buttery yellow backgrounds, soft pink panels, teal accents and dark readable text. Uses the supplied Fluttershy bridge picture as the chat wallpaper. Adapted from Kirby Beach by ⁷𝐌 𝐑𝐢𝐬𝐤.",
-  "version": "1.3",
+  "description": "Fluttershy light theme with buttery yellow backgrounds, soft pink panels, teal accents and black text. Uses the supplied Fluttershy bridge picture as the chat wallpaper. Adapted from Kirby Beach by ⁷𝐌 𝐑𝐢𝐬𝐤.",
+  "version": "1.4",
   "authors": [
     {
       "name": "fluttershy_simper",
@@ -85,9 +85,9 @@
       "#F8CCDF"
     ],
     "CHANNELS_DEFAULT": [
-      "#553746",
-      "#553746",
-      "#553746"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "BACKGROUND_MESSAGE_HOVER": [
       "#F3B6CF26",
@@ -210,24 +210,24 @@
       "#FFF8E8"
     ],
     "HEADER_PRIMARY": [
-      "#65344F",
-      "#65344F",
-      "#65344F"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "HEADER_SECONDARY": [
-      "#553746",
-      "#553746",
-      "#553746"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "INTERACTIVE_ACTIVE": [
-      "#813355",
-      "#813355",
-      "#813355"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "INTERACTIVE_HOVER": [
-      "#35212C",
-      "#35212C",
-      "#35212C"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "INTERACTIVE_MUTED": [
       "#A88395",
@@ -235,9 +235,9 @@
       "#A88395"
     ],
     "INTERACTIVE_NORMAL": [
-      "#78425C",
-      "#78425C",
-      "#78425C"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "MENTION_BACKGROUND": [
       "#F3B6CF80",
@@ -245,9 +245,9 @@
       "#F3B6CF80"
     ],
     "MENTION_FOREGROUND": [
-      "#643049",
-      "#643049",
-      "#643049"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "REDESIGN_BUTTON_SECONDARY_ALT_BACKGROUND": [
       "#F8D9E6",
@@ -270,14 +270,14 @@
       "#A83F61"
     ],
     "REDESIGN_CHANNEL_CATEGORY_NAME_TEXT": [
-      "#A84570",
-      "#A84570",
-      "#A84570"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "REDESIGN_CHANNEL_NAME_TEXT": [
-      "#65344F",
-      "#65344F",
-      "#65344F"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "REDESIGN_CHAT_INPUT_BACKGROUND": [
       "#FFE4EF",
@@ -325,29 +325,29 @@
       "#C8EAE3"
     ],
     "TEXT_LINK": [
-      "#174F50",
-      "#174F50",
-      "#174F50"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "TEXT_MUTED": [
-      "#553746",
-      "#553746",
-      "#553746"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "TEXT_NORMAL": [
-      "#35212C",
-      "#35212C",
-      "#35212C"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "TEXT_PRIMARY": [
-      "#35212C",
-      "#35212C",
-      "#35212C"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "TEXT_SECONDARY": [
-      "#553746",
-      "#553746",
-      "#553746"
+      "#000000",
+      "#000000",
+      "#000000"
     ],
     "TEXT_DANGER": [
       "#922746",
@@ -493,8 +493,8 @@
     "YELLOW_700": "#2C2713",
     "BRAND_200": "#FAE3EC",
     "BRAND_730": "#26121D",
-    "PLUM_1": "#35212C",
-    "PLUM_10": "#A88395",
+    "PLUM_1": "#000000",
+    "PLUM_10": "#000000",
     "PLUM_11": "#B64C76",
     "PLUM_13": "#E4AEC6",
     "PLUM_15": "#F3B6CF",
@@ -507,16 +507,16 @@
     "PLUM_22": "#FFE4EF",
     "PLUM_24": "#F8D9E6",
     "PLUM_25": "#F3D1DF",
-    "PLUM_3": "#553746",
-    "PLUM_4": "#65344F",
-    "PLUM_6": "#78425C",
-    "PLUM_9": "#876375",
+    "PLUM_3": "#000000",
+    "PLUM_4": "#000000",
+    "PLUM_6": "#000000",
+    "PLUM_9": "#000000",
     "PRIMARY_100": "#FFFFFF",
-    "PRIMARY_200": "#35212C",
-    "PRIMARY_300": "#65344F",
-    "PRIMARY_330": "#553746",
-    "PRIMARY_360": "#553746",
-    "PRIMARY_400": "#876375",
+    "PRIMARY_200": "#000000",
+    "PRIMARY_300": "#000000",
+    "PRIMARY_330": "#000000",
+    "PRIMARY_360": "#000000",
+    "PRIMARY_400": "#000000",
     "PRIMARY_460": "#C27D9A",
     "PRIMARY_500": "#E4AEC6",
     "PRIMARY_530": "#F8CCDF",
@@ -530,7 +530,7 @@
     "GUILD_BOOSTING_PINK": "#B64C76",
     "GUILD_BOOSTING_PURPLE": "#A667A1",
     "GUILD_BOOSTING_PURPLE_FOR_GRADIENTS": "#A667A1",
-    "ROLE_DEFAULT": "#553746",
+    "ROLE_DEFAULT": "#000000",
     "WHITE_500": "#FFFFFF",
     "WHITE_630": "#B64C76"
   },
