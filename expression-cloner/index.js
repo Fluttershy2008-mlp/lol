@@ -569,6 +569,187 @@
         return () => patches.splice(0).reverse().forEach(p => { try { p?.(); } catch {} });
     }
 
+
+    const hookedStickerDetailModules = new WeakSet();
+
+    function resolveStickerFromProps(props) {
+        let sticker = props?.sticker ?? props?.renderableSticker ?? props?.item;
+        if (!sticker?.id && sticker?.stickerId) {
+            sticker = {
+                ...sticker,
+                id: sticker.stickerId,
+                name: sticker.stickerName ?? sticker.name,
+                format_type: sticker.stickerType ?? sticker.format_type,
+            };
+        }
+
+        const id = sticker?.id ?? props?.stickerId ?? props?.renderableSticker?.id;
+        if (id && StickerStore?.getStickerById) {
+            try {
+                const full = StickerStore.getStickerById(String(id));
+                if (full?.id) sticker = { ...sticker, ...full };
+            } catch {}
+        }
+
+        return sticker?.id ? sticker : null;
+    }
+
+    function StickerCloneButton({ sticker }) {
+        if (!Button || !sticker?.id) return null;
+        const format = Number(sticker.format_type ?? sticker.formatType ?? sticker.format);
+        const unsupported = format === 3;
+
+        return React.createElement(Button, {
+            color: Button.Colors?.BRAND,
+            text: unsupported ? "Clone Sticker (Lottie unsupported)" : "Clone Sticker",
+            size: Button.Sizes?.SMALL,
+            disabled: unsupported,
+            onPress: () => {
+                LazyActionSheet?.hideActionSheet?.();
+                openServerPicker("Sticker", {
+                    ...sticker,
+                    name: normalizeName(sticker.name ?? "sticker", "Sticker"),
+                });
+            },
+            style: { marginTop: ReactNative.Platform.select({ android: 12, default: 16 }) },
+        });
+    }
+
+    function injectStickerDetailButton(props, result) {
+        try {
+            const sticker = resolveStickerFromProps(props);
+            if (!sticker?.id) return;
+
+            const key = `expression-cloner-sticker-${sticker.id}`;
+            const view = result?.props?.children;
+            const content = view?.props?.children;
+
+            if (content) {
+                const children = React.Children.toArray(content).slice();
+                if (children.some(child => child?.key === key)) return;
+                children.push(React.createElement(StickerCloneButton, { key, sticker }));
+                view.props.children = children;
+                return;
+            }
+
+            const isButton = child => child?.type?.name === "Button" || child?.type === Button;
+            const container = findInReactTree(result, node => Array.isArray(node) && node.some?.(isButton));
+            if (!container) return;
+            if (container.some(child => child?.key === key)) return;
+
+            const lastIndex = container.findLastIndex?.(isButton) ?? container.length - 1;
+            container.splice(lastIndex + 1, 0,
+                React.createElement(StickerCloneButton, { key, sticker })
+            );
+        } catch (e) {
+            logError("Sticker detail injection failed", e);
+        }
+    }
+
+    function hookStickerDetailModule(module) {
+        if (!module || hookedStickerDetailModules.has(module)) return false;
+        const sheetDefault = module.default;
+
+        if (sheetDefault && typeof sheetDefault === "object" && typeof sheetDefault.type === "function") {
+            hookedStickerDetailModules.add(module);
+            const unpatch = after("type", sheetDefault, (args, result) => {
+                injectStickerDetailButton(args?.[0], result);
+            });
+            unpatches.push(unpatch);
+            return true;
+        }
+
+        if (typeof sheetDefault === "function") {
+            hookedStickerDetailModules.add(module);
+            const unpatch = after("default", module, (args, result) => {
+                try {
+                    if (result?.type && typeof result.type === "function") {
+                        const innerUnpatch = after("type", result, (innerArgs, innerResult) => {
+                            injectStickerDetailButton(innerArgs?.[0] ?? args?.[0], innerResult);
+                        });
+                        unpatches.push(innerUnpatch);
+                    } else {
+                        injectStickerDetailButton(args?.[0], result);
+                    }
+                } catch (e) {
+                    logError("Sticker detail sheet patch failed", e);
+                }
+            });
+            unpatches.push(unpatch);
+            return true;
+        }
+
+        return false;
+    }
+
+    function findStickerDetailModuleByPath() {
+        try {
+            const registry = globalThis.modules ?? globalThis.window?.modules;
+            const requireFn = globalThis.__r ?? globalThis.window?.__r;
+            if (!registry || !requireFn) return null;
+
+            const entries = registry instanceof Map
+                ? [...registry.entries()]
+                : Object.entries(registry);
+
+            for (const [id, factory] of entries) {
+                const path = factory?.__filePath ?? factory?.definition?.__filePath;
+                if (typeof path !== "string") continue;
+                if (!path.endsWith("StickerDetailActionSheet.tsx") && !path.endsWith("StickerDetailActionSheet.ts")) continue;
+
+                try {
+                    const module = requireFn(Number(id));
+                    const target = module?.default?.type ?? module?.default;
+                    if (typeof target === "function") return module;
+                } catch {}
+            }
+        } catch (e) {
+            logError("Failed to locate sticker detail module", e);
+        }
+        return null;
+    }
+
+    function patchStickerDetailActionSheet() {
+        const localUnpatches = [];
+        let retryTimer = null;
+
+        const tryDirect = () => {
+            const module = findStickerDetailModuleByPath();
+            if (!module) return false;
+            return hookStickerDetailModule(module);
+        };
+
+        if (LazyActionSheet?.openLazy) {
+            const unpatchLazy = before("openLazy", LazyActionSheet, ([lazySheet, name]) => {
+                const key = String(name ?? "");
+                if (!/sticker_detail_action_sheet|StickerDetailActionSheet/i.test(key)) return;
+
+                Promise.resolve(lazySheet)
+                    .then(module => hookStickerDetailModule(module))
+                    .catch(e => logError("Failed to patch sticker detail sheet", e));
+            });
+            localUnpatches.push(unpatchLazy);
+        }
+
+        if (!tryDirect()) {
+            let attempts = 0;
+            retryTimer = setInterval(() => {
+                attempts++;
+                if (tryDirect() || attempts >= 20) {
+                    clearInterval(retryTimer);
+                    retryTimer = null;
+                }
+            }, 1000);
+        }
+
+        return () => {
+            if (retryTimer) clearInterval(retryTimer);
+            localUnpatches.splice(0).reverse().forEach(fn => {
+                try { fn?.(); } catch {}
+            });
+        };
+    }
+
     function patchMessageStickerActionSheet() {
         if (!LazyActionSheet?.openLazy || !ActionSheetRow) return () => {};
         const patches = [];
@@ -620,6 +801,7 @@
 
         unpatches.push(patchMessageEmojiActionSheet());
         unpatches.push(patchReactionLongPress());
+        unpatches.push(patchStickerDetailActionSheet());
         unpatches.push(patchMessageStickerActionSheet());
         showToast("ExpressionCloner enabled", iconEmoji);
     }
