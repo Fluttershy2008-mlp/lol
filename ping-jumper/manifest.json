@@ -1,7 +1,7 @@
 {
   "name": "PingJumper",
-  "description": "Quickly jump to the latest message that directly pinged you from Discord mobile chat.",
-  "version": "1.0.0",
+  "description": "Floating up/down arrows let you jump through recent Discord pings on mobile.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_link_24px"
   },
-  "hash": "028d714d29ee7273fff221ae58f44c38752ff0ebace704ace7d0ddafd63da491"
+  "hash": "8863158a262a6a4f495742fa61418012d6c14d0ffa6e954cbdb88089fffefcc5"
 }
