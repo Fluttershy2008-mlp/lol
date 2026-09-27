@@ -497,7 +497,8 @@
       }
     }
 
-    // Name-independent fallback used by several current Revenge plugins.
+    // ActionSheetRow type names can be minified/hidden on newer Discord builds.
+    // First try a row-shaped array by component identity/name...
     const actionRows = findInReactTree(
       tree,
       value =>
@@ -512,10 +513,62 @@
     if (Array.isArray(actionRows)) {
       if (duplicate(actionRows)) return true;
       const saveIndex = actionRows.findIndex(child =>
-        /save image/i.test(String(child?.props?.label ?? ""))
+        /save image/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
       );
       if (saveIndex >= 0) actionRows.splice(saveIndex + 1, 0, row);
       else actionRows.push(row);
+      return true;
+    }
+
+    // ...then use a completely name-independent fallback. This matches current
+    // Revenge plugins: find any array of action-like React elements and append.
+    const genericRows = findInReactTree(
+      tree,
+      value =>
+        Array.isArray(value)
+        && value.length > 0
+        && value.every(child =>
+          child
+          && typeof child === "object"
+          && child.props
+          && typeof child.props.onPress === "function"
+          && (
+            typeof child.props.label === "string"
+            || typeof child.props.message === "string"
+          )
+        )
+    );
+
+    if (Array.isArray(genericRows)) {
+      if (duplicate(genericRows)) return true;
+      const saveIndex = genericRows.findIndex(child =>
+        /save image/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
+      );
+      const copyImageIndex = genericRows.findIndex(child =>
+        /copy image link/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
+      );
+      if (saveIndex >= 0) genericRows.splice(saveIndex + 1, 0, row);
+      else if (copyImageIndex >= 0) genericRows.splice(copyImageIndex, 0, row);
+      else genericRows.push(row);
+      return true;
+    }
+
+    // Final fallback: if Discord exposes ActionSheetRow.Group but its children
+    // are nested differently, append to the first group with array children.
+    const groupElement = findInReactTree(
+      tree,
+      value =>
+        value?.props
+        && Array.isArray(value.props.children)
+        && value.props.children.some(child =>
+          child?.props && typeof child.props.onPress === "function"
+        )
+    );
+
+    if (groupElement?.props && Array.isArray(groupElement.props.children)) {
+      const children = groupElement.props.children;
+      if (duplicate(children)) return true;
+      children.push(row);
       return true;
     }
 
@@ -548,6 +601,10 @@
           try {
             if (!injectImageRow(tree, image)) {
               log("Could not find an ActionSheetRow group for the selected image");
+              if (!globalThis.__saveAsStickerInjectWarned) {
+                globalThis.__saveAsStickerInjectWarned = true;
+                toast("SaveAsSticker: image found, but menu layout was unsupported", badIcon);
+              }
             }
           } catch (e) {
             log("message action-sheet injection failed", e);
