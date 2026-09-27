@@ -1,0 +1,15 @@
+{
+  "name": "PingJumper",
+  "description": "Quickly jump to the latest message that directly pinged you from Discord mobile chat.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Fluttershy2008-mlp"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_link_24px"
+  },
+  "hash": "028d714d29ee7273fff221ae58f44c38752ff0ebace704ace7d0ddafd63da491"
+}
