@@ -7,6 +7,7 @@ A Revenge / Vendetta-compatible mobile port inspired by Vencord's ExpressionClon
 - Clone custom emojis from the emoji action sheet.
 - Long-press custom reactions to open the emoji action sheet.
 - Clone PNG/APNG/GIF stickers from a message's long-press menu.
+- Tap/press a sticker to get a direct **Clone Sticker** button, matching the emoji clone flow.
 - Choose a destination server and rename before cloning.
 - Filters servers by expression permissions and available slots.
 - Automatically retries smaller CDN image sizes to stay under Discord upload limits.
@@ -31,3 +32,7 @@ This plugin is intended for managing expressions in servers where your account h
 ## Compatibility
 
 Version 1.0.1 replaces the legacy Vendetta input alert with Discord's current AlertModal flow, fixing the `FluxContainer(Alert)` crash seen on Discord Android 346.13.
+
+### 1.1.0
+
+Sticker cloning now appears directly in the sticker detail action sheet, alongside the same server picker and rename flow used for emojis.
