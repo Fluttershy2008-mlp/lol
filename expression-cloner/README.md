@@ -27,3 +27,7 @@ If Revenge warns that the plugin is an unproxied external source, only continue 
 - Stealmoji contributors for established Vendetta mobile action-sheet patterns.
 
 This plugin is intended for managing expressions in servers where your account has permission to create guild expressions.
+
+## Compatibility
+
+Version 1.0.1 replaces the legacy Vendetta input alert with Discord's current AlertModal flow, fixing the `FluxContainer(Alert)` crash seen on Discord Android 346.13.
