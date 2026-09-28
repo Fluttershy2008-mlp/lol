@@ -19,7 +19,10 @@ async function settle() { for (let i = 0; i < 12; i++) await tick(); }
 function nodes(tree) {
   if (!tree) return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
-  return typeof tree === 'object' ? [tree, ...nodes(tree.props?.children)] : [];
+  if (typeof tree !== 'object') return [];
+  const rows = tree.props?.renderItem && tree.props?.data
+    ? tree.props.data.map(item => tree.props.renderItem({ item })) : [];
+  return [tree, ...nodes(tree.props?.children), ...nodes(tree.props?.leading), ...nodes(tree.props?.trailing), ...nodes(rows)];
 }
 function makeHarness(options = {}) {
   let hooks = [], hookIndex = 0, effects = [];
@@ -70,6 +73,10 @@ function makeHarness(options = {}) {
     async createGuildSticker(opts) { calls.posts.push(opts); return options.post ? options.post(opts) : { id: 'new-sticker' }; },
   };
   const modules = [sheetHost, { ActionSheetRow: Row }, { ActionSheet: 'ActionSheet' }, files, cropper, uploader];
+  if (options.nativeUI) modules.push(
+    { ActionSheetTitleHeader: 'TitleHeader' }, { ActionSheetCloseButton: 'CloseButton' },
+    { default: 'GuildIcon', GuildIconSizes: { MEDIUM: 44 } }, { BottomSheetFlatList: 'ServerList' },
+  );
   async function fetcher(url) {
     calls.gets.push(url);
     return { ok: true, headers: { get: () => null }, blob: async () => ({ size: 80, type: 'image/jpeg', data: options.downloadData ?? 'aW1hZ2U=' }) };
@@ -88,7 +95,7 @@ function makeHarness(options = {}) {
       return () => { target[key] = old; };
     } },
     logger: { error: (...args) => calls.logs.push(args) },
-    ui: { assets: { getAssetIDByName: () => 1 }, toasts: { showToast: message => calls.toasts.push(message) }, components: {} },
+    ui: { assets: { getAssetIDByName: () => 1 }, toasts: { showToast: message => calls.toasts.push(message) }, components: options.nativeUI ? { Forms: { FormRow: 'FormRow', FormIcon: 'FormIcon' } } : {} },
     utils: { safeFetch: fetcher },
   };
   class Reader { readAsDataURL(blob) { this.result = 'data:' + blob.type + ';base64,' + blob.data; this.onload(); } }
@@ -177,19 +184,36 @@ test('multiple images prompt for selection instead of silently uploading the fir
   assert.match(nodes(p.render()).find(n => n.type === 'Image').props.source.uri, /second.jpg/);
 });
 
-test('server picker includes owners/creators with capacity and excludes full or unauthorized servers', async () => {
+test('native picker matches reference layout, keeps full servers disabled and excludes unauthorized servers', async () => {
   const guilds = [
     { id: '1', name: 'Owner', ownerId: 'me' }, { id: '2', name: 'Creator', create: true },
     { id: '3', name: 'Manage only', manage: true }, { id: '4', name: 'Full', create: true },
     { id: '5', name: 'Boosted', create: true, premiumTier: 1 },
     { id: '6', name: 'Extra slots', create: true, premiumFeatures: { additionalStickerSlots: 5 } },
   ];
-  const t = makeHarness({ guilds, stickers: { '4': Array(5).fill({}), '5': Array(5).fill({}), '6': Array(5).fill({}) } });
+  const t = makeHarness({ nativeUI: true, guilds, stickers: { '4': Array(5).fill({}), '5': Array(5).fill({}), '6': Array(5).fill({}) } });
   const p = await t.openPicker(await t.menu());
-  const labels = nodes(p.render()).map(n => n.props?.accessibilityLabel).filter(Boolean);
-  assert.deepEqual(labels, ['Boosted', 'Creator', 'Extra slots', 'Owner', 'Cancel']);
-  const input = nodes(p.render()).find(n => n.type === 'TextInput'); input.props.onChangeText('boost');
-  assert.equal(nodes(p.render()).filter(n => n.type === 'Pressable').length, 2);
+  const tree = p.render();
+  const rows = nodes(tree).filter(n => n.type === 'FormRow');
+  assert.deepEqual(rows.map(n => n.props.label), ['Boosted', 'Creator', 'Extra slots', 'Full', 'Owner']);
+  const full = rows.find(n => n.props.label === 'Full');
+  assert.equal(full.props.disabled, true);
+  assert.equal(full.props.subLabel, 'No slots available');
+  assert.equal(full.props.accessibilityState.disabled, true);
+  full.props.onPress();
+  assert.equal(nodes(p.render()).some(n => n.type === 'TextInput'), false, 'full server cannot open the add form');
+  for (const row of rows) {
+    assert.equal(row.props.leading.type, 'GuildIcon');
+    assert.equal(row.props.leading.props.size, 44);
+    assert.equal(row.props.trailing.type, 'FormIcon');
+  }
+  assert.equal(rows[0].props.subLabel, undefined, 'available rows match the uncluttered reference');
+  const header = nodes(tree).find(n => n.type === 'TitleHeader');
+  assert.equal(header.props.title, 'Saving pony');
+  assert.equal(header.props.leading.props.source.uri, image().url);
+  assert.equal(header.props.trailing.type, 'CloseButton');
+  header.props.trailing.props.onPress();
+  assert.equal(t.calls.hides.at(-1), 'SaveAsStickerPicker');
 });
 
 test('absent current user is not treated as server owner', async () => {

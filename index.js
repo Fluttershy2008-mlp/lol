@@ -27,6 +27,15 @@
   };
   const sheetHost = byProps("openLazy", "hideActionSheet");
   const Row = byProps("ActionSheetRow")?.ActionSheetRow;
+  const Forms = V.ui.components?.Forms ?? {};
+  const TitleHeader = byProps("ActionSheetTitleHeader")?.ActionSheetTitleHeader
+    ?? byProps("BottomSheetTitleHeader")?.BottomSheetTitleHeader;
+  const CloseButton = byProps("ActionSheetCloseButton")?.ActionSheetCloseButton;
+  const GuildIconModule = byProps("GuildIconSizes");
+  const GuildIcon = GuildIconModule?.default;
+  const GuildIconSizes = GuildIconModule?.GuildIconSizes;
+  const ServerList = byProps("BottomSheetFlatList")?.BottomSheetFlatList
+    ?? byProps("BottomSheetScrollView")?.BottomSheetFlatList ?? RN.FlatList;
   let Sheet = byProps("ActionSheet")?.ActionSheet;
   if (!Sheet) {
     try { Sheet = V.metro.find(m => m?.render?.name === "ActionSheet"); } catch {}
@@ -117,11 +126,9 @@
   }
 
   function eligibleGuilds() {
-    return Object.values(byStore("GuildStore")?.getGuilds?.() ?? {}).filter(guild => {
-      if (!canCreate(guild)) return false;
-      const slots = stickerSlots(guild);
-      return slots.used == null || slots.used < slots.max;
-    }).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    // Keep full servers visible, like Discord's native expression picker.
+    return Object.values(byStore("GuildStore")?.getGuilds?.() ?? {}).filter(canCreate)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
   }
 
   function errorText(error) {
@@ -280,7 +287,6 @@
     const [image, setImage] = React.useState(images.length === 1 ? images[0] : null);
     const [guild, setGuild] = React.useState(null);
     const [name, setName] = React.useState(filenameName(images[0]?.filename));
-    const [query, setQuery] = React.useState("");
     const [, setRevision] = React.useState(0);
     const dark = RN.Appearance?.getColorScheme?.() !== "light";
     const colors = { text: dark ? "#f2f3f5" : "#1e1f22", muted: dark ? "#b5bac1" : "#4e5058", input: dark ? "#1e1f22" : "#e3e5e8" };
@@ -296,6 +302,81 @@
       style: { padding: 14, borderRadius: 8, backgroundColor: disabled ? "#555967" : "#5865f2", marginTop: 12 },
     }, text(label, { color: "#ffffff", fontWeight: "600", textAlign: "center" }));
     const inputStyle = { color: colors.text, backgroundColor: colors.input, borderRadius: 8, padding: 12, fontSize: 16, marginTop: 10 };
+    const close = () => sheetHost.hideActionSheet(SHEET_KEY);
+    const headerImage = image ? h(RN.Image, {
+      source: { uri: image.url }, resizeMode: "contain", accessibilityLabel: "Sticker preview",
+      style: { width: 26, height: 26, marginRight: 12 },
+    }) : null;
+    const title = guild ? "Sticker name" : image ? "Saving " + filenameName(image.filename) : "Choose image";
+    const closeControl = CloseButton
+      ? h(CloseButton, { onPress: close, accessibilityLabel: "Close" })
+      : h(RN.Pressable, {
+          onPress: close, accessibilityRole: "button", accessibilityLabel: "Close",
+          hitSlop: 10, style: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+        }, text("×", { fontSize: 32, lineHeight: 36 }));
+    const header = TitleHeader ? h(TitleHeader, { title, leading: headerImage, trailing: closeControl })
+      : h(RN.View, { style: { flexDirection: "row", alignItems: "center", paddingHorizontal: 28, minHeight: 72 } },
+          headerImage, h(RN.Text, {
+            numberOfLines: 1, style: { flex: 1, color: colors.text, fontSize: 20, fontWeight: "600", textAlign: "center", paddingHorizontal: 8 },
+          }, title), closeControl);
+    const sheetHeight = Math.min(640, (RN.Dimensions?.get?.("window")?.height ?? 800) * 0.62);
+
+    function serverIcon(item) {
+      if (GuildIcon) return h(GuildIcon, { guild: item, size: GuildIconSizes?.MEDIUM, animate: false });
+      if (item.icon) return h(RN.Image, {
+        source: { uri: "https://cdn.discordapp.com/icons/" + item.id + "/" + item.icon + ".png?size=96" },
+        style: { width: 44, height: 44, borderRadius: 14 }, resizeMode: "cover",
+      });
+      const initials = String(item.name).trim().split(/\s+/).map(word => word[0]).join("").slice(0, 3);
+      return h(RN.View, { style: {
+        width: 44, height: 44, borderRadius: 14, backgroundColor: "#5865f2", alignItems: "center", justifyContent: "center",
+      } }, text(initials, { color: "#ffffff", fontWeight: "600" }));
+    }
+    function serverRow(item) {
+      const slots = stickerSlots(item);
+      const full = slots.used != null && slots.used >= slots.max;
+      const subLabel = full ? "No slots available" : slots.used == null ? "Check slots on upload" : undefined;
+      // Also guard the callback: the store may change before this row re-renders.
+      const select = () => {
+        const current = byStore("GuildStore")?.getGuild?.(item.id) ?? item;
+        const now = stickerSlots(current);
+        if (!canCreate(current) || (now.used != null && now.used >= now.max)) return;
+        setGuild(current);
+      };
+      const plusAsset = asset("ic_add_24px", "PlusSmallIcon", "PlusIcon");
+      const plus = Forms.FormIcon && plusAsset != null
+        ? h(Forms.FormIcon, { source: plusAsset, style: { opacity: 1 } })
+        : text("+", { color: colors.muted, fontSize: 30, fontWeight: "300" });
+      if (Forms.FormRow) return h(Forms.FormRow, {
+        key: item.id, leading: serverIcon(item), label: item.name, subLabel,
+        trailing: plus, disabled: full, onPress: select, accessibilityLabel: item.name,
+        accessibilityRole: "button", accessibilityState: { disabled: full },
+      });
+      return h(RN.Pressable, {
+        key: item.id, accessibilityRole: "button", accessibilityLabel: item.name,
+        accessibilityState: { disabled: full }, disabled: full, onPress: select,
+        style: { minHeight: 80, paddingHorizontal: 32, flexDirection: "row", alignItems: "center", opacity: full ? 0.4 : 1 },
+      }, serverIcon(item), h(RN.View, { style: { flex: 1, marginLeft: 18, marginRight: 16 } },
+        text(item.name, { fontWeight: "600", fontSize: 18 }),
+        subLabel ? text(subLabel, { color: colors.muted, fontSize: 13, marginTop: 3 }) : null), plus);
+    }
+
+    if (image && !guild) {
+      const data = eligibleGuilds();
+      const empty = h(RN.View, { style: { padding: 24 } }, text(
+        "No servers available. You need Create Expressions permission to add a sticker.",
+        { color: colors.muted, fontSize: 14 },
+      ));
+      const list = ServerList ? h(ServerList, {
+        style: { flex: 1 }, contentContainerStyle: { paddingBottom: 32 }, data,
+        renderItem: ({ item }) => serverRow(item), keyExtractor: item => item.id,
+        extraData: data.map(item => item.id + ":" + stickerSlots(item).used).join(","),
+        ListEmptyComponent: empty,
+      }) : h(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { paddingBottom: 32 } },
+        data.length ? data.map(serverRow) : empty);
+      return h(Sheet, { scrollable: true }, h(RN.View, { style: { height: sheetHeight } }, header, list));
+    }
+
     let content;
     if (!image) {
       content = images.map((item, i) => h(RN.Pressable, {
@@ -303,21 +384,6 @@
         onPress: () => { setImage(item); setName(filenameName(item.filename)); },
         style: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
       }, h(RN.Image, { source: { uri: item.url }, style: { width: 64, height: 64 }, resizeMode: "contain" }), text(item.filename, { flex: 1 })));
-    } else if (!guild) {
-      const all = eligibleGuilds(), data = all.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
-      content = h(RN.View, null,
-        text("Choose a server", { fontWeight: "600" }),
-        text("Servers need Create Expressions permission and a free sticker slot.", { fontSize: 13, color: colors.muted, marginTop: 6 }),
-        h(RN.TextInput, { value: query, onChangeText: setQuery, placeholder: "Search servers", placeholderTextColor: colors.muted, style: inputStyle }),
-        !data.length ? text(all.length ? "No servers match your search." : "No available servers. Ask a server admin for Create Expressions permission or a free sticker slot.", { color: colors.muted, marginTop: 18 }) : null,
-        ...data.map(item => {
-          const slots = stickerSlots(item);
-          return h(RN.Pressable, {
-            key: item.id, accessibilityRole: "button", accessibilityLabel: item.name, onPress: () => setGuild(item),
-            style: { paddingVertical: 16, borderBottomWidth: 0.5, borderBottomColor: colors.muted },
-          }, text(item.name, { fontWeight: "600" }), text(slots.used == null ? "Check slots on upload" : (slots.max - slots.used) + " sticker slots available", { color: colors.muted, fontSize: 13, marginTop: 4 }));
-        })
-      );
     } else {
       const valid = name.trim().length >= 2 && name.trim().length <= 30 && !/[\u0000-\u001f]/.test(name);
       content = h(RN.View, null,
@@ -329,11 +395,10 @@
         button("Choose another server", () => setGuild(null))
       );
     }
-    return h(Sheet, null, h(RN.ScrollView, {
-      keyboardShouldPersistTaps: "handled", style: { maxHeight: (RN.Dimensions?.get?.("window")?.height ?? 800) * 0.75 },
+    return h(Sheet, { scrollable: true }, header, h(RN.ScrollView, {
+      keyboardShouldPersistTaps: "handled", style: { maxHeight: sheetHeight },
       contentContainerStyle: { padding: 20, paddingBottom: 40 },
-    }, text("Save as Sticker", { fontSize: 22, fontWeight: "700", marginBottom: 16 }), content,
-    button("Cancel", () => sheetHost.hideActionSheet(SHEET_KEY))));
+    }, content));
   }
 
   function openPicker(images, fromKey) {
@@ -427,7 +492,7 @@
         return { ...module, default: wrapSheet(module.default, context, key, session) };
       });
     }));
-    toast("SaveAsSticker 1.1.0 enabled");
+    toast("SaveAsSticker 1.2.0 enabled");
   }
   function onUnload() {
     active = false; generation++;

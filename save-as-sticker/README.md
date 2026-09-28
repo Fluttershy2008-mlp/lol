@@ -1,4 +1,4 @@
-# SaveAsSticker 1.1.0
+# SaveAsSticker 1.2.0
 
 Save an image from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -18,7 +18,7 @@ If already installed, open the plugin's menu, choose **Refetch**, and restart Di
 
 1. Long-press the image in chat and tap **Save as Sticker**. The option is also available in the full-screen image's share menu.
 2. If a message has several images and Discord has not identified the selected one, choose the image from its preview.
-3. Search for and choose a server. You must own it or have **Create Expressions** permission. Full servers are excluded using Discord's sticker store.
+3. Tap the **+** beside a server. You must own it or have **Create Expressions** permission. Full servers stay visible, greyed out and disabled, with **No slots available**.
 4. Enter the sticker name, review the preview, and tap **Add sticker**.
 5. Crop the image if prompted. A successful upload shows **Sticker added to [server]**.
 
@@ -31,6 +31,14 @@ Servers with an unknown cached sticker count are marked **Check slots on upload*
 - Animated GIF/APNG images may become a still image when cropped. This plugin does not convert or resize animations while preserving their frames.
 - It uses Discord's own image cropper, local cache files and authenticated sticker upload action. It does not request your token or send images to an external converter.
 - Canceling the crop or disabling the plugin before submission prevents the upload. An upload already submitted to Discord cannot be canceled by unloading the plugin.
+
+## Changes in 1.2.0
+
+- Matches the requested Discord expression-picker layout: image thumbnail, centered **Saving [name]** title and close button.
+- Uses native Discord server icons, rows and trailing **+** controls, with a scrollable list.
+- Keeps full servers greyed out with **No slots available**; disabled rows cannot begin an upload.
+- Tapping a server opens the existing name-and-crop step. Capacity and permission are still rechecked before submission.
+- Includes React Native fallbacks when individual native row/header components are unavailable.
 
 ## Changes in 1.1.0
 
