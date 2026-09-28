@@ -1,636 +1,438 @@
 (() => {
   "use strict";
+  const V = typeof vendetta !== "undefined" ? vendetta : globalThis.vendetta;
+  if (!V?.metro || !V?.patcher) throw new Error("SaveAsSticker needs Revenge's Vendetta plugin support.");
+  const { React, ReactNative: RN, constants } = V.metro.common;
+  const h = React.createElement;
+  const SHEET_KEY = "SaveAsStickerPicker", ROW_KEY = "save-as-sticker-action";
+  const MAX_BYTES = 512 * 1024, MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+  const LIMITS = [5, 15, 30, 60], unpatches = [];
+  let active = false, generation = 0, saving = false;
 
-  // SaveAsSticker for Revenge / Vendetta-compatible Discord mobile clients.
-  // Long-press an image -> Save as Sticker -> choose server -> name/crop -> upload.
-
-  const V = globalThis.vendetta ?? globalThis.revenge ?? globalThis.bunny
-    ?? globalThis.kettu ?? globalThis.voxi;
-  if (!V) throw new Error("SaveAsSticker: compatible runtime not found");
-
-  const { find, findByProps, findByStoreName } = V.metro;
-  const { React, ReactNative, constants } = V.metro.common;
-  const { before, after } = V.patcher;
-  const { getAssetIDByName } = V.ui.assets;
-  const { showToast } = V.ui.toasts;
-  const { findInReactTree } = V.utils;
-  const { Forms, ErrorBoundary } = V.ui.components;
-  const { FormRow, FormIcon, FormDivider } = Forms;
-
-  const LazySheet = findByProps("openLazy", "hideActionSheet") ?? findByProps("hideActionSheet");
-  const Row = findByProps("ActionSheetRow")?.ActionSheetRow;
-  const Sheet = findByProps("ActionSheet")?.ActionSheet ?? find(m => m?.render?.name === "ActionSheet");
-  const TitleHeader = findByProps("ActionSheetTitleHeader")?.ActionSheetTitleHeader
-    ?? findByProps("BottomSheetTitleHeader")?.BottomSheetTitleHeader;
-  const CloseButton = findByProps("ActionSheetCloseButton")?.ActionSheetCloseButton;
-  const FlatList = findByProps("BottomSheetScrollView")?.BottomSheetFlatList ?? ReactNative.FlatList;
-
-  const AlertHost = findByProps("openAlert", "dismissAlert");
-  const AlertParts = findByProps("AlertModal", "AlertActions");
-  const AlertModal = AlertParts?.AlertModal;
-  const AlertActions = AlertParts?.AlertActions;
-  const AlertButton = AlertParts?.AlertActionButton;
-
-  const GuildStore = findByStoreName("GuildStore");
-  const PermissionStore = findByStoreName("PermissionStore");
-  const StickerStore = findByStoreName("StickersStore") ?? findByStoreName("StickerStore");
-  const UserStore = findByStoreName("UserStore");
-
-  const StickerActions = findByProps("createGuildSticker", "updateGuildSticker")
-    ?? findByProps("createGuildSticker");
-  const Files = findByProps("writeFile", "removeFile", "readFile")
-    ?? findByProps("writeFile", "removeFile");
-  const ImagePicker = findByProps("launchCropper", "cleanSingle")
-    ?? findByProps("launchCropper");
-
-  const GuildIconMod = findByProps("GuildIconSizes");
-  const GuildIcon = GuildIconMod?.default;
-  const GuildIconSizes = GuildIconMod?.GuildIconSizes;
-
-  const stickerIcon = getAssetIDByName("ic_sticker_24px")
-    ?? getAssetIDByName("StickerIcon")
-    ?? getAssetIDByName("StickerIcon-primary");
-  const addIcon = getAssetIDByName("ic_add_24px")
-    ?? getAssetIDByName("CirclePlusIcon-primary");
-  const okIcon = getAssetIDByName("Check")
-    ?? getAssetIDByName("CircleCheckIcon-primary");
-  const badIcon = getAssetIDByName("Small")
-    ?? getAssetIDByName("CircleXIcon-primary");
-
-  const MAX_BYTES = 512 * 1024;
-  const SLOT_LIMITS = { 0: 5, 1: 15, 2: 30, 3: 60 };
-  const unpatches = [];
-
-  const log = (...a) => {
-    try { V.logger?.error?.("[SaveAsSticker]", ...a); }
-    catch { console.error("[SaveAsSticker]", ...a); }
+  const byProps = (...keys) => {
+    try { return V.metro.findByProps(...keys); } catch { return undefined; }
   };
-  const toast = (text, icon = stickerIcon) => {
-    try { showToast(text, icon); }
-    catch { console.log("[SaveAsSticker]", text); }
+  const byStore = name => {
+    try { return V.metro.findByStoreName(name); } catch { return undefined; }
   };
-  const str = value => typeof value === "string" && value ? value : null;
-
-  function cleanName(value) {
-    let n = String(value ?? "sticker")
-      .replace(/\.[A-Za-z0-9]{1,6}$/i, "")
-      .replace(/[\u0000-\u001f]/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 30);
-    if (n.length < 2) n = "sticker";
-    return n;
-  }
-
-  function errorText(e) {
-    for (const x of [e?.body?.message, e?.message, e?.text]) {
-      if (!x || typeof x !== "string") continue;
-      try { return JSON.parse(x)?.message ?? x; }
-      catch { return x; }
+  const asset = (...names) => {
+    for (const name of names) {
+      try { const id = V.ui.assets.getAssetIDByName(name); if (id != null) return id; } catch {}
     }
-    return "Unknown error";
+  };
+  const log = (...args) => V.logger?.error?.("[SaveAsSticker]", ...args);
+  const toast = message => {
+    try { V.ui.toasts.showToast(message, asset("StickerIcon", "ic_sticker_24px")); }
+    catch { console.log("[SaveAsSticker]", message); }
+  };
+  const sheetHost = byProps("openLazy", "hideActionSheet");
+  const Row = byProps("ActionSheetRow")?.ActionSheetRow;
+  let Sheet = byProps("ActionSheet")?.ActionSheet;
+  if (!Sheet) {
+    try { Sheet = V.metro.find(m => m?.render?.name === "ActionSheet"); } catch {}
   }
 
-  function isImage(a) {
-    const type = str(a?.content_type) ?? str(a?.contentType);
-    if (type?.startsWith("image/")) return true;
-    const name = str(a?.filename) ?? str(a?.url) ?? "";
-    return /\.(png|jpe?g|webp|gif|avif|bmp)(\?|$)/i.test(name);
+  function filenameName(filename) {
+    const name = String(filename || "sticker").replace(/\.[a-z0-9]{1,6}$/i, "")
+      .replace(/[\u0000-\u001f]/g, "").trim().slice(0, 30);
+    return name.length >= 2 ? name : "sticker";
   }
 
-  function resolveImage(props) {
-    const ctx = props?.analyticsLocation ?? props;
-    const selected = ctx?.selectedMedia;
-    if (selected?.mediaType === "image" && str(selected.mediaUrl)) {
-      const src = selected.source ?? {};
-      return {
-        url: selected.mediaUrl,
-        filename: src.filename ?? src.name ?? "sticker.png",
-        contentType: src.content_type ?? src.contentType ?? null,
-        id: src.id ?? null,
-      };
-    }
-
-    const attachments = ctx?.message?.attachments;
-    if (Array.isArray(attachments)) {
-      const a = attachments.find(isImage);
-      if (a) return {
-        url: a.url ?? a.proxy_url ?? a.proxyURL,
-        filename: a.filename ?? "sticker.png",
-        contentType: a.content_type ?? a.contentType ?? null,
-        id: a.id ?? null,
-      };
-    }
-    return null;
+  function imageFrom(source, knownImage = false) {
+    if (!source) return null;
+    const mime = String(source.content_type ?? source.contentType ?? source.mimeType ?? "");
+    const kind = source.mediaType ?? source.type;
+    if (/^(video|audio)\//i.test(mime) || /^(video|audio|file)$/i.test(String(kind))) return null;
+    const url = source.mediaUrl ?? source.sourceURI ?? source.url ?? source.uri ?? source.proxy_url ?? source.proxyURL;
+    if (typeof url !== "string" || !/^https:\/\//i.test(url)) return null;
+    const filename = source.filename ?? source.name ?? url.split(/[?#]/)[0].split("/").pop() ?? "sticker";
+    if (!knownImage && kind !== "image" && !mime.startsWith("image/")
+      && !/\.(png|apng|jpe?g|webp|gif|avif|bmp)(?:[?#]|$)/i.test(filename)
+      && !/\.(png|apng|jpe?g|webp|gif|avif|bmp)(?:[?#]|$)/i.test(url)) return null;
+    return { url, filename, contentType: mime, id: source.id ?? source.attachmentId };
   }
 
-  function canCreate(guild) {
-    const me = UserStore?.getCurrentUser?.()?.id;
-    if (guild?.ownerId === me || guild?.owner_id === me) return true;
-    const perms = [
-      constants?.Permissions?.CREATE_GUILD_EXPRESSIONS,
-      constants?.Permissions?.MANAGE_GUILD_EXPRESSIONS,
-      constants?.Permissions?.MANAGE_EMOJIS_AND_STICKERS,
-    ].filter(x => x != null);
-    for (const p of perms) {
-      try { if (PermissionStore?.can?.(p, guild)) return true; }
-      catch {}
-    }
-    return false;
-  }
-
-  function hasSlot(guild) {
-    try {
-      const tier = Number(guild?.premiumTier ?? guild?.premium_tier ?? 0);
-      let max = SLOT_LIMITS[tier] ?? 5;
-      const f = guild?.features;
-      const more = Array.isArray(f) ? f.includes("MORE_STICKERS") : Boolean(f?.has?.("MORE_STICKERS"));
-      if (more && tier === 3) max = 120;
-      const list = StickerStore?.getStickersByGuildId?.(guild.id);
-      return !list || list.length < max;
-    } catch { return true; }
-  }
-
-  function guilds() {
-    return Object.values(GuildStore?.getGuilds?.() ?? {})
-      .filter(canCreate)
-      .filter(hasSlot)
-      .sort((a, b) => String(a?.name ?? "").localeCompare(String(b?.name ?? "")));
-  }
-
-  function blobDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      try {
-        const r = new FileReader();
-        r.onerror = () => reject(r.error ?? new Error("Failed to read image"));
-        r.onloadend = () => resolve(String(r.result));
-        r.readAsDataURL(blob);
-      } catch (e) { reject(e); }
+  function resolveImages(...values) {
+    const contexts = values.flatMap(value => {
+      if (!value || typeof value !== "object") return [];
+      const nested = value.analyticsLocation;
+      return nested && typeof nested === "object" ? [value, nested] : [value];
     });
-  }
-
-  function b64Bytes(base64) {
-    const v = String(base64 ?? "").replace(/\s/g, "");
-    if (!v) return 0;
-    const pad = v.endsWith("==") ? 2 : v.endsWith("=") ? 1 : 0;
-    return Math.floor(v.length * 3 / 4) - pad;
-  }
-
-  function getSize(uri) {
-    const Image = ReactNative?.Image;
-    if (!Image?.getSize) return Promise.resolve(null);
-    return new Promise(resolve => {
-      try { Image.getSize(uri, (width, height) => resolve({ width, height }), () => resolve(null)); }
-      catch { resolve(null); }
-    });
-  }
-
-  async function download(image) {
-    const response = await fetch(image.url);
-    if (!response.ok) throw new Error("HTTP " + response.status + " while downloading image");
-    const blob = await response.blob();
-    const dataUrl = await blobDataUrl(blob);
-    const comma = dataUrl.indexOf(",");
-    return {
-      blob,
-      dataUrl,
-      base64: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl,
-      mime: blob.type || image.contentType || "image/png",
-    };
-  }
-
-  async function prepare(image) {
-    const source = await download(image);
-    const size = await getSize(image.url);
-
-    if (source.mime === "image/png" && size?.width === 320 && size?.height === 320
-      && source.blob.size <= MAX_BYTES) {
-      return { uri: source.dataUrl, cleanup() {} };
-    }
-
-    if (!Files?.writeFile || !ImagePicker?.launchCropper) {
-      throw new Error("Image cropper unavailable. Use a 320x320 PNG under 512 KB.");
-    }
-
-    const ext = source.mime.includes("jpeg") ? "jpg"
-      : source.mime.includes("webp") ? "webp"
-      : source.mime.includes("gif") ? "gif"
-      : source.mime.includes("avif") ? "avif" : "png";
-    const rel = "save_as_sticker_" + Date.now() + "_" + Math.random().toString(36).slice(2) + "." + ext;
-    let croppedPath = null;
-
-    try {
-      const localUri = await Files.writeFile("cache", rel, source.base64, "base64");
-      const result = await ImagePicker.launchCropper({
-        uri: localUri,
-        width: 320,
-        height: 320,
-        mimeType: "image/png",
-        includeBase64: true,
-        freeStyleCropEnabled: false,
-        cropperCircleOverlay: false,
-      });
-
-      croppedPath = result?.path ?? null;
-      const data = str(result?.data) ?? str(result?.base64);
-      if (!data) throw new Error("Cropper did not return image data");
-      const raw = data.includes(",") ? data.slice(data.indexOf(",") + 1) : data;
-      const bytes = b64Bytes(raw);
-      if (bytes > MAX_BYTES) {
-        throw new Error("Cropped sticker is " + Math.round(bytes / 1024) + " KB; max is 512 KB");
+    // Explicit selections win, including videos. Do not choose another attachment.
+    for (const ctx of contexts) {
+      if (ctx.selectedMedia) {
+        const s = ctx.selectedMedia;
+        const image = imageFrom({ ...s.source, ...s }, s.mediaType === "image");
+        return image ? [image] : [];
       }
-      return {
-        uri: data.startsWith("data:") ? data : "data:image/png;base64," + raw,
-        cleanup() {
-          if (croppedPath && ImagePicker?.cleanSingle) {
-            try { ImagePicker.cleanSingle(croppedPath); } catch {}
-          }
-        },
-      };
-    } finally {
-      try { await Files.removeFile?.("cache", rel); } catch {}
     }
-  }
-
-  async function upload(guild, image, name) {
-    if (!StickerActions?.createGuildSticker) throw new Error("Native sticker upload action not found");
-    const made = await prepare(image);
-    try {
-      return await StickerActions.createGuildSticker({
-        guildId: guild.id,
-        name: cleanName(name),
-        tags: "\uD83D\uDE42",
-        description: "",
-        uri: made.uri,
-        mimeType: "image/png",
-        platform: "mobile",
-        originalMd5: null,
-      });
-    } finally {
-      try { made.cleanup?.(); } catch {}
-    }
-  }
-
-  async function save(guild, image, name) {
-    try {
-      toast("Crop the image for your sticker");
-      await upload(guild, image, name);
-      toast("Sticker added to " + guild.name, okIcon);
-    } catch (e) {
-      if (e?.code === "E_PICKER_CANCELLED" || /cancel/i.test(String(e?.message ?? ""))) return;
-      log("upload failed", e);
-      toast("Sticker failed: " + errorText(e), badIcon);
-    }
-  }
-
-  function NameDialog({ guild, image, alertKey }) {
-    const [value, setValue] = React.useState(cleanName(image.filename));
-    const [error, setError] = React.useState("");
-    const dark = ReactNative.Appearance?.getColorScheme?.() !== "light";
-
-    const confirm = () => {
-      if (String(value ?? "").trim().length < 2) {
-        setError("Use a name between 2 and 30 characters.");
-        return;
+    for (const ctx of contexts) {
+      let source = ctx.source;
+      if (ctx.syncer?.sources) {
+        const index = ctx.syncer.index?.value ?? ctx.syncer.index ?? 0;
+        source = ctx.syncer.sources[index];
       }
-      try { AlertHost?.dismissAlert?.(alertKey); } catch {}
-      void save(guild, image, cleanName(value));
-    };
-
-    const input = React.createElement(ReactNative.View, { style: { width: "100%", gap: 8 } },
-      React.createElement(ReactNative.TextInput, {
-        value,
-        autoFocus: true,
-        selectTextOnFocus: true,
-        maxLength: 30,
-        placeholder: "Sticker name",
-        placeholderTextColor: dark ? "#949ba4" : "#5c5e66",
-        returnKeyType: "done",
-        onChangeText: t => { setValue(t); if (error) setError(""); },
-        onSubmitEditing: confirm,
-        style: {
-          minHeight: 44,
-          borderWidth: 1,
-          borderColor: error ? "#da373c" : (dark ? "#4e5058" : "#c4c9ce"),
-          borderRadius: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          color: dark ? "#f2f3f5" : "#1e1f22",
-          backgroundColor: dark ? "#1e1f22" : "#f2f3f5",
-        },
-      }),
-      error ? React.createElement(ReactNative.Text, { style: { color: "#da373c", fontSize: 12 } }, error) : null
-    );
-
-    const primary = React.createElement(AlertButton, {
-      text: "Add to " + guild.name,
-      variant: "primary",
-      onPress: confirm,
-    });
-    const cancel = React.createElement(AlertButton, {
-      text: "Cancel",
-      variant: "secondary",
-      onPress: () => { try { AlertHost?.dismissAlert?.(alertKey); } catch {} },
-    });
-
-    return React.createElement(AlertModal, {
-      title: "Sticker name",
-      content: input,
-      actions: AlertActions
-        ? React.createElement(AlertActions, null, primary, cancel)
-        : React.createElement(ReactNative.View, { style: { gap: 8 } }, primary, cancel),
-    });
-  }
-
-  function askName(guild, image) {
-    const fallback = cleanName(image.filename);
-    if (!AlertHost?.openAlert || !AlertModal || !AlertButton) {
-      void save(guild, image, fallback);
-      return;
+      if (Array.isArray(source)) source = source[0];
+      if (source) {
+        const image = imageFrom(source);
+        return image ? [image] : [];
+      }
     }
-    const key = "save-as-sticker-" + guild.id + "-" + (image.id ?? Date.now());
-    AlertHost.openAlert(key, React.createElement(NameDialog, { guild, image, alertKey: key }));
-  }
-
-  function GuildRow({ guild, image }) {
-    const leading = GuildIcon
-      ? React.createElement(GuildIcon, { guild, size: GuildIconSizes?.MEDIUM, animate: false })
-      : React.createElement(FormIcon, { source: stickerIcon });
-    return React.createElement(FormRow, {
-      leading,
-      label: guild.name,
-      trailing: React.createElement(FormIcon, { style: { opacity: 1 }, source: addIcon }),
-      onPress: () => {
-        try { LazySheet?.hideActionSheet?.(); } catch {}
-        askName(guild, image);
-      },
-    });
-  }
-
-  function Picker({ image }) {
-    const data = guilds();
-    const header = TitleHeader
-      ? React.createElement(TitleHeader, {
-          title: "Save as Sticker",
-          leading: React.createElement(FormIcon, {
-            style: { marginRight: 12, opacity: 1 },
-            source: { uri: image.url },
-            disableColor: true,
-          }),
-          trailing: CloseButton
-            ? React.createElement(CloseButton, { onPress: () => LazySheet?.hideActionSheet?.() })
-            : undefined,
-        })
-      : null;
-
-    const list = React.createElement(FlatList, {
-      style: { flex: 1 },
-      contentContainerStyle: { paddingBottom: 24 },
-      data,
-      renderItem: ({ item }) => React.createElement(GuildRow, { guild: item, image }),
-      ItemSeparatorComponent: FormDivider,
-      keyExtractor: g => g.id,
-      ListEmptyComponent: React.createElement(FormRow, {
-        label: "No eligible servers",
-        subLabel: "You need Create Expressions permission and a free sticker slot.",
-      }),
-    });
-
-    return React.createElement(React.Fragment, null, header, list);
-  }
-
-  function openPicker(image) {
-    if (!LazySheet?.openLazy || !Sheet) {
-      toast("Could not open the server picker on this Discord build", badIcon);
-      return;
-    }
-    const body = ErrorBoundary
-      ? React.createElement(ErrorBoundary, null, React.createElement(Picker, { image }))
-      : React.createElement(Picker, { image });
-    const element = React.createElement(Sheet, { scrollable: true }, body);
-    LazySheet.openLazy(Promise.resolve({ default: () => element }), "SaveAsStickerServerPicker");
-  }
-
-  function saveRow(image) {
-    if (!Row) return null;
-    const p = {
-      label: "Save as Sticker",
-      onPress: () => {
-        try { LazySheet?.hideActionSheet?.(); } catch {}
-        openPicker(image);
-      },
-    };
-    if (stickerIcon != null) {
-      if (Row.Icon) p.icon = React.createElement(Row.Icon, { source: stickerIcon });
-      else p.iconSource = stickerIcon;
-    }
-    return React.createElement(Row, { key: "save-as-sticker-action", ...p });
-  }
-
-  function isRow(c) {
-    return c?.type === Row || c?.type?.name === "ActionSheetRow"
-      || c?.type?.displayName === "ActionSheetRow";
-  }
-
-  function rowsIn(rendered) {
-    const media = findInReactTree(rendered, n =>
-      Array.isArray(n) && n.some(isRow)
-      && n.some(c => /save image|copy image link/i.test(String(c?.props?.label ?? "")))
-    );
-    if (media) return media;
-    return findInReactTree(rendered, n => Array.isArray(n) && n.some(isRow));
-  }
-
-  function inject(props, rendered) {
-    try {
-      const image = resolveImage(props);
-      if (!image?.url || !Row) return;
-      const rows = rowsIn(rendered);
-      if (!rows?.push) return;
-      if (rows.some(r => r?.key === "save-as-sticker-action" || r?.props?.label === "Save as Sticker")) return;
-      const row = saveRow(image);
-      if (!row) return;
-      const i = rows.findIndex(r => /save image/i.test(String(r?.props?.label ?? "")));
-      if (i >= 0) rows.splice(i + 1, 0, row);
-      else rows.push(row);
-    } catch (e) { log("inject failed", e); }
-  }
-
-  function injectImageRow(tree, image) {
-    if (!tree || !image?.url || !Row) return false;
-
-    const row = saveRow(image);
-    if (!row) return false;
-
-    const duplicate = children =>
-      Array.isArray(children)
-      && children.some(child =>
-        child?.key === "save-as-sticker-action"
-        || child?.props?.label === "Save as Sticker"
-      );
-
-    // Current Discord groups ActionSheetRow elements inside ActionSheetRowGroup.
-    // Prefer the group that already contains Save Image / Copy Image Link.
-    const groups = findInReactTree(
-      tree,
-      value => Array.isArray(value) && value?.[0]?.type?.name === "ActionSheetRowGroup"
-    );
-
-    if (Array.isArray(groups)) {
-      for (const group of groups) {
-        const children = group?.props?.children;
-        if (!Array.isArray(children)) continue;
-        if (duplicate(children)) return true;
-
-        const saveIndex = children.findIndex(child =>
-          /save image/i.test(String(child?.props?.label ?? ""))
-        );
-        const linkIndex = children.findIndex(child =>
-          /copy image link/i.test(String(child?.props?.label ?? ""))
-        );
-
-        if (saveIndex >= 0 || linkIndex >= 0) {
-          const index = saveIndex >= 0 ? saveIndex + 1 : linkIndex;
-          children.splice(Math.max(0, index), 0, row);
-          return true;
+    const images = [];
+    for (const ctx of contexts) {
+      for (const attachment of ctx.message?.attachments ?? []) {
+        const image = imageFrom(attachment);
+        if (image) images.push(image);
+      }
+      for (const embed of ctx.message?.embeds ?? []) {
+        for (const source of [embed.image, ...(embed.images ?? []), embed.type === "image" ? embed : null]) {
+          const image = imageFrom(source, true);
+          if (image) images.push(image);
         }
       }
     }
-
-    // ActionSheetRow type names can be minified/hidden on newer Discord builds.
-    // First try a row-shaped array by component identity/name...
-    const actionRows = findInReactTree(
-      tree,
-      value =>
-        Array.isArray(value)
-        && value.some(child =>
-          child?.type === Row
-          || child?.type?.name === "ActionSheetRow"
-          || child?.type?.displayName === "ActionSheetRow"
-        )
-    );
-
-    if (Array.isArray(actionRows)) {
-      if (duplicate(actionRows)) return true;
-      const saveIndex = actionRows.findIndex(child =>
-        /save image/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
-      );
-      if (saveIndex >= 0) actionRows.splice(saveIndex + 1, 0, row);
-      else actionRows.push(row);
-      return true;
-    }
-
-    // ...then use a completely name-independent fallback. This matches current
-    // Revenge plugins: find any array of action-like React elements and append.
-    const genericRows = findInReactTree(
-      tree,
-      value =>
-        Array.isArray(value)
-        && value.length > 0
-        && value.every(child =>
-          child
-          && typeof child === "object"
-          && child.props
-          && typeof child.props.onPress === "function"
-          && (
-            typeof child.props.label === "string"
-            || typeof child.props.message === "string"
-          )
-        )
-    );
-
-    if (Array.isArray(genericRows)) {
-      if (duplicate(genericRows)) return true;
-      const saveIndex = genericRows.findIndex(child =>
-        /save image/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
-      );
-      const copyImageIndex = genericRows.findIndex(child =>
-        /copy image link/i.test(String(child?.props?.label ?? child?.props?.message ?? ""))
-      );
-      if (saveIndex >= 0) genericRows.splice(saveIndex + 1, 0, row);
-      else if (copyImageIndex >= 0) genericRows.splice(copyImageIndex, 0, row);
-      else genericRows.push(row);
-      return true;
-    }
-
-    // Final fallback: if Discord exposes ActionSheetRow.Group but its children
-    // are nested differently, append to the first group with array children.
-    const groupElement = findInReactTree(
-      tree,
-      value =>
-        value?.props
-        && Array.isArray(value.props.children)
-        && value.props.children.some(child =>
-          child?.props && typeof child.props.onPress === "function"
-        )
-    );
-
-    if (groupElement?.props && Array.isArray(groupElement.props.children)) {
-      const children = groupElement.props.children;
-      if (duplicate(children)) return true;
-      children.push(row);
-      return true;
-    }
-
-    return false;
+    return images.filter((image, i) => images.findIndex(other => other.url === image.url) === i);
   }
 
-  function patchMessageSheet() {
-    if (!LazySheet?.openLazy || !findInReactTree || !Row) return;
+  function canCreate(guild) {
+    if (!guild?.id || guild.unavailable) return false;
+    const me = byStore("UserStore")?.getCurrentUser?.()?.id;
+    if (me && (guild.ownerId === me || guild.owner_id === me)) return true;
+    // Manage Expressions alone does not grant Create Expressions on current Discord.
+    const permission = constants?.Permissions?.CREATE_GUILD_EXPRESSIONS ?? (1n << 43n);
+    try { return Boolean(byStore("PermissionStore")?.can?.(permission, guild)); } catch { return false; }
+  }
 
-    const unpatchOpen = before("openLazy", LazySheet, ([component, key, context]) => {
-      if (key !== "MessageLongPressActionSheet" || !component?.then) return;
+  function stickerSlots(guild) {
+    const tier = Number(guild.premiumTier ?? guild.premium_tier ?? 0), features = guild.features;
+    const more = Array.isArray(features) ? features.includes("MORE_STICKERS") : features?.has?.("MORE_STICKERS");
+    const extra = Number(guild.premiumFeatures?.additionalStickerSlots ?? guild.premium_features?.additional_sticker_slots ?? 0);
+    const base = more && tier === 3 ? 120 : LIMITS[tier] ?? LIMITS[0];
+    const explicit = Number(guild.maxStickers ?? guild.max_stickers ?? 0);
+    const max = Math.max(base + (Number.isFinite(extra) ? Math.max(0, extra) : 0), explicit || 0);
+    const store = byStore("GuildStickersStore") ?? byStore("StickersStore") ?? byStore("StickerStore");
+    let list = store?.getStickersByGuildId?.(guild.id) ?? guild.stickers;
+    if (list && !Array.isArray(list)) list = Object.values(list);
+    return { max, used: Array.isArray(list) ? list.length : null };
+  }
 
-      // IMPORTANT: selectedMedia lives on openLazy's context object on current
-      // Discord mobile. It is not reliably passed to the rendered component,
-      // which is why the old build could load successfully but show no button.
-      const image = resolveImage(context);
-      if (!image?.url) return;
+  function eligibleGuilds() {
+    return Object.values(byStore("GuildStore")?.getGuilds?.() ?? {}).filter(guild => {
+      if (!canCreate(guild)) return false;
+      const slots = stickerSlots(guild);
+      return slots.used == null || slots.used < slots.max;
+    }).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  }
 
-      Promise.resolve(component).then(instance => {
-        if (!instance || typeof instance.default !== "function") return;
+  function errorText(error) {
+    const code = Number(error?.body?.code ?? error?.code);
+    if (code === 50013) return "You need Create Expressions permission in this server.";
+    if (code === 30039) return "This server has no free sticker slots. Choose another server.";
+    for (const value of [error?.body?.message, error?.message, error?.text]) {
+      if (typeof value !== "string" || !value) continue;
+      try { return JSON.parse(value)?.message ?? value; } catch { return value; }
+    }
+    return "Discord could not upload the sticker. Please try again.";
+  }
 
-        let unpatchRender;
-        unpatchRender = after("default", instance, (_args, tree) => {
-          try {
-            React.useEffect?.(() => () => {
-              try { unpatchRender?.(); } catch {}
-            }, []);
-          } catch {}
+  function nativeFiles() {
+    const found = byProps("writeFile", "readFile", "removeFile");
+    if (found) return found;
+    for (const name of ["NativeFileModule", "RTNFileManager", "DCDFileManager"]) {
+      try {
+        const module = RN.NativeModules?.[name] ?? globalThis.nativeModuleProxy?.[name];
+        if (module?.writeFile) return module;
+      } catch {}
+    }
+  }
 
-          try {
-            if (!injectImageRow(tree, image)) {
-              log("Could not find an ActionSheetRow group for the selected image");
-              if (!globalThis.__saveAsStickerInjectWarned) {
-                globalThis.__saveAsStickerInjectWarned = true;
-                toast("SaveAsSticker: image found, but menu layout was unsupported", badIcon);
-              }
-            }
-          } catch (e) {
-            log("message action-sheet injection failed", e);
-          }
-
-          return tree;
-        });
-      }).catch(e => log("failed to load MessageLongPressActionSheet", e));
+  function readBlob(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error("Could not read the image."));
+      reader.onload = () => resolve(String(reader.result).split(",")[1]);
+      reader.readAsDataURL(blob);
     });
-
-    unpatches.push(unpatchOpen);
+  }
+  function base64Bytes(data) {
+    return Math.floor(data.length * 3 / 4) - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
+  }
+  function pngSize(base64) {
+    // Read the PNG signature/IHDR without atob (missing on some Hermes builds).
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", bytes = [];
+    let bits = 0, buffer = 0;
+    for (const ch of base64.slice(0, 44)) {
+      const value = alphabet.indexOf(ch);
+      if (value < 0) break;
+      buffer = (buffer << 6) | value; bits += 6;
+      if (bits >= 8) { bits -= 8; bytes.push((buffer >>> bits) & 255); }
+    }
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length < 24 || signature.some((v, i) => bytes[i] !== v)
+      || String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR") return null;
+    const number = i => bytes[i] * 16777216 + bytes[i + 1] * 65536 + bytes[i + 2] * 256 + bytes[i + 3];
+    return { width: number(16), height: number(20) };
+  }
+  function fileUri(path) {
+    if (typeof path !== "string" || !path) throw new Error("Discord did not return a local image path.");
+    return /^(file|content):\/\//.test(path) ? path : "file://" + path;
   }
 
+  async function prepare(image, session) {
+    const files = nativeFiles();
+    if (!files?.writeFile || !files?.removeFile) throw new Error("Discord's image file module is unavailable on this build.");
+    const temporary = [], picker = byProps("launchCropper", "cleanSingle") ?? byProps("launchCropper");
+    let cropPath;
+    async function cleanup() {
+      if (cropPath && picker?.cleanSingle) { try { await picker.cleanSingle(cropPath); } catch {} }
+      for (const path of temporary) { try { await files.removeFile("cache", path); } catch {} }
+    }
+    const check = () => {
+      if (!active || generation !== session) throw Object.assign(new Error("Cancelled"), { code: "E_PICKER_CANCELLED" });
+    };
+    try {
+      let url = image.url;
+      const refresh = byProps("maybeRefreshAttachmentUrl");
+      if (/^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\//i.test(url)) {
+        try { url = await refresh?.maybeRefreshAttachmentUrl?.(url) || url; } catch {}
+      }
+      const response = await (V.utils?.safeFetch ?? fetch)(url, {}, 20000);
+      if (!response.ok) throw new Error("Image download failed (HTTP " + response.status + "). Reopen the image and try again.");
+      if (Number(response.headers?.get?.("content-length")) > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image smaller than 25 MB.");
+      const blob = await response.blob();
+      if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image smaller than 25 MB.");
+      let data = await readBlob(blob);
+      check();
+      if (!data) throw new Error("The image is empty.");
+      const prefix = "save-as-sticker-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      const size = pngSize(data);
+      if (!size || size.width !== 320 || size.height !== 320 || base64Bytes(data) > MAX_BYTES) {
+        if (!picker?.launchCropper) throw new Error("Image cropping is unavailable. Choose a 320×320 PNG under 512 KiB.");
+        const mime = blob.type || image.contentType || "image/png";
+        const ext = /jpeg/i.test(mime) ? "jpg" : /webp/i.test(mime) ? "webp" : /gif/i.test(mime) ? "gif" : /avif/i.test(mime) ? "avif" : "png";
+        const input = prefix + "." + ext;
+        temporary.push(input);
+        const local = fileUri(await files.writeFile("cache", input, data, "base64"));
+        check();
+        const result = await picker.launchCropper({
+          uri: local, width: 320, height: 320, mimeType: "image/png", includeBase64: true, freeStyleCropEnabled: false,
+        });
+        cropPath = result?.path ?? result?.uri;
+        check();
+        data = result?.data ?? result?.base64;
+        if (!data && cropPath && files.readFile) data = await files.readFile(cropPath.replace(/^file:\/\//, ""), "base64");
+        if (typeof data !== "string" || !data) throw new Error("The cropper did not return an image.");
+        data = data.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+      }
+      const outputSize = pngSize(data);
+      if (!outputSize || outputSize.width !== 320 || outputSize.height !== 320) {
+        throw new Error("The cropper did not produce a 320×320 PNG. The sticker was not uploaded.");
+      }
+      if (base64Bytes(data) > MAX_BYTES) throw new Error("The cropped sticker is over 512 KiB. Try a simpler image.");
+      const output = prefix + "-sticker.png";
+      temporary.push(output);
+      const uri = fileUri(await files.writeFile("cache", output, data, "base64"));
+      check();
+      return { uri, cleanup };
+    } catch (error) { await cleanup(); throw error; }
+  }
+
+  async function save(guild, image, name) {
+    if (saving || !active) return;
+    saving = true;
+    const session = generation;
+    let prepared;
+    try {
+      if (name.length < 2 || name.length > 30) throw new Error("Use a sticker name between 2 and 30 characters.");
+      const uploader = byProps("createGuildSticker");
+      if (!uploader?.createGuildSticker) throw new Error("Discord's sticker upload module is unavailable on this build.");
+      sheetHost.hideActionSheet(SHEET_KEY);
+      RN.Keyboard?.dismiss?.();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (!active || generation !== session) return;
+      toast("Preparing your sticker…");
+      prepared = await prepare(image, session);
+      if (!active || generation !== session) return;
+      const currentGuild = byStore("GuildStore")?.getGuild?.(guild.id) ?? guild;
+      if (!canCreate(currentGuild)) throw new Error("You no longer have Create Expressions permission in this server.");
+      const slots = stickerSlots(currentGuild);
+      if (slots.used != null && slots.used >= slots.max) throw new Error("This server has no free sticker slots. Choose another server.");
+      toast("Adding sticker to " + guild.name + "…");
+      // Android's native multipart uploader accepts a local file:// URI.
+      // Never retry a POST automatically: a timeout may follow a successful creation.
+      const result = await uploader.createGuildSticker({
+        guildId: guild.id, name, tags: "slight_smile", description: "",
+        uri: prepared.uri, mimeType: "image/png", platform: "mobile", originalMd5: null,
+      });
+      if (!result?.id && !result?.body?.id) throw new Error("Discord did not confirm the upload. Check the server's stickers before trying again.");
+      if (active && generation === session) toast("Sticker added to " + guild.name);
+    } catch (error) {
+      if (error?.code === "E_PICKER_CANCELLED" || /cancel/i.test(String(error?.message ?? ""))) return;
+      log("Upload failed", error);
+      if (active && generation === session) {
+        const message = errorText(error);
+        if (RN.Alert?.alert) RN.Alert.alert("Sticker could not be added", message); else toast(message);
+      }
+    } finally { await prepared?.cleanup?.(); saving = false; }
+  }
+
+  function Picker({ images }) {
+    const [image, setImage] = React.useState(images.length === 1 ? images[0] : null);
+    const [guild, setGuild] = React.useState(null);
+    const [name, setName] = React.useState(filenameName(images[0]?.filename));
+    const [query, setQuery] = React.useState("");
+    const [, setRevision] = React.useState(0);
+    const dark = RN.Appearance?.getColorScheme?.() !== "light";
+    const colors = { text: dark ? "#f2f3f5" : "#1e1f22", muted: dark ? "#b5bac1" : "#4e5058", input: dark ? "#1e1f22" : "#e3e5e8" };
+    React.useEffect(() => {
+      const stores = [byStore("GuildStore"), byStore("PermissionStore"), byStore("GuildStickersStore"), byStore("StickersStore")].filter(Boolean);
+      const refresh = () => setRevision(value => value + 1);
+      stores.forEach(store => store.addChangeListener?.(refresh));
+      return () => stores.forEach(store => store.removeChangeListener?.(refresh));
+    }, []);
+    const text = (value, style = {}) => h(RN.Text, { style: { color: colors.text, fontSize: 16, ...style } }, value);
+    const button = (label, onPress, disabled = false) => h(RN.Pressable, {
+      accessibilityRole: "button", accessibilityLabel: label, disabled, onPress,
+      style: { padding: 14, borderRadius: 8, backgroundColor: disabled ? "#555967" : "#5865f2", marginTop: 12 },
+    }, text(label, { color: "#ffffff", fontWeight: "600", textAlign: "center" }));
+    const inputStyle = { color: colors.text, backgroundColor: colors.input, borderRadius: 8, padding: 12, fontSize: 16, marginTop: 10 };
+    let content;
+    if (!image) {
+      content = images.map((item, i) => h(RN.Pressable, {
+        key: item.url, accessibilityRole: "button", accessibilityLabel: "Use image " + (i + 1),
+        onPress: () => { setImage(item); setName(filenameName(item.filename)); },
+        style: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+      }, h(RN.Image, { source: { uri: item.url }, style: { width: 64, height: 64 }, resizeMode: "contain" }), text(item.filename, { flex: 1 })));
+    } else if (!guild) {
+      const all = eligibleGuilds(), data = all.filter(item => item.name.toLowerCase().includes(query.toLowerCase()));
+      content = h(RN.View, null,
+        text("Choose a server", { fontWeight: "600" }),
+        text("Servers need Create Expressions permission and a free sticker slot.", { fontSize: 13, color: colors.muted, marginTop: 6 }),
+        h(RN.TextInput, { value: query, onChangeText: setQuery, placeholder: "Search servers", placeholderTextColor: colors.muted, style: inputStyle }),
+        !data.length ? text(all.length ? "No servers match your search." : "No available servers. Ask a server admin for Create Expressions permission or a free sticker slot.", { color: colors.muted, marginTop: 18 }) : null,
+        ...data.map(item => {
+          const slots = stickerSlots(item);
+          return h(RN.Pressable, {
+            key: item.id, accessibilityRole: "button", accessibilityLabel: item.name, onPress: () => setGuild(item),
+            style: { paddingVertical: 16, borderBottomWidth: 0.5, borderBottomColor: colors.muted },
+          }, text(item.name, { fontWeight: "600" }), text(slots.used == null ? "Check slots on upload" : (slots.max - slots.used) + " sticker slots available", { color: colors.muted, fontSize: 13, marginTop: 4 }));
+        })
+      );
+    } else {
+      const valid = name.trim().length >= 2 && name.trim().length <= 30 && !/[\u0000-\u001f]/.test(name);
+      content = h(RN.View, null,
+        h(RN.Image, { source: { uri: image.url }, style: { height: 128, width: "100%", marginBottom: 12 }, resizeMode: "contain" }),
+        text("Server: " + guild.name, { fontWeight: "600" }), text("Sticker name", { marginTop: 12 }),
+        h(RN.TextInput, { value: name, onChangeText: setName, maxLength: 30, placeholder: "Sticker name", placeholderTextColor: colors.muted, style: inputStyle, selectTextOnFocus: true }),
+        text("Crop to 320×320 if needed. Animated images may become a still image.", { color: colors.muted, fontSize: 13, marginTop: 12 }),
+        button("Add sticker", () => { void save(guild, image, name.trim()); }, !valid),
+        button("Choose another server", () => setGuild(null))
+      );
+    }
+    return h(Sheet, null, h(RN.ScrollView, {
+      keyboardShouldPersistTaps: "handled", style: { maxHeight: (RN.Dimensions?.get?.("window")?.height ?? 800) * 0.75 },
+      contentContainerStyle: { padding: 20, paddingBottom: 40 },
+    }, text("Save as Sticker", { fontSize: 22, fontWeight: "700", marginBottom: 16 }), content,
+    button("Cancel", () => sheetHost.hideActionSheet(SHEET_KEY))));
+  }
+
+  function openPicker(images, fromKey) {
+    if (!active) return;
+    if (saving) { toast("A sticker upload is already in progress."); return; }
+    if (!Sheet) { toast("The server picker is unavailable on this Discord build."); return; }
+    sheetHost.hideActionSheet(fromKey);
+    const ErrorBoundary = V.ui.components?.ErrorBoundary;
+    const component = () => {
+      const body = h(Picker, { images });
+      return ErrorBoundary ? h(ErrorBoundary, null, body) : body;
+    };
+    sheetHost.openLazy(Promise.resolve({ default: component }), SHEET_KEY, {});
+  }
+  function makeRow(images, key) {
+    const icon = asset("StickerIcon", "ic_sticker_24px");
+    return h(Row, {
+      key: ROW_KEY, label: "Save as Sticker",
+      icon: Row.Icon && icon != null ? h(Row.Icon, { source: icon }) : undefined,
+      iconSource: !Row.Icon ? icon : undefined, onPress: () => openPicker(images, key),
+    });
+  }
+
+  function injectRow(tree, images, key) {
+    let best = null, score = -1, duplicate = false;
+    const label = row => String(row?.props?.label ?? row?.props?.message ?? "");
+    const isAction = row => row?.props && typeof row.props.onPress === "function"
+      && (row.type === Row || row.props.label != null || row.props.message != null);
+    function inspect(node, depth = 0) {
+      if (!node || depth > 40) return;
+      if (Array.isArray(node)) {
+        const actions = node.filter(isAction);
+        if (actions.length) {
+          const priority = actions.some(row => /save image/i.test(label(row))) ? 1000
+            : actions.some(row => /copy image link/i.test(label(row))) ? 900 : 10;
+          if (priority + actions.length > score) { best = node; score = priority + actions.length; }
+        }
+        node.forEach(child => inspect(child, depth + 1));
+      } else if (node.props) {
+        if (node.key === ROW_KEY || label(node) === "Save as Sticker") duplicate = true;
+        inspect(node.props.children, depth + 1);
+      }
+    }
+    inspect(tree);
+    if (duplicate || !best) return tree;
+    const row = makeRow(images, key), saveIndex = best.findIndex(item => /save image/i.test(label(item)));
+    const insertion = saveIndex >= 0 ? saveIndex + 1 : best.length;
+    function replace(node) {
+      if (node === best) return [...best.slice(0, insertion), row, ...best.slice(insertion)];
+      if (Array.isArray(node)) {
+        const children = node.map(replace);
+        return children.some((child, i) => child !== node[i]) ? children : node;
+      }
+      if (node?.props?.children != null) {
+        const children = replace(node.props.children);
+        return children !== node.props.children ? React.cloneElement(node, { children }) : node;
+      }
+      return node;
+    }
+    return replace(tree);
+  }
+
+  function wrapSheet(component, context, key, session) {
+    const transform = (props, tree) => {
+      if (!active || generation !== session) return tree;
+      try {
+        const images = resolveImages(props, context);
+        return images.length ? injectRow(tree, images, key) : tree;
+      } catch (error) { log("Could not add image menu action", error); return tree; }
+    };
+    if (typeof component === "function" && !component.prototype?.isReactComponent) {
+      return function SaveAsStickerSheet(...args) { return transform(args[0], component.apply(this, args)); };
+    }
+    if (component?.$$typeof === Symbol.for("react.memo")) return React.memo(wrapSheet(component.type, context, key, session), component.compare);
+    if (component?.$$typeof === Symbol.for("react.forward_ref")) return React.forwardRef((props, ref) => transform(props, component.render(props, ref)));
+    return component;
+  }
   function onLoad() {
-    if (!LazySheet || !Row || !GuildStore || !PermissionStore) {
-      throw new Error("SaveAsSticker: required Discord modules were not found");
-    }
-    patchMessageSheet();
-    toast("SaveAsSticker enabled");
+    if (!sheetHost?.openLazy || !Row || !Sheet || !byStore("GuildStore")) throw new Error("SaveAsSticker: required menu modules were not found on this Discord build.");
+    if (active) return;
+    active = true; generation++;
+    unpatches.push(V.patcher.before("openLazy", sheetHost, args => {
+      const [lazy, key, context] = args;
+      if (key !== "MessageLongPressActionSheet" && key !== "MediaShareActionSheet") return;
+      if (!lazy?.then) return;
+      const session = generation;
+      // Wrap this opening's promise instead of mutating the cached sheet module.
+      // No additional hooks or persistent render patches can leak across images.
+      args[0] = Promise.resolve(lazy).then(module => {
+        if (!active || session !== generation || !module?.default) return module;
+        return { ...module, default: wrapSheet(module.default, context, key, session) };
+      });
+    }));
+    toast("SaveAsSticker 1.1.0 enabled");
   }
-
   function onUnload() {
-    for (const fn of unpatches.splice(0).reverse()) {
-      try { fn?.(); } catch (e) { log("unpatch failed", e); }
-    }
+    active = false; generation++;
+    for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }
+    try { sheetHost?.hideActionSheet?.(SHEET_KEY); } catch {}
   }
-
   return { onLoad, onUnload };
 })()

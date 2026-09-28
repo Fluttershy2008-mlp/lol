@@ -1,7 +1,7 @@
 {
   "name": "SaveAsSticker",
-  "description": "Adds Save as Sticker to image long-press menus. Pick a server, name and crop the image, then upload it as a Discord sticker.",
-  "version": "1.0.2",
+  "description": "Save chat images as server stickers. Choose an available server, name your sticker, crop to 320x320 and upload directly from Revenge.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_sticker_24px"
   },
-  "hash": "9dd9329f2f13d0689f6b093d68e8e48c7a35418e1e63c0a92fb7228a3cfb6377"
+  "hash": "ab8471df5fa33dd09e044ce00af2c73e8a5ca527ca82f6ed7f44ec483c8cb709"
 }
