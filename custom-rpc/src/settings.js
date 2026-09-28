@@ -147,7 +147,7 @@ export function createSettings({ React, RN, storage, controller, openURL, getThe
           storage.draft = saved; setDraft(saved); setErrors({});
         }, false, status.busy || !dirty),
         action(status.busy ? 'Applying…' : 'Save & apply', apply, true, status.busy),
-        h(RN.Text, { style: { color: colors.muted, marginTop: 20, fontSize: 12, textAlign: 'center' } }, 'CustomRPC 1.0.0 · Adapted from Vencord · GPL-3.0-or-later'),
+        h(RN.Text, { style: { color: colors.muted, marginTop: 20, fontSize: 12, textAlign: 'center' } }, 'CustomRPC 1.1.0 · Adapted from Vencord · GPL-3.0-or-later'),
       ),
     );
   };

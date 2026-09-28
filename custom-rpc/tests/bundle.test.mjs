@@ -20,10 +20,17 @@ test('install bundle evaluates with Revenge’s exact expression wrapper and con
   const vendetta = { plugin: { storage }, metro: { common: { React, ReactNative: RN,
     FluxDispatcher: { dispatch: event => events.push(event), subscribe() {}, unsubscribe() {} } },
     findByProps: () => undefined, findByStoreName: () => undefined }, logger: { error() {} } };
-  const plugin = vm.runInNewContext(`(vendetta => { return ${bundle}\n})`, { setTimeout, clearTimeout })(vendetta);
+  const rows = [{ key: 'BUNNY' }, { key: 'BUNNY_PLUGINS' }, { key: 'BUNNY_THEMES' }, { key: 'ACCOUNT_SWITCHER' }];
+  const originalRows = [...rows];
+  const bunny = { ui: { settings: { registeredSections: { Revenge: rows, Bunny: [], Vendetta: [] } } } };
+  const plugin = vm.runInNewContext(`(vendetta => { return ${bundle}\n})`, { setTimeout, clearTimeout, bunny })(vendetta);
   assert.equal(typeof plugin.onLoad, 'function'); assert.equal(typeof plugin.settings, 'function');
   plugin.onLoad(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(events[0].activity.name, 'Bundle test');
+  const shortcut = rows[2];
+  assert.equal(shortcut.title(), 'CustomRPC');
+  assert.equal((await shortcut.render()).default, plugin.settings);
+  plugin.onLoad(); assert.equal(rows.length, originalRows.length + 1);
   const tree = plugin.settings();
   assert.equal(tree.type, 'KeyboardAvoidingView');
   function materialize(node) {
@@ -38,6 +45,10 @@ test('install bundle evaluates with Revenge’s exact expression wrapper and con
   plugin.onUnload();
   assert.equal(events.at(-1).activity, null);
   assert.equal(events[0].socketId, events.at(-1).socketId);
+  assert.deepEqual(rows, originalRows);
+  // Updating/re-enabling the plugin must add exactly one shortcut.
+  plugin.onLoad(); assert.equal(rows.length, originalRows.length + 1);
+  plugin.onUnload(); assert.deepEqual(rows, originalRows);
 });
 
 test('manifest hash matches the exact install bundle and no imports remain', () => {

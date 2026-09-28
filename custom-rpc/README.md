@@ -14,7 +14,7 @@ Use the folder URL, not the GitHub source page or `manifest.json`. `manifest.jso
 
 ## Set up
 
-1. Enable CustomRPC and open its plugin settings.
+1. Enable CustomRPC. In Discord settings, open **Revenge → CustomRPC**, directly below **Plugins**. The plugin's own settings button opens the same editor.
 2. Enter an **Application name** and choose Playing, Streaming, Listening, Watching, or Competing.
 3. Add details, state, images, buttons, a timer or party size if wanted.
 4. Tap **Save & apply**. Use **Stop activity** to remove it without deleting your settings.
@@ -25,9 +25,14 @@ Each button needs a label and an `http://` or `https://` link. Either button slo
 
 The plugin resumes the applied configuration when it reloads and refreshes it after a reconnect/foreground event. Unsaved edits remain a separate draft. It does not run a separate background service: force-closing Discord or Android suspending the app can stop the presence. Turn off other custom RPC plugins if they compete with this one.
 
+### Updating from 1.0.0
+
+Update CustomRPC from the Plugins page, then restart Discord or reopen its settings. Version 1.1.0 adds the shortcut inside the existing Revenge section. Your saved activity and draft are retained. Disabling CustomRPC removes the shortcut; stopping only the activity keeps it available.
+
 ## Features
 
 - All five Vencord activity types, including Twitch/YouTube streaming links.
+- A **CustomRPC** row directly below **Plugins** in the main Revenge settings section.
 - Application name/ID, two text lines and optional text links.
 - Large and small images, hover text and optional click links.
 - Two independently validated buttons.
@@ -48,7 +53,7 @@ npm ci
 npm run check
 ```
 
-`npm run build` produces an expression bundle in Revenge's loader format and updates the manifest SHA-256. Node tests exercise activity payloads, validation, asset resolution, asynchronous cancellation, lifecycle cleanup, and evaluation of the actual install bundle. They use mocked Discord modules. This release has **not been verified on a physical Revenge/Discord Android client**; native module discovery and remote profile visibility still need an on-device check.
+`npm run build` produces an expression bundle in Revenge's loader format and updates the manifest SHA-256. Node tests exercise activity payloads, validation, asset resolution, asynchronous cancellation, lifecycle cleanup, shortcut placement/navigation/removal, and evaluation of the actual install bundle. They use mocked Discord modules. The shortcut uses the settings registry and lazy-page contract verified against Revenge commit `1b1d297`, the version shown in the user's screenshot. This release has **not been verified on a physical Revenge/Discord Android client**; native module discovery and remote profile visibility still need an on-device check.
 
 Suggested phone check: apply a Playing activity; confirm it from another account; try one image and one button; stop; reapply; reconnect; disable the plugin. Stop/disable should remove only CustomRPC's activity. If Discord updates break module lookup, the settings screen reports the failure; image failures are reported while the text activity is still applied.
 

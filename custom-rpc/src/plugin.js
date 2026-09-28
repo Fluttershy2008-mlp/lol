@@ -2,6 +2,7 @@
 import { createAssetResolver } from './assets.js';
 import { createController } from './controller.js';
 import { createSettings } from './settings.js';
+import { registerSettingsShortcut } from './shortcut.js';
 
 export default (() => {
   const V = typeof vendetta !== 'undefined' ? vendetta : globalThis.vendetta;
@@ -26,5 +27,24 @@ export default (() => {
       try { return V.metro.findByStoreName('ThemeStore')?.theme; } catch { return undefined; }
     },
   });
-  return { onLoad: () => controller.load(), onUnload: () => controller.unload(), settings };
+  let removeShortcut;
+  return {
+    onLoad() {
+      controller.load();
+      if (!removeShortcut) {
+        removeShortcut = registerSettingsShortcut({
+          settingsAPI: globalThis.bunny?.ui?.settings ?? globalThis.window?.bunny?.ui?.settings,
+          Settings: settings,
+          getAssetID: name => V.ui?.assets?.getAssetIDByName(name),
+          log: message => V.logger?.warn?.('[CustomRPC]', message),
+        });
+      }
+    },
+    onUnload() {
+      removeShortcut?.();
+      removeShortcut = undefined;
+      controller.unload();
+    },
+    settings,
+  };
 })();
