@@ -25,9 +25,13 @@ Each button needs a label and an `http://` or `https://` link. Either button slo
 
 The plugin resumes the applied configuration when it reloads and refreshes it after a reconnect/foreground event. Unsaved edits remain a separate draft. It does not run a separate background service: force-closing Discord or Android suspending the app can stop the presence. Turn off other custom RPC plugins if they compete with this one.
 
-### Updating from 1.0.0
+### Updating / recovery from the 1.1.0 settings crash
 
-Update CustomRPC from the Plugins page, then restart Discord or reopen its settings. Version 1.1.0 adds the shortcut inside the existing Revenge section. Your saved activity and draft are retained. Disabling CustomRPC removes the shortcut; stopping only the activity keeps it available.
+Version **1.1.1** fixes `Cannot read property 'parent' of undefined` from `getAncestors` when opening Settings. With plugin updates enabled, fully close and reopen Discord to fetch the update. If the Plugins page is accessible, you can also update CustomRPC there. Keep using the same install URL; no data reset is needed.
+
+The shortcut remains below Plugins. The fix registers its native renderer before its menu key, preserves existing renderer getters, and repairs its own entry if another sidebar plugin replaces that getter. It does not disable native settings blocking or catch unrelated settings errors. A hidden, parentless renderer record remains after unload so cached native lists can safely resolve the old key. This small bridge is reused on re-enable. If native registration is unavailable, the plugin leaves out the unsafe shortcut and retains the plugin-card settings editor.
+
+Your saved activity and draft are retained. Disabling CustomRPC removes the shortcut; stopping only the activity keeps it available.
 
 ## Features
 
@@ -53,7 +57,7 @@ npm ci
 npm run check
 ```
 
-`npm run build` produces an expression bundle in Revenge's loader format and updates the manifest SHA-256. Node tests exercise activity payloads, validation, asset resolution, asynchronous cancellation, lifecycle cleanup, shortcut placement/navigation/removal, and evaluation of the actual install bundle. They use mocked Discord modules. The shortcut uses the settings registry and lazy-page contract verified against Revenge commit `1b1d297`, the version shown in the user's screenshot. This release has **not been verified on a physical Revenge/Discord Android client**; native module discovery and remote profile visibility still need an on-device check.
+`npm run build` produces an expression bundle in Revenge's loader format and updates the manifest SHA-256. Node tests exercise activity payloads, validation, asset resolution, asynchronous cancellation, lifecycle cleanup, shortcut placement/navigation/removal, and evaluation of the actual install bundle. A regression fixture reproduces the reported `.parent` error with a captured renderer map and checks both registration and unload. Tests also cover late sidebar overrides, cached keys, native setters, and preserving unrelated blocking behavior. These tests use mocked Discord modules and do not replace an on-device check. The shortcut uses the settings registry and page contract from Revenge commit `1b1d297`, the version shown in the user's screenshot. Version 1.1.1 has **not been verified on a physical Revenge/Discord Android client**.
 
 Suggested phone check: apply a Playing activity; confirm it from another account; try one image and one button; stop; reapply; reconnect; disable the plugin. Stop/disable should remove only CustomRPC's activity. If Discord updates break module lookup, the settings screen reports the failure; image failures are reported while the text activity is still applied.
 

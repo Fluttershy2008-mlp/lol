@@ -35,15 +35,29 @@ export default (() => {
         removeShortcut = registerSettingsShortcut({
           settingsAPI: globalThis.bunny?.ui?.settings ?? globalThis.window?.bunny?.ui?.settings,
           Settings: settings,
+          constants: byProps('SETTING_RENDERER_CONFIG'),
+          treeManager: byProps('getAncestors', 'isBlocked'),
+          patcher: V.patcher,
+          openSettings: () => {
+            try {
+              const nav = byProps('getRootNavigationRef')?.getRootNavigationRef?.();
+              if (!nav?.navigate) throw new Error('Settings navigation is unavailable. Open CustomRPC from the Plugins page.');
+              nav.navigate('BUNNY_CUSTOM_PAGE', { title: 'CustomRPC', render: () => React.createElement(settings) });
+            } catch (error) { RN.Alert.alert('CustomRPC', error?.message ?? 'Could not open settings.'); }
+          },
+          renderIcon: icon => {
+            const Icon = byProps('TableRowIcon')?.TableRowIcon;
+            return Icon ? React.createElement(Icon, { source: icon })
+              : React.createElement(RN.Image, { source: icon, style: { width: 24, height: 24 } });
+          },
           getAssetID: name => V.ui?.assets?.getAssetIDByName(name),
           log: message => V.logger?.warn?.('[CustomRPC]', message),
         });
       }
     },
     onUnload() {
-      removeShortcut?.();
-      removeShortcut = undefined;
-      controller.unload();
+      try { removeShortcut?.(); }
+      finally { removeShortcut = undefined; controller.unload(); }
     },
     settings,
   };

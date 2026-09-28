@@ -6,8 +6,9 @@ function setup(label = 'Revenge') {
   const rows = ['BUNNY', 'BUNNY_PLUGINS', 'BUNNY_THEMES', 'BUNNY_FONTS', 'BUNNY_DEVELOPER', 'ACCOUNT_SWITCHER']
     .map(key => ({ key }));
   const settingsAPI = { registeredSections: { [label]: rows, Bunny: [], Vendetta: [] } };
+  const constants = { SETTING_RENDERER_CONFIG: Object.fromEntries(rows.map(row => [row.key, { parent: null }])) };
   const Settings = () => 'existing editor';
-  return { rows, settingsAPI, Settings, getAssetID: name => name === 'WrenchIcon' ? 42 : undefined };
+  return { rows, settingsAPI, Settings, constants, openSettings: () => {}, getAssetID: name => name === 'WrenchIcon' ? 42 : undefined };
 }
 
 test('shortcut appears below Plugins and opens the existing editor via Revenge’s lazy render contract', async () => {
@@ -31,6 +32,7 @@ test('translated section headings work and duplicate registration does not add a
 
 test('cleanup handles section arrays replaced by another plugin without removing its rows', () => {
   const f = setup(), remove = registerSettingsShortcut(f), additional = { key: 'OTHER_PLUGIN' };
+  assert.ok(f.rows.some(row => row.key === SHORTCUT_KEY));
   f.settingsAPI.registeredSections.Revenge = [...f.rows, additional];
   remove();
   assert.equal(f.rows.some(row => row.key === SHORTCUT_KEY), false);
