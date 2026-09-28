@@ -1,0 +1,110 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { GifReader } from 'omggif';
+import { prepareGIF, isGIF } from '../src/gif.js';
+import { gifFixture } from './gif-fixture.mjs';
+
+const base64 = bytes => Buffer.from(bytes).toString('base64');
+const pixel = (rgba, x, y) => [...rgba.slice((y * 320 + x) * 4, (y * 320 + x) * 4 + 4)];
+const red = [255, 0, 0, 255], green = [0, 255, 0, 255], blue = [0, 0, 255, 255], clear = [0, 0, 0, 0];
+async function convert(options) {
+  const result = await prepareGIF(base64(gifFixture(options)));
+  const bytes = Buffer.from(result.base64, 'base64'), reader = new GifReader(bytes);
+  assert.equal(result.mimeType, 'image/gif');
+  assert.equal(reader.width, 320); assert.equal(reader.height, 320);
+  assert.ok(bytes.length <= 512 * 1024);
+  const frames = Array.from({ length: reader.numFrames() }, (_, i) => {
+    const rgba = new Uint8Array(320 * 320 * 4);
+    reader.decodeAndBlitFrameRGBA(i, rgba);
+    return rgba;
+  });
+  return { reader, frames, bytes };
+}
+
+test('GIF resizing keeps every frame, timing, looping, aspect ratio and transparent padding', async () => {
+  const { reader, frames } = await convert();
+  assert.equal(reader.numFrames(), 2); assert.equal(reader.loopCount(), 0);
+  assert.deepEqual([reader.frameInfo(0).delay, reader.frameInfo(1).delay], [10, 15]);
+  assert.deepEqual(pixel(frames[0], 160, 160), red);
+  assert.deepEqual(pixel(frames[1], 160, 160), green);
+  for (const rgba of frames) {
+    assert.deepEqual(pixel(rgba, 160, 79), clear);
+    assert.equal(pixel(rgba, 160, 80)[3], 255);
+    assert.equal(pixel(rgba, 160, 239)[3], 255);
+    assert.deepEqual(pixel(rgba, 160, 240), clear);
+  }
+});
+
+test('partial frames compose correctly for keep, clear and restore-previous disposal', async () => {
+  for (const disposal of [1, 2, 3]) {
+    const { frames } = await convert({ width: 32, height: 32, frames: [
+      { color: 1, disposal: 1 },
+      { x: 0, y: 0, width: 16, height: 32, color: 2, disposal },
+      { x: 16, y: 0, width: 16, height: 32, color: 3 },
+    ] });
+    assert.equal(frames.length, 3);
+    assert.deepEqual(pixel(frames[0], 80, 160), red);
+    assert.deepEqual(pixel(frames[1], 80, 160), green);
+    assert.deepEqual(pixel(frames[1], 240, 160), red);
+    assert.deepEqual(pixel(frames[2], 80, 160), disposal === 1 ? green : disposal === 2 ? clear : red);
+    assert.deepEqual(pixel(frames[2], 240, 160), blue);
+  }
+});
+
+test('ready-to-upload GIF is preserved byte-for-byte, including original palette and timing', async () => {
+  const original = base64(gifFixture({ width: 320, height: 320, loop: 3 }));
+  assert.equal(isGIF(original), true);
+  const result = await prepareGIF(original);
+  assert.equal(result.base64, original);
+  assert.equal(result.mimeType, 'image/gif');
+  assert.equal(isGIF('iVBORw0KGgo='), false);
+});
+
+test('finite and non-looping animations retain their loop settings', async () => {
+  for (const loop of [null, 2]) assert.equal((await convert({ loop })).reader.loopCount(), loop);
+});
+
+test('five-second boundary is accepted, longer GIFs and excessive frame counts are rejected', async () => {
+  const five = base64(gifFixture({ frames: [{ delay: 250 }, { delay: 250 }] }));
+  assert.equal((await prepareGIF(five)).mimeType, 'image/gif');
+  await assert.rejects(prepareGIF(base64(gifFixture({ frames: [{ delay: 250 }, { delay: 251 }] }))), /5 seconds/);
+  await assert.rejects(prepareGIF(base64(gifFixture({ width: 1, height: 1, frames: Array(251).fill({ delay: 2 }) }))), /250 frames/);
+});
+
+test('incomplete GIFs and unsafe dimensions are rejected before allocating frame canvases', async () => {
+  const bytes = gifFixture();
+  await assert.rejects(prepareGIF(base64(bytes.slice(0, -1))), /incomplete or invalid/);
+  bytes[6] = 255; bytes[7] = 255; bytes[8] = 255; bytes[9] = 255;
+  await assert.rejects(prepareGIF(base64(bytes)), /4 megapixels/);
+});
+
+test('conversion yields between frames and honors unload cancellation', async () => {
+  let checks = 0, timerRan = false;
+  setTimeout(() => { timerRan = true; }, 0);
+  await assert.rejects(prepareGIF(base64(gifFixture()), () => {
+    if (++checks === 4) throw new Error('Unloaded');
+  }), /Unloaded/);
+  assert.equal(timerRan, true);
+});
+
+test('oversized animations reduce color count without dropping frames, or fail at the file-size limit', async () => {
+  let seed = 123456;
+  const random = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
+  const palette = Array.from({ length: 256 }, () => random() & 0xffffff);
+  for (const count of [5, 8]) {
+    const frames = Array.from({ length: count }, () => ({
+      pixels: Uint8Array.from({ length: 320 * 320 }, () => random() & 255), delay: 10,
+    }));
+    const input = gifFixture({ width: 320, height: 320, palette, frames });
+    assert.ok(input.length > 512 * 1024);
+    if (count === 8) {
+      await assert.rejects(prepareGIF(base64(input)), /still over 512 KiB/);
+    } else {
+      const output = Buffer.from((await prepareGIF(base64(input))).base64, 'base64');
+      assert.ok(output.length <= 512 * 1024);
+      const reader = new GifReader(output);
+      assert.equal(reader.numFrames(), count);
+      for (let i = 0; i < count; i++) assert.equal(reader.frameInfo(i).delay, 10);
+    }
+  }
+});

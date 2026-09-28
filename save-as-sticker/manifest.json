@@ -1,7 +1,7 @@
 {
   "name": "SaveAsSticker",
-  "description": "Save chat images as server stickers. Choose an available server, name your sticker, crop to 320x320 and upload directly from Revenge.",
-  "version": "1.2.0",
+  "description": "Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
+  "version": "1.3.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_sticker_24px"
   },
-  "hash": "433d7f77487fdf2dd86f04cd1696cc818094daf1a9756c7d19d4acd0ba77be93"
+  "hash": "207b4501c5ba25313cc9ed69cf12adaeb78e9d5a9c5be44c9abf470c3c0e1a65"
 }

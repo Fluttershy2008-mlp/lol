@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { GifReader } from 'omggif';
+import { gifFixture } from './gif-fixture.mjs';
 
 const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
 // PNG header fixture: conversion and decoding are delegated to Discord's native cropper.
@@ -79,7 +81,7 @@ function makeHarness(options = {}) {
   );
   async function fetcher(url) {
     calls.gets.push(url);
-    return { ok: true, headers: { get: () => null }, blob: async () => ({ size: 80, type: 'image/jpeg', data: options.downloadData ?? 'aW1hZ2U=' }) };
+    return { ok: true, headers: { get: () => null }, blob: async () => ({ size: 80, type: options.downloadType ?? 'image/jpeg', data: options.downloadData ?? 'aW1hZ2U=' }) };
   }
   const RN = {
     View: 'View', Text: 'Text', TextInput: 'TextInput', ScrollView: 'ScrollView', Pressable: 'Pressable', Image: 'Image',
@@ -236,6 +238,52 @@ test('upload converts JPEG, keeps edited name, uses local PNG and cleans files a
 test('valid 320x320 PNG skips cropping and still uploads via a local file', async () => {
   const t = makeHarness({ downloadData: png() }); await t.startUpload(); await settle();
   assert.equal(t.calls.crops.length, 0); assert.equal(t.calls.posts.length, 1); assert.equal(t.calls.deletes.length, 1);
+});
+
+test('GIF upload keeps animation, uses image/gif and skips the static cropper', async () => {
+  const t = makeHarness({ downloadData: Buffer.from(gifFixture()).toString('base64'), downloadType: 'image/gif' });
+  await t.startUpload(selected('moving.gif')); await settle();
+  assert.equal(t.calls.crops.length, 0);
+  assert.equal(t.calls.posts.length, 1);
+  assert.equal(t.calls.posts[0].mimeType, 'image/gif');
+  assert.match(t.calls.posts[0].uri, /-sticker.gif$/);
+  const reader = new GifReader(Buffer.from(t.calls.writes[0].data, 'base64'));
+  assert.equal(reader.numFrames(), 2); assert.equal(reader.width, 320); assert.equal(reader.height, 320);
+  assert.equal(t.calls.deletes.length, 1); assert.deepEqual(t.calls.alerts, []);
+});
+
+test('GIF source takes priority over a video preview and preserves signed URL parameters', async () => {
+  const t = makeHarness({ downloadData: Buffer.from(gifFixture()).toString('base64'), downloadType: 'image/gif' });
+  await t.startUpload({ selectedMedia: { mediaType: 'video', mediaUrl: 'https://example.com/preview.mp4',
+    source: { url: image('moving.gif').url + '&format=webp&animated=false', content_type: 'video/mp4' } } });
+  await settle();
+  assert.equal(t.calls.gets[0], image('moving.gif').url);
+  assert.equal(t.calls.posts.length, 1);
+});
+
+test('GIF embeds expose their original GIF from selected media and message context', async () => {
+  const gif = { type: 'gifv', url: 'https://example.com/view/pony',
+    video: { url: 'https://example.com/pony.mp4' }, thumbnail: { url: 'https://example.com/pony.gif' } };
+  for (const context of [{ selectedMedia: { mediaType: 'video', mediaUrl: gif.video.url, source: gif } }, { message: { embeds: [gif] } }]) {
+    const t = makeHarness({ downloadData: Buffer.from(gifFixture()).toString('base64'), downloadType: 'image/gif' });
+    await t.startUpload(context); await settle();
+    assert.equal(t.calls.gets[0], gif.thumbnail.url);
+    assert.equal(t.calls.posts.length, 1); assert.equal(t.calls.posts[0].mimeType, 'image/gif');
+  }
+});
+
+test('GIF link returning a static or video preview fails without silently flattening it', async () => {
+  const t = makeHarness({ downloadData: png(), downloadType: 'image/png' });
+  await t.startUpload(selected('moving.gif')); await settle();
+  assert.equal(t.calls.posts.length, 0); assert.equal(t.calls.crops.length, 0);
+  assert.match(t.calls.alerts[0][1], /original .gif/);
+});
+
+test('GIF exceeding animation limit is rejected before creating files or posting', async () => {
+  const t = makeHarness({ downloadData: Buffer.from(gifFixture({ frames: [{ delay: 501 }] })).toString('base64'), downloadType: 'image/gif' });
+  await t.startUpload(selected('moving.gif')); await settle();
+  assert.equal(t.calls.posts.length, 0); assert.equal(t.calls.writes.length, 0);
+  assert.match(t.calls.alerts[0][1], /5 seconds/);
 });
 
 test('cropper cancellation, invalid format/dimensions and oversized output never upload', async () => {
