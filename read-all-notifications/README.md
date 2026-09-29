@@ -1,6 +1,7 @@
 # ReadAllNotificationsButton for Revenge
 
-A mobile adaptation of Vencord's `readAllNotificationsButton` by kemo.
+A mobile adaptation of Vencord's `readAllNotificationsButton` by kemo, extended
+in version 1.1.0 to include DMs and group DMs.
 
 ## Install
 
@@ -16,7 +17,7 @@ Reopen a chat after installing or reload Discord if the button has not appeared.
 ## Use
 
 - Tap **✓ Read All** at the lower left of the chat view.
-- Or open this plugin's settings and tap **Read all server notifications**.
+- Or open this plugin's settings and tap **Read all notifications**.
 - Or run the local **/readall** command. It does not send a chat message.
 
 The settings let you hide the floating button, move it left/right, and optionally
@@ -25,9 +26,9 @@ to the left so it does not overlap PingJumper's right-side arrows.
 
 ## What gets marked as read
 
-Unread server text/announcement channels, voice/stage text chats, and active
-joined threads. Unread mention badges in those channels are included. This
-matches the original plugin's server scope. DMs and group DMs stay unread.
+Unread server text/announcement channels, voice/stage text chats, active
+joined threads, direct messages and group DMs. Unread mention badges in those
+channels are included. DM support is enabled automatically after updating.
 
 This does not delete messages, clear Discord's recent-mention history, delete
 notifications from the Activity tab, or dismiss Android system notifications.
@@ -46,7 +47,9 @@ remain available. Compatibility with future Discord changes cannot be guaranteed
 - Checks guild membership, skips non-message channels, deduplicates channels,
   and only acknowledges known message IDs.
 - Reads `GuildChannelStore`, with a guild-channel-record fallback, plus
-  `ActiveJoinedThreadsStore`. Missing data is reported in plugin settings.
+  `ActiveJoinedThreadsStore` and `ChannelStore`'s private-channel lists. Private
+  channel records and ID arrays are supported. Missing data is reported in
+  plugin settings; unavailable DM lists do not stop server reads.
 - Optional confirmation holds the original snapshot. It does not mark messages
   arriving after the snapshot as read. An account change or unloading the plugin
   invalidates the pending action.

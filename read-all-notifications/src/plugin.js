@@ -8,7 +8,7 @@ export function createPlugin(V) {
   const listeners = new Set();
   const cleanup = [];
   let active = false, busy = false, generation = 0, overlay = false, pending = null;
-  let message = 'Ready. Tap Read All to mark your unread server channels as read.';
+  let message = 'Ready. Tap Read All to mark your unread server channels, DMs and group DMs as read.';
   let warnings = [];
   const log = error => { try { V.logger?.warn?.('[ReadAllNotificationsButton]', error?.message ?? String(error)); } catch {} };
   const safe = getter => { try { return getter(); } catch { return undefined; } };
@@ -33,7 +33,7 @@ export function createPlugin(V) {
   function snapshot() {
     const UserStore = byStore('UserStore');
     const accountId = safe(() => UserStore.getCurrentUser()?.id);
-    if (!accountId) throw new Error('Sign in to Discord and wait for your servers to load.');
+    if (!accountId) throw new Error('Sign in to Discord and wait for your chats to load.');
     const connection = byStore('ConnectionStore');
     if (safe(() => connection.isConnected()) === false) throw new Error('Discord is offline. Reconnect and try again.');
     const ReadStateStore = byStore('ReadStateStore') ?? byProps('hasUnread', 'lastMessageId');
@@ -65,7 +65,7 @@ export function createPlugin(V) {
       // as in Vencord. No separate REST call, token access or double ack.
       await dispatcher.dispatch(bulkReadEvent(data.channels));
       if (!active || run !== generation) return;
-      notify(`Marked ${data.channels.length} server channel${data.channels.length === 1 ? '' : 's'} as read.${warnings.length ? ' Some items were skipped; see plugin settings.' : ''}`);
+      notify(`Marked ${data.channels.length} channel${data.channels.length === 1 ? '' : 's'} as read.${warnings.length ? ' Some items were skipped; see plugin settings.' : ''}`);
     } catch (error) {
       log(error);
       if (active && run === generation) notify(`Could not mark notifications as read: ${error?.message ?? 'Unknown error'}`, true);
@@ -80,7 +80,7 @@ export function createPlugin(V) {
       const data = snapshot();
       warnings = data.warnings;
       if (!data.channels.length) {
-        notify(warnings.length ? 'No unread channels could be marked. Check the notes in plugin settings.' : 'All server notifications are already read.');
+        notify(warnings.length ? 'No unread channels could be marked. Check the notes in plugin settings.' : 'All server and DM notifications are already read.');
         return;
       }
       const run = generation;
@@ -88,7 +88,7 @@ export function createPlugin(V) {
         const token = {};
         pending = token;
         const release = () => { if (pending === token) pending = null; };
-        RN.Alert.alert('Read all server notifications?', `Mark ${data.channels.length} unread server channels and joined threads as read? Direct messages stay unread.`, [
+        RN.Alert.alert('Read all notifications?', `Mark ${data.channels.length} unread channels as read? This includes server channels, joined threads, DMs and group DMs.`, [
           { text: 'Cancel', style: 'cancel', onPress: release },
           { text: 'Read All', onPress: () => {
             if (pending !== token) return;
@@ -100,7 +100,7 @@ export function createPlugin(V) {
     } catch (error) {
       pending = null;
       log(error);
-      notify(error?.message ?? 'Unable to check unread server channels.', true);
+      notify(error?.message ?? 'Unable to check unread channels.', true);
     }
   }
 
@@ -109,7 +109,7 @@ export function createPlugin(V) {
     try {
       const data = snapshot();
       warnings = data.warnings;
-      message = `${data.channels.length} unread server channel${data.channels.length === 1 ? '' : 's'} ready to mark as read.`;
+      message = `${data.channels.length} unread channel${data.channels.length === 1 ? '' : 's'} ready to mark as read, including DMs and group DMs.`;
       changed();
     } catch (error) { notify(error?.message ?? 'Unable to check unread channels.', true); }
   }
@@ -148,7 +148,7 @@ export function createPlugin(V) {
     try {
       const unregister = V.commands?.registerCommand?.({
         name: 'readall', displayName: 'readall',
-        description: 'Mark all server notifications as read', displayDescription: 'Mark all server notifications as read',
+        description: 'Mark all server and DM notifications as read', displayDescription: 'Mark all server and DM notifications as read',
         options: [], applicationId: '-1', inputType: 1, type: 1,
         execute: async () => { await requestReadAll(); return null; },
       });

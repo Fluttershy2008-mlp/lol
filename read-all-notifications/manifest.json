@@ -1,7 +1,7 @@
 {
   "name": "ReadAllNotificationsButton",
-  "description": "Mark unread server channels and joined threads as read with a Read All button. Mobile port of Vencord's ReadAllNotificationsButton.",
-  "version": "1.0.0",
+  "description": "Mark unread server channels, joined threads, DMs and group DMs as read with one button. Mobile port of Vencord's ReadAllNotificationsButton.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -18,5 +18,5 @@
   "vendetta": {
     "icon": "Check"
   },
-  "hash": "1024e19d0bd7d85ccd099479e1f0169073dd3ac81e34214623b7ea717d6d8cdf"
+  "hash": "dfd98b6415336dd89147754bb62c0dc03d3fb0e8b0fddf669326ad6989cb80a8"
 }

@@ -22,7 +22,7 @@ export function createUI({ React, RN, getState, subscribe, updateOptions, reques
       pointerEvents: 'box-none',
       style: { position: 'absolute', [state.options.side]: 12, bottom: 145, zIndex: 9999 },
     }, h(Pressable, {
-      accessibilityRole: 'button', accessibilityLabel: 'Mark all server notifications as read',
+      accessibilityRole: 'button', accessibilityLabel: 'Mark all server and DM notifications as read',
       accessibilityState: { disabled: state.busy, busy: state.busy },
       onPress: requestReadAll, disabled: state.busy,
       style: { minHeight: 44, minWidth: 92, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 22,
@@ -52,15 +52,15 @@ export function createUI({ React, RN, getState, subscribe, updateOptions, reques
     h(RN.Switch, { value: state.options[key], accessibilityLabel: title, onValueChange: value => updateOptions({ [key]: value }) }));
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('Read All Notifications', { fontSize: 24, lineHeight: 30, fontWeight: '700' }),
-      text('Mark unread server channels and joined threads as read in one tap.', { color: colors.muted, marginTop: 8 }),
-      text('Direct messages and group DMs stay unread. This does not delete messages, mention history or Android notifications.',
+      text('Mark unread server channels, joined threads, DMs and group DMs as read in one tap.', { color: colors.muted, marginTop: 8 }),
+      text('This does not delete messages, mention history or Android notifications.',
         { color: colors.muted, marginTop: 8, fontSize: 13 }),
-      button(state.busy ? 'Reading…' : '✓ Read all server notifications', requestReadAll, true),
+      button(state.busy ? 'Reading…' : '✓ Read all notifications', requestReadAll, true),
       button('Check unread channels', refresh),
       text(state.message, { marginTop: 14 }),
       ...state.warnings.map((warning, index) => h(RN.Text, { key: index, style: { color: colors.muted, marginTop: 8, fontSize: 13 } }, warning)),
       toggle('showButton', 'Show floating button', 'Display Read All in the chat view. It hides while typing.'),
-      toggle('confirm', 'Confirm before reading', 'Ask before marking your current unread server channels as read.'),
+      toggle('confirm', 'Confirm before reading', 'Ask before marking your current unread servers and DMs as read.'),
       button(`Button position: ${state.options.side === 'left' ? 'Left' : 'Right'} — tap to change`,
         () => updateOptions({ side: state.options.side === 'left' ? 'right' : 'left' })),
       text(state.overlay ? 'Floating button is ready. Reopen a chat if it is not visible yet.'

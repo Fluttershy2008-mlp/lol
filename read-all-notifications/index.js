@@ -1,5 +1,5 @@
 (() => {
-/*! ReadAllNotificationsButton for Revenge 1.0.0
+/*! ReadAllNotificationsButton for Revenge 1.1.0
  * Vencord original by kemo, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -27,7 +27,7 @@ function collectUnread(stores) {
   const { GuildStore, GuildChannelStore, ChannelStore, ReadStateStore, ActiveJoinedThreadsStore } = stores;
   if (typeof GuildStore?.getGuilds !== 'function' || typeof ReadStateStore?.hasUnread !== 'function'
     || typeof ReadStateStore?.lastMessageId !== 'function') {
-    throw new Error('Discord read states are not ready. Reopen a server and try again.');
+    throw new Error('Discord read states are not ready. Reopen a chat and try again.');
   }
   const guilds = GuildStore.getGuilds();
   if (!guilds || typeof guilds !== 'object') throw new Error('Discord servers are still loading.');
@@ -37,14 +37,21 @@ function collectUnread(stores) {
 
   function add(raw, guildId, joined = false) {
     let channel = raw?.channel ?? raw;
-    if (typeof channel === 'string') channel = ChannelStore?.getChannel?.(channel);
+    if (typeof channel === 'string') {
+      try { channel = ChannelStore?.getChannel?.(channel); } catch { channel = undefined; }
+      if (!channel) { skipped++; return; }
+    }
     if (!channel || typeof channel !== 'object' || !snowflake(channel.id)) return;
     const id = channel.id;
-    // Even a malformed guild index must never clear DMs or another server.
+    // Keep guild/private indexes separate, even if an index contains bad entries.
     const owner = channel.guild_id ?? channel.guildId;
-    if (owner != null && owner !== guildId) return;
     const type = channel.type == null ? null : Number(channel.type);
-    if (type != null && (!messageTypes.has(type) || threadTypes.has(type) && !joined)) return;
+    if (guildId == null) {
+      if (owner != null || type !== 1 && type !== 3) return;
+    } else {
+      if (owner != null && owner !== guildId) return;
+      if (type != null && (!messageTypes.has(type) || threadTypes.has(type) && !joined)) return;
+    }
     if (channels.has(id)) return;
     try {
       const unread = ReadStateStore.hasUnread(id);
@@ -98,10 +105,23 @@ function collectUnread(stores) {
       }
     } catch { warnings.add('Some joined threads could not be loaded.'); }
   }
-  if (!availableGuilds && values(guilds).some(guild => !guild?.unavailable && guild?.isMember !== false)) {
+  // Discord mobile versions expose private channels as records, channel arrays
+  // or ID arrays. Resolve IDs through ChannelStore and deduplicate all sources.
+  let privateListed = false;
+  for (const getter of ['getMutablePrivateChannels', 'getSortedPrivateChannels', 'getPrivateChannels']) {
+    try {
+      if (typeof ChannelStore?.[getter] !== 'function') continue;
+      const index = ChannelStore[getter]();
+      if (!index || typeof index !== 'object') continue;
+      for (const item of values(index)) add(item, null);
+      privateListed = true;
+    } catch {}
+  }
+  if (!privateListed) warnings.add('DM and group DM lists could not be loaded; they were skipped.');
+  if (!availableGuilds && !privateListed && values(guilds).some(guild => !guild?.unavailable && guild?.isMember !== false)) {
     throw new Error('Discord server channels are not ready. Reopen a server and try again.');
   }
-  if (skipped) warnings.add(`${skipped} unread channel${skipped === 1 ? '' : 's'} could not be checked and were skipped.`);
+  if (skipped) warnings.add(`${skipped} channel${skipped === 1 ? '' : 's'} could not be checked and were skipped.`);
   return { channels: Array.from(channels.values()), warnings: Array.from(warnings) };
 }
 
@@ -134,7 +154,7 @@ function createUI({ React, RN, getState, subscribe, updateOptions, requestReadAl
       pointerEvents: 'box-none',
       style: { position: 'absolute', [state.options.side]: 12, bottom: 145, zIndex: 9999 },
     }, h(Pressable, {
-      accessibilityRole: 'button', accessibilityLabel: 'Mark all server notifications as read',
+      accessibilityRole: 'button', accessibilityLabel: 'Mark all server and DM notifications as read',
       accessibilityState: { disabled: state.busy, busy: state.busy },
       onPress: requestReadAll, disabled: state.busy,
       style: { minHeight: 44, minWidth: 92, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 22,
@@ -164,15 +184,15 @@ function createUI({ React, RN, getState, subscribe, updateOptions, requestReadAl
     h(RN.Switch, { value: state.options[key], accessibilityLabel: title, onValueChange: value => updateOptions({ [key]: value }) }));
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('Read All Notifications', { fontSize: 24, lineHeight: 30, fontWeight: '700' }),
-      text('Mark unread server channels and joined threads as read in one tap.', { color: colors.muted, marginTop: 8 }),
-      text('Direct messages and group DMs stay unread. This does not delete messages, mention history or Android notifications.',
+      text('Mark unread server channels, joined threads, DMs and group DMs as read in one tap.', { color: colors.muted, marginTop: 8 }),
+      text('This does not delete messages, mention history or Android notifications.',
         { color: colors.muted, marginTop: 8, fontSize: 13 }),
-      button(state.busy ? 'Reading…' : '✓ Read all server notifications', requestReadAll, true),
+      button(state.busy ? 'Reading…' : '✓ Read all notifications', requestReadAll, true),
       button('Check unread channels', refresh),
       text(state.message, { marginTop: 14 }),
       ...state.warnings.map((warning, index) => h(RN.Text, { key: index, style: { color: colors.muted, marginTop: 8, fontSize: 13 } }, warning)),
       toggle('showButton', 'Show floating button', 'Display Read All in the chat view. It hides while typing.'),
-      toggle('confirm', 'Confirm before reading', 'Ask before marking your current unread server channels as read.'),
+      toggle('confirm', 'Confirm before reading', 'Ask before marking your current unread servers and DMs as read.'),
       button(`Button position: ${state.options.side === 'left' ? 'Left' : 'Right'} — tap to change`,
         () => updateOptions({ side: state.options.side === 'left' ? 'right' : 'left' })),
       text(state.overlay ? 'Floating button is ready. Reopen a chat if it is not visible yet.'
@@ -192,7 +212,7 @@ function createPlugin(V) {
   const listeners = new Set();
   const cleanup = [];
   let active = false, busy = false, generation = 0, overlay = false, pending = null;
-  let message = 'Ready. Tap Read All to mark your unread server channels as read.';
+  let message = 'Ready. Tap Read All to mark your unread server channels, DMs and group DMs as read.';
   let warnings = [];
   const log = error => { try { V.logger?.warn?.('[ReadAllNotificationsButton]', error?.message ?? String(error)); } catch {} };
   const safe = getter => { try { return getter(); } catch { return undefined; } };
@@ -217,7 +237,7 @@ function createPlugin(V) {
   function snapshot() {
     const UserStore = byStore('UserStore');
     const accountId = safe(() => UserStore.getCurrentUser()?.id);
-    if (!accountId) throw new Error('Sign in to Discord and wait for your servers to load.');
+    if (!accountId) throw new Error('Sign in to Discord and wait for your chats to load.');
     const connection = byStore('ConnectionStore');
     if (safe(() => connection.isConnected()) === false) throw new Error('Discord is offline. Reconnect and try again.');
     const ReadStateStore = byStore('ReadStateStore') ?? byProps('hasUnread', 'lastMessageId');
@@ -249,7 +269,7 @@ function createPlugin(V) {
       // as in Vencord. No separate REST call, token access or double ack.
       await dispatcher.dispatch(bulkReadEvent(data.channels));
       if (!active || run !== generation) return;
-      notify(`Marked ${data.channels.length} server channel${data.channels.length === 1 ? '' : 's'} as read.${warnings.length ? ' Some items were skipped; see plugin settings.' : ''}`);
+      notify(`Marked ${data.channels.length} channel${data.channels.length === 1 ? '' : 's'} as read.${warnings.length ? ' Some items were skipped; see plugin settings.' : ''}`);
     } catch (error) {
       log(error);
       if (active && run === generation) notify(`Could not mark notifications as read: ${error?.message ?? 'Unknown error'}`, true);
@@ -264,7 +284,7 @@ function createPlugin(V) {
       const data = snapshot();
       warnings = data.warnings;
       if (!data.channels.length) {
-        notify(warnings.length ? 'No unread channels could be marked. Check the notes in plugin settings.' : 'All server notifications are already read.');
+        notify(warnings.length ? 'No unread channels could be marked. Check the notes in plugin settings.' : 'All server and DM notifications are already read.');
         return;
       }
       const run = generation;
@@ -272,7 +292,7 @@ function createPlugin(V) {
         const token = {};
         pending = token;
         const release = () => { if (pending === token) pending = null; };
-        RN.Alert.alert('Read all server notifications?', `Mark ${data.channels.length} unread server channels and joined threads as read? Direct messages stay unread.`, [
+        RN.Alert.alert('Read all notifications?', `Mark ${data.channels.length} unread channels as read? This includes server channels, joined threads, DMs and group DMs.`, [
           { text: 'Cancel', style: 'cancel', onPress: release },
           { text: 'Read All', onPress: () => {
             if (pending !== token) return;
@@ -284,7 +304,7 @@ function createPlugin(V) {
     } catch (error) {
       pending = null;
       log(error);
-      notify(error?.message ?? 'Unable to check unread server channels.', true);
+      notify(error?.message ?? 'Unable to check unread channels.', true);
     }
   }
 
@@ -293,7 +313,7 @@ function createPlugin(V) {
     try {
       const data = snapshot();
       warnings = data.warnings;
-      message = `${data.channels.length} unread server channel${data.channels.length === 1 ? '' : 's'} ready to mark as read.`;
+      message = `${data.channels.length} unread channel${data.channels.length === 1 ? '' : 's'} ready to mark as read, including DMs and group DMs.`;
       changed();
     } catch (error) { notify(error?.message ?? 'Unable to check unread channels.', true); }
   }
@@ -332,7 +352,7 @@ function createPlugin(V) {
     try {
       const unregister = V.commands?.registerCommand?.({
         name: 'readall', displayName: 'readall',
-        description: 'Mark all server notifications as read', displayDescription: 'Mark all server notifications as read',
+        description: 'Mark all server and DM notifications as read', displayDescription: 'Mark all server and DM notifications as read',
         options: [], applicationId: '-1', inputType: 1, type: 1,
         execute: async () => { await requestReadAll(); return null; },
       });

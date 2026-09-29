@@ -19,7 +19,7 @@ export function collectUnread(stores) {
   const { GuildStore, GuildChannelStore, ChannelStore, ReadStateStore, ActiveJoinedThreadsStore } = stores;
   if (typeof GuildStore?.getGuilds !== 'function' || typeof ReadStateStore?.hasUnread !== 'function'
     || typeof ReadStateStore?.lastMessageId !== 'function') {
-    throw new Error('Discord read states are not ready. Reopen a server and try again.');
+    throw new Error('Discord read states are not ready. Reopen a chat and try again.');
   }
   const guilds = GuildStore.getGuilds();
   if (!guilds || typeof guilds !== 'object') throw new Error('Discord servers are still loading.');
@@ -29,14 +29,21 @@ export function collectUnread(stores) {
 
   function add(raw, guildId, joined = false) {
     let channel = raw?.channel ?? raw;
-    if (typeof channel === 'string') channel = ChannelStore?.getChannel?.(channel);
+    if (typeof channel === 'string') {
+      try { channel = ChannelStore?.getChannel?.(channel); } catch { channel = undefined; }
+      if (!channel) { skipped++; return; }
+    }
     if (!channel || typeof channel !== 'object' || !snowflake(channel.id)) return;
     const id = channel.id;
-    // Even a malformed guild index must never clear DMs or another server.
+    // Keep guild/private indexes separate, even if an index contains bad entries.
     const owner = channel.guild_id ?? channel.guildId;
-    if (owner != null && owner !== guildId) return;
     const type = channel.type == null ? null : Number(channel.type);
-    if (type != null && (!messageTypes.has(type) || threadTypes.has(type) && !joined)) return;
+    if (guildId == null) {
+      if (owner != null || type !== 1 && type !== 3) return;
+    } else {
+      if (owner != null && owner !== guildId) return;
+      if (type != null && (!messageTypes.has(type) || threadTypes.has(type) && !joined)) return;
+    }
     if (channels.has(id)) return;
     try {
       const unread = ReadStateStore.hasUnread(id);
@@ -90,10 +97,23 @@ export function collectUnread(stores) {
       }
     } catch { warnings.add('Some joined threads could not be loaded.'); }
   }
-  if (!availableGuilds && values(guilds).some(guild => !guild?.unavailable && guild?.isMember !== false)) {
+  // Discord mobile versions expose private channels as records, channel arrays
+  // or ID arrays. Resolve IDs through ChannelStore and deduplicate all sources.
+  let privateListed = false;
+  for (const getter of ['getMutablePrivateChannels', 'getSortedPrivateChannels', 'getPrivateChannels']) {
+    try {
+      if (typeof ChannelStore?.[getter] !== 'function') continue;
+      const index = ChannelStore[getter]();
+      if (!index || typeof index !== 'object') continue;
+      for (const item of values(index)) add(item, null);
+      privateListed = true;
+    } catch {}
+  }
+  if (!privateListed) warnings.add('DM and group DM lists could not be loaded; they were skipped.');
+  if (!availableGuilds && !privateListed && values(guilds).some(guild => !guild?.unavailable && guild?.isMember !== false)) {
     throw new Error('Discord server channels are not ready. Reopen a server and try again.');
   }
-  if (skipped) warnings.add(`${skipped} unread channel${skipped === 1 ? '' : 's'} could not be checked and were skipped.`);
+  if (skipped) warnings.add(`${skipped} channel${skipped === 1 ? '' : 's'} could not be checked and were skipped.`);
   return { channels: Array.from(channels.values()), warnings: Array.from(warnings) };
 }
 

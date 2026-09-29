@@ -19,7 +19,7 @@ function harness({ confirm = false, missingChat = false, noDispatcher = false, d
     GuildChannelStore: { getChannels: () => ({ SELECTABLE: [{ channel: { id: '100', guild_id: '1', type: 0 } }] }) },
     ReadStateStore: { hasUnread: () => true, lastMessageId: () => '999' },
     ActiveJoinedThreadsStore: { getActiveJoinedThreadsForGuild: () => ({}) },
-    ChannelStore: {}, ThemeStore: { theme: 'light' },
+    ChannelStore: { getMutablePrivateChannels: () => ({}) }, ThemeStore: { theme: 'light' },
   };
   const effects = [];
   const React = {
@@ -79,7 +79,7 @@ test('load never reads notifications; explicit /readall dispatches one captured 
   assert.equal(h.command.name, 'readall');
   assert.equal(await h.command.execute(), null);
   assert.deepEqual(plain(h.events), [{ type: 'BULK_ACK', context: 'APP', channels: [{ channelId: '100', messageId: '999', readStateType: 0 }] }]);
-  assert.match(h.toasts.at(-1), /Marked 1 server channel/);
+  assert.match(h.toasts.at(-1), /Marked 1 channel/);
   h.plugin.onUnload();
 });
 
@@ -103,7 +103,7 @@ test('settings retain the action if ChatView is absent or a lazy proxy throws', 
   assert.doesNotThrow(() => h.plugin.onLoad());
   const tree = h.plugin.settings();
   const all = children(tree);
-  const action = all.find(item => item.props?.accessibilityRole === 'button' && item.props.children[0]?.props?.children[0] === '✓ Read all server notifications');
+  const action = all.find(item => item.props?.accessibilityRole === 'button' && item.props.children[0]?.props?.children[0] === '✓ Read all notifications');
   assert.ok(action);
   await action.props.onPress();
   assert.equal(h.events.length, 1);
@@ -189,5 +189,23 @@ test('rapid taps cannot dispatch duplicate acknowledgements while a dispatch is 
   assert.equal(h.events.length, 1);
   finish();
   await first;
+  h.plugin.onUnload();
+});
+
+test('Read All includes DMs and group DMs in the same confirmed native acknowledgement', async () => {
+  const h = harness({ confirm: true });
+  h.stores.ChannelStore.getMutablePrivateChannels = () => ({ 201: { id: '201', type: 1 }, 202: { id: '202', type: 3 } });
+  h.plugin.onLoad();
+  await h.command.execute();
+  assert.equal(h.events.length, 0);
+  assert.match(h.alerts[0][1], /DMs and group DMs/);
+  h.alerts[0][2][1].onPress();
+  await tick();
+  assert.deepEqual(plain(h.events), [{ type: 'BULK_ACK', context: 'APP', channels: [
+    { channelId: '100', messageId: '999', readStateType: 0 },
+    { channelId: '201', messageId: '999', readStateType: 0 },
+    { channelId: '202', messageId: '999', readStateType: 0 },
+  ] }]);
+  assert.match(h.toasts.at(-1), /Marked 3 channels as read/);
   h.plugin.onUnload();
 });
