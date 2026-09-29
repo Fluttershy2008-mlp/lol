@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later. Includes BSD-3-Clause code; see NOTICE. */
 import { findByProps } from "@vendetta/metro";
-import { FluxDispatcher } from "@vendetta/metro/common";
-import { instead } from "@vendetta/patcher";
+import { FluxDispatcher, React, ReactNative } from "@vendetta/metro/common";
+import { before, instead } from "@vendetta/patcher";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 import { storage } from "@vendetta/plugin";
 import * as commands from "@vendetta/commands";
 import { history, configureHistory, initOptions, resetHistory, retentionStatus, reportRetention, resetRetentionStatus } from "./state";
-import { openHistory } from "./settings";
+import Settings, { openHistory, openSettings } from "./settings";
+import { registerSettingsShortcut } from "./shortcut";
 
 type Entry = { id: string; channelId: string };
 type Job = { entry: Entry; remove: boolean };
@@ -328,6 +330,25 @@ export function onLoad() {
         options: [], execute: (_args: any, context: any) => { openHistory(context?.channel?.id); },
       }));
     } catch { /* Settings remains available if the command API changes. */ }
+    // Add a row to the existing Revenge section. Register its native renderer
+    // before exposing the row key to avoid the old settings .parent crash.
+    try {
+      const host: any = globalThis;
+      patches.push(registerSettingsShortcut({
+        settingsAPI: host.bunny?.ui?.settings ?? host.window?.bunny?.ui?.settings,
+        Settings,
+        constants: optionalModule("SETTING_RENDERER_CONFIG"),
+        treeManager: optionalModule("getAncestors", "isBlocked"),
+        patcher: { before },
+        openSettings,
+        getAssetID: getAssetIDByName,
+        renderIcon: (asset: any) => {
+          const Icon = optionalModule("TableRowIcon")?.TableRowIcon;
+          return Icon ? React.createElement(Icon, { source: asset })
+            : React.createElement(ReactNative.Image, { source: asset, style: { width: 24, height: 24 } });
+        },
+      }));
+    } catch { /* An unavailable shortcut must not stop message logging. */ }
     scheduleWork();
   } catch (error) {
     onUnload();

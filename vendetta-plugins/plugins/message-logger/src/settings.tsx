@@ -104,6 +104,16 @@ export function openHistory(channelId?: string) {
   }
 }
 
+export function openSettings() {
+  try {
+    const navigation = findByProps("getRootNavigationRef")?.getRootNavigationRef?.();
+    if (typeof navigation?.navigate !== "function") throw new Error("Navigation unavailable");
+    navigation.navigate("BUNNY_CUSTOM_PAGE", { title: "Message Logger", render: () => <Settings /> });
+  } catch {
+    RN.Alert.alert("Message Logger", "Open Revenge Settings → Plugins → Message Logger → settings.");
+  }
+}
+
 export default function Settings() {
   useProxy(storage);
   const palette = usePalette();
@@ -117,7 +127,7 @@ export default function Settings() {
     ["ignoreBots", "Ignore bots"], ["ignoreSelf", "Ignore my messages"], ["nopk", "Ignore PluralKit originals"],
   ];
   return <RN.ScrollView style={{ flex: 1, backgroundColor: palette.bg }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-    <RN.Text style={{ color: palette.fg, fontSize: 23, fontWeight: "700", marginBottom: 12 }}>Message Logger 2.0.1</RN.Text>
+    <RN.Text style={{ color: palette.fg, fontSize: 23, fontWeight: "700", marginBottom: 12 }}>Message Logger 2.0.2</RN.Text>
     <RN.Text style={{ color: palette.muted, marginBottom: 12 }}>Deleted messages and edit history for Revenge, adapted from Vencord. Use /messagelogger in any chat to open its history privately.</RN.Text>
     <Button label="Open message history" color={palette.accent} background={palette.card} onPress={() => setShowHistory(true)} />
     <RN.Text selectable style={{ color: palette.muted, marginVertical: 10 }}>{"Deletions seen: " + retentionStatus.seen + " · Kept in chat: " + retentionStatus.kept + "\nLast deletion: " + retentionStatus.last}</RN.Text>

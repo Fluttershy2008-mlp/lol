@@ -86,6 +86,31 @@ function setup(options = {}) {
     useState: value => [value, () => {}], useEffect() {},
     createElement: (type, props, ...children) => { assert.ok(type, "settings cannot render missing controls"); return { type, props, children }; },
   };
+  const nativeKeys = ['BUNNY', 'BUNNY_PLUGINS', 'CUSTOMRPC_FLUTTERSHY_SETTINGS',
+    'PROFILE_STATUS_PRESETS_FLUTTERSHY_SETTINGS', 'RELATIONSHIP_NOTIFIER_FLUTTERSHY_SETTINGS',
+    'BUNNY_THEMES', 'BUNNY_FONTS', 'BUNNY_DEVELOPER', 'ACCOUNT_SWITCHER'];
+  const nativeRows = nativeKeys.map(key => ({ key }));
+  const nativeBase = Object.fromEntries(nativeKeys.map(key => [key, { type: 'pressable', parent: null }]));
+  const settingConstants = {};
+  Object.defineProperty(settingConstants, 'SETTING_RENDERER_CONFIG', {
+    configurable: !options.lockedSettings, enumerable: true, get: () => ({ ...nativeBase }),
+  });
+  const settingsTree = {
+    getAncestors(key) {
+      const parents = [];
+      let parent = settingConstants.SETTING_RENDERER_CONFIG[key].parent;
+      while (parent != null) { parents.push(parent); parent = settingConstants.SETTING_RENDERER_CONFIG[parent].parent; }
+      return parents;
+    },
+    isBlocked(key, blocked) { return [...this.getAncestors(key), key].some(id => blocked.has(id)); },
+  };
+  const settingsAPI = { registeredSections: { Revenge: nativeRows } };
+  const originalGetAncestors = settingsTree.getAncestors;
+  const splice = nativeRows.splice;
+  nativeRows.splice = function (index, count, ...added) {
+    for (const row of added) assert.doesNotThrow(() => settingsTree.getAncestors(row.key), 'register renderer before exposing row');
+    return splice.call(this, index, count, ...added);
+  };
   const api = {
     metro: {
       findByProps(...props) {
@@ -95,9 +120,11 @@ function setup(options = {}) {
         if (props[0] === "getChannel") return { getChannel: id => ({ id, name: "channel " + id, guild_id: "guild", parent_id: "category" }) };
         if (props[0] === "getCurrentUser") return { getCurrentUser: () => ({ id: "self" }) };
         if (props[0] === "getRootNavigationRef") return options.noNavigation ? undefined : { getRootNavigationRef: () => ({ navigate: (...args) => pages.push(args) }) };
+        if (props[0] === "SETTING_RENDERER_CONFIG") return options.shortcut ? settingConstants : undefined;
+        if (props[0] === "getAncestors") return options.shortcut ? settingsTree : undefined;
       },
       findByName: () => RowManager,
-      common: { FluxDispatcher: dispatcher, ReactNative: { ScrollView: "scroll", View: "view", Text: "text", Switch: "switch", TextInput: "input", Pressable: "button", FlatList: "list", Alert: { alert: (...args) => alerts.push(args) }, useColorScheme: () => "dark", processColor: (v) => v }, React },
+      common: { FluxDispatcher: dispatcher, ReactNative: { ScrollView: "scroll", View: "view", Text: "text", Switch: "switch", TextInput: "input", Pressable: "button", FlatList: "list", Image: "image", Alert: { alert: (...args) => alerts.push(args) }, useColorScheme: () => "dark", processColor: (v) => v }, React },
     },
     commands: options.noCommands ? undefined : { registerCommand: command => { commands.push(command); return () => commands.splice(commands.indexOf(command), 1); } },
     patcher: options.patcher ?? patcher,
@@ -107,6 +134,7 @@ function setup(options = {}) {
   };
   const plugin = runInNewContext(bundle, {
     vendetta: api, setTimeout: timeout, clearTimeout: (id) => timers.delete(id),
+    bunny: options.shortcut ? { ui: { settings: settingsAPI } } : undefined,
     AbortController: options.noAbort ? undefined : AbortController,
     fetch(...args) {
       requests.push(args);
@@ -128,7 +156,7 @@ function setup(options = {}) {
     nodes(plugin.settings()).find(n => n.props?.label === "Clear all history").props.onPress();
     alerts.at(-1)[2].find(button => button.text === "Clear").onPress();
   }
-  return { plugin, add, remove, logs, clearAll, commands, pages, alerts, store, cache, events, requests, storage, dispatcher, utils, RowManager, originalDispatch, originalDirtyDispatch, originalMaybeDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
+  return { plugin, add, remove, logs, clearAll, commands, pages, alerts, store, cache, events, requests, storage, dispatcher, utils, RowManager, nativeKeys, nativeRows, nativeBase, settingsAPI, settingConstants, settingsTree, originalGetAncestors, originalDispatch, originalDirtyDispatch, originalMaybeDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
 }
 function nodes(element) {
   if (Array.isArray(element)) return element.flatMap(nodes);
@@ -138,7 +166,7 @@ function nodes(element) {
 
 test("published manifest hashes the exact executable bundle", () => {
   const m = JSON.parse(readFileSync(new URL("../dist/message-logger/manifest.json", import.meta.url)));
-  assert.equal(m.version, "2.0.1"); assert.equal(m.main, "index.js");
+  assert.equal(m.version, "2.0.2"); assert.equal(m.main, "index.js");
   assert.equal(m.hash, createHash("sha256").update(bundle).digest("hex"));
 });
 
@@ -513,4 +541,44 @@ test("retained deletions keep public dispatch promise semantics", async () => {
   const h = setup(); h.plugin.onLoad(); h.add("a");
   const result = h.remove("a"); assert.equal(typeof result?.then, "function"); await result;
   await h.advance(); assert.equal(h.logs().length, 1); h.plugin.onUnload();
+});
+
+test("Revenge section shortcut opens Message Logger settings and preserves the pictured rows", async () => {
+  const h = setup({ shortcut: true }), key = 'MESSAGE_LOGGER_FLUTTERSHY_SETTINGS'; h.plugin.onLoad(); h.plugin.onLoad();
+  assert.deepEqual(h.nativeRows.map(row => row.key), [...h.nativeKeys.slice(0, 5), key, ...h.nativeKeys.slice(5)]);
+  const row = h.nativeRows.find(row => row.key === key), renderer = h.settingConstants.SETTING_RENDERER_CONFIG[key];
+  assert.equal(row.title(), 'Message Logger'); assert.equal((await row.render()).default, h.plugin.settings);
+  assert.equal(renderer.parent, null); assert.equal(renderer.usePredicate(), true); assert.equal(renderer.IconComponent().type, 'image');
+  assert.doesNotThrow(() => h.nativeRows.forEach(row => h.settingsTree.getAncestors(row.key)));
+  renderer.onPress(); assert.equal(h.pages.at(-1)[0], 'BUNNY_CUSTOM_PAGE');
+  assert.equal(h.pages.at(-1)[1].render().type, h.plugin.settings);
+  h.plugin.onUnload(); assert.deepEqual(h.nativeRows.map(row => row.key), h.nativeKeys);
+});
+
+test("shortcut unload and re-enable keep stale native keys safe without wrapping repeatedly", () => {
+  const h = setup({ shortcut: true }), key = 'MESSAGE_LOGGER_FLUTTERSHY_SETTINGS'; h.plugin.onLoad();
+  const cachedKeys = h.nativeRows.map(row => row.key), captured = h.settingConstants.SETTING_RENDERER_CONFIG[key];
+  const getter = Object.getOwnPropertyDescriptor(h.settingConstants, 'SETTING_RENDERER_CONFIG').get;
+  h.settingsAPI.registeredSections.Revenge = [...h.nativeRows, { key: 'LATER_PLUGIN' }];
+  h.plugin.onUnload(); h.plugin.onUnload();
+  assert.doesNotThrow(() => cachedKeys.forEach(key => h.settingsTree.getAncestors(key)));
+  assert.equal(captured.usePredicate(), false); captured.onPress(); assert.equal(h.pages.length, 0);
+  assert.equal(h.settingsAPI.registeredSections.Revenge.some(row => row.key === key), false);
+  assert.equal(h.settingsAPI.registeredSections.Revenge.at(-1).key, 'LATER_PLUGIN');
+  h.plugin.onLoad(); assert.equal(h.settingConstants.SETTING_RENDERER_CONFIG[key].usePredicate(), true);
+  assert.equal(Object.getOwnPropertyDescriptor(h.settingConstants, 'SETTING_RENDERER_CONFIG').get, getter);
+  h.plugin.onUnload(); assert.equal(h.settingsTree.getAncestors, h.originalGetAncestors);
+});
+
+test("shortcut protects its renderer from replacements and skips unsupported registries safely", async () => {
+  const h = setup({ shortcut: true }), key = 'MESSAGE_LOGGER_FLUTTERSHY_SETTINGS'; h.plugin.onLoad();
+  Object.defineProperty(h.settingConstants, 'SETTING_RENDERER_CONFIG', { configurable: true, get: () => ({ ...h.nativeBase, LATE: { parent: 'BUNNY' } }) });
+  assert.equal(h.settingConstants.SETTING_RENDERER_CONFIG[key], undefined);
+  assert.doesNotThrow(() => h.settingsTree.getAncestors(key));
+  assert.equal(h.settingsTree.isBlocked('LATE', new Set(['BUNNY'])), true);
+  assert.throws(() => h.settingsTree.getAncestors('UNRELATED_MISSING'), /parent/);
+  h.plugin.onUnload();
+  const locked = setup({ shortcut: true, lockedSettings: true }); locked.plugin.onLoad(); locked.add('a'); locked.remove('a'); await locked.advance();
+  assert.deepEqual(locked.nativeRows.map(row => row.key), locked.nativeKeys);
+  assert.equal(locked.store.getMessage('c', 'a').content, '[deleted] hello'); locked.plugin.onUnload();
 });

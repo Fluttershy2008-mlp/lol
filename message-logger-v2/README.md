@@ -1,12 +1,11 @@
-# Message Logger V2 2.0.1 for Revenge
+# Message Logger V2 2.0.2 for Revenge
 
 Mobile adaptation of Vencord MessageLogger's deleted messages, edit history,
 attachment history and ignore filters. Extends the existing Revenge 1.2.0
 retention engine and its deferred-update crash safeguards.
 
-This separate install URL contains the same fixed 2.0.1 build. It starts with
-fresh plugin settings. Disable or remove the old Message Logger before enabling
-Message Logger V2 so the two copies do not process the same events.
+This separate install URL uses its own plugin settings. Keep only this copy
+enabled if you previously installed the original Message Logger.
 
 ## Install or update
 
@@ -17,8 +16,23 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/
 ```
 
 If already installed from this URL, update the plugin and fully close and reopen
-Revenge. Check that it shows **2.0.1**. If the old version remains cached, remove
+Revenge. Check that it shows **2.0.2**. If the old version remains cached, remove
 it and reinstall using the URL above. Keep only one Message Logger enabled.
+
+### 2.0.2 settings shortcut
+
+A **Message Logger** row appears in Discord Settings' **Revenge** section, below
+RelationshipNotifier when installed, alongside CustomRPC and Profile Status
+Presets. It opens the full Message Logger settings page, with the **Open message
+history** button. Update the plugin, restart Revenge and reopen Settings to see it.
+
+The shortcut uses Revenge's existing settings section and registers a valid
+native renderer before exposing the row. Unloading removes only its own row and
+keeps stale native keys safe, avoiding the earlier `.parent` settings crash.
+Unsupported settings APIs leave the existing plugin settings and command usable.
+
+The separate **Message Logger V2** installation is also updated at:
+`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/`.
 
 ### 2.0.1 chat retention fix
 
@@ -44,7 +58,8 @@ your existing filter choices.
   and the plugin stops attempting the label for the rest of that session.
 - Run **`/messagelogger`** in a chat to open its local history. The command opens
   a screen and does not send anything to the channel.
-- Or open **Plugins → Message Logger → settings → Open message history**.
+- Or use **Discord Settings → Revenge section → Message Logger → Open message
+  history**, or **Plugins → Message Logger → settings → Open message history**.
 - Switch between all / deleted / edited entries, search text or IDs, and tap
   an entry for earlier versions, timestamps and attachment details.
 - Clear one message, a channel, or all history. Clearing only affects local
@@ -96,15 +111,17 @@ npm run test:message-logger
 
 The build emits `dist/message-logger/index.js`, a manifest with a SHA-256 hash,
 `LICENSE` and `NOTICE`. Publish these together to the top-level `message-logger/`
-directory, alongside this README.
+directory, alongside this README. Publish the same bundle and hash to
+`message-logger-v2/` too, retaining that manifest's **Message Logger V2** name.
 
-48 automated checks execute the distributed bundle with the real spitroast
+51 automated checks execute the distributed bundle with the real spitroast
 patcher and simulated Discord stores, Flux dispatch and timers. They cover
 the prior crash regressions, bulk/burst deletes, edits and empty text, removed
 attachments, filters, local commands, history limits and cleanup, plus alternate
 mobile event paths and synchronous/asynchronous label failures. The label-error,
 alternate-dispatch and mobile-record regression cases fail against 2.0.0 and
-pass against 2.0.1. A real Android
+pass against 2.0.1 and later. Shortcut checks cover native navigation, row order,
+safe unload/re-enable and renderer replacement. A real Android
 Revenge runtime was not available, so these checks do not guarantee that every
 Discord build is compatible or free of native crashes.
 
