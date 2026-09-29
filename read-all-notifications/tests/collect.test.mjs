@@ -1,0 +1,97 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { collectUnread, bulkReadEvent } from '../src/collect.js';
+
+function fixture() {
+  const text = { id: '101', guild_id: '1', type: 0 };
+  const voice = { id: '102', guild_id: '1', type: 2 };
+  const thread = { id: '103', guild_id: '1', type: 11 };
+  return {
+    GuildStore: { getGuilds: () => ({ 1: { id: '1' } }) },
+    GuildChannelStore: { getChannels: () => ({ SELECTABLE: [{ channel: text }], VOCAL: [{ channel: voice }] }) },
+    ActiveJoinedThreadsStore: { getActiveJoinedThreadsForGuild: () => ({ 101: { 103: { channel: thread } } }) },
+    ReadStateStore: { hasUnread: () => true, getMentionCount: () => 0, lastMessageId: id => id + '000' },
+    ChannelStore: {},
+  };
+}
+
+test('collects server text, voice and joined thread reads with the original Vencord action shape', () => {
+  const result = collectUnread(fixture());
+  assert.deepEqual(result, { channels: [
+    { channelId: '101', messageId: '101000', readStateType: 0 },
+    { channelId: '102', messageId: '102000', readStateType: 0 },
+    { channelId: '103', messageId: '103000', readStateType: 0 },
+  ], warnings: [] });
+  assert.deepEqual(bulkReadEvent(result.channels), { type: 'BULK_ACK', context: 'APP', channels: result.channels });
+});
+
+test('ignores DMs, group DMs, categories, forums, unjoined threads and mismatched guilds', () => {
+  const stores = fixture();
+  stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: [
+    ...[1, 3, 4, 14, 15, 16, 11].map((type, i) => ({ channel: { id: String(200 + i), guild_id: '1', type } })),
+    { channel: { id: '300', guild_id: '2', type: 0 } },
+  ] });
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['103']);
+});
+
+test('deduplicates overlapping channel and joined thread lists without changing store objects', () => {
+  const stores = fixture();
+  const item = Object.freeze({ id: '101', guild_id: '1', type: 0 });
+  const index = Object.freeze({ SELECTABLE: Object.freeze([{ channel: item }, { channel: item }]), VOCAL: Object.freeze([{ channel: item }]) });
+  stores.GuildChannelStore.getChannels = () => index;
+  stores.ActiveJoinedThreadsStore.getActiveJoinedThreadsForGuild = () => ({ a: { channel: item } });
+  assert.equal(collectUnread(stores).channels.length, 1);
+  assert.equal(index.SELECTABLE.length, 2);
+});
+
+test('does not acknowledge read channels or invent IDs for channels with missing last messages', () => {
+  const stores = fixture();
+  stores.ReadStateStore.hasUnread = id => id !== '101';
+  stores.ReadStateStore.lastMessageId = id => id === '102' ? null : '900';
+  const result = collectUnread(stores);
+  assert.deepEqual(result.channels.map(c => c.channelId), ['103']);
+  assert.match(result.warnings.join(' '), /1 unread channel/);
+});
+
+test('includes unread mention badges even if hasUnread is false', () => {
+  const stores = fixture();
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.getMentionCount = id => id === '101' ? 2 : 0;
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['101']);
+});
+
+test('falls back to guild channel records when GuildChannelStore is missing', () => {
+  const stores = fixture();
+  delete stores.GuildChannelStore;
+  stores.ChannelStore.getMutableGuildChannelsForGuild = () => ({ 104: { id: '104', type: 0, guild_id: '1' } });
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['104', '103']);
+});
+
+test('handles Map indexes and direct joined-thread channel objects', () => {
+  const stores = fixture();
+  stores.GuildStore.getGuilds = () => new Map([['1', { id: '1' }]]);
+  stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: new Map([['101', { id: '101', type: 0 }]]) });
+  stores.ActiveJoinedThreadsStore.getActiveJoinedThreadsForGuild = () => [{ id: '103', type: 11, guild_id: '1' }];
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['101', '103']);
+});
+
+test('missing channel indexes and missing read state stores report a failure, not false success', () => {
+  const stores = fixture();
+  delete stores.GuildChannelStore;
+  assert.throws(() => collectUnread(stores), /channels are not ready/);
+  delete stores.ReadStateStore;
+  assert.throws(() => collectUnread(stores), /read states are not ready/);
+});
+
+test('skips unavailable guilds and reports absent thread support', () => {
+  const stores = fixture();
+  stores.GuildStore.getGuilds = () => ({ 1: { id: '1' }, 2: { id: '2', unavailable: true } });
+  const calls = [];
+  stores.GuildChannelStore.getChannels = id => { calls.push(id); return { SELECTABLE: [] }; };
+  delete stores.ActiveJoinedThreadsStore;
+  const result = collectUnread(stores);
+  assert.deepEqual(calls, ['1']);
+  assert.equal(result.channels.length, 0);
+  assert.match(result.warnings.join(' '), /unavailable/);
+  assert.match(result.warnings.join(' '), /Joined-thread/);
+});

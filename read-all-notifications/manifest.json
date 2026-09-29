@@ -1,0 +1,22 @@
+{
+  "name": "ReadAllNotificationsButton",
+  "description": "Mark unread server channels and joined threads as read with a Read All button. Mobile port of Vencord's ReadAllNotificationsButton.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Fluttershy2008-mlp",
+      "id": "753962426407452713"
+    },
+    {
+      "name": "kemo (original Vencord plugin)"
+    },
+    {
+      "name": "Vendicated and Vencord contributors"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "Check"
+  },
+  "hash": "1024e19d0bd7d85ccd099479e1f0169073dd3ac81e34214623b7ea717d6d8cdf"
+}
