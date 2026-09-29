@@ -48,22 +48,23 @@ export function createHistory(deps: {
       parentId: text(channel?.parent_id),
     };
   }
-  function ignore(message: any, edit = false) {
+  function ignoreReason(message: any, edit = false): string | null {
     const o = options();
-    if (!message || typeof message.id !== "string" || typeof message.channel_id !== "string") return true;
-    if (message.author?.id === "1" || message.state === "SEND_FAILED" || (Number(message.flags) & 64)) return true;
-    if (message.content != null && typeof message.content !== "string") return true;
-    if (edit ? !o.logEdits : !o.logDeletes) return true;
-    if (o.ignoreBots && message.author?.bot) return true;
+    if (!message || typeof message.id !== "string" || typeof message.channel_id !== "string") return "Unsupported message data";
+    if (message.author?.id === "1" || message.state === "SEND_FAILED" || (Number(message.flags) & 64)) return "System, failed or ephemeral message";
+    if (message.content != null && typeof message.content !== "string") return "Unsupported message content";
+    if (edit ? !o.logEdits : !o.logDeletes) return "Logging is disabled";
+    if (o.ignoreBots && message.author?.bot) return "Bot ignored — switch off Ignore bots to include it";
     let self: string | undefined;
     try { self = deps.selfId?.(); } catch { /* Optional store. */ }
-    if (o.ignoreSelf && self && message.author?.id === self) return true;
+    if (o.ignoreSelf && self && message.author?.id === self) return "Your own message is ignored";
     const channel = metadata(message);
-    return ids(o.ignoreUsers).has(message.author?.id)
-      || ids(o.ignoreChannels).has(message.channel_id)
-      || ids(o.ignoreChannels).has(channel.parentId)
-      || ids(o.ignoreGuilds).has(channel.guildId);
+    if (ids(o.ignoreUsers).has(message.author?.id)) return "User is in the ignore list";
+    if (ids(o.ignoreChannels).has(message.channel_id) || ids(o.ignoreChannels).has(channel.parentId)) return "Channel or category is in the ignore list";
+    if (ids(o.ignoreGuilds).has(channel.guildId)) return "Server is in the ignore list";
+    return null;
   }
+  const ignore = (message: any, edit = false) => ignoreReason(message, edit) !== null;
   function snapshot(message: any): Version {
     return {
       content: text(message.content, limits.content),
@@ -125,7 +126,7 @@ export function createHistory(deps: {
     changed();
   }
   return {
-    ignore, recordEdit, recordDelete, clear,
+    ignore, ignoreReason, recordEdit, recordDelete, clear,
     get: (channelId: string, id: string) => records.get(key(channelId, id)),
     list: () => [...records.values()].reverse(),
     size: () => records.size,

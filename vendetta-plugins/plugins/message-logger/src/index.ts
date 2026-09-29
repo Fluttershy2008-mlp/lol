@@ -4,7 +4,7 @@ import { FluxDispatcher } from "@vendetta/metro/common";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import * as commands from "@vendetta/commands";
-import { history, configureHistory, initOptions, resetHistory } from "./state";
+import { history, configureHistory, initOptions, resetHistory, retentionStatus, reportRetention, resetRetentionStatus } from "./state";
 import { openHistory } from "./settings";
 
 type Entry = { id: string; channelId: string };
@@ -23,6 +23,8 @@ const patches: (() => void)[] = [];
 let MessageStore: any;
 let ChannelMessages: any;
 let active = false;
+let labelSupported = true;
+let transformedEvents = new WeakMap<object, any>();
 let generation = 0;
 let workTimer: ReturnType<typeof setTimeout> | undefined;
 let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -31,9 +33,33 @@ const current = (entry: Entry) => deleted.get(key(entry)) === entry;
 const label = (content: string) => content.startsWith(PREFIX) ? content : PREFIX + content;
 
 function getMessage({ channelId, id }: Entry) {
-  return MessageStore?.getMessage?.(channelId, id)
-    ?? MessageStore?.getMessages?.(channelId)?.get?.(id)
-    ?? ChannelMessages?.get?.(channelId)?.get?.(id);
+  // One unavailable store must not prevent the other cache from being read.
+  for (const read of [
+    () => MessageStore?.getMessage?.(channelId, id),
+    () => MessageStore?.getMessages?.(channelId)?.get?.(id),
+    () => ChannelMessages?.get?.(channelId)?.get?.(id),
+  ]) {
+    try { const message = read(); if (message) return message; } catch { /* Try the next cache. */ }
+  }
+}
+
+function forHistory(message: any, entry: Entry) {
+  if (!message) return undefined;
+  // This small view is ONLY for archive/filter reads, never a native message update.
+  return {
+    id: message.id ?? entry.id, channel_id: message.channel_id ?? message.channelId ?? entry.channelId,
+    guild_id: message.guild_id ?? message.guildId, author: message.author, state: message.state,
+    flags: message.flags, content: message.content, attachments: message.attachments,
+    timestamp: message.timestamp, edited_timestamp: message.edited_timestamp ?? message.editedTimestamp,
+  };
+}
+
+function dispatchSafely(event: any, onError: () => void = () => {}) {
+  try {
+    const result = FluxDispatcher.dispatch(event);
+    // Newer Flux dispatchers return a Promise; sync try/catch alone misses rejection.
+    if (result && typeof result.then === "function") Promise.resolve(result).catch(onError);
+  } catch { onError(); }
 }
 
 function forget(entry: Entry) {
@@ -101,7 +127,7 @@ function scheduleWork() {
         const [id, job] = pending.entries().next().value as [string, Job];
         pending.delete(id);
         if (job.remove) {
-          try { FluxDispatcher.dispatch(deleteEvent(job.entry)); } catch { /* Fail open. */ }
+          dispatchSafely(deleteEvent(job.entry));
           continue;
         }
         if (!current(job.entry)) continue;
@@ -113,15 +139,20 @@ function scheduleWork() {
           // Records are already normalized. Reconstructing one as gateway data can
           // corrupt attachments/timestamps and later crash native rendering.
           // A partial update lets Discord preserve every other field.
-          FluxDispatcher.dispatch({
-            type: "MESSAGE_UPDATE",
-            __vml_synthetic: true,
-            message: { id: job.entry.id, channel_id: job.entry.channelId, content: label(content) },
-          });
+          if (labelSupported) dispatchSafely({
+              type: "MESSAGE_UPDATE",
+              __vml_synthetic: true,
+              message: { id: job.entry.id, channel_id: job.entry.channelId, content: label(content) },
+            }, () => {
+              if (!active || epoch !== generation || !current(job.entry)) return;
+              // A cosmetic label failure must NEVER turn back into a real deletion.
+              labelSupported = false;
+              reportRetention({ labelFailures: retentionStatus.labelFailures + 1, last: "Message kept in chat; deleted label is unavailable on this Discord build" });
+            });
           if (storage.nopk && current(job.entry)) pkQueue.set(id, job.entry);
         } catch {
-          forget(job.entry);
-          try { FluxDispatcher.dispatch(deleteEvent(job.entry)); } catch { /* Never throw from a timer. */ }
+          // Keep the original cached record even when the optional marker cannot be applied.
+          reportRetention({ last: "Message kept in chat without a deleted label" });
         }
       }
       pumpPluralKit();
@@ -131,19 +162,20 @@ function scheduleWork() {
 }
 
 function retain(entry: Entry) {
-  const message = getMessage(entry);
-  if (!message || message.author?.id === "1" || message.state === "SEND_FAILED") return false;
-  if ((Number(message.flags) & 64) !== 0) return false;
-  if (message.content != null && typeof message.content !== "string") return false;
-  if (message.channel_id != null && message.channel_id !== entry.channelId) return false;
-  if (history.ignore(message)) return false;
+  reportRetention({ seen: retentionStatus.seen + 1 });
+  const message = forHistory(getMessage(entry), entry);
+  if (!message) { reportRetention({ last: "Message was not in Discord's local cache" }); return false; }
+  if (message.channel_id !== entry.channelId || message.id !== entry.id) return false;
+  const reason = history.ignoreReason(message);
+  if (reason) { reportRetention({ last: reason }); return false; }
   if (deleted.has(key(entry))) return true;
   history.recordDelete(message);
-  if (!storage.keepDeletedInChat) return false;
+  if (!storage.keepDeletedInChat) { reportRetention({ last: "Saved to history only — Keep deleted messages in chat is off" }); return false; }
   // The separate viewer can still record the event when chat retention is full.
-  if (pending.size >= MAX_PENDING - 1 || pending.has(key(entry))) return false;
+  if (pending.size >= MAX_PENDING - 1 || pending.has(key(entry))) { reportRetention({ last: "Saved to history only — chat retention queue is full" }); return false; }
 
   deleted.set(key(entry), entry);
+  reportRetention({ kept: retentionStatus.kept + 1, last: "Deleted message kept in chat" });
   pending.set(key(entry), { entry, remove: false });
   let inChannel = 0;
   let oldestInChannel: Entry | undefined;
@@ -160,6 +192,7 @@ function retain(entry: Entry) {
 
 function resetWork() {
   generation++;
+  transformedEvents = new WeakMap();
   if (workTimer !== undefined) clearTimeout(workTimer);
   if (cleanupTimer !== undefined) clearTimeout(cleanupTimer);
   workTimer = cleanupTimer = undefined;
@@ -177,6 +210,8 @@ function resetWork() {
 export function onLoad() {
   if (active) return;
   initOptions();
+  resetRetentionStatus();
+  labelSupported = true;
   MessageStore = findByProps("getMessage", "getMessages");
   ChannelMessages = findByProps("_channelMessages");
   if (typeof FluxDispatcher?.dispatch !== "function"
@@ -200,21 +235,20 @@ export function onLoad() {
   for (const [id, entry] of unloadEntries) pending.set(id, { entry, remove: true });
   unloadEntries.clear();
   try {
-    patches.push(instead("dispatch", FluxDispatcher, function (args, original) {
-      const [event] = args;
-      if (!active || !event) return original.apply(this, args);
+    const transformEvent = (event: any) => {
+      if (!active || !event) return event;
       if (event.type === "LOGOUT" || event.type === "LOGOUT_START" || event.type === "LOGIN_SUCCESS") {
         // Account transitions must not mix one account's message history with another.
         resetHistory();
         resetWork();
-        return original.apply(this, args);
+        return event;
       }
       if (event.type === "CHANNEL_DELETE") {
         const channelId = event.channel?.id ?? event.channelId ?? event.channel_id;
         for (const entry of [...deleted.values()]) if (entry.channelId === channelId) forget(entry);
         for (const [id, job] of pending) if (job.entry.channelId === channelId) pending.delete(id);
         if (typeof channelId === "string") history.clear(channelId);
-        return original.apply(this, args);
+        return event;
       }
       if (event.type === "GUILD_DELETE" && !event.unavailable && !event.guild?.unavailable) {
         const guildId = event.guild?.id ?? event.guildId ?? event.guild_id ?? event.id;
@@ -228,24 +262,25 @@ export function onLoad() {
       }
       if (event.type === "MESSAGE_UPDATE") {
         const message = event.message;
-        if (!event.__vml_synthetic && message && typeof message.id === "string" && typeof message.channel_id === "string") {
-          try { history.recordEdit(getMessage({ id: message.id, channelId: message.channel_id }), message); }
+        const entry = { id: message?.id ?? event.id ?? event.messageId, channelId: message?.channel_id ?? message?.channelId ?? event.channelId ?? event.channel_id };
+        if (!event.__vml_synthetic && message && typeof entry.id === "string" && typeof entry.channelId === "string") {
+          try { history.recordEdit(forHistory(getMessage(entry), entry), forHistory(message, entry)); }
           catch { /* Logging must not prevent Discord from applying a real edit. */ }
         }
         if (message && typeof message.content === "string"
-          && deleted.has(key({ id: message.id, channelId: message.channel_id }))) {
-          return original.apply(this, [{ ...event, message: { ...message, content: label(message.content) } }, ...args.slice(1)]);
+          && deleted.has(key(entry))) {
+          return { ...event, message: { ...message, content: label(message.content) } };
         }
-        return original.apply(this, args);
+        return event;
       }
       const bulk = event.type === "MESSAGE_DELETE_BULK";
-      if (!bulk && event.type !== "MESSAGE_DELETE") return original.apply(this, args);
-      const channelId = event.channelId ?? event.channel_id;
-      const ids = bulk ? event.ids : [event.id];
-      if (typeof channelId !== "string" || !Array.isArray(ids) || !ids.length) return original.apply(this, args);
+      if (!bulk && event.type !== "MESSAGE_DELETE") return event;
+      const channelId = event.channelId ?? event.channel_id ?? event.message?.channel_id ?? event.message?.channelId;
+      const ids = bulk ? event.ids : [event.id ?? event.messageId ?? event.message?.id];
+      if (typeof channelId !== "string" || !Array.isArray(ids) || !ids.length) return event;
       if (event.__vml_cleanup) {
         for (const id of ids) forget({ id, channelId });
-        return original.apply(this, args);
+        return event;
       }
       const remaining: string[] = [];
       for (const id of ids) {
@@ -254,12 +289,38 @@ export function onLoad() {
             if (typeof id === "string") forget({ channelId, id });
             remaining.push(id);
           }
-        } catch { remaining.push(id); }
+        } catch { reportRetention({ last: "This deletion could not be retained" }); remaining.push(id); }
       }
-      if (!remaining.length) return;
-      if (!bulk || remaining.length === ids.length) return original.apply(this, args);
-      return original.apply(this, [{ ...event, ids: remaining }, ...args.slice(1)]);
-    }));
+      if (!remaining.length) return null;
+      if (!bulk || remaining.length === ids.length) return event;
+      return { ...event, ids: remaining };
+    };
+    const installed: string[] = [];
+    // Mobile can deliver gateway events directly to dirtyDispatch/maybeDispatch.
+    // Cache each transformation by object identity so forwarding between paths
+    // (including queued forwarding) cannot duplicate edits or bulk-delete work.
+    for (const method of ["dispatch", "dirtyDispatch", "maybeDispatch"]) {
+      if (typeof (FluxDispatcher as any)[method] !== "function") continue;
+      try {
+        patches.push(instead(method, FluxDispatcher, function (args, original) {
+          const event = args[0];
+          if (!active || !event || typeof event !== "object") return original.apply(this, args);
+          let next;
+          if (transformedEvents.has(event)) next = transformedEvents.get(event);
+          else {
+            next = transformEvent(event);
+            transformedEvents.set(event, next);
+            if (next && next !== event) transformedEvents.set(next, next);
+          }
+          if (next === null) return method === "dispatch" ? Promise.resolve() : undefined;
+          return original.apply(this, next === event ? args : [next, ...args.slice(1)]);
+        }));
+        installed.push(method);
+      } catch (error) {
+        if (method === "dispatch") throw error;
+      }
+    }
+    reportRetention({ hooks: installed.join(", ") });
     // Local built-in command. Returning no object prevents Revenge from sending a message.
     try {
       if (typeof commands?.registerCommand === "function") patches.push(commands.registerCommand({
@@ -300,8 +361,7 @@ export function onUnload() {
         channels.set(entry.channelId, ids);
       }
       for (const [channelId, ids] of channels) {
-        try { FluxDispatcher.dispatch({ type: "MESSAGE_DELETE_BULK", channelId, ids, __vml_cleanup: true }); }
-        catch { /* A missing channel must not prevent other cleanup. */ }
+        dispatchSafely({ type: "MESSAGE_DELETE_BULK", channelId, ids, __vml_cleanup: true });
       }
       unloadEntries.clear();
     } catch { /* Do not throw during unloading. */ }

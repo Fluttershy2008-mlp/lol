@@ -40,8 +40,8 @@ function setup(options = {}) {
     },
   };
   const store = {
-    getMessage(c, id) { if (options.brokenStore) throw new Error("cache not ready"); return cache.get(key(c, id)); },
-    getMessages: (c) => ({ get: (id) => cache.get(key(c, id)) }),
+    getMessage(c, id) { if (options.brokenStore || options.brokenPrimary) throw new Error("cache not ready"); return cache.get(key(c, id)); },
+    getMessages: (c) => { if (options.brokenStore) throw new Error("cache not ready"); return { get: (id) => cache.get(key(c, id)) }; },
   };
   const channelMessages = { _channelMessages: {}, get: store.getMessages };
   class RowManager {
@@ -56,12 +56,14 @@ function setup(options = {}) {
       assert.equal(this, dispatcher);
       assert.equal(busy, false, "synthetic dispatch must not run inside Flux notifications");
       events.push({ event, extra, at: now });
-      const c = event?.channelId ?? event?.channel_id;
+      const c = event?.channelId ?? event?.channel_id ?? event?.message?.channel_id ?? event?.message?.channelId;
       if (event?.type === "MESSAGE_DELETE_BULK" && event.__vml_cleanup && c === options.failCleanupChannel) throw new Error("channel already unloaded");
       if (event?.type === "MESSAGE_UPDATE") {
-        const k = key(event.message.channel_id, event.message.id), old = cache.get(k);
+        if (event.__vml_synthetic && options.asyncFailUpdate) return Promise.reject(new Error("async label rejected"));
+        if (event.__vml_synthetic && options.labelPromise) return options.labelPromise();
+        const k = key(event.message.channel_id ?? event.message.channelId ?? c, event.message.id), old = cache.get(k);
         if (old) cache.set(k, utils.updateMessageRecord(old, event.message));
-      } else if (event?.type === "MESSAGE_DELETE") cache.delete(key(c, event.id));
+      } else if (event?.type === "MESSAGE_DELETE") cache.delete(key(c, event.id ?? event.messageId ?? event.message?.id));
       else if (event?.type === "MESSAGE_DELETE_BULK") {
         if (Array.isArray(event.ids)) for (const id of event.ids) cache.delete(key(c, id));
       } else if (event?.type === "LOGOUT") cache.clear();
@@ -71,6 +73,14 @@ function setup(options = {}) {
       return "original-return";
     },
   };
+  if (options.mobileDispatch) {
+    dispatcher.dirtyDispatch = dispatcher.dispatch;
+    dispatcher.maybeDispatch = function (...args) { return this.dirtyDispatch(...args); };
+    dispatcher.dispatch = function (...args) {
+      return options.queuedDispatch ? Promise.resolve().then(() => this.maybeDispatch(...args)) : this.maybeDispatch(...args);
+    };
+  }
+  const originalDirtyDispatch = dispatcher.dirtyDispatch, originalMaybeDispatch = dispatcher.maybeDispatch;
   const originalDispatch = dispatcher.dispatch, originalUpdate = utils.updateMessageRecord, originalGenerate = RowManager.prototype.generate;
   const React = {
     useState: value => [value, () => {}], useEffect() {},
@@ -105,7 +115,7 @@ function setup(options = {}) {
   });
   function add(id, fields = {}) {
     const value = record({ id, channel_id: "c", content: "hello", author: Object.freeze({ id: "user" }), attachments: Object.freeze([{ id: "a", url: "https://example.test/a.png" }]), timestamp: new Date(0), reactions: Object.freeze([{ count: 1 }]), flags: 0, ...fields });
-    cache.set(key(value.channel_id, id), value); return value;
+    cache.set(key(value.channel_id ?? value.channelId ?? "c", id), value); return value;
   }
   const remove = (id, fields = {}) => dispatcher.dispatch({ type: "MESSAGE_DELETE", channelId: "c", id, ...fields });
   function logs(channelId) {
@@ -118,7 +128,7 @@ function setup(options = {}) {
     nodes(plugin.settings()).find(n => n.props?.label === "Clear all history").props.onPress();
     alerts.at(-1)[2].find(button => button.text === "Clear").onPress();
   }
-  return { plugin, add, remove, logs, clearAll, commands, pages, alerts, store, cache, events, requests, storage, dispatcher, utils, RowManager, originalDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
+  return { plugin, add, remove, logs, clearAll, commands, pages, alerts, store, cache, events, requests, storage, dispatcher, utils, RowManager, originalDispatch, originalDirtyDispatch, originalMaybeDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
 }
 function nodes(element) {
   if (Array.isArray(element)) return element.flatMap(nodes);
@@ -128,7 +138,7 @@ function nodes(element) {
 
 test("published manifest hashes the exact executable bundle", () => {
   const m = JSON.parse(readFileSync(new URL("../dist/message-logger/manifest.json", import.meta.url)));
-  assert.equal(m.version, "2.0.0"); assert.equal(m.main, "index.js");
+  assert.equal(m.version, "2.0.1"); assert.equal(m.main, "index.js");
   assert.equal(m.hash, createHash("sha256").update(bundle).digest("hex"));
 });
 
@@ -191,9 +201,14 @@ test("later content updates keep one label without mutating the input event", as
   h.dispatcher.dispatch(event); assert.equal(h.store.getMessage("c", "a").content, "[deleted] changed"); assert.equal(event.message.content, "changed"); h.plugin.onUnload();
 });
 
-test("update failures fall back to ordinary deletion without escaping the timer", async () => {
+test("label update failures preserve deleted messages instead of deleting them", async () => {
   const h = setup({ failUpdate: true }); h.plugin.onLoad(); h.add("a"); h.remove("a"); await h.advance();
-  assert.equal(h.cache.size, 0); assert.equal(h.events.at(-1).event.type, "MESSAGE_DELETE"); h.plugin.onUnload();
+  assert.equal(h.store.getMessage("c", "a").content, "hello");
+  assert.equal(h.events.some(x => x.event.type.startsWith("MESSAGE_DELETE")), false);
+  h.add("b"); h.remove("b"); await h.advance();
+  assert.equal(h.store.getMessage("c", "b").content, "hello");
+  assert.equal(h.events.filter(x => x.event.type === "MESSAGE_UPDATE").length, 1, "unsupported labels are not retried for each delete");
+  h.clearAll(); await h.advance(); assert.equal(h.cache.size, 0); h.plugin.onUnload();
 });
 
 test("cache failures fail open", () => {
@@ -435,4 +450,67 @@ test("history obeys per-channel, global record and total text budgets", () => {
     for (let edit = 0; edit < 12; edit++) h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id, channel_id: c, content: String(edit) + "a".repeat(3990) } });
   }
   assert.ok(JSON.stringify(h.logs()).length <= 2_000_201); assert.equal(h.logs()[0].id, "long79"); h.plugin.onUnload();
+});
+
+test("mobile dirtyDispatch and maybeDispatch deletion paths retain messages and unload cleanly", async () => {
+  for (const method of ["dirtyDispatch", "maybeDispatch"]) {
+    const h = setup({ mobileDispatch: true }); h.plugin.onLoad(); h.add("a");
+    h.dispatcher[method]({ type: "MESSAGE_DELETE", channelId: "c", id: "a" });
+    await h.advance(); assert.equal(h.store.getMessage("c", "a").content, "[deleted] hello");
+    assert.equal(h.logs().length, 1); h.plugin.onUnload();
+    assert.equal(h.dispatcher.dirtyDispatch, h.originalDirtyDispatch); assert.equal(h.dispatcher.maybeDispatch, h.originalMaybeDispatch);
+    assert.equal(h.cache.size, 0);
+  }
+});
+
+test("nested and queued mobile dispatch preserve edits once and filter bulk deletion once", async () => {
+  for (const queuedDispatch of [false, true]) {
+    const h = setup({ mobileDispatch: true, queuedDispatch, strictUpdate: false }); h.plugin.onLoad(); h.add("a");
+    await h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content: "edited" } });
+    assert.equal(h.logs()[0].edits.length, 1);
+    h.add("bot", { author: { id: "bot", bot: true } });
+    const event = { type: "MESSAGE_DELETE_BULK", channelId: "c", ids: ["a", "bot", "missing"] };
+    await h.dispatcher.dispatch(event, "extra"); await h.advance();
+    assert.equal(h.logs()[0].edits.length, 1); assert.equal(h.store.getMessage("c", "a").content, "[deleted] edited");
+    const deletions = h.events.filter(x => x.event.type === "MESSAGE_DELETE_BULK");
+    assert.equal(deletions.length, 1); assert.deepEqual(Array.from(deletions[0].event.ids), ["bot", "missing"]);
+    assert.equal(deletions[0].extra, "extra"); assert.deepEqual(event.ids, ["a", "bot", "missing"]);
+    h.plugin.onUnload(); await tick(); assert.equal(h.cache.size, 0);
+  }
+});
+
+test("mobile camelCase records and channel identity from the event are retained", async () => {
+  for (const fields of [{ channel_id: undefined, channelId: "c" }, { channel_id: undefined }]) {
+    const h = setup(); h.plugin.onLoad(); h.add("a", fields);
+    h.dispatcher.dispatch({ type: "MESSAGE_DELETE", message: { id: "a", channelId: "c" } });
+    await h.advance(); assert.equal(h.store.getMessage("c", "a").content, "[deleted] hello"); assert.equal(h.logs()[0].channelId, "c");
+    h.plugin.onUnload();
+  }
+});
+
+test("a failing primary message lookup falls back to the available channel cache", async () => {
+  const h = setup({ brokenPrimary: true }); h.plugin.onLoad(); h.add("a"); h.remove("a"); await h.advance();
+  assert.equal(h.cache.get("c:a").content, "[deleted] hello"); assert.equal(h.logs().length, 1); h.plugin.onUnload();
+});
+
+test("asynchronous label rejection is handled and never deletes the retained record", async () => {
+  const h = setup({ asyncFailUpdate: true }); h.plugin.onLoad(); h.add("a"); h.remove("a"); await h.advance();
+  assert.equal(h.store.getMessage("c", "a").content, "hello"); assert.equal(h.logs().length, 1);
+  assert.equal(h.events.some(x => x.event.type.startsWith("MESSAGE_DELETE")), false);
+  h.add("b"); h.remove("b"); await h.advance(); assert.equal(h.events.length, 1); h.plugin.onUnload();
+});
+
+test("a late label failure cannot disable labels in a newly enabled session", async () => {
+  let reject;
+  const options = { labelPromise: () => new Promise((_resolve, r) => { reject = r; }) };
+  const h = setup(options); h.plugin.onLoad(); h.add("old"); h.remove("old"); await h.advance();
+  h.plugin.onUnload(); options.labelPromise = undefined; h.plugin.onLoad(); reject(new Error("old failure")); await tick();
+  h.add("new"); h.remove("new"); await h.advance();
+  assert.equal(h.store.getMessage("c", "new").content, "[deleted] hello"); h.plugin.onUnload();
+});
+
+test("retained deletions keep public dispatch promise semantics", async () => {
+  const h = setup(); h.plugin.onLoad(); h.add("a");
+  const result = h.remove("a"); assert.equal(typeof result?.then, "function"); await result;
+  await h.advance(); assert.equal(h.logs().length, 1); h.plugin.onUnload();
 });

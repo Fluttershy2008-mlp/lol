@@ -6,6 +6,14 @@ const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let channelStore: any, userStore: any;
 let clearRetained: ((channelId?: string, id?: string) => void) | undefined;
+export const retentionStatus = { seen: 0, kept: 0, labelFailures: 0, last: "Waiting for a deletion", hooks: "" };
+export function reportRetention(update: Partial<typeof retentionStatus>) {
+  Object.assign(retentionStatus, update);
+  notify();
+}
+export function resetRetentionStatus() {
+  reportRetention({ seen: 0, kept: 0, labelFailures: 0, last: "Waiting for a deletion", hooks: "" });
+}
 function notify() {
   if (!listeners.size || timer !== undefined) return;
   timer = setTimeout(() => {

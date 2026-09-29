@@ -1,4 +1,4 @@
-# Message Logger 2.0.0 for Revenge
+# Message Logger 2.0.1 for Revenge
 
 Mobile adaptation of Vencord MessageLogger's deleted messages, edit history,
 attachment history and ignore filters. Extends the existing Revenge 1.2.0
@@ -13,12 +13,31 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/
 ```
 
 If already installed from this URL, update the plugin and fully close and reopen
-Revenge. Check that it shows **2.0.0**. If the old version remains cached, remove
+Revenge. Check that it shows **2.0.1**. If the old version remains cached, remove
 it and reinstall using the URL above. Keep only one Message Logger enabled.
+
+### 2.0.1 chat retention fix
+
+- Handles `dispatch`, `dirtyDispatch` and `maybeDispatch`, including forwarding
+  between them, so mobile deletion paths cannot bypass the hook through these APIs.
+- A failed `[deleted]` label update now leaves the original message in chat.
+  The old fallback incorrectly dispatched a real deletion when adding the label
+  failed. Both synchronous errors and rejected dispatch promises are handled.
+- Accepts mobile `channelId` records and channel IDs supplied by the event, and
+  tries another cache if one lookup throws.
+- Settings show **Deletions seen**, **Kept in chat** (session counts) and **Last
+  deletion**, including reasons such as ignored bots, a disabled retention option
+  or an uncached message. No message content or IDs are included in this status.
+
+For a new test, keep **Log deleted messages** and **Keep deleted messages in chat**
+on. If testing a bot message, switch **Ignore bots** off. This update preserves
+your existing filter choices.
 
 ## Use
 
-- Deleted messages stay in chat with a `[deleted]` prefix by default.
+- Deleted messages stay in chat with a `[deleted]` prefix by default. If the
+  current Discord build rejects that cosmetic update, the original text remains
+  and the plugin stops attempting the label for the rest of that session.
 - Run **`/messagelogger`** in a chat to open its local history. The command opens
   a screen and does not send anything to the channel.
 - Or open **Plugins → Message Logger → settings → Open message history**.
@@ -75,10 +94,13 @@ The build emits `dist/message-logger/index.js`, a manifest with a SHA-256 hash,
 `LICENSE` and `NOTICE`. Publish these together to the top-level `message-logger/`
 directory, alongside this README.
 
-41 automated checks execute the distributed bundle with the real spitroast
+48 automated checks execute the distributed bundle with the real spitroast
 patcher and simulated Discord stores, Flux dispatch and timers. They cover
 the prior crash regressions, bulk/burst deletes, edits and empty text, removed
-attachments, filters, local commands, history limits and cleanup. A real Android
+attachments, filters, local commands, history limits and cleanup, plus alternate
+mobile event paths and synchronous/asynchronous label failures. The label-error,
+alternate-dispatch and mobile-record regression cases fail against 2.0.0 and
+pass against 2.0.1. A real Android
 Revenge runtime was not available, so these checks do not guarantee that every
 Discord build is compatible or free of native crashes.
 

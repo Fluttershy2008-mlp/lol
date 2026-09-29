@@ -3,7 +3,7 @@ import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { history, subscribeLogs, clearHistory } from "./state";
+import { history, subscribeLogs, clearHistory, retentionStatus } from "./state";
 import type { Log, Version } from "./history";
 
 function usePalette() {
@@ -108,6 +108,8 @@ export default function Settings() {
   useProxy(storage);
   const palette = usePalette();
   const [showHistory, setShowHistory] = React.useState(false);
+  const [, refresh] = React.useState(0);
+  React.useEffect(() => subscribeLogs(() => refresh((n: number) => n + 1)), []);
   if (showHistory) return <HistoryView onBack={() => setShowHistory(false)} />;
   const switches = [
     ["logDeletes", "Log deleted messages"], ["logEdits", "Log edits"],
@@ -115,9 +117,11 @@ export default function Settings() {
     ["ignoreBots", "Ignore bots"], ["ignoreSelf", "Ignore my messages"], ["nopk", "Ignore PluralKit originals"],
   ];
   return <RN.ScrollView style={{ flex: 1, backgroundColor: palette.bg }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-    <RN.Text style={{ color: palette.fg, fontSize: 23, fontWeight: "700", marginBottom: 12 }}>Message Logger 2.0.0</RN.Text>
+    <RN.Text style={{ color: palette.fg, fontSize: 23, fontWeight: "700", marginBottom: 12 }}>Message Logger 2.0.1</RN.Text>
     <RN.Text style={{ color: palette.muted, marginBottom: 12 }}>Deleted messages and edit history for Revenge, adapted from Vencord. Use /messagelogger in any chat to open its history privately.</RN.Text>
     <Button label="Open message history" color={palette.accent} background={palette.card} onPress={() => setShowHistory(true)} />
+    <RN.Text selectable style={{ color: palette.muted, marginVertical: 10 }}>{"Deletions seen: " + retentionStatus.seen + " · Kept in chat: " + retentionStatus.kept + "\nLast deletion: " + retentionStatus.last}</RN.Text>
+    {retentionStatus.labelFailures > 0 && <RN.Text style={{ color: palette.muted, marginBottom: 10 }}>Your Discord build rejected the deleted label. Messages are kept with their original text for this session.</RN.Text>}
     <RN.Text style={{ color: palette.muted, marginVertical: 14 }}>History clears when you restart, disable the plugin or log out. Limits: 200 messages total, 50 per channel, 10 older versions per message, plus a total memory cap. Text is limited to 4,000 characters per version.</RN.Text>
     {switches.map(([key, label]) => <RN.View key={key} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}>
       <RN.Text style={{ color: palette.fg, fontSize: 16, flex: 1, paddingRight: 12 }}>{label}</RN.Text>
