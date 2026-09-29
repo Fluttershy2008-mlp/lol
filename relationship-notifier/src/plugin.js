@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { createTracker } from './tracker.js';
 import { createSettings } from './settings.js';
+import { registerSettingsShortcut } from './shortcut.js';
 
-export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setInterval, clearInterval }) {
+export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setInterval, clearInterval }, host = globalThis) {
   if (!V?.metro?.common || !V?.plugin?.storage) throw new Error('RelationshipNotifier requires Revenge Vendetta plugin support.');
   const { React, ReactNative: RN } = V.metro.common;
   const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch { return undefined; } };
@@ -288,6 +289,35 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
       if (appState?.remove) disposers.push(() => appState.remove());
       interval = clock.setInterval(() => schedule(), 30000);
       schedule(5000);
+      // Keep the shortcut optional: a changed settings API must not stop alerts.
+      try {
+        disposers.push(registerSettingsShortcut({
+          settingsAPI: host.bunny?.ui?.settings ?? host.window?.bunny?.ui?.settings,
+          Settings: settings,
+          constants: byProps('SETTING_RENDERER_CONFIG'),
+          treeManager: byProps('getAncestors', 'isBlocked'),
+          patcher: V.patcher,
+          openSettings: () => {
+            try {
+              const navigation = byProps('getRootNavigationRef')?.getRootNavigationRef?.();
+              if (!navigation?.navigate) throw new Error('Open RelationshipNotifier from the Plugins page on this Discord version.');
+              navigation.navigate('BUNNY_CUSTOM_PAGE', {
+                title: 'RelationshipNotifier', render: () => React.createElement(settings),
+              });
+            } catch (error) {
+              log(error);
+              try { RN.Alert.alert('RelationshipNotifier', error?.message ?? 'Could not open settings.'); } catch {}
+            }
+          },
+          renderIcon: asset => {
+            const Icon = byProps('TableRowIcon')?.TableRowIcon;
+            return Icon ? React.createElement(Icon, { source: asset })
+              : React.createElement(RN.Image, { source: asset, style: { width: 24, height: 24 } });
+          },
+          getAssetID: name => V.ui?.assets?.getAssetIDByName(name),
+          log,
+        }));
+      } catch (error) { log(error); }
     } catch (error) { unload(); throw error; }
   }
 

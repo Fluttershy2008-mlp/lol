@@ -15,6 +15,11 @@ The URL must end with the plugin folder, not `index.js`, `manifest.json`, a ZIP,
 or a GitHub `tree`/`blob` page. Enable the plugin and open its settings from the
 plugin card. Tap **Test notification** to check alerts on your phone.
 
+With the plugin enabled, **RelationshipNotifier** also appears in Discord's
+**Revenge** settings section, below **CustomRPC** if installed (otherwise below
+**Plugins**). Tap it to open the same settings and notification history directly.
+After updating, restart Discord and reopen Settings to refresh the menu.
+
 The first successful check saves your starting lists. It cannot recover removals
 from before installation. Future updates use the same install URL; leave plugin
 updates enabled and restart Discord to download them.
@@ -32,8 +37,10 @@ updates enabled and restart Discord to download them.
   server/group leaves where Discord's action or REST modules can be identified.
 - Skips temporary server outages, accepted requests and ordinary 1-to-1 DM
   closures. Failed actions clear their suppression markers.
-- Native React Native settings components; no deprecated `FluxContainer(Alert)`
-  or custom Discord settings sidebar entries.
+- A direct shortcut in the Revenge settings section, using the existing mobile
+  settings page. The row and its native renderer are registered together to
+  prevent the earlier missing `.parent` settings crash.
+- Native React Native settings components; no deprecated `FluxContainer(Alert)`.
 
 ## Behavior and limits
 
@@ -73,11 +80,14 @@ npm test
 - `src/plugin.js`: Revenge/Discord store adapters, subscriptions, alerts,
   action observation, reconnect handling and unload cleanup.
 - `src/settings.js`: mobile settings, test alert and notification history.
+- `src/shortcut.js`: Revenge settings shortcut, navigation and safe renderer
+  registration, compatible with CustomRPC and other existing menu entries.
 - `build.mjs`: dependency-free fixed-module bundler. Produces the expression
   evaluated by Revenge's loader and updates the manifest's SHA-256 hash.
-- `tests/`: 25 automated tests covering real bundle evaluation with the Revenge
+- `tests/`: automated tests covering real bundle evaluation with the Revenge
   loader's wrapper, all four categories, account isolation, local actions and
-  failures, outages, reconnects, history, UI fallback and cleanup. Runtime tests
+  failures, outages, reconnects, history, UI fallback, settings shortcut and
+  cleanup. Runtime tests
   simulate Discord stores and events; they are not physical Android app tests.
 
 The committed `index.js` is the installable build. Do not edit it directly;

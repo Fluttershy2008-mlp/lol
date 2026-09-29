@@ -6,9 +6,9 @@ const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
 // Fixed, dependency-free module list. These modules only use named exports and
 // relative imports from one another; no runtime require or external packages.
-const sources = ['tracker', 'settings', 'plugin'].map(name => {
+const sources = ['tracker', 'settings', 'shortcut', 'plugin'].map(name => {
   const source = readFileSync(new URL(`src/${name}.js`, root), 'utf8')
-    .replace(/^import \{[^\n]+\} from '\.\/(tracker|settings)\.js';\n/gm, '')
+    .replace(/^import \{[^\n]+\} from '\.\/(tracker|settings|shortcut)\.js';\n/gm, '')
     .replace(/^export (?=(function|const) )/gm, '');
   if (/^\s*(import|export)\b/m.test(source)) throw new Error(`Unsupported module syntax in ${name}`);
   return source;

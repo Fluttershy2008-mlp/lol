@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import { createPlugin } from '../src/plugin.js';
+import { SHORTCUT_KEY } from '../src/shortcut.js';
 
 function fakeClock() {
   let time = 1000, next = 0;
@@ -30,7 +31,7 @@ function fakeClock() {
   return clock;
 }
 
-function setup({ storage = {}, map = false, connected = true } = {}) {
+function setup({ storage = {}, map = false, connected = true, host = {} } = {}) {
   const clock = fakeClock();
   const subscriptions = new Map(), toasts = [], alerts = [], errors = [], patches = new Set();
   const state = { user: 'me', connected, relationships: { '101': 1, '102': 3 }, guilds: { '201': { id: '201', name: 'Cloudsdale' } }, channels: { '301': { id: '301', type: 3, name: 'Pony chat' }, '302': { id: '302', type: 1 } }, unavailable: new Set() };
@@ -71,7 +72,7 @@ function setup({ storage = {}, map = false, connected = true } = {}) {
       patches.add(unpatch); return unpatch;
     } },
   };
-  const plugin = createPlugin(V, clock);
+  const plugin = createPlugin(V, clock, host);
   return { plugin, V, clock, dispatch, stores, state, actions, api, storage, toasts, alerts, errors, patches, subscriptions, failAction: () => { failAction = true; }, appState: () => appStateHandler };
 }
 
@@ -224,9 +225,34 @@ test('install bundle evaluates with the actual Revenge loader wrapper and matche
   assert.equal(manifest.main, 'index.js');
   assert.equal(manifest.hash, createHash('sha256').update(bundle).digest('hex'));
   const h = setup();
-  const context = { setTimeout: h.clock.setTimeout, clearTimeout: h.clock.clearTimeout, setInterval: h.clock.setInterval, clearInterval: h.clock.clearInterval, Date, Map, Set, WeakMap };
+  const rows = [{ key: 'BUNNY_PLUGINS' }, { key: 'CUSTOMRPC_FLUTTERSHY_SETTINGS' }, { key: 'BUNNY_THEMES' }];
+  const settingsAPI = { registeredSections: { Revenge: rows } };
+  const constants = { SETTING_RENDERER_CONFIG: Object.fromEntries(rows.map(row => [row.key, { parent: null }])) };
+  const opened = [];
+  const navigation = { getRootNavigationRef: () => ({ navigate: (...args) => opened.push(args) }) };
+  const previousFind = h.V.metro.findByProps;
+  h.V.metro.findByProps = (...keys) => [constants, navigation].find(value => keys.every(key => key in value)) ?? previousFind(...keys);
+  const context = { setTimeout: h.clock.setTimeout, clearTimeout: h.clock.clearTimeout, setInterval: h.clock.setInterval, clearInterval: h.clock.clearInterval, Date, Map, Set, WeakMap, bunny: { ui: { settings: settingsAPI } } };
   const plugin = vm.runInNewContext(`vendetta => { return ${bundle} }`, context)(h.V);
   assert.equal(typeof plugin.onLoad, 'function'); assert.equal(typeof plugin.onUnload, 'function'); assert.equal(typeof plugin.settings, 'function');
-  plugin.onLoad(); plugin.settings(); plugin.onUnload();
+  plugin.onLoad(); plugin.settings();
+  assert.equal(rows[2].key, SHORTCUT_KEY);
+  constants.SETTING_RENDERER_CONFIG[SHORTCUT_KEY].onPress();
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0][0], 'BUNNY_CUSTOM_PAGE');
+  assert.equal(opened[0][1].title, 'RelationshipNotifier');
+  assert.equal(opened[0][1].render().type, plugin.settings);
+  plugin.onUnload();
+  assert.equal(rows.some(row => row.key === SHORTCUT_KEY), false);
+  assert.equal(constants.SETTING_RENDERER_CONFIG[SHORTCUT_KEY].usePredicate(), false);
   assert.equal(h.patches.size, 0); assert.equal(h.clock.jobs.size, 0);
+});
+
+test('shortcut registration failures do not stop relationship alerts', () => {
+  const host = { bunny: { ui: {} } };
+  Object.defineProperty(host.bunny.ui, 'settings', { get() { throw new Error('Settings unavailable'); } });
+  const h = setup({ host }); h.plugin.onLoad(); h.clock.tick(5000);
+  delete h.state.relationships['101']; h.dispatch('RELATIONSHIP_REMOVE'); h.clock.tick(1000);
+  assert.equal(h.toasts.length, 1); assert.match(h.toasts[0], /Alice/);
+  h.plugin.onUnload(); assert.equal(h.patches.size, 0); assert.equal(h.clock.jobs.size, 0);
 });
