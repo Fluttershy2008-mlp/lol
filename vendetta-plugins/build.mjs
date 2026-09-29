@@ -60,6 +60,7 @@ for (let plug of requested.length ? requested : available) {
       format: "iife",
       compact: true,
       exports: "named",
+      banner: plug === "message-logger" ? "/*! Message Logger for Revenge. GPL-3.0-or-later. Includes BSD-3-Clause code by redstonekasi; see NOTICE. Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/vendetta-plugins/plugins/message-logger */" : undefined,
     });
     await bundle.close();
 
@@ -67,7 +68,10 @@ for (let plug of requested.length ? requested : available) {
     manifest.hash = createHash("sha256").update(toHash).digest("hex");
     manifest.main = "index.js";
     await writeFile(`./dist/${plug}/manifest.json`, JSON.stringify(manifest));
-    await writeFile(`./dist/${plug}/LICENSE`, await readFile("LICENSE"));
+    await writeFile(`./dist/${plug}/LICENSE`, await readFile(plug === "message-logger" ? `./plugins/${plug}/LICENSE` : "LICENSE"));
+    if (plug === "message-logger") {
+      await writeFile(`./dist/${plug}/NOTICE`, await readFile(`./plugins/${plug}/NOTICE`));
+    }
 
     console.log(`Successfully built ${manifest.name}!`);
   } catch (e) {

@@ -9,9 +9,9 @@ import patcher from "spitroast";
 const bundle = readFileSync(process.env.MESSAGE_LOGGER_BUNDLE ?? new URL("../dist/message-logger/index.js", import.meta.url), "utf8");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function setup(options = {}) {
-  const cache = new Map(), events = [], requests = [], timers = new Map();
+  const cache = new Map(), events = [], requests = [], timers = new Map(), commands = [], pages = [], alerts = [];
   let now = 0, timerId = 0, busy = false;
-  const storage = { nopk: Boolean(options.nopk) };
+  const storage = { nopk: Boolean(options.nopk), ...options.storage };
   const key = (c, id) => `${c}:${id}`;
   const timeout = (fn, delay = 0) => { const id = ++timerId; timers.set(id, { fn, at: now + delay }); return id; };
   async function advance(ms = 1000) {
@@ -72,17 +72,24 @@ function setup(options = {}) {
     },
   };
   const originalDispatch = dispatcher.dispatch, originalUpdate = utils.updateMessageRecord, originalGenerate = RowManager.prototype.generate;
-  const React = { createElement: (type, props, ...children) => { assert.ok(type, "settings cannot render missing controls"); return { type, props, children }; } };
+  const React = {
+    useState: value => [value, () => {}], useEffect() {},
+    createElement: (type, props, ...children) => { assert.ok(type, "settings cannot render missing controls"); return { type, props, children }; },
+  };
   const api = {
     metro: {
       findByProps(...props) {
         if (props[0] === "getMessage") return options.noStore || options.legacyCache ? undefined : store;
         if (props[0] === "_channelMessages") return options.noStore || options.modernCache ? undefined : channelMessages;
         if (props[0] === "updateMessageRecord") return options.noUtils ? undefined : utils;
+        if (props[0] === "getChannel") return { getChannel: id => ({ id, name: "channel " + id, guild_id: "guild", parent_id: "category" }) };
+        if (props[0] === "getCurrentUser") return { getCurrentUser: () => ({ id: "self" }) };
+        if (props[0] === "getRootNavigationRef") return options.noNavigation ? undefined : { getRootNavigationRef: () => ({ navigate: (...args) => pages.push(args) }) };
       },
       findByName: () => RowManager,
-      common: { FluxDispatcher: dispatcher, ReactNative: { ScrollView: "scroll", View: "view", Text: "text", Switch: "switch", useColorScheme: () => "dark", processColor: (v) => v }, React },
+      common: { FluxDispatcher: dispatcher, ReactNative: { ScrollView: "scroll", View: "view", Text: "text", Switch: "switch", TextInput: "input", Pressable: "button", FlatList: "list", Alert: { alert: (...args) => alerts.push(args) }, useColorScheme: () => "dark", processColor: (v) => v }, React },
     },
+    commands: options.noCommands ? undefined : { registerCommand: command => { commands.push(command); return () => commands.splice(commands.indexOf(command), 1); } },
     patcher: options.patcher ?? patcher,
     plugin: { storage }, storage: { useProxy() {} },
     // Deliberately absent in modern Discord. The plugin must not depend on Forms.
@@ -101,12 +108,27 @@ function setup(options = {}) {
     cache.set(key(value.channel_id, id), value); return value;
   }
   const remove = (id, fields = {}) => dispatcher.dispatch({ type: "MESSAGE_DELETE", channelId: "c", id, ...fields });
-  return { plugin, add, remove, store, cache, events, requests, storage, dispatcher, utils, RowManager, originalDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
+  function logs(channelId) {
+    assert.equal(commands[0].execute([], { channel: { id: channelId } }), undefined, "local command must not return a message to send");
+    const [route, params] = pages.at(-1); assert.equal(route, "BUNNY_CUSTOM_PAGE");
+    const page = params.render();
+    return nodes(page.type(page.props)).find(n => n.type === "list").props.data;
+  }
+  function clearAll() {
+    nodes(plugin.settings()).find(n => n.props?.label === "Clear all history").props.onPress();
+    alerts.at(-1)[2].find(button => button.text === "Clear").onPress();
+  }
+  return { plugin, add, remove, logs, clearAll, commands, pages, alerts, store, cache, events, requests, storage, dispatcher, utils, RowManager, originalDispatch, originalUpdate, originalGenerate, advance, timers, setBusy: (v) => { busy = v; } };
+}
+function nodes(element) {
+  if (Array.isArray(element)) return element.flatMap(nodes);
+  if (!element || typeof element !== "object") return [];
+  return [element, ...nodes(element.children)];
 }
 
 test("published manifest hashes the exact executable bundle", () => {
   const m = JSON.parse(readFileSync(new URL("../dist/message-logger/manifest.json", import.meta.url)));
-  assert.equal(m.version, "1.2.0"); assert.equal(m.main, "index.js");
+  assert.equal(m.version, "2.0.0"); assert.equal(m.main, "index.js");
   assert.equal(m.hash, createHash("sha256").update(bundle).digest("hex"));
 });
 
@@ -287,4 +309,130 @@ test("rapid re-enable drains deferred unload cleanup without stranding cached ro
 test("failure of one cleanup does not skip other messages or channels", async () => {
   const h = setup({ failCleanupChannel: "c" }); h.plugin.onLoad(); h.add("a"); h.remove("a"); h.add("b", { channel_id: "other" }); h.remove("b", { channelId: "other" }); await h.advance();
   h.plugin.onUnload(); assert.equal(h.store.getMessage("other", "b"), undefined); assert.equal(h.timers.size, 0); assert.equal(h.dispatcher.dispatch, h.originalDispatch);
+});
+
+test("real edits keep chronological versions, blank content and deletion without synthetic edits", async () => {
+  const h = setup({ strictUpdate: false }); h.plugin.onLoad(); h.add("a", { content: "original" });
+  for (const [content, date] of [["changed", "2026-09-29T12:00:00Z"], ["", "2026-09-29T12:01:00Z"]]) {
+    h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content, edited_timestamp: date } });
+  }
+  h.remove("a"); await h.advance(); h.remove("a");
+  const log = h.logs()[0];
+  assert.deepEqual(Array.from(log.edits, v => v.content), ["original", "changed"]);
+  assert.equal(log.current.content, ""); assert.ok(log.deletedAt); assert.equal(log.current.time, "2026-09-29T12:01:00.000Z");
+  assert.equal(h.store.getMessage("c", "a").content, "[deleted] ");
+  assert.equal(JSON.stringify(h.storage).includes("original"), false, "message history must not be persisted in settings");
+  h.plugin.onUnload(); assert.equal(h.commands.length, 0);
+});
+
+test("embed updates, repeated content, missing records and ephemeral updates create no fake edits", () => {
+  const h = setup({ strictUpdate: false }); h.plugin.onLoad(); h.add("a");
+  for (const message of [
+    { id: "a", channel_id: "c", embeds: [] }, { id: "a", channel_id: "c", content: "hello" },
+    { id: "missing", channel_id: "c", content: "unknown" }, { id: "a", channel_id: "c", content: "secret", flags: 64 },
+  ]) h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message });
+  assert.equal(h.logs().length, 0); h.plugin.onUnload();
+});
+
+test("attachment removal preserves detached metadata without changing Discord attachments", () => {
+  const h = setup({ strictUpdate: false }); h.plugin.onLoad();
+  const attachments = [{ id: "image", filename: "picture.png", url: "https://cdn.discordapp.com/attachments/1/2/a.png" }];
+  h.add("a", { attachments });
+  h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", attachments: [] } });
+  attachments[0].filename = "mutated-after-capture";
+  const log = h.logs()[0];
+  assert.equal(log.edits[0].attachments[0].filename, "picture.png");
+  assert.equal(log.current.attachments.length, 0); assert.equal(h.store.getMessage("c", "a").attachments.length, 0);
+  h.plugin.onUnload();
+});
+
+test("attachment logging can be disabled independently of text history", () => {
+  const h = setup({ strictUpdate: false, storage: { logDeletedAttachments: false } }); h.plugin.onLoad(); h.add("a");
+  h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content: "new", attachments: [] } });
+  const log = h.logs()[0]; assert.equal(log.edits.length, 1); assert.equal(log.edits[0].attachments.length, 0); h.plugin.onUnload();
+});
+
+test("bot, self, user, channel, category and server filters apply to edits and deletes", () => {
+  for (const [storage, fields] of [
+    [{}, { author: { id: "bot", bot: true } }], [{ ignoreSelf: true }, { author: { id: "self" } }],
+    [{ ignoreUsers: "elsewhere, user" }, {}], [{ ignoreChannels: "c" }, {}],
+    [{ ignoreChannels: "other category" }, {}], [{ ignoreGuilds: "guild" }, {}],
+  ]) {
+    const h = setup({ storage, strictUpdate: false }); h.plugin.onLoad(); h.add("a", fields);
+    h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content: "edited" } });
+    assert.equal(h.remove("a"), "original-return"); assert.equal(h.logs().length, 0); h.plugin.onUnload();
+  }
+});
+
+test("ignore IDs match whole tokens and bots may be explicitly enabled", () => {
+  const h = setup({ storage: { ignoreBots: false, ignoreUsers: "1234", ignoreChannels: "abc", ignoreGuilds: "otherguild" } });
+  h.plugin.onLoad(); h.add("a", { author: { id: "123", bot: true } }); h.remove("a");
+  assert.equal(h.logs().length, 1); h.plugin.onUnload();
+});
+
+test("logging switches are independent and viewer-only mode allows normal deletion", () => {
+  const h = setup({ strictUpdate: false, storage: { keepDeletedInChat: false, logEdits: false } }); h.plugin.onLoad(); h.add("a");
+  h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content: "changed" } });
+  assert.equal(h.logs().length, 0); h.remove("a"); assert.equal(h.cache.size, 0);
+  assert.equal(h.logs()[0].current.content, "changed"); assert.equal(h.timers.size, 0);
+  h.storage.logDeletes = false; h.storage.logEdits = true; h.add("b");
+  h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "b", channel_id: "c", content: "edit logged" } }); h.remove("b");
+  assert.equal(h.logs()[0].deletedAt, null); assert.equal(h.logs()[0].edits.length, 1); h.plugin.onUnload();
+});
+
+test("clearing history removes retained deletes without removing live edited messages", async () => {
+  const h = setup({ strictUpdate: false }); h.plugin.onLoad(); h.add("deleted"); h.remove("deleted"); h.add("live");
+  h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "live", channel_id: "c", content: "edited" } });
+  h.clearAll(); assert.equal(h.logs().length, 0); await h.advance();
+  assert.equal(h.store.getMessage("c", "deleted"), undefined); assert.equal(h.store.getMessage("c", "live").content, "edited");
+  h.plugin.onUnload();
+});
+
+test("local command filters the requested channel and sends no message", () => {
+  const h = setup(); h.plugin.onLoad(); h.add("a"); h.remove("a"); h.add("b", { channel_id: "other" }); h.remove("b", { channelId: "other" });
+  assert.equal(h.logs("c").length, 1); assert.equal(h.logs()[0].channelId, "other");
+  assert.equal(h.events.length, 0); assert.equal(h.commands[0].name, "messagelogger"); h.plugin.onUnload();
+});
+
+test("missing optional commands and navigation leave settings and logging usable", () => {
+  for (const options of [{ noCommands: true }, { noNavigation: true }]) {
+    const h = setup(options); h.plugin.onLoad(); h.add("a"); h.remove("a");
+    assert.doesNotThrow(() => h.plugin.settings());
+    if (h.commands.length) { assert.equal(h.commands[0].execute([], {}), undefined); assert.equal(h.alerts.length, 1); }
+    assert.ok(h.store.getMessage("c", "a")); h.plugin.onUnload();
+  }
+});
+
+test("history clears on logout, account transition, channel removal and guild removal", async () => {
+  for (const event of [
+    { type: "LOGOUT" }, { type: "LOGOUT_START" }, { type: "LOGIN_SUCCESS" },
+    { type: "CHANNEL_DELETE", channel: { id: "c" } }, { type: "GUILD_DELETE", id: "guild" },
+  ]) {
+    const h = setup(); h.plugin.onLoad(); h.add("a"); h.remove("a"); assert.equal(h.logs().length, 1);
+    h.dispatcher.dispatch(event); assert.equal(h.logs().length, 0); await h.advance(); h.plugin.onUnload();
+  }
+  const h = setup(); h.plugin.onLoad(); h.add("a"); h.remove("a");
+  h.dispatcher.dispatch({ type: "GUILD_DELETE", id: "guild", unavailable: true }); assert.equal(h.logs().length, 1);
+  h.dispatcher.dispatch({ type: "CHANNEL_DELETE" }); assert.equal(h.logs().length, 1); h.plugin.onUnload();
+  h.plugin.onLoad(); assert.equal(h.logs().length, 0); h.plugin.onUnload();
+});
+
+test("repeated edits respect version and content limits and disclose discarded history", () => {
+  const h = setup({ strictUpdate: false }); h.plugin.onLoad(); h.add("a", { content: "old", editedTimestamp: new Date(0) });
+  for (let i = 0; i < 30; i++) h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id: "a", channel_id: "c", content: String(i) + "x".repeat(5000) } });
+  const log = h.logs()[0]; assert.equal(log.edits.length, 10); assert.equal(log.droppedEdits, 20);
+  assert.equal(log.current.content.length, 4000); assert.equal(log.earlierEditsMissing, true); h.plugin.onUnload();
+});
+
+test("history obeys per-channel, global record and total text budgets", () => {
+  const h = setup({ storage: { keepDeletedInChat: false }, strictUpdate: false }); h.plugin.onLoad();
+  for (let i = 0; i < 250; i++) { const c = "channel" + Math.floor(i / 25); h.add(String(i), { channel_id: c }); h.remove(String(i), { channelId: c }); }
+  assert.equal(h.logs().length, 200);
+  for (let i = 0; i < 60; i++) { h.add("same" + i); h.remove("same" + i); }
+  assert.equal(h.logs("c").length, 50);
+  for (let i = 0; i < 80; i++) {
+    const c = "long" + Math.floor(i / 10), id = "long" + i; h.add(id, { channel_id: c, content: "start" });
+    for (let edit = 0; edit < 12; edit++) h.dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { id, channel_id: c, content: String(edit) + "a".repeat(3990) } });
+  }
+  assert.ok(JSON.stringify(h.logs()).length <= 2_000_201); assert.equal(h.logs()[0].id, "long79"); h.plugin.onUnload();
 });

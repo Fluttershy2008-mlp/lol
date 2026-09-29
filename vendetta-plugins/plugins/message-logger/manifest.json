@@ -1,8 +1,12 @@
 {
   "name": "Message Logger",
-  "description": "Keeps cached deleted messages with a safe text label, bounded retention, and deferred updates for Revenge/Vendetta.",
-  "version": "1.2.0",
+  "description": "Vencord-style deleted messages, edit history, attachment records and ignore filters for Revenge. Open with /messagelogger.",
+  "version": "2.0.0",
   "authors": [
+    {
+      "name": "Fluttershy2008-mlp",
+      "id": "753962426407452713"
+    },
     {
       "name": "redstonekasi",
       "id": "265064055490871297"

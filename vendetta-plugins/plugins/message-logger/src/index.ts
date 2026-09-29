@@ -1,7 +1,11 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later. Includes BSD-3-Clause code; see NOTICE. */
 import { findByProps } from "@vendetta/metro";
 import { FluxDispatcher } from "@vendetta/metro/common";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
+import * as commands from "@vendetta/commands";
+import { history, configureHistory, initOptions, resetHistory } from "./state";
+import { openHistory } from "./settings";
 
 type Entry = { id: string; channelId: string };
 type Job = { entry: Entry; remove: boolean };
@@ -66,7 +70,10 @@ function pumpPluralKit() {
       .then((res) => res?.ok ? res.json() : undefined)
       .then((data) => {
         if (!active || epoch !== generation || !storage.nopk || !current(entry)) return;
-        if (data?.original === entry.id && !data.member?.keep_proxy) release(entry);
+        if (data?.original === entry.id && !data.member?.keep_proxy) {
+          history.clear(entry.channelId, entry.id);
+          release(entry);
+        }
       })
       .catch(() => { /* Offline, timeout and missing PK messages are harmless. */ })
       .finally(() => {
@@ -108,6 +115,7 @@ function scheduleWork() {
           // A partial update lets Discord preserve every other field.
           FluxDispatcher.dispatch({
             type: "MESSAGE_UPDATE",
+            __vml_synthetic: true,
             message: { id: job.entry.id, channel_id: job.entry.channelId, content: label(content) },
           });
           if (storage.nopk && current(job.entry)) pkQueue.set(id, job.entry);
@@ -123,14 +131,17 @@ function scheduleWork() {
 }
 
 function retain(entry: Entry) {
-  if (deleted.has(key(entry))) return true;
-  // Backpressure keeps huge deletion bursts from building an unbounded queue.
-  if (pending.size >= MAX_PENDING - 1 || pending.has(key(entry))) return false;
   const message = getMessage(entry);
   if (!message || message.author?.id === "1" || message.state === "SEND_FAILED") return false;
   if ((Number(message.flags) & 64) !== 0) return false;
   if (message.content != null && typeof message.content !== "string") return false;
   if (message.channel_id != null && message.channel_id !== entry.channelId) return false;
+  if (history.ignore(message)) return false;
+  if (deleted.has(key(entry))) return true;
+  history.recordDelete(message);
+  if (!storage.keepDeletedInChat) return false;
+  // The separate viewer can still record the event when chat retention is full.
+  if (pending.size >= MAX_PENDING - 1 || pending.has(key(entry))) return false;
 
   deleted.set(key(entry), entry);
   pending.set(key(entry), { entry, remove: false });
@@ -165,7 +176,7 @@ function resetWork() {
 
 export function onLoad() {
   if (active) return;
-  storage.nopk ??= false;
+  initOptions();
   MessageStore = findByProps("getMessage", "getMessages");
   ChannelMessages = findByProps("_channelMessages");
   if (typeof FluxDispatcher?.dispatch !== "function"
@@ -175,6 +186,12 @@ export function onLoad() {
     throw new Error("Message Logger: unsupported message store. Include your Discord and Revenge versions when reporting this error.");
   }
   active = true;
+  const optionalModule = (...props: string[]) => { try { return findByProps(...props); } catch { return undefined; } };
+  configureHistory(optionalModule("getChannel", "getDMFromUserId"), optionalModule("getCurrentUser"), (channelId, id) => {
+    for (const entry of [...deleted.values()]) {
+      if ((!channelId || entry.channelId === channelId) && (!id || entry.id === id)) release(entry);
+    }
+  });
   generation++;
   if (cleanupTimer !== undefined) clearTimeout(cleanupTimer);
   cleanupTimer = undefined;
@@ -186,7 +203,9 @@ export function onLoad() {
     patches.push(instead("dispatch", FluxDispatcher, function (args, original) {
       const [event] = args;
       if (!active || !event) return original.apply(this, args);
-      if (event.type === "LOGOUT") {
+      if (event.type === "LOGOUT" || event.type === "LOGOUT_START" || event.type === "LOGIN_SUCCESS") {
+        // Account transitions must not mix one account's message history with another.
+        resetHistory();
         resetWork();
         return original.apply(this, args);
       }
@@ -194,10 +213,25 @@ export function onLoad() {
         const channelId = event.channel?.id ?? event.channelId ?? event.channel_id;
         for (const entry of [...deleted.values()]) if (entry.channelId === channelId) forget(entry);
         for (const [id, job] of pending) if (job.entry.channelId === channelId) pending.delete(id);
+        if (typeof channelId === "string") history.clear(channelId);
         return original.apply(this, args);
+      }
+      if (event.type === "GUILD_DELETE" && !event.unavailable && !event.guild?.unavailable) {
+        const guildId = event.guild?.id ?? event.guildId ?? event.guild_id ?? event.id;
+        if (typeof guildId === "string") {
+          for (const log of history.list()) if (log.guildId === guildId) {
+            history.clear(log.channelId, log.id);
+            const entry = deleted.get(key({ channelId: log.channelId, id: log.id }));
+            if (entry) release(entry);
+          }
+        }
       }
       if (event.type === "MESSAGE_UPDATE") {
         const message = event.message;
+        if (!event.__vml_synthetic && message && typeof message.id === "string" && typeof message.channel_id === "string") {
+          try { history.recordEdit(getMessage({ id: message.id, channelId: message.channel_id }), message); }
+          catch { /* Logging must not prevent Discord from applying a real edit. */ }
+        }
         if (message && typeof message.content === "string"
           && deleted.has(key({ id: message.id, channelId: message.channel_id }))) {
           return original.apply(this, [{ ...event, message: { ...message, content: label(message.content) } }, ...args.slice(1)]);
@@ -216,13 +250,23 @@ export function onLoad() {
       const remaining: string[] = [];
       for (const id of ids) {
         try {
-          if (typeof id !== "string" || !retain({ channelId, id })) remaining.push(id);
+          if (typeof id !== "string" || !retain({ channelId, id })) {
+            if (typeof id === "string") forget({ channelId, id });
+            remaining.push(id);
+          }
         } catch { remaining.push(id); }
       }
       if (!remaining.length) return;
       if (!bulk || remaining.length === ids.length) return original.apply(this, args);
       return original.apply(this, [{ ...event, ids: remaining }, ...args.slice(1)]);
     }));
+    // Local built-in command. Returning no object prevents Revenge from sending a message.
+    try {
+      if (typeof commands?.registerCommand === "function") patches.push(commands.registerCommand({
+        name: "messagelogger", description: "Open your local deleted messages and edit history",
+        options: [], execute: (_args: any, context: any) => { openHistory(context?.channel?.id); },
+      }));
+    } catch { /* Settings remains available if the command API changes. */ }
     scheduleWork();
   } catch (error) {
     onUnload();
@@ -236,6 +280,8 @@ export function onUnload() {
   const entries = new Map<string, Entry>(deleted);
   for (const [id, job] of pending) entries.set(id, job.entry);
   active = false;
+  configureHistory(undefined, undefined);
+  resetHistory();
   resetWork();
   for (const [id, entry] of entries) unloadEntries.set(id, entry);
   for (const unpatch of patches.splice(0).reverse()) {
