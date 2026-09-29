@@ -1,0 +1,24 @@
+{
+  "name": "HideBlockedAndIgnoredMessages",
+  "description": "Hides blocked and ignored messages without placeholder text, including bot responses to their slash commands and optional replies.",
+  "version": "1.1.0",
+  "authors": [
+    {
+      "name": "Zykrah",
+      "id": "543614592291700748"
+    },
+    {
+      "name": "シグマ siguma",
+      "id": "737597276339437578"
+    },
+    {
+      "name": "Fluttershy2008-mlp",
+      "id": "753962426407452713"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_block"
+  },
+  "hash": "6ea649df8f600a00e79834d0162ecf5bd242818d16e5e40cdb6268063f64a855"
+}

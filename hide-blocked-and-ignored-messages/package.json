@@ -1,0 +1,12 @@
+{
+  "name": "revenge-hide-blocked-and-ignored-messages",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "license": "CC0-1.0",
+  "devDependencies": { "spitroast": "1.4.4" },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}
