@@ -1,4 +1,4 @@
-# Message Logger V2 2.0.2 for Revenge
+# Message Logger V2 2.0.3 for Revenge
 
 Mobile adaptation of Vencord MessageLogger's deleted messages, edit history,
 attachment history and ignore filters. Extends the existing Revenge 1.2.0
@@ -16,8 +16,25 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/
 ```
 
 If already installed from this URL, update the plugin and fully close and reopen
-Revenge. Check that it shows **2.0.2**. If the old version remains cached, remove
+Revenge. Check that it shows **2.0.3**. If the old version remains cached, remove
 it and reinstall using the URL above. Keep only one Message Logger enabled.
+
+### 2.0.3 crash safeguards
+
+- After a Discord build rejects the `[deleted]` label, real message edits are
+  passed through without adding that rejected label again. Deleted messages
+  remain cached with their original text and in the history viewer.
+- Limit unfinished synthetic dispatches to ten, in addition to the existing
+  per-tick and queue limits. Work resumes when an update finishes; it does not
+  spin timers or keep submitting updates while the native dispatcher is stalled.
+- Contain errors in the logger's event transformation, forwarding the original
+  event exactly once. Errors from Discord's own dispatcher retain their normal
+  behavior.
+- Guard the PluralKit timeout's abort call and final promise cleanup against
+  exceptions. Session changes also reset unfinished-work tracking.
+
+This source replaces the unsafe message-record/RowManager patches in the
+original Vendetta ZIP. Keep only one Message Logger installation enabled.
 
 ### 2.0.2 settings shortcut
 
@@ -114,14 +131,17 @@ The build emits `dist/message-logger/index.js`, a manifest with a SHA-256 hash,
 directory, alongside this README. Publish the same bundle and hash to
 `message-logger-v2/` too, retaining that manifest's **Message Logger V2** name.
 
-51 automated checks execute the distributed bundle with the real spitroast
+56 automated checks execute the distributed bundle with the real spitroast
 patcher and simulated Discord stores, Flux dispatch and timers. They cover
 the prior crash regressions, bulk/burst deletes, edits and empty text, removed
 attachments, filters, local commands, history limits and cleanup, plus alternate
 mobile event paths and synchronous/asynchronous label failures. The label-error,
 alternate-dispatch and mobile-record regression cases fail against 2.0.0 and
 pass against 2.0.1 and later. Shortcut checks cover native navigation, row order,
-safe unload/re-enable and renderer replacement. A real Android
+safe unload/re-enable and renderer replacement. Four new regression cases fail
+against 2.0.2 and pass against 2.0.3, covering rejected labels on real edits,
+unfinished dispatch limits, event-transform errors, and abort-timeout errors.
+A real Android
 Revenge runtime was not available, so these checks do not guarantee that every
 Discord build is compatible or free of native crashes.
 

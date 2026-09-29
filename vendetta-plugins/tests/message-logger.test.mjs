@@ -34,6 +34,7 @@ function setup(options = {}) {
     updateMessageRecord(old, update) {
       assert.equal(this, utils);
       if (options.failUpdate) throw new Error("store failed");
+      if (options.rejectLabel && update.content?.startsWith("[deleted] ")) throw new Error("this build rejects the deleted label");
       // No normalized embeds, author objects, timestamps, or native props may leak.
       if (options.strictUpdate !== false) assert.deepEqual(Object.keys(update).sort(), ["channel_id", "content", "id"]);
       return record({ ...old, ...update });
@@ -135,7 +136,7 @@ function setup(options = {}) {
   const plugin = runInNewContext(bundle, {
     vendetta: api, setTimeout: timeout, clearTimeout: (id) => timers.delete(id),
     bunny: options.shortcut ? { ui: { settings: settingsAPI } } : undefined,
-    AbortController: options.noAbort ? undefined : AbortController,
+    AbortController: options.noAbort ? undefined : options.AbortController ?? AbortController,
     fetch(...args) {
       requests.push(args);
       return options.fetch ? options.fetch(...args) : Promise.reject(new Error("offline"));
@@ -166,7 +167,7 @@ function nodes(element) {
 
 test("published manifest hashes the exact executable bundle", () => {
   const m = JSON.parse(readFileSync(new URL("../dist/message-logger/manifest.json", import.meta.url)));
-  assert.equal(m.version, "2.0.2"); assert.equal(m.main, "index.js");
+  assert.equal(m.version, "2.0.3"); assert.equal(m.main, "index.js");
   assert.equal(m.hash, createHash("sha256").update(bundle).digest("hex"));
 });
 
@@ -581,4 +582,47 @@ test("shortcut protects its renderer from replacements and skips unsupported reg
   const locked = setup({ shortcut: true, lockedSettings: true }); locked.plugin.onLoad(); locked.add('a'); locked.remove('a'); await locked.advance();
   assert.deepEqual(locked.nativeRows.map(row => row.key), locked.nativeKeys);
   assert.equal(locked.store.getMessage('c', 'a').content, '[deleted] hello'); locked.plugin.onUnload();
+});
+
+test("crashguard: real edits stop injecting a label after the native update rejects it", async () => {
+  const h = setup({ rejectLabel: true }); h.plugin.onLoad(); h.add('a'); h.remove('a'); await h.advance();
+  assert.equal(h.store.getMessage('c', 'a').content, 'hello');
+  const event = { type: 'MESSAGE_UPDATE', message: { id: 'a', channel_id: 'c', content: 'new content' } };
+  assert.doesNotThrow(() => h.dispatcher.dispatch(event));
+  assert.equal(h.events.at(-1).event, event);
+  assert.equal(h.store.getMessage('c', 'a').content, 'new content'); h.plugin.onUnload();
+});
+
+test("crashguard: slow native dispatch limits in-flight updates and resumes after settlement", async () => {
+  const waiting = [];
+  const h = setup({ labelPromise: () => new Promise(resolve => waiting.push(resolve)) }); h.plugin.onLoad();
+  for (let i = 0; i < 30; i++) { h.add(String(i)); h.remove(String(i)); }
+  await h.advance();
+  assert.equal(waiting.length, 10); assert.equal(h.timers.size, 0, 'do not spin timers while all slots are occupied');
+  waiting.splice(0).forEach(resolve => resolve()); await h.advance(); assert.equal(waiting.length, 10);
+  waiting.splice(0).forEach(resolve => resolve()); await h.advance(); assert.equal(waiting.length, 10);
+  waiting.splice(0).forEach(resolve => resolve()); await h.advance();
+  assert.equal(h.events.filter(x => x.event.type === 'MESSAGE_UPDATE').length, 30); h.plugin.onUnload();
+});
+
+test("crashguard: a logger-only compatibility error forwards the original event once", () => {
+  const h = setup(); h.plugin.onLoad();
+  const event = { type: 'GUILD_DELETE', get unavailable() { throw new Error('unsupported compatibility accessor'); } };
+  assert.doesNotThrow(() => h.dispatcher.dispatch(event, 'extra'));
+  assert.equal(h.events.length, 1); assert.equal(h.events[0].event, event); assert.equal(h.events[0].extra, 'extra'); h.plugin.onUnload();
+});
+
+test("crashguard: an AbortController failure cannot throw out of the timeout callback", async () => {
+  class BadAbort { signal = undefined; abort() { throw new Error('native abort failed'); } }
+  const h = setup({ nopk: true, AbortController: BadAbort, fetch: () => new Promise(() => {}) });
+  h.plugin.onLoad(); h.add('a'); h.remove('a'); await h.advance(11000);
+  assert.ok(h.store.getMessage('c', 'a')); h.plugin.onUnload(); assert.equal(h.timers.size, 0);
+});
+
+test("crashguard: late native settlements never drain a new session's queue", async () => {
+  const waiting = [];
+  const h = setup({ labelPromise: () => new Promise(resolve => waiting.push(resolve)) }); h.plugin.onLoad();
+  h.add('old'); h.remove('old'); await h.advance(); h.plugin.onUnload(); h.plugin.onLoad();
+  h.add('new'); h.remove('new'); waiting.splice(0).forEach(resolve => resolve()); await h.advance();
+  assert.ok(h.store.getMessage('c', 'new')); assert.equal(waiting.length, 1); h.plugin.onUnload();
 });

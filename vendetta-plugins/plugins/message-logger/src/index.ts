@@ -16,6 +16,8 @@ const MAX_RETAINED = 200;
 const MAX_PER_CHANNEL = 50;
 const MAX_PENDING = 400;
 const WORK_PER_TICK = 10;
+const MAX_IN_FLIGHT = 10;
+const inFlight = new Set<object>();
 const deleted = new Map<string, Entry>();
 const pending = new Map<string, Job>();
 const pkQueue = new Map<string, Entry>();
@@ -56,12 +58,26 @@ function forHistory(message: any, entry: Entry) {
   };
 }
 
-function dispatchSafely(event: any, onError: () => void = () => {}) {
+function dispatchSafely(event: any, onError: () => void = () => {}, onSettled: () => void = () => {}) {
+  const failed = () => { try { onError(); } catch { /* Error reporting must not reject a native dispatch promise. */ } };
+  const settled = () => { try { onSettled(); } catch { /* Cleanup must not reject a native dispatch promise. */ } };
   try {
     const result = FluxDispatcher.dispatch(event);
     // Newer Flux dispatchers return a Promise; sync try/catch alone misses rejection.
-    if (result && typeof result.then === "function") Promise.resolve(result).catch(onError);
-  } catch { onError(); }
+    if (result && typeof result.then === "function") {
+      void Promise.resolve(result).then(settled, () => { failed(); settled(); });
+    } else settled();
+  } catch { failed(); settled(); }
+}
+
+function dispatchQueued(event: any, onError: () => void = () => {}) {
+  const token = {};
+  const epoch = generation;
+  inFlight.add(token);
+  dispatchSafely(event, onError, () => {
+    inFlight.delete(token);
+    if (active && epoch === generation) scheduleWork();
+  });
 }
 
 function forget(entry: Entry) {
@@ -87,7 +103,9 @@ function pumpPluralKit() {
     if (!current(entry)) continue;
     const epoch = generation;
     const controller = new AbortController();
-    const request = { controller, timer: setTimeout(() => controller.abort(), 10000) };
+    const request = { controller, timer: setTimeout(() => {
+      try { controller.abort(); } catch { /* Native abort may fail during app shutdown. */ }
+    }, 10000) };
     requests.add(request);
     // Opt-in; only an ID is sent. Never send message text or a Discord token.
     void Promise.resolve()
@@ -108,7 +126,8 @@ function pumpPluralKit() {
         clearTimeout(request.timer);
         requests.delete(request);
         if (epoch === generation) pumpPluralKit();
-      });
+      })
+      .catch(() => { /* A changed storage/network API must not cause an unhandled rejection. */ });
   }
 }
 
@@ -117,7 +136,7 @@ function deleteEvent(entry: Entry) {
 }
 
 function scheduleWork() {
-  if (!active || workTimer !== undefined || !pending.size) return;
+  if (!active || workTimer !== undefined || !pending.size || inFlight.size >= MAX_IN_FLIGHT) return;
   const epoch = generation;
   workTimer = setTimeout(() => {
     workTimer = undefined;
@@ -125,11 +144,11 @@ function scheduleWork() {
     // Flux disallows dispatch inside a store notification. Yield between small batches.
     try {
       if (FluxDispatcher.isDispatching?.()) { scheduleWork(); return; }
-      for (let i = 0; i < WORK_PER_TICK && pending.size; i++) {
+      for (let i = 0; i < WORK_PER_TICK && pending.size && inFlight.size < MAX_IN_FLIGHT; i++) {
         const [id, job] = pending.entries().next().value as [string, Job];
         pending.delete(id);
         if (job.remove) {
-          dispatchSafely(deleteEvent(job.entry));
+          dispatchQueued(deleteEvent(job.entry));
           continue;
         }
         if (!current(job.entry)) continue;
@@ -141,7 +160,7 @@ function scheduleWork() {
           // Records are already normalized. Reconstructing one as gateway data can
           // corrupt attachments/timestamps and later crash native rendering.
           // A partial update lets Discord preserve every other field.
-          if (labelSupported) dispatchSafely({
+          if (labelSupported) dispatchQueued({
               type: "MESSAGE_UPDATE",
               __vml_synthetic: true,
               message: { id: job.entry.id, channel_id: job.entry.channelId, content: label(content) },
@@ -195,6 +214,7 @@ function retain(entry: Entry) {
 function resetWork() {
   generation++;
   transformedEvents = new WeakMap();
+  inFlight.clear();
   if (workTimer !== undefined) clearTimeout(workTimer);
   if (cleanupTimer !== undefined) clearTimeout(cleanupTimer);
   workTimer = cleanupTimer = undefined;
@@ -269,7 +289,7 @@ export function onLoad() {
           try { history.recordEdit(forHistory(getMessage(entry), entry), forHistory(message, entry)); }
           catch { /* Logging must not prevent Discord from applying a real edit. */ }
         }
-        if (message && typeof message.content === "string"
+        if (labelSupported && message && typeof message.content === "string"
           && deleted.has(key(entry))) {
           return { ...event, message: { ...message, content: label(message.content) } };
         }
@@ -310,7 +330,13 @@ export function onLoad() {
           let next;
           if (transformedEvents.has(event)) next = transformedEvents.get(event);
           else {
-            next = transformEvent(event);
+            try { next = transformEvent(event); }
+            catch {
+              // Only contain our transformation. The original dispatcher runs
+              // exactly once, outside this catch, retaining its own semantics.
+              next = event;
+              try { reportRetention({ last: "Skipped incompatible event data; Discord handled it normally" }); } catch {}
+            }
             transformedEvents.set(event, next);
             if (next && next !== event) transformedEvents.set(next, next);
           }
