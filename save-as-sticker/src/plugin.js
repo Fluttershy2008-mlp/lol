@@ -521,7 +521,7 @@ export default (() => {
         return { ...module, default: wrapSheet(module.default, context, key, session) };
       });
     }));
-    toast("SaveAsSticker 1.3.0 enabled");
+    toast("SaveAsSticker 1.3.1 enabled");
   }
   function onUnload() {
     active = false; generation++;

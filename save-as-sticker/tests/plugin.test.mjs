@@ -261,6 +261,28 @@ test('GIF source takes priority over a video preview and preserves signed URL pa
   assert.equal(t.calls.posts.length, 1);
 });
 
+test('GIFs with trailing bytes or a missing trailer upload the complete normalized animation', async () => {
+  const original = gifFixture({ width: 320, height: 320 });
+  for (const bytes of [Uint8Array.from([...original, 0, 10]), original.slice(0, -1)]) {
+    const t = makeHarness({ downloadData: Buffer.from(bytes).toString('base64'), downloadType: 'image/gif' });
+    await t.startUpload(selected('moving.gif')); await settle();
+    assert.equal(t.calls.posts.length, 1);
+    assert.equal(t.calls.posts[0].mimeType, 'image/gif');
+    assert.equal(t.calls.writes[0].data, Buffer.from(original).toString('base64'));
+    assert.equal(t.calls.crops.length, 0); assert.deepEqual(t.calls.alerts, []);
+    assert.equal(t.calls.deletes.length, 1);
+  }
+});
+
+test('a GIF cut off inside a frame never creates a file or starts an upload', async () => {
+  const bytes = gifFixture();
+  const frame = new GifReader(bytes).frameInfo(1);
+  const t = makeHarness({ downloadData: Buffer.from(bytes.slice(0, frame.data_offset + 3)).toString('base64'), downloadType: 'image/gif' });
+  await t.startUpload(selected('moving.gif')); await settle();
+  assert.equal(t.calls.posts.length, 0); assert.equal(t.calls.writes.length, 0);
+  assert.match(t.calls.alerts[0][1], /download is incomplete/);
+});
+
 test('GIF embeds expose their original GIF from selected media and message context', async () => {
   const gif = { type: 'gifv', url: 'https://example.com/view/pony',
     video: { url: 'https://example.com/pony.mp4' }, thumbnail: { url: 'https://example.com/pony.gif' } };

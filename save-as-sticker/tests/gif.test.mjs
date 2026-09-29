@@ -71,9 +71,54 @@ test('five-second boundary is accepted, longer GIFs and excessive frame counts a
   await assert.rejects(prepareGIF(base64(gifFixture({ width: 1, height: 1, frames: Array(251).fill({ delay: 2 }) }))), /250 frames/);
 });
 
-test('incomplete GIFs and unsafe dimensions are rejected before allocating frame canvases', async () => {
+test('extra bytes after the GIF stream are removed without rejecting or changing its animation', async () => {
+  for (const size of [64, 320]) {
+    const original = gifFixture({ width: size, height: size });
+    // Includes another 0x3b: taking the last trailer byte would be incorrect.
+    const padded = Uint8Array.from([...original, 0, 13, 10, 0x3b, 255, 0]);
+    const expected = await prepareGIF(base64(original));
+    const result = await prepareGIF(base64(padded));
+    assert.equal(result.base64, expected.base64);
+    assert.equal(new GifReader(Buffer.from(result.base64, 'base64')).numFrames(), 2);
+  }
+});
+
+test('a missing trailer after complete frames is repaired before resizing or direct upload', async () => {
+  for (const size of [64, 320]) {
+    const original = gifFixture({ width: size, height: size });
+    const expected = await prepareGIF(base64(original));
+    const result = await prepareGIF(base64(original.slice(0, -1)));
+    assert.equal(result.base64, expected.base64);
+  }
+});
+
+test('trailer bytes inside extensions are not confused with the end of the GIF', async () => {
+  const original = gifFixture({ width: 320, height: 320, palette: [0, 0x3b3b3b, 0x00ff00, 0x0000ff] });
+  const commented = Uint8Array.from([...original.slice(0, -1), 0x21, 0xfe, 3, 0x3b, 0x3b, 0, 0, 0x3b]);
+  const padded = Uint8Array.from([...commented, 0, 10]);
+  assert.equal((await prepareGIF(base64(padded))).base64, base64(commented));
+});
+
+test('base64 line breaks do not corrupt decoded GIF bytes', async () => {
+  const original = base64(gifFixture({ width: 320, height: 320 }));
+  assert.equal((await prepareGIF(original.match(/.{1,64}/g).join('\r\n'))).base64, original);
+});
+
+test('truncated palettes, images and extensions are not repaired or silently dropped', async () => {
   const bytes = gifFixture();
-  await assert.rejects(prepareGIF(base64(bytes.slice(0, -1))), /incomplete or invalid/);
+  const last = new GifReader(bytes).frameInfo(1);
+  const cuts = [12, 15, last.data_offset - 2, last.data_offset,
+    last.data_offset + 3, last.data_offset + last.data_length - 1];
+  for (const cut of cuts) await assert.rejects(prepareGIF(base64(bytes.slice(0, cut))), /incomplete/);
+  // A trailer-looking byte cannot stand in for missing frame payload.
+  await assert.rejects(prepareGIF(base64(Uint8Array.from([...bytes.slice(0, last.data_offset + 3), 0x3b]))), /incomplete/);
+  for (const suffix of [[0x21, 0xfe, 4, 0x3b], [0x21, 0xf9, 4, 0, 0, 0, 0, 0]]) {
+    await assert.rejects(prepareGIF(base64(Uint8Array.from([...bytes.slice(0, -1), ...suffix]))), /incomplete/);
+  }
+});
+
+test('unsafe dimensions are rejected before allocating frame canvases', async () => {
+  const bytes = gifFixture();
   bytes[6] = 255; bytes[7] = 255; bytes[8] = 255; bytes[9] = 255;
   await assert.rejects(prepareGIF(base64(bytes)), /4 megapixels/);
 });

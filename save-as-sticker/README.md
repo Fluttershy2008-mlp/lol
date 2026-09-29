@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.0
+# SaveAsSticker 1.3.1
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -28,13 +28,21 @@ Servers with an unknown cached sticker count are marked **Check slots on upload*
 
 - Static images supported by Discord's native cropper, including JPEG, PNG and WebP, are converted to a 320×320 PNG.
 - Valid 320×320 PNGs under 512 KiB skip cropping. PNG signatures, dimensions and byte size are checked before upload.
-- Animated GIFs keep their frames, timing, loop settings and transparency. GIFs are fitted inside a 320×320 canvas with transparent padding, preserving their aspect ratio. Ready-to-upload GIFs are preserved byte-for-byte.
+- Animated GIFs keep their frames, timing, loop settings and transparency. GIFs are fitted inside a 320×320 canvas with transparent padding, preserving their aspect ratio. Well-formed, ready-to-upload GIFs are preserved byte-for-byte.
+- GIF validation follows actual block boundaries. Extra bytes after the GIF trailer are removed; a missing trailer is repaired only when all image/extension blocks are complete. Truncated blocks are rejected without uploading a partial animation.
 - GIFs must be at most **5 seconds** long. Color reduction is attempted if needed to fit Discord's **512 KiB** limit. Frames are never silently dropped or trimmed; an animation that still exceeds the limits shows an error.
 - GIF attachments and embeds that expose an original `.gif` URL are supported. MP4-only GIFV/Tenor previews are not converted into GIFs; share the original GIF file instead. GIF links returning a still preview are rejected instead of silently flattening the animation.
 - To keep conversion bounded on mobile, GIFs must contain no more than 250 frames and have a canvas no larger than 4 megapixels; resizing is limited to 80 megapixels across all frames. The converter yields between frames and avoids storing every decoded frame in memory.
 - Animated APNG/WebP files are outside the GIF conversion path and may become still images when cropped.
 - GIF conversion runs locally using bundled libraries. Static images use Discord's own cropper. Both use local cache files and Discord's authenticated sticker upload action. The plugin does not request your token or send images to an external converter.
 - Canceling the crop or disabling the plugin before submission prevents the upload. An upload already submitted to Discord cannot be canceled by unloading the plugin.
+
+## Changes in 1.3.1
+
+- Fixes the overly strict final-byte check that produced **This GIF is incomplete or invalid** for readable animations with trailing bytes or only a missing end marker.
+- Normalizes the GIF stream before both direct uploads and resizing, and tolerates line breaks in base64 data.
+- Checks palettes, descriptors and data-block boundaries so incomplete frames/extensions are not silently dropped.
+- Adds regression tests for repaired animations, upload bytes, trailer-like bytes within data and genuinely truncated downloads.
 
 ## Changes in 1.3.0
 

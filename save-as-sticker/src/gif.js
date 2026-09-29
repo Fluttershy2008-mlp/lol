@@ -10,8 +10,64 @@ const EDGE = 320;
 const MAX_BYTES = 512 * 1024;
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-export function inspectGIF(bytes) {
-  if (bytes.length < 27 || bytes[bytes.length - 1] !== 0x3b) throw new Error('This GIF is incomplete or invalid. Download the original GIF and try again.');
+function normalizeGIF(bytes) {
+  const incomplete = () => new Error('This GIF download is incomplete. Reopen the GIF or share the original file and try again.');
+  if (bytes.length < 13) throw incomplete();
+  if (!/^GIF8[79]a$/.test(String.fromCharCode(...bytes.subarray(0, 6)))) {
+    throw new Error('This file could not be read as an animated GIF.');
+  }
+  let position = 13, frames = 0, pendingControl = false;
+  function take(length) {
+    if (position + length > bytes.length) throw incomplete();
+    const start = position;
+    position += length;
+    return start;
+  }
+  function palette(packed) {
+    if (packed & 0x80) take(3 * (1 << ((packed & 7) + 1)));
+  }
+  function subBlocks() {
+    for (;;) {
+      const length = bytes[take(1)];
+      if (length === 0) return;
+      take(length);
+    }
+  }
+  palette(bytes[10]);
+  // Walk real block boundaries. A 0x3b inside a palette, extension or compressed
+  // frame is data, not a trailer. Downloads may contain bytes after the stream.
+  while (position < bytes.length) {
+    const marker = bytes[take(1)];
+    if (marker === 0x3b) {
+      if (!frames || pendingControl) throw incomplete();
+      return position === bytes.length ? bytes : bytes.subarray(0, position);
+    }
+    if (marker === 0x21) {
+      const label = bytes[take(1)];
+      subBlocks();
+      if (label === 0xf9) pendingControl = true;
+    } else if (marker === 0x2c) {
+      const descriptor = take(9);
+      palette(bytes[descriptor + 8]);
+      take(1); // LZW minimum code size; checked with the decoded frame metadata.
+      subBlocks();
+      pendingControl = false;
+      if (++frames > 250) throw new Error('Use a GIF with 250 frames or fewer.');
+    } else {
+      throw new Error('This GIF contains an invalid data block. Share the original GIF file and try again.');
+    }
+  }
+  // Some encoders omit only the final trailer. Repair it only after complete,
+  // terminated blocks; never discard an incomplete image or extension.
+  if (!frames || pendingControl) throw incomplete();
+  const complete = new Uint8Array(bytes.length + 1);
+  complete.set(bytes);
+  complete[bytes.length] = 0x3b;
+  return complete;
+}
+
+export function inspectGIF(input) {
+  const bytes = normalizeGIF(input);
   let reader;
   try { reader = new GifReader(bytes); } catch { throw new Error('This file could not be read as an animated GIF.'); }
   const { width, height } = reader;
@@ -32,7 +88,7 @@ export function inspectGIF(bytes) {
     frames.push({ ...f, delayMs: delay });
   }
   if (duration > 5000) throw new Error('Discord stickers can be at most 5 seconds long. Use a shorter GIF; it has not been trimmed or uploaded.');
-  return { reader, width, height, frames, duration };
+  return { bytes, reader, width, height, frames, duration };
 }
 
 function background(bytes, frame) {
@@ -98,10 +154,12 @@ async function encode(bytes, info, colors, check) {
 
 export async function prepareGIF(base64, check = () => {}) {
   check();
-  const bytes = toByteArray(base64);
-  const info = inspectGIF(bytes);
+  base64 = base64.replace(/\s/g, '');
+  const input = toByteArray(base64);
+  const info = inspectGIF(input);
+  const { bytes } = info;
   if (info.width === EDGE && info.height === EDGE && bytes.length <= MAX_BYTES) {
-    return { base64, mimeType: 'image/gif', extension: 'gif' };
+    return { base64: bytes === input ? base64 : fromByteArray(bytes), mimeType: 'image/gif', extension: 'gif' };
   }
   if (info.width * info.height * info.frames.length > 80 * 1024 * 1024) {
     throw new Error('This GIF is too complex to resize on mobile. Use a smaller GIF.');

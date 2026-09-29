@@ -1,7 +1,7 @@
 {
   "name": "SaveAsSticker",
   "description": "Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_sticker_24px"
   },
-  "hash": "207b4501c5ba25313cc9ed69cf12adaeb78e9d5a9c5be44c9abf470c3c0e1a65"
+  "hash": "c8447402c7e3c95ba6e65088c90e1f4eaa06678aaf92a6540bf111737aabfd43"
 }
