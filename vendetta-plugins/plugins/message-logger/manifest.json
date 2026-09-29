@@ -1,7 +1,7 @@
 {
   "name": "Message Logger",
-  "description": "Temporarily keeps cached deleted messages visible, including bulk deletions. Compatibility fix for Vendetta-based clients.",
-  "version": "1.1.0",
+  "description": "Keeps cached deleted messages with a safe text label, bounded retention, and deferred updates for Revenge/Vendetta.",
+  "version": "1.2.0",
   "authors": [
     {
       "name": "redstonekasi",

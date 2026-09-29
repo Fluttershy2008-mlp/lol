@@ -1,55 +1,77 @@
-# Message Logger 1.1.0
+# Message Logger 1.2.0
 
-Compatibility repair of redstonekasi's Vendetta Message Logger.
+Stability update of redstonekasi's Vendetta Message Logger for Revenge and other Vendetta-compatible clients.
 
-## Install
+## Update / install
 
-Disable the old Message Logger first, then add this **folder URL** in your
-Vendetta-compatible client's Plugins screen:
+Update the existing Message Logger plugin, then fully close and reopen Revenge.
+Check that the plugin shows **1.2.0**. If it still shows an older version, remove
+that plugin and reinstall using this folder URL:
 
 ```text
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/
 ```
 
-Enable Message Logger and restart Discord. Test by deleting a message that was
-visible while the plugin was enabled. Only messages already in Discord's local
-cache can be retained. Deletions before installation or while offline cannot be
-recovered. This build logs deletions; it does not add edit history. Retention is
-temporary and clearing the plugin or restarting the app clears the log.
+Keep only one Message Logger enabled. Restarting also removes any old renderer
+hooks and temporarily retained messages from the previous version.
 
-## Changes
+## What changed
 
-- Supports single and bulk deletions, including batches containing uncached messages.
-- Discovers modules on load and rolls back hooks if startup fails.
-- Uses MessageStore with a legacy ChannelMessages fallback.
-- Removes the dependency on the named MessageRecord constructor.
-- Tracks deletion flags outside Discord's records, including frozen records.
-- Keeps the red highlight where the RowManager renderer is available; otherwise
-  shows a `[deleted]` text label.
-- Removes all retained messages on unload without skipping adjacent entries.
-- Handles PluralKit lookup failures and ignores responses from a previous session.
+- Replaced native chat-row highlighting with a plain `[deleted]` content label.
+  The plugin no longer changes RowManager, native highlight fields, or the
+  native `edited` field.
+- Removed the MessageRecord reconstruction hook. Only `id`, `channel_id`, and
+  `content` are sent in a partial update; Discord keeps its normalized author,
+  attachment, reaction, and timestamp data.
+- Deferred updates until after the deletion handler returns, with no more than
+  ten operations every 16 ms. If Flux is still dispatching, work waits.
+- Retains up to **50 deleted messages per channel and 200 total**. Oldest entries
+  are removed. During extreme bursts, the bounded work queue lets new deletions
+  proceed normally rather than growing without limit.
+- Cancels queued work on logout and removes channel work when that channel is
+  deleted. Unload also handles pending evictions and rapid re-enabling.
+- Limits opt-in PluralKit lookups to two concurrent requests, with a ten-second
+  abort deadline. Late responses cannot affect a new plugin session. Runtimes
+  without AbortController skip these optional lookups.
+- Uses React Native controls in settings instead of removed Discord Forms and
+  icon components.
 
-The optional **Ignore PluralKit** setting sends the message ID to PluralKit's
-public API. It is off by default. Message text and Discord credentials are not sent.
+## Behavior
+
+Single and bulk deletions are supported for messages already in Discord's local
+cache. This is a temporary deletion logger; it does not recover messages deleted
+before installation or while offline, and does not provide edit history.
+Discord can evict cached messages independently. Disabling the plugin or
+restarting the app clears retained history.
+
+**Ignore PluralKit** is off by default. When enabled it sends message IDs to
+PluralKit's public API, never message content or Discord credentials. Lookup
+failures leave the retained message alone.
 
 ## Build and tests
 
-From the source project directory:
+From `vendetta-plugins/`:
 
 ```sh
 npm install --ignore-scripts
 npm run test:message-logger
 ```
 
-The build writes `dist/message-logger/index.js`, its hashed manifest, and the
-license. Upload that directory to the install URL when updating this plugin.
-The GitHub source copy is in `vendetta-plugins/`.
+The build produces `dist/message-logger/index.js` and a SHA-256-hashed manifest.
+Publish them together to `message-logger/` when releasing an update.
 
-Twelve automated regression tests exercise the distributed bundle with
-Vendetta's real spitroast patcher and simulated Discord stores/renderers.
-An Android/Discord runtime was unavailable for device testing; compatibility
-with every Discord or Vendetta fork version is not guaranteed. If the plugin
-reports unsupported message modules, include your client name, Discord version,
-and the error text when reporting it.
+28 automated tests execute the distributed bundle with Vendetta's real
+spitroast patcher, strict simulated records/Flux dispatch, and a deterministic
+scheduler. They cover single/bulk deletes, preservation of normalized records,
+unchanged native row rendering, dispatch re-entry, a 2,000-deletion burst,
+retention/queue bounds, unload/reload, and failed/cancelled/stale PluralKit work.
+A regression check against 1.1.0 fails the deferred-update/record-safety test.
+
+An Android/Revenge runtime was not available. These checks do not reproduce or
+prove a fix for every native app exit. If Revenge still closes, include your
+Discord version, Revenge version, the action preceding the exit, and its crash
+log. Android crashes may require an Android crash report rather than a JS error
+screen. Briefly disabling Message Logger can help establish whether it is the
+cause.
 
 Original plugin by redstonekasi, BSD-3-Clause. See `LICENSE`.
