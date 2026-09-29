@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.1
+# SaveAsSticker 1.3.2
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -36,6 +36,12 @@ Servers with an unknown cached sticker count are marked **Check slots on upload*
 - Animated APNG/WebP files are outside the GIF conversion path and may become still images when cropped.
 - GIF conversion runs locally using bundled libraries. Static images use Discord's own cropper. Both use local cache files and Discord's authenticated sticker upload action. The plugin does not request your token or send images to an external converter.
 - Canceling the crop or disabling the plugin before submission prevents the upload. An upload already submitted to Discord cannot be canceled by unloading the plugin.
+
+## Changes in 1.3.2
+
+- Fixes **undefined is not a function** during GIF conversion on mobile Hermes. Generated module-import getters captured the same loop variable, causing the base64 encoder to be called in place of the decoder. This also caused misleading invalid-GIF errors in 1.3.0.
+- Runs Babel's block-scoping transform after bundling so each generated import getter retains the correct function. The transformation includes the generated helpers and bundled dependencies; no global runtime patches are installed.
+- Adds a real Hermes regression test that loads the installation bundle, opens the picker and verifies resized, ready-to-upload, padded and partial-frame GIF uploads with mocked Discord APIs.
 
 ## Changes in 1.3.1
 
@@ -83,6 +89,14 @@ node --check index.js
 ```
 
 The build updates the canonical plugin files, the legacy root alias and their SHA-256 manifest hashes. Commit the source, lockfile and both generated install locations together. Dependency license notices are in `THIRD_PARTY_LICENSES.txt` and included in the bundle.
+
+To run the mobile-engine regression test, obtain the official Linux Hermes CLI from [Facebook's Hermes v0.13.0 release](https://github.com/facebook/hermes/releases/tag/v0.13.0) and set the executable path:
+
+```sh
+HERMES_BINARY=/absolute/path/to/hermes npm test
+```
+
+Without `HERMES_BINARY`, the Hermes test is explicitly skipped. The fix was reproduced and verified using the release's HBC 96 runtime. This runs the actual plugin bundle in Hermes; Discord's network, file and UI APIs remain mocked.
 
 The tests encode and decode real GIFs to check animation frames, timing, looping, transparent padding, disposal modes, compression, limits and cancellation. Integration tests exercise Revenge's expression loader and mocked Discord/React Native modules, including GIF MIME types, original-source selection, frozen menu trees, server filtering, static crop/upload behavior, cleanup and unload. They do not run a Discord APK or verify rendering on a physical phone. Discord updates can change these internal APIs.
 

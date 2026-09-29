@@ -1,6 +1,6 @@
 {
   "name": "revenge-save-as-sticker",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,8 @@
     "omggif": "1.0.10"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/plugin-transform-block-scoping": "7.29.7",
     "esbuild": "0.28.2"
   }
 }
