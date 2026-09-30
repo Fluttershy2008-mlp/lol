@@ -1,0 +1,27 @@
+{
+  "name": "ValidUser",
+  "description": "Resolve unknown user mentions in messages, embeds and forwards, with safe lookups and profile access.",
+  "authors": [
+    {
+      "name": "fshin",
+      "id": "1381008677301129257"
+    },
+    {
+      "name": "o.oer",
+      "id": "306810730055729152"
+    },
+    {
+      "name": "kmmiio99o",
+      "id": "879393496627306587"
+    },
+    {
+      "name": "fluttershy_simper",
+      "id": "753962426407452713"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_mention_24px"
+  },
+  "version": "2.0.0"
+}
