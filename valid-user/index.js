@@ -147,13 +147,51 @@ function createResolver({ getUser, request, accept, onResolved = () => {},
     };
 }
 
+// Bounded startup retries plus store-driven scans; no permanent polling loop.
+function createAutoScanner({ scan, enabled, onError = () => {} }) {
+    let active = false, pending = null;
+    const retries = new Set();
+    function notify(delay = 100) {
+        if (!active || !enabled() || pending !== null) return;
+        pending = setTimeout(() => {
+            pending = null;
+            if (active && enabled()) {
+                try { scan(); } catch (error) { onError(error); }
+            }
+        }, delay);
+    }
+    function clear() {
+        if (pending !== null) clearTimeout(pending);
+        pending = null;
+        for (const timer of retries) clearTimeout(timer);
+        retries.clear();
+    }
+    function wake() {
+        clear();
+        if (!active || !enabled()) return;
+        notify(0);
+        // The selected channel, logged-in user and message cache hydrate separately.
+        // Store listeners handle later changes after these startup retries finish.
+        for (const delay of [500, 1500, 3000, 6000, 12000, 30000]) {
+            const timer = setTimeout(() => { retries.delete(timer); notify(0); }, delay);
+            retries.add(timer);
+        }
+    }
+    return {
+        notify, wake,
+        start() { active = true; wake(); },
+        stop() { active = false; clear(); }
+    };
+}
+
 
 function createPlugin(V) {
     "use strict";
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin?.storage ?? {};
-    const unpatches = [], timers = new Set(), autoIds = new Set();
-    let active = false, generation = 0, resolver, scanTimer, refreshTimer;
+    const unpatches = [], timers = new Set(), autoIds = new Set(), watchedStores = new Set();
+    let active = false, generation = 0, resolver, resolverAccount, scanTimer, refreshTimer;
+    let autoScanner, loggedOut = false;
     let users, messages, selected, dispatcher, rest, sheetHost, Row;
     const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
     const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
@@ -190,13 +228,21 @@ function createPlugin(V) {
         for (const timer of timers) clearTimeout(timer);
         timers.clear(); autoIds.clear(); scanTimer = refreshTimer = null;
         const session = generation, account = users.getCurrentUser?.()?.id;
+        resolverAccount = account;
         resolver = createResolver({
             getUser: id => users.getUser(id),
-            isCurrent: () => active && generation === session && account === users.getCurrentUser?.()?.id,
+            isCurrent: () => active && !loggedOut && validId(account) && generation === session && account === users.getCurrentUser?.()?.id,
             request: id => rest.get({ url: `/users/${id}` }),
             accept: raw => dispatcher.dispatch({ type: "USER_UPDATE", user: raw }),
             onResolved: refresh
         });
+    }
+    function ensureResolver() {
+        if (!active || loggedOut) return false;
+        const account = users.getCurrentUser?.()?.id;
+        // onLoad may run before the signed-in account has hydrated.
+        if (!resolver || account !== resolverAccount) resetResolver();
+        return validId(account);
     }
     function statusText(result) {
         switch (result.status) {
@@ -241,6 +287,7 @@ function createPlugin(V) {
         try { RN.Alert.alert(title, text, buttons); } catch { toast(statusText(result)); }
     }
     async function resolveMessage(message) {
+        if (!ensureResolver()) return;
         const session = generation, ids = extractMentionIds(message);
         if (!active || !ids.length) return;
         toast(`Resolving ${ids.length} mention${ids.length === 1 ? "" : "s"}…`);
@@ -251,6 +298,7 @@ function createPlugin(V) {
     }
     function queueMessage(message, eventChannel) {
         if (!active || storage.autoResolve === false || !message) return;
+        if (!ensureResolver()) return;
         const channel = message.channel_id ?? message.channelId ?? eventChannel;
         const current = selected?.getChannelId?.();
         if (!current || channel !== current) return;
@@ -265,13 +313,34 @@ function createPlugin(V) {
         });
     }
     function scanCurrentChannel() {
+        if (storage.autoResolve === false || !ensureResolver()) return;
+        if (!messages) {
+            messages = byStore("MessageStore") ?? byProps("getMessage", "getMessages");
+            watchStore(messages);
+        }
+        if (!selected) {
+            selected = byStore("SelectedChannelStore") ?? byProps("getChannelId", "getVoiceChannelId")
+                ?? byProps("getGuildId", "getChannelId");
+            watchStore(selected);
+        }
         const id = selected?.getChannelId?.();
-        if (!id || storage.autoResolve === false) return;
+        if (!id) return;
         let list = messages?.getMessages?.(id);
         if (typeof list?.toArray === "function") list = list.toArray();
         else if (typeof list?.values === "function") list = Array.from(list.values());
         else if (Array.isArray(list?._array)) list = list._array;
+        else if (typeof list?.getMessages === "function") list = list.getMessages();
         if (Array.isArray(list)) for (const message of list.slice(-80)) queueMessage(message, id);
+    }
+    function watchStore(store) {
+        if (watchedStores.has(store)) return;
+        if (typeof store?.addChangeListener !== "function" || typeof store?.removeChangeListener !== "function") return;
+        const listener = () => autoScanner?.notify();
+        try {
+            store.addChangeListener(listener);
+            watchedStores.add(store);
+            unpatches.push(() => store.removeChangeListener(listener));
+        } catch { log("A store listener was unavailable; startup retries remain enabled."); }
     }
     function subscribe(event, fn) {
         const safe = value => { if (active) { try { fn(value); } catch { log(`Skipped ${event}.`); } } };
@@ -354,6 +423,7 @@ function createPlugin(V) {
         const text = (label, style = {}) => h(RN.Text, { style: { color, marginVertical: 8, ...style } }, label);
         async function lookup() {
             if (!active || busy) return;
+            if (!ensureResolver()) { toast("Wait for Discord to finish signing in, then try again."); return; }
             const input = value.trim(), id = validId(input) ? input : extractMentionIds(input)[0];
             setBusy(true); setResult(null);
             const session = generation;
@@ -363,13 +433,14 @@ function createPlugin(V) {
             } finally { if (mounted.current) setBusy(false); }
         }
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, paddingBottom: 40 }, keyboardShouldPersistTaps: "handled" },
-            text("ValidUser 2.0.0", { fontSize: 24, fontWeight: "700" }),
+            text("ValidUser 2.1.0", { fontSize: 24, fontWeight: "700" }),
             text("Resolve unknown mentions in messages, embeds and forwarded messages."),
             h(RN.View, { style: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
                 text("Automatically resolve mentions"), h(RN.Switch, { value: auto, onValueChange: enabled => {
                     storage.autoResolve = enabled; setAuto(enabled);
-                    resetResolver(); if (enabled) later(scanCurrentChannel);
+                    resetResolver(); autoScanner?.wake();
                 } })),
+            text("Runs automatically when Revenge starts, messages load, you switch channels, or you return to the app.", { color: muted }),
             text("User ID, mention, or profile link"),
             h(RN.TextInput, { value, onChangeText: setValue, autoCapitalize: "none", autoCorrect: false,
                 placeholder: "Paste a user ID or <@mention>", placeholderTextColor: muted,
@@ -385,7 +456,8 @@ function createPlugin(V) {
         if (active) return;
         users = byStore("UserStore") ?? byProps("getUser", "getCurrentUser");
         messages = byStore("MessageStore") ?? byProps("getMessage", "getMessages");
-        selected = byStore("SelectedChannelStore") ?? byProps("getChannelId", "getVoiceChannelId");
+        selected = byStore("SelectedChannelStore") ?? byProps("getChannelId", "getVoiceChannelId")
+            ?? byProps("getGuildId", "getChannelId");
         dispatcher = V.metro.common.FluxDispatcher ?? byProps("dispatch", "subscribe");
         rest = byProps("get", "post", "del") ?? byProps("get", "post", "patch");
         sheetHost = byProps("openLazy", "hideActionSheet");
@@ -393,19 +465,37 @@ function createPlugin(V) {
         if (!users?.getUser || !dispatcher?.dispatch || !rest?.get) {
             throw new Error("ValidUser: user lookup modules are unavailable on this Discord build.");
         }
-        active = true;
+        active = true; loggedOut = false;
         try {
             resetResolver();
+            autoScanner = createAutoScanner({
+                scan: scanCurrentChannel,
+                enabled: () => active && !loggedOut && storage.autoResolve !== false,
+                onError: () => log("Waiting for Discord's message cache to become available.")
+            });
+            for (const store of [users, messages, selected]) watchStore(store);
+            if (typeof RN.AppState?.addEventListener === "function") {
+                const listener = state => { if (state === "active") autoScanner.wake(); };
+                try {
+                    const subscription = RN.AppState.addEventListener("change", listener);
+                    unpatches.push(() => {
+                        if (typeof subscription?.remove === "function") subscription.remove();
+                        else RN.AppState.removeEventListener?.("change", listener);
+                    });
+                } catch { log("App resume notifications are unavailable."); }
+            }
             if (dispatcher.subscribe && dispatcher.unsubscribe) {
                 for (const event of ["MESSAGE_CREATE", "MESSAGE_UPDATE"]) subscribe(event, payload => queueMessage(payload?.message));
                 subscribe("LOAD_MESSAGES_SUCCESS", payload => {
                     for (const message of (Array.isArray(payload?.messages) ? payload.messages.slice(-80) : [])) {
                         queueMessage(message, payload.channelId ?? payload.channel_id);
                     }
+                    autoScanner.notify();
                 });
-                subscribe("CHANNEL_SELECT", () => later(scanCurrentChannel));
-                subscribe("CONNECTION_OPEN", () => { resetResolver(); later(scanCurrentChannel); });
-                subscribe("LOGOUT", () => { resetResolver(); resolver.stop(); });
+                subscribe("CHANNEL_SELECT", () => autoScanner.wake());
+                subscribe("CONNECTION_OPEN", () => { loggedOut = false; autoScanner.wake(); });
+                subscribe("CONNECTION_RESUMED", () => autoScanner.wake());
+                subscribe("LOGOUT", () => { loggedOut = true; resetResolver(); resolver.stop(); autoScanner.wake(); });
             }
             if (sheetHost?.openLazy && Row) {
                 unpatches.push(V.patcher.before("openLazy", sheetHost, args => {
@@ -419,14 +509,15 @@ function createPlugin(V) {
                     });
                 }));
             } else toast("ValidUser: use the plugin settings to resolve a user on this Discord version.");
-            later(scanCurrentChannel);
+            autoScanner.start();
         } catch (error) { onUnload(); throw error; }
     }
     function onUnload() {
-        active = false; generation++; resolver?.stop();
+        active = false; generation++; resolver?.stop(); autoScanner?.stop();
         for (const timer of timers) clearTimeout(timer);
         timers.clear(); autoIds.clear(); scanTimer = refreshTimer = null;
         for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }
+        watchedStores.clear();
     }
     return { onLoad, onUnload, settings: Settings };
 }

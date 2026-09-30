@@ -10,10 +10,18 @@ Disable the old ValidUser first, install this version, then restart Revenge.
 
 ## Use
 
-- Automatically looks up unknown mentions in the channel you are viewing, including embeds, component text and forwarded messages.
+- Automatic resolution is on by default. It starts when Revenge loads, waits for Discord's account/channel/message cache to be ready, and looks up unknown mentions in the channel you are viewing, including embeds, component text and forwarded messages.
+- Message and channel store changes, reconnection, and returning to the app trigger further automatic scans. Startup retries stop after 30 seconds; later cache changes are detected through store listeners. No long-press or pop-up confirmation is needed for automatic lookups.
 - Long-press a message and choose **Resolve mentions / Open profile**. The result explains whether Discord returned a real user and offers **Open profile** on success. For several users, tap **Next**.
 - The plugin's settings also accept a user ID, `<@mention>`, or Discord user link. Automatic lookup can be switched off there.
 - If an already-rendered mention still shows the old ID after resolution, switch channels and return. Some Discord builds cache the parsed message independently of the user store.
+
+## What changed in 2.1.0
+
+- Reliable startup scans even when the selected channel, account or messages load after the plugin.
+- Debounced store listeners and bounded startup retries catch cache hydration without constant polling.
+- Automatically scans again when you return to Revenge or reconnect.
+- Reconnection on the same account preserves lookup cooldowns. Logout, account changes and plugin disable still cancel stale work.
 
 ## What changed in 2.0.0
 

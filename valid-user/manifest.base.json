@@ -1,6 +1,6 @@
 {
   "name": "ValidUser",
-  "description": "Resolve unknown user mentions in messages, embeds and forwards, with safe lookups and profile access.",
+  "description": "Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",
   "authors": [
     {
       "name": "fshin",
@@ -23,5 +23,5 @@
   "vendetta": {
     "icon": "ic_mention_24px"
   },
-  "version": "2.0.0"
+  "version": "2.1.0"
 }

@@ -7,15 +7,21 @@ import createPlugin from "../src/plugin.mjs";
 const A = "1332879948079431743", CHANNEL = "123456789012345678";
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function harness({ missingMenu = false, missingRest = false, request } = {}) {
+function harness({ missingMenu = false, missingRest = false, request, storeListeners = true } = {}) {
     const cache = new Map(), handlers = new Map(), events = [], requests = [], alerts = [], profiles = [];
-    const users = { getUser: id => cache.get(id), getCurrentUser: () => ({ id: "753962426407452713" }), emitChange() {} };
+    let account = "753962426407452713", channel = CHANNEL, loadedMessages = [];
+    const listeners = new Set(), appListeners = new Set();
+    const observable = object => storeListeners ? Object.assign(object, {
+        addChangeListener: fn => listeners.add(fn), removeChangeListener: fn => listeners.delete(fn),
+        emitChange() { for (const fn of listeners) fn(); }
+    }) : object;
+    const users = observable({ getUser: id => cache.get(id), getCurrentUser: () => account ? ({ id: account }) : undefined });
     const dispatcher = {
         subscribe(event, fn) { if (!handlers.has(event)) handlers.set(event, new Set()); handlers.get(event).add(fn); },
         unsubscribe(event, fn) { handlers.get(event)?.delete(fn); },
         dispatch(event) {
             events.push(event);
-            if (event.type === "USER_UPDATE") cache.set(event.user.id, event.user);
+            if (event.type === "USER_UPDATE") { cache.set(event.user.id, event.user); users.emitChange?.(); }
             for (const fn of handlers.get(event.type) ?? []) fn(event);
         }
     };
@@ -30,10 +36,12 @@ function harness({ missingMenu = false, missingRest = false, request } = {}) {
         memo: (type, compare) => ({ $$typeof: Symbol.for("react.memo"), type, compare }),
         forwardRef: render => ({ $$typeof: Symbol.for("react.forward_ref"), render })
     };
-    const stores = { UserStore: users, MessageStore: { getMessages: () => [] }, SelectedChannelStore: { getChannelId: () => CHANNEL } };
+    const stores = { UserStore: users, MessageStore: observable({ getMessages: () => loadedMessages }), SelectedChannelStore: observable({ getChannelId: () => channel }) };
     const modules = [users, ...(missingMenu ? [] : [sheet, { ActionSheetRow: Row }]), ...(missingRest ? [] : [rest])];
     const V = {
-        metro: { common: { React, ReactNative: { Alert: { alert: (...args) => alerts.push(args) } }, FluxDispatcher: dispatcher },
+        metro: { common: { React, ReactNative: { Alert: { alert: (...args) => alerts.push(args) },
+            AppState: { addEventListener: (_, fn) => { appListeners.add(fn); return { remove: () => appListeners.delete(fn) }; } }
+        }, FluxDispatcher: dispatcher },
             findByProps: (...props) => modules.find(m => props.every(p => p in m)), findByStoreName: name => stores[name],
             findByName: name => name === "showUserProfileActionSheet" ? value => profiles.push(value) : undefined },
         patcher: { before(key, object, callback) {
@@ -43,7 +51,13 @@ function harness({ missingMenu = false, missingRest = false, request } = {}) {
         plugin: { storage: {} }, logger: { warn() {} },
         ui: { toasts: { showToast() {} }, assets: { getAssetIDByName: () => 1 } }
     };
-    return { V, plugin: createPlugin(V), cache, events, requests, alerts, profiles, dispatcher, handlers, sheet, Row, React };
+    return { V, plugin: createPlugin(V), cache, events, requests, alerts, profiles, dispatcher, handlers, sheet, Row, React, stores,
+        listeners, appListeners,
+        setAccount: value => { account = value; }, setChannel: value => { channel = value; },
+        setMessages: value => { loadedMessages = value; },
+        emitStoreChange: () => { for (const fn of listeners) fn(); },
+        appState: state => { for (const fn of appListeners) fn(state); }
+    };
 }
 test("published bundle evaluates to a Revenge lifecycle object and matches its manifest hash", () => {
     const { V } = harness();
@@ -110,4 +124,81 @@ test("React memo and forwardRef sheets keep the mention action", async () => {
         assert.equal(tree.props.children[0].props.label, "Resolve mentions / Open profile");
         t.plugin.onUnload();
     }
+});
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+async function advance(context, ms = 0) {
+    context.mock.timers.tick(ms); await flush();
+    context.mock.timers.tick(0); await flush();
+}
+function startupHarness(context, options) {
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    const t = harness(options);
+    context.after(() => t.plugin.onUnload());
+    return t;
+}
+test("opening Revenge resolves mentions already present in its cache without taps", async context => {
+    const t = startupHarness(context);
+    t.setMessages([{ content: `<@${A}>`, channelId: CHANNEL }]); t.plugin.onLoad();
+    await advance(context);
+    assert.equal(t.cache.get(A)?.username, "Resolved Name");
+    assert.equal(t.alerts.length, 0); assert.equal(t.profiles.length, 0);
+    await advance(context, 30000);
+    assert.equal(t.requests.length, 1);
+});
+test("startup retries wait for account, selected channel and messages without gateway events", async context => {
+    const t = startupHarness(context, { storeListeners: false });
+    t.setAccount(undefined); t.setChannel(undefined); t.plugin.onLoad();
+    await advance(context); assert.equal(t.requests.length, 0);
+    t.setAccount("753962426407452713"); t.setChannel(CHANNEL);
+    await advance(context, 500); assert.equal(t.requests.length, 0);
+    t.setMessages({ _array: [{ embeds: [{ description: `<@${A}>` }] }] });
+    await advance(context, 1000);
+    assert.equal(t.cache.get(A)?.username, "Resolved Name");
+    assert.equal(t.alerts.length, 0);
+});
+test("message cache changes after the startup window still resolve automatically", async context => {
+    const t = startupHarness(context); t.plugin.onLoad();
+    await advance(context, 31000);
+    t.setMessages({ toArray: () => [{ content: `<@${A}>` }] });
+    for (let n = 0; n < 10; n++) t.emitStoreChange();
+    await advance(context, 100);
+    assert.equal(t.requests.length, 1); assert.equal(t.cache.get(A)?.username, "Resolved Name");
+});
+test("returning to Revenge and reconnecting trigger a silent scan", async context => {
+    const t = startupHarness(context, { storeListeners: false }); t.plugin.onLoad();
+    await advance(context, 31000);
+    t.setMessages([{ content: `<@${A}>` }]); t.appState("active");
+    await advance(context); assert.equal(t.requests.length, 1);
+    const B = "753962426407452714";
+    t.setMessages([{ content: `<@${B}>` }]);
+    t.dispatcher.dispatch({ type: "CONNECTION_OPEN" });
+    await advance(context, 500); await advance(context, 500);
+    assert.equal(t.cache.get(B)?.username, "Resolved Name"); assert.equal(t.alerts.length, 0);
+});
+test("startup retries discover message and channel stores that load after the plugin", async context => {
+    const t = startupHarness(context);
+    const messageStore = t.stores.MessageStore, selectedStore = t.stores.SelectedChannelStore;
+    delete t.stores.MessageStore; delete t.stores.SelectedChannelStore;
+    t.plugin.onLoad(); await advance(context);
+    t.stores.MessageStore = messageStore; t.stores.SelectedChannelStore = selectedStore;
+    t.setMessages([{ content: `<@${A}>` }]); await advance(context, 500);
+    assert.equal(t.cache.get(A)?.username, "Resolved Name");
+    assert.equal(t.listeners.size, 3);
+});
+test("disabled automatic setting and logout suppress startup and resume lookups", async context => {
+    const t = startupHarness(context); t.V.plugin.storage.autoResolve = false;
+    t.setMessages([{ content: `<@${A}>` }]); t.plugin.onLoad();
+    t.appState("active"); t.emitStoreChange(); await advance(context, 31000);
+    assert.equal(t.requests.length, 0);
+    t.V.plugin.storage.autoResolve = true;
+    t.dispatcher.dispatch({ type: "LOGOUT" }); t.appState("active"); t.emitStoreChange();
+    await advance(context, 31000); assert.equal(t.requests.length, 0);
+});
+test("unload removes store/app listeners and cancels every startup retry", async context => {
+    const t = startupHarness(context); t.plugin.onLoad(); await advance(context);
+    t.plugin.onUnload(); t.setMessages([{ content: `<@${A}>` }]);
+    assert.equal(t.listeners.size, 0); assert.equal(t.appListeners.size, 0);
+    t.appState("active"); t.emitStoreChange(); await advance(context, 31000);
+    assert.equal(t.requests.length, 0);
 });
