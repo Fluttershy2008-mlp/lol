@@ -4,8 +4,9 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
-function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' } = {}) {
-  let hooks = null, index = 0, jobs = [], timerId = 0;
+function runtime({ missing = false, missingSend = false, sendBehavior = 'clear', silentNative = false,
+  staleCache = false, delayFlush = false, delayInitial = false, dropInsert = false } = {}) {
+  let hooks = null, index = 0, jobs = [], timerId = 0, clock = 0;
   const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set(), appListeners = new Set();
   const appState = { currentState: 'active', addEventListener(event, callback) {
     appListeners.add(callback); return { remove: () => appListeners.delete(callback) };
@@ -31,23 +32,44 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' 
     const state = [];
     return { render() { hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
   }
-  let draft = '', account = 'user1', channel = 'channel1', sendCount = 0;
+  let draft = '', cached = '', editId = '0', cachedEditId = '0', account = 'user1', channel = 'channel1', sendCount = 0;
+  const inserted = [], pendingFlushes = [], nativeHandle = {};
+  let originalRefValue = null, originalFlushCount = 0;
   const sentContents = [];
   let liveTree;
   const emitNative = (text, start = text.length, end = start) => {
     const field = nodes(liveTree, n => typeof n.props?.onSelectionOrTextChange === 'function')[0];
     assert(field, 'native field present');
-    field.props.onSelectionOrTextChange({ nativeEvent: { text, start, end } });
+    draft = text; editId = String(Number(editId) + 1);
+    field.props.onSelectionOrTextChange({ nativeEvent: { text, start, end, editId } });
+  };
+  const replace = (text, start, end, revision) => {
+    if (dropInsert || (revision != null && revision !== editId)) return;
+    const next = draft.slice(0, start) + text + draft.slice(end);
+    inserted.push(text);
+    if (silentNative) { draft = next; editId = String(Number(editId) + 1); }
+    else emitNative(next);
+  };
+  const nativeCommands = {
+    getText() {}, replaceRange() {},
+    flushText(ref, requestId) {
+      assert.equal(ref, nativeHandle, 'flush targets the mounted native field');
+      const text = draft;
+      const deliver = () => nodes(liveTree, n => typeof n.props?.onTextFlushed === 'function')[0]
+        .props.onTextFlushed({ nativeEvent: { text, requestId } });
+      if ((delayFlush && inserted.length) || (delayInitial && !inserted.length)) pendingFlushes.push(deliver); else deliver();
+    },
   };
   const input = {
-    getText: () => draft,
+    getText: () => cached,
     handleTextChanged() {},
     handleSend() {
       sendCount++; sentContents.push(draft);
       if (sendBehavior === 'throw') throw new Error('Discord rejected send');
       if (sendBehavior === 'clear') emitNative('');
     },
-    insertText(text, start, space, nodes, end) { emitNative(draft.slice(0, start) + text + draft.slice(end)); },
+    insertText(text, start, space, nodes, end) { replace(text, start, end, cachedEditId); },
+    replaceRange({ location, length, text, editId }) { replace(text, location, location + length, editId); },
   };
   if (missingSend) delete input.handleSend;
   const inputRef = { current: input };
@@ -59,7 +81,13 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' 
       React.createElement('View', { testID: 'floating-box', collapsable: false,
         onStartShouldSetResponder() {}, onResponderRelease() {}, style: { flexDirection: 'column', overflow: 'hidden' } },
         React.createElement('View', { testID: 'input-row', style: { flexDirection: 'row' } },
-          React.createElement('NativeInput', { onSelectionOrTextChange(event) { draft = event.nativeEvent.text; } }))))),
+          React.createElement('NativeInput', {
+            ref(value) { originalRefValue = value; },
+            onTextFlushed() { originalFlushCount++; },
+            onSelectionOrTextChange(event) {
+              if (!staleCache) { cached = event.nativeEvent.text; cachedEditId = event.nativeEvent.editId; }
+            },
+          }))))),
   };
   const original = holder.default;
   const api = {
@@ -68,7 +96,7 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' 
       common: { React, ReactNative: { ...Object.fromEntries(['Text', 'View', 'TextInput', 'ScrollView', 'TouchableOpacity', 'Switch', 'Modal', 'SafeAreaView', 'KeyboardAvoidingView'].map(name => [name, name])), AppState: appState }, clipboard: { setString() {} } },
       findByName: () => missing ? undefined : holder,
       findByTypeName: () => undefined,
-      findByProps: () => ({ getMaxMessageLength: () => 2000 }),
+      findByProps: (...props) => props.includes('flushText') ? nativeCommands : { getMaxMessageLength: () => 2000 },
       findByStoreName: name => name === 'SelectedChannelStore' ? { getChannelId: () => channel } : name === 'UserStore' ? { getCurrentUser: () => ({ id: account }) } : null,
     },
     patcher: { before(key, obj, fn) {
@@ -85,13 +113,25 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' 
   const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   const plugin = vm.runInNewContext('(' + source + ')', {
     vendetta: api,
-    setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id),
+    Date: class extends Date { static now() { return clock; } },
+    setTimeout: (fn, delay) => { timers.set(++timerId, { fn, at: clock + delay }); return timerId; }, clearTimeout: id => timers.delete(id),
     setInterval: fn => { intervals.set(++timerId, fn); return timerId; }, clearInterval: id => intervals.delete(id),
   });
   return { plugin, holder, original, patches, storage, host, timers, intervals, read: () => draft,
-    open() { liveTree = holder.default({ channel: { id: channel } }); return liveTree; },
+    open() {
+      liveTree = holder.default({ channel: { id: channel } });
+      const field = nodes(liveTree, n => n.type === 'NativeInput')[0];
+      field.props.ref(nativeHandle);
+      assert.equal(originalRefValue, nativeHandle, 'Discord still receives its native ref');
+      return liveTree;
+    },
     type: emitNative,
-    flush() { const pending = [...timers]; timers.clear(); pending.forEach(([, fn]) => fn()); },
+    flush() {
+      if (!timers.size) return;
+      clock = Math.min(...[...timers.values()].map(item => item.at));
+      for (const [id, item] of [...timers]) if (item.at <= clock) { timers.delete(id); item.fn(); }
+    },
+    pendingFlushes, inserted, originalFlushCount: () => originalFlushCount,
     switchAccount() { account = 'user2'; },
     switchChannel() { channel = 'channel2'; },
     background() { appState.currentState = 'background'; for (const fn of appListeners) fn('background'); },
@@ -209,6 +249,63 @@ test('AutoType screen runs a multiline message without shortcut expansion or ext
   assert.equal(r.sent(), 0, 'AutoType never sends the prepared message');
   assert(!Object.values(r.storage).includes(source), 'prepared message is not persisted');
   r.plugin.onUnload(); assert.equal(r.appListeners.size, 0); assert.equal(r.timers.size, 0);
+});
+test('native text confirmation recovers missing echoes and stale cached text at Very slow speed', () => {
+  for (const autoSend of [false, true]) {
+    const r = runtime({ silentNative: true, staleCache: true });
+    r.storage.typingInterval = 500;
+    const source = '- A\n- B 🍓';
+    const host = openAutoType(r, source, autoSend);
+    for (let i = 0; i < 400; i++) r.flush();
+    assert.equal(r.inserted.join(''), source, 'each character is inserted exactly once');
+    assert.equal(r.read(), autoSend ? '' : source);
+    assert.equal(r.sent(), autoSend ? 1 : 0);
+    if (autoSend) assert.deepEqual(r.sentTexts(), [source]);
+    assert(r.originalFlushCount() > 0, 'native probes still pass through Discord\'s flush handler');
+    assert.equal(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length, 0);
+    r.plugin.onUnload(); assert.equal(r.timers.size, 0);
+  }
+});
+test('native event revisions take precedence over a stale composer cache', () => {
+  const r = runtime({ staleCache: true });
+  const source = 'abc 🍓'; openAutoType(r, source, true);
+  for (let i = 0; i < 100; i++) r.flush();
+  assert.deepEqual(r.sentTexts(), [source]); assert.equal(r.inserted.join(''), source);
+  r.plugin.onUnload();
+});
+test('a late native text reply cannot continue typing or auto-send after cancellation', () => {
+  for (const action of ['stop', 'unload', 'background', 'edit', 'channel']) {
+    const r = runtime({ silentNative: true, staleCache: true, delayFlush: true });
+    const host = openAutoType(r, 'ab', true);
+    for (let i = 0; i < 20 && !r.pendingFlushes.length; i++) r.flush();
+    assert.equal(r.pendingFlushes.length, 1);
+    if (action === 'stop') nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing')[0].props.onPress();
+    if (action === 'unload') r.plugin.onUnload();
+    if (action === 'background') r.background();
+    if (action === 'edit') r.type('manual');
+    if (action === 'channel') r.switchChannel();
+    r.pendingFlushes.shift()();
+    for (let i = 0; i < 250; i++) r.flush();
+    assert.equal(r.read(), action === 'edit' ? 'manual' : 'a', action);
+    assert.equal(r.inserted.join(''), 'a', action); assert.equal(r.sent(), 0, action);
+    r.plugin.onUnload(); assert.equal(r.timers.size, 0);
+  }
+});
+test('an ignored native insert times out without retrying or sending an unfinished draft', () => {
+  const r = runtime({ dropInsert: true }); const host = openAutoType(r, 'abc', true);
+  for (let i = 0; i < 300; i++) r.flush();
+  assert.equal(r.read(), ''); assert.equal(r.sent(), 0);
+  assert(nodes(host.render(), n => n.type === 'Text' && /message box did not respond/.test(n.props.children)).length);
+  r.plugin.onUnload(); assert.equal(r.timers.size, 0);
+});
+test('leaving the chat while the initial native read is pending cancels the run', () => {
+  const r = runtime({ delayInitial: true }); const host = openAutoType(r, 'abc', true);
+  r.flush(); assert.equal(r.pendingFlushes.length, 1); assert.equal(r.read(), '');
+  r.switchChannel(); r.pendingFlushes.shift()();
+  for (let i = 0; i < 20; i++) r.flush();
+  assert.equal(r.read(), ''); assert.equal(r.sent(), 0);
+  assert.equal(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length, 0);
+  r.plugin.onUnload(); assert.equal(r.timers.size, 0);
 });
 test('Stop button preserves the partial draft and prevents remaining letters', () => {
   const r = runtime(); const host = openAutoType(r, 'abcdef'); r.flush(); r.flush();

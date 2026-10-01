@@ -14,7 +14,7 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/
 
 Enable AutoText, then reopen a chat. The compact AutoText bar appears inside the composer, above the typing row. Tap **AutoType** to prepare the message you want typed.
 
-Updating from an earlier version: update the plugin to **1.2.1**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
+Updating from an earlier version: update the plugin to **1.2.2**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
 
 ## Automatic typing
 
@@ -35,7 +35,7 @@ The text is appended to the end of the current draft; clear the message box firs
 | Normal | 70 ms |
 | Fast | 25 ms |
 
-There is a short initial delay so the editor can close. Discord's native updates may slow this down. AutoType waits for confirmation before inserting another character and stops if the composer cannot confirm an edit.
+There is a short initial delay so the editor can close. Discord's native updates may slow this down. AutoType waits for confirmation before inserting another character. Version 1.2.2 reads the native message box when Discord's cached text or change event lags, uses the latest native edit revision, and allows up to five seconds for a delayed edit. Each character is inserted once; a failed edit is never blindly retried. If the native field cannot confirm it, typing stops and auto-send is cancelled.
 
 It stops on manual edits, cursor movement, channel/account changes, backgrounding, plugin unload, or a user-initiated Send. It never starts another message automatically. The prepared message is held only in memory for the current composer; your selected speed and auto-send preference are saved.
 
@@ -77,13 +77,13 @@ Automatic changes trigger only when a single character is added at the end of a 
 
 ## Compatibility and troubleshooting
 
-This uses `ChatInputGuardWrapper`, the native `onSelectionOrTextChange` event, and the composer's `getText` and `insertText` methods. The old `handleTextChanged` hook is retained as a compatibility path. Hooks are restricted to mounted chat composers and removed when the plugin is disabled. The small range edits preserve native mention nodes outside the replacement range.
+This uses `ChatInputGuardWrapper`, the native `onSelectionOrTextChange` event, and the composer's `getText` and `insertText` methods. Where supported, `flushText`/`onTextFlushed` confirms the native draft and `replaceRange` uses the observed edit revision. Discord's original native ref and event handlers are preserved. The old `handleTextChanged` hook is retained as a compatibility path. Hooks are restricted to mounted chat composers and removed when the plugin is disabled. The small range edits preserve native mention nodes outside the replacement range.
 
 Version 1.0.1 puts the toolbar inside the measured floating input column, rather than beside the guard, and bounds each toolbar strip to 44 layout units. It fixes the old overlapping controls and oversized blank area. Native events are observed after Discord updates its own state, including cursor movement that cancels a pending automatic edit.
 
 Discord can change these internal APIs. If the bar is missing, reopen the chat or restart Revenge and check the status in AutoText settings. If the live composer is unsupported, settings still include a practice editor and **Copy draft** button. No message is sent by using that editor.
 
-Automated tests cover optional auto-send, final-character acknowledgment, single submission, native send failures, cancellation immediately before submission, automatic typing speed, literal multiline messages, Stop, delayed native acknowledgments, emoji clusters, user-initiated Send, backgrounding, text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.2.1 update has not yet been verified in a physical Android/Revenge session.**
+Automated tests reproduce missing native echoes, stale text caches and delayed acknowledgments, and cover optional auto-send, final-character acknowledgment, single submission, native send failures, cancellation immediately before submission, automatic typing speed, literal multiline messages, Stop, delayed native acknowledgments, emoji clusters, user-initiated Send, backgrounding, text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.2.2 update has not yet been verified in a physical Android/Revenge session.**
 
 ## Development
 
@@ -101,5 +101,7 @@ API references used for integration:
 - [Revenge's Vendetta plugin loader](https://github.com/revenge-mod/revenge-bundle/blob/main/src/core/vendetta/plugins.ts)
 - [Revenge's compatibility API](https://github.com/revenge-mod/revenge-bundle/blob/main/src/core/vendetta/api.tsx)
 - [Message Preview's composer hook](https://github.com/nexpid/RevengePlugins/blob/main/src/plugins/message-preview/src/stuff/patcher.ts)
+- [Discord native input reference methods](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/6b4f87763b43cac7485c1e03ad70926dd350fb95/discord_app/modules/chat_input/native/useChatInputRefs.tsx)
+- [Discord native text confirmation commands](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/6b4f87763b43cac7485c1e03ad70926dd350fb95/discord_app/modules/chat_input/native/ChatInputNativeCommands.tsx)
 
 Original implementation, MIT licensed.

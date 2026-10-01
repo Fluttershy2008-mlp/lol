@@ -158,16 +158,22 @@ function typingCharacters(text) {
   return result;
 }
 
-function createTyper({ read, insert, send, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
+function createTyper({ read, insert, send, refresh, prepare, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let disposed = false, timer = null, status = 'idle', message = '', chunks = [], position = 0, total = 0;
   let expected = '', pending = null, interval = 70;
   let autoSend = false, sendIssued = false, sendStarted = 0, runId = 0;
+  let verification = null, prepared = false;
   const state = () => ({ status, message, position, total, autoSend,
     running: status === 'running', sending: status === 'sending', busy: status === 'running' || status === 'sending' });
   const announce = () => { try { changed(state()); } catch {} };
   const clearTimer = () => { if (timer !== null) cancel(timer); timer = null; };
+  function clearVerification() {
+    const old = verification; verification = null;
+    try { old?.cancel?.(); } catch {}
+  }
   function finish(nextStatus, reason) {
     runId++;
+    clearVerification();
     clearTimer(); status = nextStatus; message = reason;
     chunks = []; pending = null; expected = ''; announce();
   }
@@ -176,7 +182,40 @@ function createTyper({ read, insert, send, allowed, maxLength, changed = () => {
     else if (status === 'sending') finish('done', 'Auto-send was already requested. Check Discord for delivery.');
   }
   function ack() {
+    clearVerification();
     expected = pending.after; pending = null; position++; announce();
+  }
+  function verifyPending() {
+    if (!refresh || verification || !pending || now() - pending.lastProbe < 250) return;
+    pending.lastProbe = now();
+    const probe = { pending, token: runId, cancel: null };
+    verification = probe;
+    probe.cancel = refresh(text => {
+      if (verification !== probe || disposed || runId !== probe.token || pending !== probe.pending) return;
+      clearVerification();
+      if (!allowed()) { stop('Stopped because this chat is no longer active or AutoText is paused.'); return; }
+      if (typeof text === 'string') observe(text);
+    });
+    // The native bridge may reply synchronously or be unavailable.
+    if (verification !== probe) probe.cancel?.();
+    else if (typeof probe.cancel !== 'function') verification = null;
+  }
+  function verifyInitial() {
+    if (!refresh) return false;
+    const probe = { token: runId, cancel: null };
+    let synchronous = true;
+    verification = probe;
+    probe.cancel = refresh(text => {
+      if (verification !== probe || disposed || runId !== probe.token || status !== 'running') return;
+      clearVerification();
+      if (!allowed()) { stop('Stopped because this chat is no longer active or AutoText is paused.'); return; }
+      if (typeof text === 'string' && text !== expected) { stop('Stopped because you changed the draft before typing began.'); return; }
+      if (!synchronous) later(0);
+    });
+    synchronous = false;
+    if (verification !== probe) probe.cancel?.();
+    else if (typeof probe.cancel !== 'function') verification = null;
+    return verification === probe;
   }
   function later(delay, callback = tick) {
     clearTimer();
@@ -220,12 +259,18 @@ function createTyper({ read, insert, send, allowed, maxLength, changed = () => {
     if (disposed || status !== 'running') return;
     try {
       if (!allowed()) { stop('Stopped because this chat is no longer active or AutoText is paused.'); return; }
+      if (!prepared) {
+        prepared = true; prepare?.();
+        // Confirm the native starting draft before the first write as well.
+        // This avoids inserting with a stale cached revision after a modal.
+        if (verifyInitial() || status !== 'running') return;
+      }
       let actual = read();
       if (pending) {
         if (actual === pending.after) ack();
         else if (actual === pending.before) {
-          if (now() - pending.started >= 1500) { finish('error', 'Typing stopped: Discord did not confirm the text change.'); return; }
-          later(25); return;
+          if (now() - pending.started >= 5000) { finish('error', 'Typing paused: the message box did not respond. Reopen the chat and check the partial draft before trying again.'); return; }
+          later(25); verifyPending(); return;
         } else { stop('Stopped because you changed or sent the draft.'); return; }
       }
       if (actual !== expected) { stop('Stopped because you changed or sent the draft.'); return; }
@@ -238,10 +283,23 @@ function createTyper({ read, insert, send, allowed, maxLength, changed = () => {
       if (expected.length + char.length > maxLength()) { finish('error', 'Typing stopped at the message length limit.'); return; }
       // Set the expected echo BEFORE issuing the command: native updates can
       // be synchronous. Wait for confirmation before writing another letter.
-      pending = { before: expected, after: expected + char, started: now() };
+      pending = { before: expected, after: expected + char, started: now(), lastProbe: now() };
       if (!insert(char, expected)) { stop('Stopped because the draft changed or could not be edited.'); return; }
       if (status === 'running') later(interval);
     } catch { finish('error', 'Typing stopped because the composer could not be updated.'); }
+  }
+  function observe(text, selection) {
+    if (disposed) return;
+    if (status === 'sending') {
+      if (text !== expected) finish('done', 'Auto-send requested. Check the chat for delivery.');
+      return;
+    }
+    if (status !== 'running') return;
+    if (selection && (selection.start !== text.length || selection.end !== text.length)) {
+      stop('Stopped because you moved the cursor.'); return;
+    }
+    if (pending && text === pending.after) { ack(); return; }
+    if (text !== expected && text !== pending?.before) stop('Stopped because you changed or sent the draft.');
   }
   return {
     get state() { return state(); },
@@ -257,24 +315,12 @@ function createTyper({ read, insert, send, allowed, maxLength, changed = () => {
       if (settings.autoSend === true && typeof send !== 'function') throw new Error('Auto-send is unavailable on this Discord version. Turn it off to type normally.');
       const speed = Number(milliseconds);
       interval = Number.isFinite(speed) ? Math.max(25, Math.min(500, speed)) : 70;
-      clearTimer(); runId++; autoSend = settings.autoSend === true; sendIssued = false;
+      clearTimer(); clearVerification(); runId++; prepared = false; autoSend = settings.autoSend === true; sendIssued = false;
       chunks = typingCharacters(normalized); position = 0; total = chunks.length;
       expected = initial; pending = null; status = 'running'; message = 'Typing your prepared message…';
       announce(); later(400); return state();
     },
-    observe(text, selection) {
-      if (disposed) return;
-      if (status === 'sending') {
-        if (text !== expected) finish('done', 'Auto-send requested. Check the chat for delivery.');
-        return;
-      }
-      if (status !== 'running') return;
-      if (selection && (selection.start !== text.length || selection.end !== text.length)) {
-        stop('Stopped because you moved the cursor.'); return;
-      }
-      if (pending && text === pending.after) { ack(); return; }
-      if (text !== expected && text !== pending?.before) stop('Stopped because you changed or sent the draft.');
-    },
+    observe,
     stop,
     dispose() { if (disposed) return; stop(); disposed = true; clearTimer(); chunks = []; pending = null; expected = ''; },
   };
@@ -283,12 +329,26 @@ function createTyper({ read, insert, send, allowed, maxLength, changed = () => {
 /* SPDX-License-Identifier: MIT */
 
 // One session belongs to one mounted composer. No drafts are stored here persistently.
-function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
+function createSession({ target, patcher, options, phrases, maxLength, nativeReader, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
   let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null, autoSending = false;
-  const read = () => {
+  let nativeText = null, cacheAtNative = null, nativeEditId = null;
+  const cachedText = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
   };
+  const read = () => {
+    const cached = cachedText();
+    if (nativeText !== null) {
+      // A real native event/flush is confirmation; our optimistic UI text is
+      // not. Keep it while getText still contains its previous cached value.
+      if (cached === cacheAtNative || cached === nativeText) return nativeText;
+      nativeText = null; nativeEditId = null;
+    }
+    return cached;
+  };
+  function confirmed(text, editId = null) {
+    nativeText = text; cacheAtNative = cachedText(); nativeEditId = editId;
+  }
   let current = read();
   if (current === null || typeof target.insertText !== 'function') {
     throw new Error('This composer does not expose the supported text editing methods.');
@@ -312,7 +372,12 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     try {
       // Native range edits retain mention/emoji nodes outside the changed range.
       // Never call sendMessage or replace a DraftStore record behind the composer.
-      target.insertText(edit.insert, edit.start, false, undefined, edit.end);
+      if (nativeText === expected && typeof target.replaceRange === 'function') {
+        // insertText can carry an old cached editId. Use the revision from the
+        // actual native event, or the optional null revision after a flush.
+        target.replaceRange({ location: edit.start, length: edit.end - edit.start,
+          text: edit.insert, nodes: [], keepCursorPosition: false, editId: nativeEditId });
+      } else target.insertText(edit.insert, edit.start, false, undefined, edit.end);
     } catch (error) {
       current = previous; undo = null; report(error); return false;
     } finally { writing = false; announce(); }
@@ -357,6 +422,18 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
   const unpatch = typeof target.handleTextChanged === 'function'
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
+    prepare: () => {
+      // Runs after the AutoType modal closes, before the first character.
+      try { if (target.isFocused?.() === false) target.focus?.(); } catch {}
+    },
+    refresh: callback => nativeReader?.read(text => {
+      if (disposed) return;
+      if (typer.state.running && allowed() && options().enabled && typeof text === 'string') {
+        confirmed(text, text === nativeText ? nativeEditId : null);
+        current = text;
+      }
+      callback(text);
+    }),
     insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
     send: typeof target.handleSend === 'function' ? expected => {
       // Re-check the exact composer and text immediately before the only send
@@ -386,6 +463,7 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
       if (typeof data?.text !== 'string') return;
       const selection = Number.isInteger(data.start) && Number.isInteger(data.end)
         ? { start: data.start, end: data.end } : null;
+      confirmed(data.text, typeof data.editId === 'string' ? data.editId : null);
       observe(data.text, selection);
     },
     undo() {
@@ -400,10 +478,66 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
 
 /* SPDX-License-Identifier: MIT */
 
+// Read the real native field when Discord's JavaScript text cache/echo lags.
+// flushText is read-only; a probe must never retry an insert or a Send.
+function createNativeReader(commands, { schedule = setTimeout, cancel = clearTimeout } = {}) {
+  let target = null, serial = 0, disposed = false;
+  const requests = new Map(), refs = new Map();
+  const prefix = 'auto-text-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '-';
+  function clear(notify = false) {
+    const pending = [...requests.values()];
+    requests.clear();
+    for (const request of pending) {
+      cancel(request.timer);
+      if (notify) { try { request.callback(null); } catch {} }
+    }
+  }
+  return {
+    ref(original) {
+      if (refs.has(original)) return refs.get(original);
+      const callback = value => {
+        if (target !== value) clear(true);
+        target = value;
+        const cleanup = typeof original === 'function' ? original(value) : undefined;
+        if (original && typeof original === 'object') original.current = value;
+        if (typeof cleanup === 'function') return () => {
+          if (target === value) { target = null; clear(true); }
+          cleanup();
+        };
+      };
+      refs.set(original, callback);
+      return callback;
+    },
+    read(callback) {
+      if (disposed || !target || typeof commands?.flushText !== 'function') return null;
+      const id = prefix + (++serial);
+      const release = () => {
+        const request = requests.get(id);
+        if (request) cancel(request.timer);
+        requests.delete(id);
+      };
+      requests.set(id, { callback, timer: schedule(() => { release(); callback(null); }, 1000) });
+      try { commands.flushText(target, id); }
+      catch { release(); return null; }
+      return release;
+    },
+    observe(event) {
+      const data = event?.nativeEvent ?? event;
+      const request = requests.get(data?.requestId);
+      if (!request) return;
+      requests.delete(data.requestId); cancel(request.timer);
+      request.callback(typeof data.text === 'string' ? data.text : null);
+    },
+    dispose() { disposed = true; target = null; clear(); refs.clear(); },
+  };
+}
+
+/* SPDX-License-Identifier: MIT */
+
 // Work only within the rendered chat-input subtree. In modern Discord the
 // input is a floating column, so a sibling above the guard lives OUTSIDE its
 // measured layout and can be covered by the text field.
-function decorateComposer(React, RN, root, { toolbar, onNativeEvent }) {
+function decorateComposer(React, RN, root, { toolbar, onNativeEvent, nativeReader }) {
   let floating = null, legacy = null, scanned = 0;
   function scan(node) {
     if (++scanned > 1500 || !node || typeof node !== 'object') return false;
@@ -443,6 +577,19 @@ function decorateComposer(React, RN, root, { toolbar, onNativeEvent }) {
         return result;
       };
       eventCount++;
+      if (nativeReader && typeof props.onTextFlushed === 'function') {
+        // Support React 18's element.ref and React 19's props.ref without
+        // invoking their development warning getters. Preserve Discord's ref.
+        const originalRef = Object.getOwnPropertyDescriptor(props, 'ref')?.value
+          ?? Object.getOwnPropertyDescriptor(node, 'ref')?.value;
+        if (originalRef != null) patch.ref = nativeReader.ref(originalRef);
+        const flushed = props.onTextFlushed;
+        patch.onTextFlushed = function (...args) {
+          const result = flushed.apply(this, args);
+          try { nativeReader.observe(args[0]); } catch {}
+          return result;
+        };
+      }
     }
     const children = map(props.children);
     if (children !== props.children) patch.children = children;
@@ -466,12 +613,13 @@ function createPlugin(api) {
   let active = false, rootUnpatch = null, retry = null, attempts = 0, appStateSubscription = null;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
-  const sessionsByRef = new Map();
+  const sessionsByRef = new Map(), mountedReaders = new Set();
+  let nativeReaders = new WeakMap();
   const tell = () => { for (const listener of listeners) { try { listener(); } catch {} } };
   const getOptions = () => ({ ...DEFAULT_OPTIONS, ...storage.options });
   const getPhrases = () => cleanPhrases(storage.phrases);
   const tryFind = (method, ...args) => { try { return api.metro[method]?.(...args); } catch { return null; } };
-  let selectedChannel = null, userStore = null, lengthModule = null;
+  let selectedChannel = null, userStore = null, lengthModule = null, nativeCommands = null;
   const channelNow = () => { try { return selectedChannel?.getChannelId?.() ?? null; } catch { return null; } };
   const accountNow = () => { try { return userStore?.getCurrentUser?.()?.id ?? null; } catch { return null; } };
   const maxLength = () => {
@@ -602,11 +750,11 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.2.1'),
+        small('Version 1.2.2'),
       ));
   }
 
-  function AssistBar({ inputRef, channelId }) {
+  function AssistBar({ inputRef, channelId, nativeReader }) {
     useUpdates();
     const [, render] = React.useState(0);
     const [open, setOpen] = React.useState(false);
@@ -620,6 +768,7 @@ function createPlugin(api) {
     const ownerAccount = accountNow();
     React.useEffect(() => {
       let closed = false, target = null, poll = null;
+      mountedReaders.add(nativeReader);
       const accountId = ownerAccount;
       const belongs = () => active && !closed && accountNow() === accountId
         && (!channelId || !channelNow() || channelNow() === channelId)
@@ -638,7 +787,7 @@ function createPlugin(api) {
         if (!next) return;
         try {
           const session = createSession({ target: next, patcher: api.patcher, options: getOptions, phrases: getPhrases,
-            maxLength, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
+            maxLength, nativeReader, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
           sessionRef.current = session; sessions.add(session); sessionsByRef.set(inputRef, session);
           connection = 'Connected to the chat composer.'; tell(); render(n => n + 1);
         } catch { issue(); }
@@ -649,7 +798,7 @@ function createPlugin(api) {
       poll = setInterval(bind, 600);
       const cleanup = () => {
         if (closed) return;
-        closed = true; clearInterval(poll); release(); mountCleanups.delete(cleanup);
+        closed = true; clearInterval(poll); release(); mountCleanups.delete(cleanup); mountedReaders.delete(nativeReader);
       };
       mountCleanups.add(cleanup);
       return cleanup;
@@ -765,9 +914,11 @@ function createPlugin(api) {
             const inputRef = args[0]?.chatInputRef ?? findInput(result);
             if (!inputRef) return;
             const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
-            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId }));
+            if (!nativeReaders.has(inputRef)) nativeReaders.set(inputRef, createNativeReader(nativeCommands));
+            const nativeReader = nativeReaders.get(inputRef);
+            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId, nativeReader }));
             const decorated = decorateComposer(React, RN, result, {
-              toolbar,
+              toolbar, nativeReader,
               onNativeEvent: event => {
                 if (active) sessionsByRef.get(inputRef)?.observeNative(event);
               },
@@ -791,6 +942,7 @@ function createPlugin(api) {
       selectedChannel = tryFind('findByStoreName', 'SelectedChannelStore');
       userStore = tryFind('findByStoreName', 'UserStore');
       lengthModule = tryFind('findByProps', 'getMaxMessageLength');
+      nativeCommands = tryFind('findByProps', 'flushText', 'replaceRange', 'getText');
       try {
         appStateSubscription = RN.AppState?.addEventListener?.('change', state => {
           if (state !== 'active') for (const session of sessions) session.stopTyping('Stopped because Revenge moved to the background.');
@@ -804,11 +956,14 @@ function createPlugin(api) {
       appStateSubscription = null;
       if (retry !== null) clearTimeout(retry);
       retry = null;
+      for (const reader of mountedReaders) reader?.dispose();
+      mountedReaders.clear();
       for (const cleanup of [...mountCleanups]) { try { cleanup(); } catch {} }
       mountCleanups.clear();
       for (const session of sessions) { try { session.dispose(); } catch {} }
       sessions.clear();
       sessionsByRef.clear();
+      nativeReaders = new WeakMap();
       try { rootUnpatch?.(); } catch {}
       rootUnpatch = null; tell(); listeners.clear();
     },

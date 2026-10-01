@@ -3,12 +3,26 @@ import { automaticEdit, applyEdit, textEdit } from './core.mjs';
 import { createTyper } from './typer.mjs';
 
 // One session belongs to one mounted composer. No drafts are stored here persistently.
-export function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
+export function createSession({ target, patcher, options, phrases, maxLength, nativeReader, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
   let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null, autoSending = false;
-  const read = () => {
+  let nativeText = null, cacheAtNative = null, nativeEditId = null;
+  const cachedText = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
   };
+  const read = () => {
+    const cached = cachedText();
+    if (nativeText !== null) {
+      // A real native event/flush is confirmation; our optimistic UI text is
+      // not. Keep it while getText still contains its previous cached value.
+      if (cached === cacheAtNative || cached === nativeText) return nativeText;
+      nativeText = null; nativeEditId = null;
+    }
+    return cached;
+  };
+  function confirmed(text, editId = null) {
+    nativeText = text; cacheAtNative = cachedText(); nativeEditId = editId;
+  }
   let current = read();
   if (current === null || typeof target.insertText !== 'function') {
     throw new Error('This composer does not expose the supported text editing methods.');
@@ -32,7 +46,12 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     try {
       // Native range edits retain mention/emoji nodes outside the changed range.
       // Never call sendMessage or replace a DraftStore record behind the composer.
-      target.insertText(edit.insert, edit.start, false, undefined, edit.end);
+      if (nativeText === expected && typeof target.replaceRange === 'function') {
+        // insertText can carry an old cached editId. Use the revision from the
+        // actual native event, or the optional null revision after a flush.
+        target.replaceRange({ location: edit.start, length: edit.end - edit.start,
+          text: edit.insert, nodes: [], keepCursorPosition: false, editId: nativeEditId });
+      } else target.insertText(edit.insert, edit.start, false, undefined, edit.end);
     } catch (error) {
       current = previous; undo = null; report(error); return false;
     } finally { writing = false; announce(); }
@@ -77,6 +96,18 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
   const unpatch = typeof target.handleTextChanged === 'function'
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
+    prepare: () => {
+      // Runs after the AutoType modal closes, before the first character.
+      try { if (target.isFocused?.() === false) target.focus?.(); } catch {}
+    },
+    refresh: callback => nativeReader?.read(text => {
+      if (disposed) return;
+      if (typer.state.running && allowed() && options().enabled && typeof text === 'string') {
+        confirmed(text, text === nativeText ? nativeEditId : null);
+        current = text;
+      }
+      callback(text);
+    }),
     insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
     send: typeof target.handleSend === 'function' ? expected => {
       // Re-check the exact composer and text immediately before the only send
@@ -106,6 +137,7 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
       if (typeof data?.text !== 'string') return;
       const selection = Number.isInteger(data.start) && Number.isInteger(data.end)
         ? { start: data.start, end: data.end } : null;
+      confirmed(data.text, typeof data.editId === 'string' ? data.editId : null);
       observe(data.text, selection);
     },
     undo() {

@@ -2,6 +2,7 @@
 import { DEFAULT_OPTIONS, cleanPhrases, validatePhrase, automaticEdit, applyEdit, suggestionsFor, startList } from './core.mjs';
 import { createSession } from './session.mjs';
 import { decorateComposer } from './composer.mjs';
+import { createNativeReader } from './native.mjs';
 
 export function createPlugin(api) {
   const { React, ReactNative: RN } = api.metro.common;
@@ -11,12 +12,13 @@ export function createPlugin(api) {
   let active = false, rootUnpatch = null, retry = null, attempts = 0, appStateSubscription = null;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
-  const sessionsByRef = new Map();
+  const sessionsByRef = new Map(), mountedReaders = new Set();
+  let nativeReaders = new WeakMap();
   const tell = () => { for (const listener of listeners) { try { listener(); } catch {} } };
   const getOptions = () => ({ ...DEFAULT_OPTIONS, ...storage.options });
   const getPhrases = () => cleanPhrases(storage.phrases);
   const tryFind = (method, ...args) => { try { return api.metro[method]?.(...args); } catch { return null; } };
-  let selectedChannel = null, userStore = null, lengthModule = null;
+  let selectedChannel = null, userStore = null, lengthModule = null, nativeCommands = null;
   const channelNow = () => { try { return selectedChannel?.getChannelId?.() ?? null; } catch { return null; } };
   const accountNow = () => { try { return userStore?.getCurrentUser?.()?.id ?? null; } catch { return null; } };
   const maxLength = () => {
@@ -147,11 +149,11 @@ export function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.2.1'),
+        small('Version 1.2.2'),
       ));
   }
 
-  function AssistBar({ inputRef, channelId }) {
+  function AssistBar({ inputRef, channelId, nativeReader }) {
     useUpdates();
     const [, render] = React.useState(0);
     const [open, setOpen] = React.useState(false);
@@ -165,6 +167,7 @@ export function createPlugin(api) {
     const ownerAccount = accountNow();
     React.useEffect(() => {
       let closed = false, target = null, poll = null;
+      mountedReaders.add(nativeReader);
       const accountId = ownerAccount;
       const belongs = () => active && !closed && accountNow() === accountId
         && (!channelId || !channelNow() || channelNow() === channelId)
@@ -183,7 +186,7 @@ export function createPlugin(api) {
         if (!next) return;
         try {
           const session = createSession({ target: next, patcher: api.patcher, options: getOptions, phrases: getPhrases,
-            maxLength, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
+            maxLength, nativeReader, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
           sessionRef.current = session; sessions.add(session); sessionsByRef.set(inputRef, session);
           connection = 'Connected to the chat composer.'; tell(); render(n => n + 1);
         } catch { issue(); }
@@ -194,7 +197,7 @@ export function createPlugin(api) {
       poll = setInterval(bind, 600);
       const cleanup = () => {
         if (closed) return;
-        closed = true; clearInterval(poll); release(); mountCleanups.delete(cleanup);
+        closed = true; clearInterval(poll); release(); mountCleanups.delete(cleanup); mountedReaders.delete(nativeReader);
       };
       mountCleanups.add(cleanup);
       return cleanup;
@@ -310,9 +313,11 @@ export function createPlugin(api) {
             const inputRef = args[0]?.chatInputRef ?? findInput(result);
             if (!inputRef) return;
             const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
-            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId }));
+            if (!nativeReaders.has(inputRef)) nativeReaders.set(inputRef, createNativeReader(nativeCommands));
+            const nativeReader = nativeReaders.get(inputRef);
+            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId, nativeReader }));
             const decorated = decorateComposer(React, RN, result, {
-              toolbar,
+              toolbar, nativeReader,
               onNativeEvent: event => {
                 if (active) sessionsByRef.get(inputRef)?.observeNative(event);
               },
@@ -336,6 +341,7 @@ export function createPlugin(api) {
       selectedChannel = tryFind('findByStoreName', 'SelectedChannelStore');
       userStore = tryFind('findByStoreName', 'UserStore');
       lengthModule = tryFind('findByProps', 'getMaxMessageLength');
+      nativeCommands = tryFind('findByProps', 'flushText', 'replaceRange', 'getText');
       try {
         appStateSubscription = RN.AppState?.addEventListener?.('change', state => {
           if (state !== 'active') for (const session of sessions) session.stopTyping('Stopped because Revenge moved to the background.');
@@ -349,11 +355,14 @@ export function createPlugin(api) {
       appStateSubscription = null;
       if (retry !== null) clearTimeout(retry);
       retry = null;
+      for (const reader of mountedReaders) reader?.dispose();
+      mountedReaders.clear();
       for (const cleanup of [...mountCleanups]) { try { cleanup(); } catch {} }
       mountCleanups.clear();
       for (const session of sessions) { try { session.dispose(); } catch {} }
       sessions.clear();
       sessionsByRef.clear();
+      nativeReaders = new WeakMap();
       try { rootUnpatch?.(); } catch {}
       rootUnpatch = null; tell(); listeners.clear();
     },

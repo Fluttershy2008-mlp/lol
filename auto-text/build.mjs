@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const root = new URL('./', import.meta.url);
 const parts = [];
-for (const name of ['core.mjs', 'typer.mjs', 'session.mjs', 'composer.mjs', 'plugin.mjs']) {
+for (const name of ['core.mjs', 'typer.mjs', 'session.mjs', 'native.mjs', 'composer.mjs', 'plugin.mjs']) {
   const source = await readFile(new URL('src/' + name, root), 'utf8');
   parts.push(source.replace(/^import .*;\n/gm, '').replace(/^export /gm, ''));
 }

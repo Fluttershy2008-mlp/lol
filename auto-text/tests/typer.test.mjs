@@ -69,6 +69,14 @@ test('missing native acknowledgment times out without duplicating characters', (
   const h = harness({ delayed: true }); h.typer.start('abc'); h.all();
   assert.equal(h.typer.state.status, 'error'); assert.equal(h.inserted.length, 1);
 });
+test('a native echo delayed beyond 1.5 seconds can still complete the message once', () => {
+  const h = harness({ delayed: true }); h.typer.start('ab', 500, { autoSend: true });
+  // First insert at 400ms, then wait beyond the old 1500ms deadline.
+  for (let i = 0; i < 50; i++) h.next();
+  assert.equal(h.typer.state.status, 'running'); assert.equal(h.inserted.length, 1);
+  h.native.shift()(); h.next(); h.native.shift()(); h.all();
+  assert.deepEqual(h.sent, ['ab']); assert.equal(h.inserted.length, 2);
+});
 test('manual edits, cursor moves, leaving the chat and unload stop a run', () => {
   for (const reason of ['edit', 'cursor', 'leave', 'dispose']) {
     const h = harness(); h.typer.start('abcdef'); h.next();

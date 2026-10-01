@@ -3,7 +3,7 @@
 // Work only within the rendered chat-input subtree. In modern Discord the
 // input is a floating column, so a sibling above the guard lives OUTSIDE its
 // measured layout and can be covered by the text field.
-export function decorateComposer(React, RN, root, { toolbar, onNativeEvent }) {
+export function decorateComposer(React, RN, root, { toolbar, onNativeEvent, nativeReader }) {
   let floating = null, legacy = null, scanned = 0;
   function scan(node) {
     if (++scanned > 1500 || !node || typeof node !== 'object') return false;
@@ -43,6 +43,19 @@ export function decorateComposer(React, RN, root, { toolbar, onNativeEvent }) {
         return result;
       };
       eventCount++;
+      if (nativeReader && typeof props.onTextFlushed === 'function') {
+        // Support React 18's element.ref and React 19's props.ref without
+        // invoking their development warning getters. Preserve Discord's ref.
+        const originalRef = Object.getOwnPropertyDescriptor(props, 'ref')?.value
+          ?? Object.getOwnPropertyDescriptor(node, 'ref')?.value;
+        if (originalRef != null) patch.ref = nativeReader.ref(originalRef);
+        const flushed = props.onTextFlushed;
+        patch.onTextFlushed = function (...args) {
+          const result = flushed.apply(this, args);
+          try { nativeReader.observe(args[0]); } catch {}
+          return result;
+        };
+      }
     }
     const children = map(props.children);
     if (children !== props.children) patch.children = children;
