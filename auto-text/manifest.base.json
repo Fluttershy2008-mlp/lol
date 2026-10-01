@@ -1,7 +1,7 @@
 {
   "name": "AutoText",
-  "description": "Offline saved-phrase suggestions, text shortcuts and automatic bullet/numbered lists while you type. Never sends messages automatically.",
-  "version": "1.0.1",
+  "description": "Type a prepared message automatically, letter by letter, with speed controls, Stop, bullet points and line breaks. You tap Send yourself.",
+  "version": "1.1.0",
   "authors": [{ "name": "Fluttershy2008-mlp", "id": "753962426407452713" }],
   "main": "index.js",
   "vendetta": { "icon": "PencilIcon" }

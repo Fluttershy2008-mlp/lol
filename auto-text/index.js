@@ -137,9 +137,105 @@ function startList(text, numbered = false) {
 
 /* SPDX-License-Identifier: MIT */
 
+function typingCharacters(text) {
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), item => item.segment);
+  }
+  // Hermes builds without Intl.Segmenter still keep common combined emoji,
+  // flags, skin tones, accents and variation selectors together.
+  const result = [];
+  let joinNext = false, regionalCount = 0;
+  for (const char of Array.from(text)) {
+    const point = char.codePointAt(0);
+    const regional = point >= 0x1f1e6 && point <= 0x1f1ff;
+    const combining = /[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe00-\ufe0f\ufe20-\ufe2f]/.test(char)
+      || (point >= 0x1f3fb && point <= 0x1f3ff) || (point >= 0xe0020 && point <= 0xe007f);
+    if (result.length && (joinNext || point === 0x200d || combining || (regional && regionalCount % 2 === 1))) result[result.length - 1] += char;
+    else result.push(char);
+    joinNext = point === 0x200d;
+    regionalCount = regional ? regionalCount + 1 : 0;
+  }
+  return result;
+}
+
+function createTyper({ read, insert, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
+  let disposed = false, timer = null, status = 'idle', message = '', chunks = [], position = 0, total = 0;
+  let expected = '', pending = null, interval = 70;
+  const state = () => ({ status, message, position, total, running: status === 'running' });
+  const announce = () => { try { changed(state()); } catch {} };
+  const clearTimer = () => { if (timer !== null) cancel(timer); timer = null; };
+  function finish(nextStatus, reason) {
+    clearTimer(); status = nextStatus; message = reason;
+    chunks = []; pending = null; expected = ''; announce();
+  }
+  function stop(reason = 'Stopped. The text already typed stays in your message box.') {
+    if (status === 'running') finish('stopped', reason);
+  }
+  function ack() {
+    expected = pending.after; pending = null; position++; announce();
+  }
+  function later(delay) {
+    clearTimer();
+    timer = schedule(() => { timer = null; tick(); }, delay);
+  }
+  function tick() {
+    if (disposed || status !== 'running') return;
+    try {
+      if (!allowed()) { stop('Stopped because this chat is no longer active or AutoText is paused.'); return; }
+      let actual = read();
+      if (pending) {
+        if (actual === pending.after) ack();
+        else if (actual === pending.before) {
+          if (now() - pending.started >= 1500) { finish('error', 'Typing stopped: Discord did not confirm the text change.'); return; }
+          later(25); return;
+        } else { stop('Stopped because you changed or sent the draft.'); return; }
+      }
+      if (actual !== expected) { stop('Stopped because you changed or sent the draft.'); return; }
+      if (position >= total) { finish('done', 'Finished typing. Review your message, then tap Send.'); return; }
+      const char = chunks[position];
+      if (expected.length + char.length > maxLength()) { finish('error', 'Typing stopped at the message length limit.'); return; }
+      // Set the expected echo BEFORE issuing the command: native updates can
+      // be synchronous. Wait for confirmation before writing another letter.
+      pending = { before: expected, after: expected + char, started: now() };
+      if (!insert(char, expected)) { stop('Stopped because the draft changed or could not be edited.'); return; }
+      if (status === 'running') later(interval);
+    } catch { finish('error', 'Typing stopped because the composer could not be updated.'); }
+  }
+  return {
+    get state() { return state(); },
+    start(text, milliseconds = 70) {
+      if (disposed) throw new Error('Reopen the chat before starting AutoType.');
+      if (status === 'running') throw new Error('Stop the current typing run first.');
+      if (!allowed()) throw new Error('Open the chat and resume AutoText before starting.');
+      if (typeof text !== 'string' || !text.trim()) throw new Error('Enter the message you want AutoType to type.');
+      const normalized = text.replace(/\r\n?/g, '\n');
+      const initial = read();
+      if (typeof initial !== 'string') throw new Error('Could not read the current message box.');
+      if (initial.length + normalized.length > maxLength()) throw new Error('Your message plus the current draft exceeds the message limit. Shorten it or clear the message box first.');
+      const speed = Number(milliseconds);
+      interval = Number.isFinite(speed) ? Math.max(25, Math.min(500, speed)) : 70;
+      clearTimer(); chunks = typingCharacters(normalized); position = 0; total = chunks.length;
+      expected = initial; pending = null; status = 'running'; message = 'Typing your prepared message…';
+      announce(); later(400); return state();
+    },
+    observe(text, selection) {
+      if (status !== 'running' || disposed) return;
+      if (selection && (selection.start !== text.length || selection.end !== text.length)) {
+        stop('Stopped because you moved the cursor.'); return;
+      }
+      if (pending && text === pending.after) { ack(); return; }
+      if (text !== expected && text !== pending?.before) stop('Stopped because you changed or sent the draft.');
+    },
+    stop,
+    dispose() { if (disposed) return; stop(); disposed = true; clearTimer(); chunks = []; pending = null; expected = ''; },
+  };
+}
+
+/* SPDX-License-Identifier: MIT */
+
 // One session belongs to one mounted composer. No drafts are stored here persistently.
 function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
-  let disposed = false, writing = false, timer = null, revision = 0, undo = null;
+  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null;
   const read = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
@@ -154,15 +250,16 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     if (timer !== null) cancel(timer);
     timer = null;
   }
-  function apply(edit, expected, recordUndo = true) {
+  function apply(edit, expected, recordUndo = true, fromTyper = false) {
     if (disposed || !allowed() || !options().enabled || writing || read() !== expected) return false;
+    if (typer?.state.running && !fromTyper) return false;
     const result = applyEdit(expected, edit);
     if (result.length > maxLength() || result === expected) return false;
     clearPending();
     writing = true;
     const previous = current;
     current = result;
-    if (recordUndo) undo = { before: expected, after: result };
+    undo = recordUndo ? { before: expected, after: result } : null;
     try {
       // Native range edits retain mention/emoji nodes outside the changed range.
       // Never call sendMessage or replace a DraftStore record behind the composer.
@@ -176,6 +273,11 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
+    if (typer?.state.running) {
+      // Prepared messages must be copied literally. Do not expand ;shortcuts
+      // or manufacture an extra bullet when the runner types a newline.
+      typer.observe(next, selection); clearPending(); announce(); return;
+    }
     if (selection && (selection.start !== next.length || selection.end !== next.length)) {
       clearPending();
       if (next !== previous) undo = null;
@@ -205,10 +307,22 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
   // by the composer adapter. Duplicate events remain harmless.
   const unpatch = typeof target.handleTextChanged === 'function'
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
+  typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
+    insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
+    changed: announce, schedule, cancel });
+  // Stop before a user-initiated Send, if this ref exposes that action. This
+  // never invokes the action itself and never modifies the outgoing message.
+  let unpatchSend = () => {};
+  if (typeof target.handleSend === 'function' && typeof patcher.before === 'function') {
+    unpatchSend = patcher.before('handleSend', target, () => { typer.stop('Stopped because you tapped Send.'); });
+  }
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
+    get typing() { return typer.state; },
+    startTyping(text, interval) { clearPending(); undo = null; return typer.start(text, interval); },
+    stopTyping(reason) { typer.stop(reason); },
     observeNative(event) {
       const data = event?.nativeEvent ?? event;
       if (typeof data?.text !== 'string') return;
@@ -222,7 +336,7 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
       if (!apply(textEdit(saved.after, saved.before), saved.after, false)) return false;
       undo = null; announce(); return true;
     },
-    dispose() { if (disposed) return; disposed = true; clearPending(); undo = null; unpatch(); },
+    dispose() { if (disposed) return; disposed = true; typer.dispose(); clearPending(); undo = null; unpatchSend(); unpatch(); },
   };
 }
 
@@ -291,7 +405,7 @@ function createPlugin(api) {
   const h = React.createElement;
   const storage = api.plugin.storage;
   const Button = RN.TouchableOpacity;
-  let active = false, rootUnpatch = null, retry = null, attempts = 0;
+  let active = false, rootUnpatch = null, retry = null, attempts = 0, appStateSubscription = null;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
   const sessionsByRef = new Map();
@@ -381,7 +495,8 @@ function createPlugin(api) {
     return h(RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
       h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 70 } },
         label('AutoText', colors, { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
-        small('Saved words, ready while you type. Offline phrase matching; no AI service or API key.'),
+        small('Automatically type a prepared message, letter by letter. Open a chat → AutoType → paste your text → Start typing.'),
+        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Tap Stop at any time; tap Send yourself when ready.'),
         onClose ? button('Back to chat', onClose, colors) : null,
         small(active ? connection : 'Plugin disabled. Enable AutoText to connect live typing.'),
         ...[
@@ -429,7 +544,7 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.0.1'),
+        small('Version 1.1.0'),
       ));
   }
 
@@ -437,6 +552,10 @@ function createPlugin(api) {
     useUpdates();
     const [, render] = React.useState(0);
     const [open, setOpen] = React.useState(false);
+    const [typingOpen, setTypingOpen] = React.useState(false);
+    const [prepared, setPrepared] = React.useState('');
+    const [typingSpeed, setTypingSpeed] = React.useState(() => [150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
+    const [typingError, setTypingError] = React.useState('');
     const sessionRef = React.useRef(null);
     const colors = palette(), options = getOptions();
     const ownerAccount = accountNow();
@@ -444,7 +563,8 @@ function createPlugin(api) {
       let closed = false, target = null, poll = null;
       const accountId = ownerAccount;
       const belongs = () => active && !closed && accountNow() === accountId
-        && (!channelId || !channelNow() || channelNow() === channelId);
+        && (!channelId || !channelNow() || channelNow() === channelId)
+        && !['background', 'inactive'].includes(RN.AppState?.currentState);
       const release = () => {
         const session = sessionRef.current;
         if (session) { session.dispose(); sessions.delete(session); }
@@ -478,12 +598,22 @@ function createPlugin(api) {
     if (!active) return null;
     const session = sessionRef.current;
     const text = session?.text ?? '';
+    const typing = session?.typing;
+    const running = Boolean(typing?.running);
     const useEdit = edit => {
       try {
         if (!session?.apply(edit, text)) notify('Draft changed or message limit reached. Try again.');
       } catch { issue(); }
     };
-    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions);
+    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions && !running);
+    function startTyping() {
+      try {
+        if (!session) throw new Error('The chat composer is not connected. Reopen this chat and try again.');
+        session.startTyping(prepared, typingSpeed);
+        storage.typingInterval = typingSpeed;
+        setTypingError(''); setTypingOpen(false);
+      } catch (error) { setTypingError(error.message || 'Could not start typing.'); }
+    }
     const compactButton = (title, onPress, accessibleName = title, key) => h(Button, {
       key, onPress, activeOpacity: 0.7, accessibilityRole: 'button', accessibilityLabel: accessibleName,
       style: { height: 44, justifyContent: 'center', paddingHorizontal: 10, flexShrink: 0 },
@@ -497,11 +627,37 @@ function createPlugin(api) {
       suggestions.length ? h(RN.ScrollView, stripProps,
         ...suggestions.map(p => compactButton(p.text.replace(/\n/g, ' · ').slice(0, 70), () => useEdit(p), 'Insert phrase ' + p.shortcut, p.shortcut))) : null,
       h(RN.ScrollView, stripProps,
-        options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
-        options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
-        options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
-        compactButton('Phrases', () => setOpen(true)),
-        compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled))),
+        running ? compactButton('■ Stop', () => session.stopTyping(), 'Stop automatic typing')
+          : compactButton('▶ AutoType', () => { setTypingError(''); setTypingOpen(true); }, 'AutoType'),
+        running ? label(`${typing.position}/${typing.total}`, colors, { fontSize: 13, marginHorizontal: 10 }, { accessibilityLabel: `Typed ${typing.position} of ${typing.total} characters` }) : null,
+        !running && options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
+        !running && options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
+        !running && options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
+        !running ? compactButton('Phrases', () => setOpen(true)) : null,
+        !running ? compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled)) : null),
+      !running && typing?.message ? label(typing.message, colors, { fontSize: 12, lineHeight: 16, color: colors.sub, paddingHorizontal: 8, paddingBottom: 4 }, { numberOfLines: 2, accessibilityLiveRegion: 'polite' }) : null,
+      typingOpen ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setTypingOpen(false) },
+        h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
+          h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
+            h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 20, paddingTop: 24, paddingBottom: 70 } },
+              label('AutoType', colors, { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
+              label('Enter your full message. AutoType will type it into this chat one character at a time.', colors, { marginTop: 10 }),
+              label('Message to type', colors, { marginTop: 20, marginBottom: 8, fontWeight: '700' }),
+              h(RN.TextInput, { value: prepared, onChangeText: setPrepared, multiline: true, maxLength: maxLength(),
+                accessibilityLabel: 'Message to type', placeholder: '- First point\n- Second point', placeholderTextColor: colors.sub,
+                autoCorrect: false, style: { minHeight: 160, maxHeight: 340, padding: 12, borderWidth: 1, borderColor: colors.border,
+                  borderRadius: 10, color: colors.text, backgroundColor: colors.card, fontSize: 16, textAlignVertical: 'top' } }),
+              label(`${prepared.length} characters · ${text.length} already in the message box`, colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
+              label('Typing speed', colors, { fontWeight: '700', marginTop: 20 }),
+              h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap' } },
+                ...[[150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
+                  () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
+                    accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
+              label('Text is added at the end of your current draft. Bullet points, emojis and new lines are kept. Nothing is sent automatically.', colors, { color: colors.sub, fontSize: 13, marginTop: 16 }),
+              typingError ? label(typingError, colors, { marginTop: 12, color: colors.accent }, { accessibilityLiveRegion: 'polite' }) : null,
+              button('Start typing', startTyping, colors),
+              button('Cancel', () => setTypingOpen(false), colors),
+            )))) : null,
       open ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setOpen(false) },
         h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
           h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
@@ -566,10 +722,17 @@ function createPlugin(api) {
       selectedChannel = tryFind('findByStoreName', 'SelectedChannelStore');
       userStore = tryFind('findByStoreName', 'UserStore');
       lengthModule = tryFind('findByProps', 'getMaxMessageLength');
+      try {
+        appStateSubscription = RN.AppState?.addEventListener?.('change', state => {
+          if (state !== 'active') for (const session of sessions) session.stopTyping('Stopped because Revenge moved to the background.');
+        });
+      } catch {}
       active = true; attempts = 0; hookComposer(); tell();
     },
     onUnload() {
       active = false;
+      try { appStateSubscription?.remove?.(); } catch {}
+      appStateSubscription = null;
       if (retry !== null) clearTimeout(retry);
       retry = null;
       for (const cleanup of [...mountCleanups]) { try { cleanup(); } catch {} }

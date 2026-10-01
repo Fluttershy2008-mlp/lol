@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: MIT */
 import { automaticEdit, applyEdit, textEdit } from './core.mjs';
+import { createTyper } from './typer.mjs';
 
 // One session belongs to one mounted composer. No drafts are stored here persistently.
 export function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
-  let disposed = false, writing = false, timer = null, revision = 0, undo = null;
+  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null;
   const read = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
@@ -18,15 +19,16 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     if (timer !== null) cancel(timer);
     timer = null;
   }
-  function apply(edit, expected, recordUndo = true) {
+  function apply(edit, expected, recordUndo = true, fromTyper = false) {
     if (disposed || !allowed() || !options().enabled || writing || read() !== expected) return false;
+    if (typer?.state.running && !fromTyper) return false;
     const result = applyEdit(expected, edit);
     if (result.length > maxLength() || result === expected) return false;
     clearPending();
     writing = true;
     const previous = current;
     current = result;
-    if (recordUndo) undo = { before: expected, after: result };
+    undo = recordUndo ? { before: expected, after: result } : null;
     try {
       // Native range edits retain mention/emoji nodes outside the changed range.
       // Never call sendMessage or replace a DraftStore record behind the composer.
@@ -40,6 +42,11 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
+    if (typer?.state.running) {
+      // Prepared messages must be copied literally. Do not expand ;shortcuts
+      // or manufacture an extra bullet when the runner types a newline.
+      typer.observe(next, selection); clearPending(); announce(); return;
+    }
     if (selection && (selection.start !== next.length || selection.end !== next.length)) {
       clearPending();
       if (next !== previous) undo = null;
@@ -69,10 +76,22 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
   // by the composer adapter. Duplicate events remain harmless.
   const unpatch = typeof target.handleTextChanged === 'function'
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
+  typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
+    insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
+    changed: announce, schedule, cancel });
+  // Stop before a user-initiated Send, if this ref exposes that action. This
+  // never invokes the action itself and never modifies the outgoing message.
+  let unpatchSend = () => {};
+  if (typeof target.handleSend === 'function' && typeof patcher.before === 'function') {
+    unpatchSend = patcher.before('handleSend', target, () => { typer.stop('Stopped because you tapped Send.'); });
+  }
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
+    get typing() { return typer.state; },
+    startTyping(text, interval) { clearPending(); undo = null; return typer.start(text, interval); },
+    stopTyping(reason) { typer.stop(reason); },
     observeNative(event) {
       const data = event?.nativeEvent ?? event;
       if (typeof data?.text !== 'string') return;
@@ -86,6 +105,6 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
       if (!apply(textEdit(saved.after, saved.before), saved.after, false)) return false;
       undo = null; announce(); return true;
     },
-    dispose() { if (disposed) return; disposed = true; clearPending(); undo = null; unpatch(); },
+    dispose() { if (disposed) return; disposed = true; typer.dispose(); clearPending(); undo = null; unpatchSend(); unpatch(); },
   };
 }

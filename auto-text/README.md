@@ -1,6 +1,8 @@
 # AutoText for Revenge
 
-An offline typing helper for Revenge's Vendetta-compatible mobile plugins. It suggests **phrases you save**, expands text shortcuts, and continues bullet points while you type. It does not generate AI responses or send messages automatically.
+Automatically type a prepared message into Discord **letter by letter**. Paste your full message, choose a speed, and watch it appear in the chat composer. Bullet points, emojis and line breaks are preserved. You tap Send yourself.
+
+Built for Revenge's Vendetta-compatible mobile plugins. No AI service, account token or API key is needed.
 
 ## Install
 
@@ -10,11 +12,30 @@ In **Revenge → Plugins → +**, paste this whole folder URL:
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/
 ```
 
-Enable AutoText, then reopen a chat. The compact AutoText bar appears inside the composer, above the typing row. Tap **Phrases** to edit your text shortcuts. The plugin's settings cog opens the same editor.
+Enable AutoText, then reopen a chat. The compact AutoText bar appears inside the composer, above the typing row. Tap **AutoType** to prepare the message you want typed.
 
-Updating from 1.0.0: update the plugin to **1.0.1**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
+Updating from 1.0.x: update the plugin to **1.1.0**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
 
-## Use it
+## Automatic typing
+
+1. Open the chat where you want to type.
+2. Tap **▶ AutoType** in the message box.
+3. Paste or enter your full message in **Message to type**. Multiline bullet lists work as entered.
+4. Choose **Slow**, **Normal**, or **Fast**, then tap **Start typing**.
+5. Watch the message appear character by character. Tap **■ Stop** to stop early.
+6. Review the finished message and tap Discord's **Send** button yourself.
+
+The text is appended to the end of the current draft; clear the message box first if you want to start empty. Stopping keeps the partial draft. Starting again begins a new run with the prepared text, so clear or edit the message box before repeating it.
+
+Speeds are approximately 150, 70 and 25 milliseconds per visible character, with a short initial delay so the editor can close. Discord's native updates may slow this down. AutoType waits for confirmation before inserting another character and stops if the composer cannot confirm an edit.
+
+It stops on manual edits, cursor movement, channel/account changes, backgrounding, plugin unload, or a user-initiated Send. It never starts another message automatically. The prepared message is held only in memory for the current composer; only your selected speed is saved.
+
+The whole run is checked against your available message length before starting. Emoji sequences and common combined characters are typed together. Existing shortcut expansion and automatic bullet continuation are suspended during a run so the prepared message stays literal.
+
+## Optional typing helpers
+
+The previous saved-phrase and list helpers remain available through **Phrases** and the settings cog.
 
 | Action | Result |
 | --- | --- |
@@ -44,7 +65,7 @@ Version 1.0.1 puts the toolbar inside the measured floating input column, rather
 
 Discord can change these internal APIs. If the bar is missing, reopen the chat or restart Revenge and check the status in AutoText settings. If the live composer is unsupported, settings still include a practice editor and **Copy draft** button. No message is sent by using that editor.
 
-Automated tests cover text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.0.1 update has not yet been verified in a physical Android/Revenge session.**
+Automated tests cover automatic typing speed, literal multiline messages, Stop, delayed native acknowledgments, emoji clusters, user-initiated Send, backgrounding, text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.1.0 update has not yet been verified in a physical Android/Revenge session.**
 
 ## Development
 

@@ -6,7 +6,10 @@ import vm from 'node:vm';
 
 function runtime({ missing = false } = {}) {
   let hooks = null, index = 0, jobs = [], timerId = 0;
-  const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set();
+  const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set(), appListeners = new Set();
+  const appState = { currentState: 'active', addEventListener(event, callback) {
+    appListeners.add(callback); return { remove: () => appListeners.delete(callback) };
+  } };
   const React = {
     Fragment: 'Fragment', Component: class { constructor(props) { this.props = props; } },
     createElement(type, props, ...children) { return { type, props: { ...props, children: children.length === 1 ? children[0] : children } }; },
@@ -28,7 +31,7 @@ function runtime({ missing = false } = {}) {
     const state = [];
     return { render() { hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
   }
-  let draft = '', account = 'user1', channel = 'channel1';
+  let draft = '', account = 'user1', channel = 'channel1', sendCount = 0;
   let liveTree;
   const emitNative = (text, start = text.length, end = start) => {
     const field = nodes(liveTree, n => typeof n.props?.onSelectionOrTextChange === 'function')[0];
@@ -38,6 +41,7 @@ function runtime({ missing = false } = {}) {
   const input = {
     getText: () => draft,
     handleTextChanged() {},
+    handleSend() { sendCount++; emitNative(''); },
     insertText(text, start, space, nodes, end) { emitNative(draft.slice(0, start) + text + draft.slice(end)); },
   };
   const inputRef = { current: input };
@@ -55,13 +59,17 @@ function runtime({ missing = false } = {}) {
   const api = {
     plugin: { storage },
     metro: {
-      common: { React, ReactNative: Object.fromEntries(['Text', 'View', 'TextInput', 'ScrollView', 'TouchableOpacity', 'Switch', 'Modal', 'SafeAreaView', 'KeyboardAvoidingView'].map(name => [name, name])), clipboard: { setString() {} } },
+      common: { React, ReactNative: { ...Object.fromEntries(['Text', 'View', 'TextInput', 'ScrollView', 'TouchableOpacity', 'Switch', 'Modal', 'SafeAreaView', 'KeyboardAvoidingView'].map(name => [name, name])), AppState: appState }, clipboard: { setString() {} } },
       findByName: () => missing ? undefined : holder,
       findByTypeName: () => undefined,
       findByProps: () => ({ getMaxMessageLength: () => 2000 }),
       findByStoreName: name => name === 'SelectedChannelStore' ? { getChannelId: () => channel } : name === 'UserStore' ? { getCurrentUser: () => ({ id: account }) } : null,
     },
-    patcher: { after(key, obj, fn) {
+    patcher: { before(key, obj, fn) {
+      const original = obj[key];
+      obj[key] = (...args) => { fn(args); return original(...args); };
+      const stop = () => { obj[key] = original; patches.delete(stop); }; patches.add(stop); return stop;
+    }, after(key, obj, fn) {
       const original = obj[key];
       obj[key] = (...args) => { const ret = original(...args); const patched = fn(args, ret); return patched === undefined ? ret : patched; };
       const stop = () => { obj[key] = original; patches.delete(stop); }; patches.add(stop); return stop;
@@ -79,6 +87,11 @@ function runtime({ missing = false } = {}) {
     type: emitNative,
     flush() { const pending = [...timers]; timers.clear(); pending.forEach(([, fn]) => fn()); },
     switchAccount() { account = 'user2'; },
+    switchChannel() { channel = 'channel2'; },
+    background() { appState.currentState = 'background'; for (const fn of appListeners) fn('background'); },
+    appListeners,
+    userSend() { input.handleSend(); },
+    sent: () => sendCount,
   };
 }
 function nodes(root, filter) {
@@ -102,7 +115,7 @@ test('real bundle patches only the composer, mounts a bar, edits native text and
   const bar = box.props.children[0].props.children;
   const host = r.host(bar.type, bar.props);
   host.render();
-  assert.equal(r.patches.size, 2); assert.equal(r.intervals.size, 1);
+  assert.equal(r.patches.size, 3); assert.equal(r.intervals.size, 1);
   r.type('- test'); r.type('- test\n'); r.flush();
   assert.equal(r.read(), '- test\n- ');
   const rendered = host.render();
@@ -156,4 +169,60 @@ test('settings can add a multiline phrase without a network or Discord send API'
   nodes(view, n => n.props?.accessibilityLabel === 'Save phrase')[0].props.onPress();
   assert.equal(r.storage.phrases.find(p => p.shortcut === ';test').text, '- One\n- Two');
   r.plugin.onUnload();
+});
+function openAutoType(r, source) {
+  r.plugin.onLoad();
+  const tree = r.open();
+  const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
+  const bar = box.props.children[0].props.children;
+  const host = r.host(bar.type, bar.props);
+  host.render();
+  let view = host.render();
+  nodes(view, n => n.props?.accessibilityLabel === 'AutoType')[0].props.onPress();
+  view = host.render();
+  nodes(view, n => n.props?.accessibilityLabel === 'Message to type')[0].props.onChangeText(source);
+  view = host.render();
+  nodes(view, n => n.props?.accessibilityLabel === 'Start typing')[0].props.onPress();
+  return host;
+}
+test('AutoType screen runs a multiline message without shortcut expansion or extra bullets', () => {
+  const r = runtime(); const source = '- One\n- Two\n;brb 🍓';
+  const host = openAutoType(r, source);
+  assert.equal(r.read(), '');
+  r.flush(); assert.equal(r.read(), '-');
+  assert(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length);
+  for (let i = 0; i < 60; i++) r.flush();
+  assert.equal(r.read(), source);
+  assert.equal(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length, 0);
+  assert.equal(r.storage.typingInterval, 70);
+  assert.equal(r.sent(), 0, 'AutoType never sends the prepared message');
+  assert(!Object.values(r.storage).includes(source), 'prepared message is not persisted');
+  r.plugin.onUnload(); assert.equal(r.appListeners.size, 0); assert.equal(r.timers.size, 0);
+});
+test('Stop button preserves the partial draft and prevents remaining letters', () => {
+  const r = runtime(); const host = openAutoType(r, 'abcdef'); r.flush(); r.flush();
+  nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing')[0].props.onPress();
+  for (let i = 0; i < 10; i++) r.flush();
+  assert.equal(r.read(), 'ab'); r.plugin.onUnload();
+});
+test('a user Send stops the run before the message action and never restarts the next draft', () => {
+  const r = runtime(); openAutoType(r, 'abcdef'); r.flush(); r.flush();
+  assert.equal(r.read(), 'ab'); assert.equal(r.sent(), 0);
+  r.userSend();
+  for (let i = 0; i < 10; i++) r.flush();
+  assert.equal(r.sent(), 1); assert.equal(r.read(), '');
+  r.plugin.onUnload();
+});
+test('channel/account changes, backgrounding, manual edits and unload stop automatic typing', () => {
+  for (const action of ['channel', 'account', 'background', 'manual', 'unload']) {
+    const r = runtime(); openAutoType(r, 'abcdef'); r.flush();
+    if (action === 'channel') r.switchChannel();
+    if (action === 'account') r.switchAccount();
+    if (action === 'background') r.background();
+    if (action === 'manual') r.type('ax');
+    if (action === 'unload') r.plugin.onUnload();
+    for (let i = 0; i < 10; i++) r.flush();
+    assert.equal(r.read(), action === 'manual' ? 'ax' : 'a', action);
+    r.plugin.onUnload(); assert.equal(r.timers.size, 0);
+  }
 });
