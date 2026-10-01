@@ -1,0 +1,28 @@
+{
+  "name": "Stealmoji",
+  "description": "Add static or animated emoji to your servers, copy links, and save images. Includes a paste-emoji tool in settings.",
+  "version": "2.0.0",
+  "authors": [
+    {
+      "name": "Fiery",
+      "id": "890228870559698955"
+    },
+    {
+      "name": "pylix",
+      "id": "492949202121261067"
+    },
+    {
+      "name": "aliernfrog",
+      "id": "459370047652102154"
+    },
+    {
+      "name": "fluttershy_simper",
+      "id": "753962426407452713"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_emoji_24px"
+  },
+  "hash": "0ff90d42083f9301c75082c6b2be296c6bf255a68f882bd650a5bbeb4a2e4498"
+}

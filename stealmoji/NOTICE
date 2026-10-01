@@ -1,0 +1,16 @@
+Stealmoji for Revenge, adaptation dated 2026-10-01.
+
+Based on Stealmoji by Fiery and pylix, and aliernfrog's mobile fork:
+https://github.com/Fierdetta/stealmoji
+https://github.com/aliernfrog/vd-plugins/tree/main/plugins/Stealmoji
+
+The supplied vd-plugins-main.zip identifies upstream commit
+fe43f5dc2b0880c95edd3787331e252f2ba1e280.
+
+Original author credits are preserved in the manifest. This adaptation replaces
+the old nested render patches, shared dialogs, and upload handling with guarded
+per-opening wrappers, a standalone settings/picker UI, validated downloads,
+lifecycle cleanup, and regression tests. Published by fluttershy_simper.
+
+Distributed under GNU GPL version 3. See LICENSE. Complete corresponding source,
+the dependency-free build script, and tests are included in this directory.
