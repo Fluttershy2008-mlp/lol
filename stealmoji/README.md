@@ -14,12 +14,27 @@ Disable the old Stealmoji copy before installing this one, then reload Revenge.
 - Long-press a message containing custom emoji to find the same action. Messages
   with multiple emoji show a selection list (up to 25 unique emoji).
 - Long-press a custom emoji tab in the reactions sheet to open its tools.
-- In the picker, copy the link, save the image/GIF, or select a server, edit the
-  name, and press **Add emoji**. Static images also have Copy image on iOS.
+- Scroll the **Stealing [emoji name]** server list, or use **Search servers**.
+  Each server has an icon and a **+** button. Tap the row or **+**, edit the name,
+  and press **Add emoji**. Full servers stay visible with **No slots available**.
+- Tap **Emoji tools** to view, copy the link, save the image/GIF, or change the
+  animated setting. Static images also have Copy image on iOS. Tap **Browse
+  servers** to return to the list.
 - If your Discord build uses a different menu layout, open **Stealmoji's plugin
   settings** and paste a custom emoji such as `<:name:123456789012345678>`, an
   emoji CDN URL, or its ID. For an animated ID that Discord has not cached, turn
   on **Animated emoji (GIF)**. Unicode emoji cannot be copied into server slots.
+
+## Changes in 2.1.0
+
+- Dedicated scrolling server picker matching the original Stealmoji layout:
+  emoji thumbnail, title, server icons, plus buttons, and dimmed full servers.
+- Title and search stay above the list while servers scroll. The list uses
+  Discord's BottomSheetFlatList when available, RN FlatList outside the sheet,
+  and a ScrollView fallback on builds without either list component.
+- Server rows are rendered in batches, keeping large server lists manageable.
+- Rechecks permission and free slots when a row is selected, as well as before
+  uploading. Emoji tools and the settings paste tool are still available.
 
 ## Changes in 2.0.0
 

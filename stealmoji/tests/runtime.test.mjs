@@ -56,7 +56,7 @@ function harness({ late = false } = {}) {
   function press(label) { const button = nodes(render()).find(n => n.props.accessibilityLabel === label && n.props.onPress);
     assert.ok(button, 'Missing button ' + label); assert.ok(!button.props.disabled, 'Disabled button ' + label); return button.props.onPress(); }
   function change(label, value) { const input = nodes(render()).find(n => n.props.placeholder === label); assert.ok(input); input.props.onChangeText(value); }
-  function chooseServer() { mount(plugin.settings()); change('<:emoji:123456789012345678>', `<:test:${id}>`); press('Use emoji'); press('Test server · 50 slots free'); }
+  function chooseServer() { mount(plugin.settings()); change('<:emoji:123456789012345678>', `<:test:${id}>`); press('Use emoji'); press('Test server'); }
   return { plugin, V, React, RN, env, host, originalOpen, modules, timers, uploads, uploadActions, toasts, stores,
     mount, render, press, change, nodes, chooseServer, setPermission: p => permitted = p,
     resume: () => resumeFn('active'), resumeRemoved: () => resumeRemoved, listeners: () => listeners,
@@ -174,4 +174,91 @@ test('bundle evaluates without eager optional module access and its manifest has
   const h = harness({ late: true });
   const plugin = vm.runInNewContext(code, { vendetta: h.V, ...h.env });
   assert.equal(typeof plugin.onLoad, 'function'); plugin.onLoad(); plugin.onUnload();
+});
+
+test('server sheet keeps the header fixed and exposes every server through its virtualized list', () => {
+  const t = harness(); t.RN.FlatList = 'FlatList';
+  t.modules.push({ BottomSheetFlatList: 'BottomSheetFlatList' });
+  const guilds = Object.fromEntries(Array.from({ length: 150 }, (_, i) => {
+    const guild = { id: String(i), name: 'Server ' + String(i).padStart(3, '0'), icon: i === 149 ? 'hash' : null };
+    return [guild.id, guild];
+  }));
+  t.stores.GuildStore.getGuilds = () => guilds;
+  t.stores.GuildStore.getGuild = key => guilds[key];
+  t.plugin.onLoad();
+  let closed = false;
+  const root = t.mount(t.React.cloneElement(t.plugin.settings(), { settings: false, inSheet: true,
+    close: () => closed = true, emojis: [{ id, name: 'test', animated: false }] }));
+  assert.equal(root.type, 'View'); assert.ok(root.props.style.height > 0);
+  const allNodes = t.nodes(root), list = allNodes.find(n => n.type === 'BottomSheetFlatList');
+  assert.ok(list); assert.equal(list.props.data.length, 150);
+  assert.equal(allNodes.some(n => n.type === 'ScrollView'), false);
+  assert.equal(allNodes.some(n => n.props.accessibilityLabel === 'Server 149'), false, 'rows should not be eagerly rendered');
+  assert.ok(allNodes.some(n => n.props.children === 'Stealing test'));
+  const lastRow = list.props.renderItem({ item: list.props.data[149] });
+  assert.equal(lastRow.props.accessibilityLabel, 'Server 149');
+  assert.ok(t.nodes(lastRow).some(n => n.props.source?.uri === 'https://cdn.discordapp.com/icons/149/hash.png?size=96'));
+  assert.ok(t.nodes(lastRow).some(n => n.props.children === '+'));
+  t.press('Close'); assert.equal(closed, true);
+  t.change('Search servers', '149');
+  const filtered = t.nodes(t.render()).find(n => n.type === 'BottomSheetFlatList');
+  assert.equal(filtered.props.data.length, 1);
+  filtered.props.renderItem({ item: filtered.props.data[0] }).props.onPress();
+  assert.ok(t.nodes(t.render()).some(n => n.props.children === 'Server: Server 149'));
+  assert.equal(t.uploads.length, 0, 'selecting a server must still show the name/confirmation screen');
+  t.plugin.onUnload(); t.unmount();
+});
+
+test('full servers remain visible and disabled; stale row callbacks recheck permissions and slots', () => {
+  const t = harness(); t.RN.FlatList = 'FlatList';
+  const guilds = { full: { id: 'full', name: 'Full server', getMaxEmojiSlots: () => 1 },
+    free: { id: 'free', name: 'Free server', getMaxEmojiSlots: () => 1 } };
+  let occupied = false;
+  t.stores.GuildStore.getGuilds = () => guilds; t.stores.GuildStore.getGuild = key => guilds[key];
+  t.stores.EmojiStore.getGuilds = () => ({ full: { emojis: [{ animated: false }] }, free: { emojis: occupied ? [{ animated: false }] : [] } });
+  t.plugin.onLoad(); t.mount(t.React.cloneElement(t.plugin.settings(), { emojis: [{ id, name: 'test', animated: false }] }));
+  const list = t.nodes(t.render()).find(n => n.type === 'FlatList');
+  assert.equal(list.props.data.length, 2);
+  const full = list.props.renderItem({ item: guilds.full }), free = list.props.renderItem({ item: guilds.free });
+  assert.equal(full.props.disabled, true); assert.ok(full.props.style.opacity < 1);
+  assert.ok(t.nodes(full).some(n => n.props.children === 'No slots available'));
+  assert.ok(t.nodes(free).some(n => n.props.children === 'Fs'), 'server without an icon gets initials');
+  occupied = true; free.props.onPress();
+  assert.ok(t.nodes(t.render()).some(n => String(n.props.children).includes('no slots available')));
+  assert.ok(!t.nodes(t.render()).some(n => n.props.placeholder === 'Emoji name'));
+  occupied = false; t.setPermission(false); free.props.onPress();
+  assert.ok(t.nodes(t.render()).some(n => String(n.props.children).includes('no longer have permission')));
+  assert.equal(t.nodes(t.render()).find(n => n.type === 'FlatList').props.data.length, 0);
+  assert.equal(t.uploads.length, 0); t.plugin.onUnload(); t.unmount();
+});
+
+test('settings uses RN FlatList even when the sheet-only list exists, and unknown counts remain selectable', () => {
+  const t = harness(); t.RN.FlatList = 'FlatList';
+  t.modules.push({ BottomSheetFlatList: 'BottomSheetFlatList' });
+  t.stores.EmojiStore.getGuilds = () => ({});
+  t.plugin.onLoad(); t.mount(t.React.cloneElement(t.plugin.settings(), { emojis: [{ id, name: 'test', animated: true }] }));
+  const nodes = t.nodes(t.render()), list = nodes.find(n => n.type === 'FlatList');
+  assert.ok(list); assert.equal(nodes.some(n => n.type === 'BottomSheetFlatList'), false);
+  const row = list.props.renderItem({ item: list.props.data[0] });
+  assert.equal(row.props.disabled, false); row.props.onPress();
+  assert.ok(t.nodes(t.render()).some(n => n.props.accessibilityLabel === 'Add emoji'));
+  t.plugin.onUnload(); t.unmount();
+});
+
+test('fallback scrolling and emoji tools preserve search and update animated slot availability', () => {
+  const t = harness();
+  const guild = { id: 'guild', name: 'Test server', getMaxEmojiSlots: () => 1 };
+  t.stores.GuildStore.getGuilds = () => ({ guild });
+  t.stores.EmojiStore.getGuilds = () => ({ guild: { emojis: [{ animated: false }] } });
+  t.plugin.onLoad(); t.mount(t.React.cloneElement(t.plugin.settings(), { emojis: [{ id, name: 'test', animated: false }] }));
+  const root = t.render(), scroll = t.nodes(root).find(n => n.type === 'ScrollView');
+  assert.equal(root.type, 'View'); assert.ok(scroll.props.nestedScrollEnabled);
+  assert.equal(t.nodes(scroll).find(n => n.props.accessibilityLabel === 'Test server').props.disabled, true);
+  t.change('Search servers', 'Test'); t.press('Emoji tools');
+  assert.ok(t.nodes(t.render()).some(n => n.props.accessibilityLabel === 'Save image'));
+  const toggle = t.nodes(t.render()).find(n => n.props.accessibilityLabel === 'Animated emoji');
+  toggle.props.onValueChange(true); t.press('Browse servers');
+  assert.equal(t.nodes(t.render()).find(n => n.props.placeholder === 'Search servers').props.value, 'Test');
+  assert.equal(t.nodes(t.render()).find(n => n.props.accessibilityLabel === 'Test server').props.disabled, false);
+  t.plugin.onUnload(); t.unmount();
 });

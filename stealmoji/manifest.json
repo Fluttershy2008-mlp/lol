@@ -1,7 +1,7 @@
 {
   "name": "Stealmoji",
-  "description": "Add static or animated emoji to your servers, copy links, and save images. Includes a paste-emoji tool in settings.",
-  "version": "2.0.0",
+  "description": "Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",
+  "version": "2.1.0",
   "authors": [
     {
       "name": "Fiery",
@@ -24,5 +24,5 @@
   "vendetta": {
     "icon": "ic_emoji_24px"
   },
-  "hash": "0ff90d42083f9301c75082c6b2be296c6bf255a68f882bd650a5bbeb4a2e4498"
+  "hash": "5e2fc6b6577a0d3ae8a410001c47cad8f3e6dbb25c50f92dc1a25c1a06a13589"
 }

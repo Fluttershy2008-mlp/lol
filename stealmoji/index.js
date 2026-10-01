@@ -233,12 +233,21 @@ function createPlugin(V, env = globalThis) {
       return `${name} added to ${latest.name}.`;
     } finally { pending = false; }
   }
-  function Picker({ emojis = [], close, settings = false }) {
+  function guildIcon(guild) {
+    const style = { width: 44, height: 44, borderRadius: 14 };
+    if (guild.icon) return h(RN.Image, { source: { uri: `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=96` },
+      resizeMode: 'cover', style, accessible: false });
+    const initials = String(guild.name ?? '?').trim().split(/\s+/).map(word => word[0]).join('').slice(0, 3);
+    return h(RN.View, { style: { ...style, backgroundColor: '#5865f2', alignItems: 'center', justifyContent: 'center' } },
+      text(initials, { color: '#fff', fontWeight: '600' }));
+  }
+  function Picker({ emojis = [], close, settings = false, inSheet = false }) {
     const [emoji, setEmoji] = React.useState(emojis.length === 1 ? emojis[0] : null);
     const [source, setSource] = React.useState(''), [name, setName] = React.useState(emojis[0]?.name ?? 'emoji');
     const [guildId, setGuild] = React.useState(null), [search, setSearch] = React.useState('');
     const [error, setError] = React.useState(''), [busy, setBusy] = React.useState(false), [success, setSuccess] = React.useState('');
-    const [, refresh] = React.useState(0), mounted = React.useRef(true), lock = React.useRef(false);
+    const [toolsOpen, setToolsOpen] = React.useState(false);
+    const [revision, refresh] = React.useState(0), mounted = React.useRef(true), lock = React.useRef(false);
     React.useEffect(() => {
       mounted.current = true;
       const cleanups = [];
@@ -248,7 +257,7 @@ function createPlugin(V, env = globalThis) {
       }
       return () => { mounted.current = false; cleanups.forEach(fn => { try { fn(); } catch {} }); };
     }, []);
-    const choose = next => { setEmoji(next); setName(next.name); setGuild(null); setError(''); setSuccess(''); };
+    const choose = next => { setEmoji(next); setName(next.name); setGuild(null); setToolsOpen(false); setSearch(''); setError(''); setSuccess(''); };
     const submit = async () => {
       if (lock.current) return;
       lock.current = true; setBusy(true); setError(''); setSuccess('');
@@ -259,6 +268,63 @@ function createPlugin(V, env = globalThis) {
       } catch (e) { if (mounted.current && active && generation === session) setError(core.errorMessage(e)); }
       finally { lock.current = false; if (mounted.current) setBusy(false); }
     };
+    if (emoji && !guildId && !toolsOpen) {
+      const palette = colors();
+      const guilds = Object.values(byStore('GuildStore')?.getGuilds?.() ?? {}).filter(canCreate)
+        .filter(g => String(g.name ?? '').toLowerCase().includes(search.trim().toLowerCase()))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      // Use the sheet's gesture-aware list inside a sheet, and a normal list in settings/alerts.
+      const List = (inSheet ? byProps('BottomSheetFlatList')?.BottomSheetFlatList
+        ?? byProps('BottomSheetScrollView')?.BottomSheetFlatList : null) ?? RN.FlatList;
+      const row = guild => {
+        const capacity = slots(guild, emoji), disabled = capacity.full || busy;
+        const select = () => {
+          if (!active || busy || pending) return;
+          const latest = currentGuild(guild.id);
+          if (!latest || !canCreate(latest)) { setError('You no longer have permission to add emoji to this server.'); return; }
+          if (slots(latest, emoji).full) { setError('This server has no slots available for this emoji type.'); return; }
+          RN.Keyboard?.dismiss?.(); setGuild(guild.id); setError(''); setSuccess('');
+        };
+        return h(RN.Pressable ?? RN.TouchableOpacity, { key: guild.id, onPress: select, disabled,
+          accessibilityRole: 'button', accessibilityLabel: guild.name,
+          accessibilityHint: capacity.full ? 'No slots available' : 'Choose emoji name and add to this server',
+          accessibilityState: { disabled }, style: { minHeight: 80, paddingHorizontal: 28, paddingVertical: 14,
+            flexDirection: 'row', alignItems: 'center', opacity: disabled ? 0.4 : 1 } },
+          guildIcon(guild), h(RN.View, { style: { flex: 1, marginLeft: 18, marginRight: 16 } },
+            h(RN.Text, { numberOfLines: 2, style: { color: palette.text, fontSize: 17, fontWeight: '600' } }, guild.name),
+            capacity.full ? text('No slots available', { color: palette.muted, fontSize: 13, marginTop: 3 }) : null),
+          text('+', { color: palette.muted, fontSize: 30, fontWeight: '300' }));
+      };
+      const empty = h(RN.View, { style: { padding: 24 } }, text(search.trim() ? 'No servers match your search.'
+        : 'No servers available. You need Create Expressions permission to add emoji.', { color: palette.muted }));
+      const listProps = { style: { flex: 1, minHeight: 0 }, contentContainerStyle: { paddingBottom: 36 },
+        keyboardShouldPersistTaps: 'handled', keyboardDismissMode: 'on-drag', nestedScrollEnabled: true,
+        showsVerticalScrollIndicator: true };
+      const list = List ? h(List, { ...listProps, data: guilds, keyExtractor: guild => guild.id,
+        renderItem: ({ item }) => row(item), extraData: `${revision}:${emoji.id}:${emoji.animated}:${busy}`,
+        initialNumToRender: 8, maxToRenderPerBatch: 8, windowSize: 5, ListEmptyComponent: empty })
+        : h(RN.ScrollView, listProps, ...(guilds.length ? guilds.map(row) : [empty]));
+      const link = (label, onPress) => h(RN.Pressable ?? RN.TouchableOpacity, { onPress, accessibilityRole: 'button',
+        accessibilityLabel: label, style: { paddingVertical: 12, paddingHorizontal: 16 } },
+        text(label, { color: palette.muted, fontSize: 14, fontWeight: '600' }));
+      const height = Math.min(680, (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.72);
+      // The list owns scrolling. A surrounding ScrollView would compete with the sheet gesture.
+      return h(RN.View, { style: settings ? { flex: 1, minHeight: 0 } : { height } },
+        h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 28, minHeight: 72 } },
+          h(RN.Image, { source: { uri: core.url(emoji) }, resizeMode: 'contain', accessible: false, style: { width: 30, height: 30 } }),
+          h(RN.Text, { numberOfLines: 1, style: { flex: 1, color: palette.text, fontSize: 20, fontWeight: '700',
+            textAlign: 'center', marginHorizontal: 12 } }, `Stealing ${emoji.name}`),
+          close ? h(RN.Pressable ?? RN.TouchableOpacity, { onPress: close, accessibilityRole: 'button', accessibilityLabel: 'Close',
+            hitSlop: 8, style: { width: 36, height: 44, justifyContent: 'center', alignItems: 'center' } },
+            text('×', { fontSize: 32, lineHeight: 36 })) : h(RN.View, { style: { width: 30 } })),
+        h(RN.View, { style: { paddingHorizontal: 24, paddingBottom: 10 } }, input(search, setSearch, 'Search servers'),
+          success ? text(success, { marginTop: 8 }) : null,
+          error ? text(error, { color: '#e66b70', marginTop: 8 }) : null),
+        list,
+        h(RN.View, { style: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingBottom: 12 } },
+          link('Emoji tools', () => { setToolsOpen(true); setError(''); }),
+          link('Use another emoji', () => { setEmoji(null); setSearch(''); setError(''); })));
+    }
     const content = [text('Stealmoji', { fontSize: 22, fontWeight: '700' })];
     if (close) content.push(button('Close', close, busy));
     if (settings) content.push(text(hooked ? 'Emoji menu hook connected.' : 'Menu hook unavailable. Paste an emoji below.', { color: colors().muted, marginTop: 8 }));
@@ -284,17 +350,7 @@ function createPlugin(V, env = globalThis) {
         content.push(h(RN.View, { key: 'animated', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 } },
           text('Animated emoji (GIF)'), h(RN.Switch, { value: emoji.animated, disabled: busy, accessibilityLabel: 'Animated emoji',
             onValueChange: value => setEmoji({ ...emoji, animated: value }) })));
-        content.push(text('Add to server', { fontSize: 18, fontWeight: '600', marginTop: 18 }));
-        content.push(input(search, setSearch, 'Search servers'));
-        const guilds = Object.values(byStore('GuildStore')?.getGuilds?.() ?? {}).filter(canCreate)
-          .filter(g => String(g.name ?? '').toLowerCase().includes(search.toLowerCase()))
-          .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-        if (!guilds.length) content.push(text('No matching servers. You need Create Expressions permission to add emoji.', { color: colors().muted, marginTop: 12 }));
-        guilds.forEach(guild => {
-          const capacity = slots(guild, emoji);
-          const detail = capacity.full ? ' · No free slots' : capacity.used == null ? '' : ` · ${capacity.max - capacity.used} slots free`;
-          content.push(button(guild.name + detail, () => { setGuild(guild.id); setError(''); setSuccess(''); }, capacity.full || busy, guild.id));
-        });
+        content.push(button('Browse servers', () => { setToolsOpen(false); setError(''); }, busy));
         content.push(button('Use another emoji', () => { setEmoji(null); setError(''); }, busy));
       } else {
         content.push(text('Server: ' + (currentGuild(guildId)?.name ?? 'Unavailable'), { fontWeight: '600', marginTop: 12 }));
@@ -320,7 +376,7 @@ function createPlugin(V, env = globalThis) {
     if (!Sheet) { try { Sheet = V.metro.find(m => m?.render?.name === 'ActionSheet'); } catch {} }
     if (sheetHost?.openLazy && Sheet) {
       const close = () => { try { sheetHost.hideActionSheet?.(KEY); } catch {} };
-      const component = () => guarded(h(Sheet, { scrollable: true }, h(Picker, { emojis, close })));
+      const component = () => guarded(h(Sheet, { scrollable: true }, h(Picker, { emojis, close, inSheet: true })));
       sheetHost.hideActionSheet?.(fromKey);
       sheetHost.openLazy(Promise.resolve({ default: component }), KEY, {});
       return;
