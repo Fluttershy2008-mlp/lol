@@ -158,25 +158,63 @@ function typingCharacters(text) {
   return result;
 }
 
-function createTyper({ read, insert, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
+function createTyper({ read, insert, send, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let disposed = false, timer = null, status = 'idle', message = '', chunks = [], position = 0, total = 0;
   let expected = '', pending = null, interval = 70;
-  const state = () => ({ status, message, position, total, running: status === 'running' });
+  let autoSend = false, sendIssued = false, sendStarted = 0, runId = 0;
+  const state = () => ({ status, message, position, total, autoSend,
+    running: status === 'running', sending: status === 'sending', busy: status === 'running' || status === 'sending' });
   const announce = () => { try { changed(state()); } catch {} };
   const clearTimer = () => { if (timer !== null) cancel(timer); timer = null; };
   function finish(nextStatus, reason) {
+    runId++;
     clearTimer(); status = nextStatus; message = reason;
     chunks = []; pending = null; expected = ''; announce();
   }
   function stop(reason = 'Stopped. The text already typed stays in your message box.') {
     if (status === 'running') finish('stopped', reason);
+    else if (status === 'sending') finish('done', 'Auto-send was already requested. Check Discord for delivery.');
   }
   function ack() {
     expected = pending.after; pending = null; position++; announce();
   }
-  function later(delay) {
+  function later(delay, callback = tick) {
     clearTimer();
-    timer = schedule(() => { timer = null; tick(); }, delay);
+    timer = schedule(() => { timer = null; callback(); }, delay);
+  }
+  function checkSend() {
+    if (disposed || status !== 'sending') return;
+    try {
+      if (!allowed() || read() !== expected) {
+        finish('done', 'Auto-send requested. Check the chat for delivery.'); return;
+      }
+      if (now() - sendStarted >= 3000) {
+        finish('done', 'Auto-send was requested once. If the draft remains, check Discord and tap Send if needed.'); return;
+      }
+      later(100, checkSend);
+    } catch { finish('done', 'Auto-send was requested. Check Discord for delivery.'); }
+  }
+  function requestSend() {
+    if (sendIssued || disposed || status !== 'running') return;
+    // No retries: native send may have succeeded even when its result is
+    // missing or rejected. Mark the attempt before entering Discord's code.
+    sendIssued = true; sendStarted = now(); status = 'sending'; message = 'Sending through Discord…';
+    const token = runId;
+    clearTimer(); announce();
+    if (disposed || runId !== token || status !== 'sending') return;
+    const failed = () => {
+      if (!disposed && runId === token && status === 'sending') {
+        finish('error', 'Auto-send could not be confirmed. Check the chat before sending manually.');
+      }
+    };
+    try {
+      const result = send(expected);
+      if (result === false) { failed(); return; }
+      if (result && typeof result.then === 'function') {
+        Promise.resolve(result).then(value => { if (value === false) failed(); }, failed);
+      }
+      if (!disposed && runId === token && status === 'sending') checkSend();
+    } catch { failed(); }
   }
   function tick() {
     if (disposed || status !== 'running') return;
@@ -191,7 +229,11 @@ function createTyper({ read, insert, allowed, maxLength, changed = () => {}, sch
         } else { stop('Stopped because you changed or sent the draft.'); return; }
       }
       if (actual !== expected) { stop('Stopped because you changed or sent the draft.'); return; }
-      if (position >= total) { finish('done', 'Finished typing. Review your message, then tap Send.'); return; }
+      if (position >= total) {
+        if (autoSend) requestSend();
+        else finish('done', 'Finished typing. Review your message, then tap Send.');
+        return;
+      }
       const char = chunks[position];
       if (expected.length + char.length > maxLength()) { finish('error', 'Typing stopped at the message length limit.'); return; }
       // Set the expected echo BEFORE issuing the command: native updates can
@@ -203,23 +245,30 @@ function createTyper({ read, insert, allowed, maxLength, changed = () => {}, sch
   }
   return {
     get state() { return state(); },
-    start(text, milliseconds = 70) {
+    start(text, milliseconds = 70, settings = {}) {
       if (disposed) throw new Error('Reopen the chat before starting AutoType.');
-      if (status === 'running') throw new Error('Stop the current typing run first.');
+      if (status === 'running' || status === 'sending') throw new Error('Wait for the current run to finish or stop it first.');
       if (!allowed()) throw new Error('Open the chat and resume AutoText before starting.');
       if (typeof text !== 'string' || !text.trim()) throw new Error('Enter the message you want AutoType to type.');
       const normalized = text.replace(/\r\n?/g, '\n');
       const initial = read();
       if (typeof initial !== 'string') throw new Error('Could not read the current message box.');
       if (initial.length + normalized.length > maxLength()) throw new Error('Your message plus the current draft exceeds the message limit. Shorten it or clear the message box first.');
+      if (settings.autoSend === true && typeof send !== 'function') throw new Error('Auto-send is unavailable on this Discord version. Turn it off to type normally.');
       const speed = Number(milliseconds);
       interval = Number.isFinite(speed) ? Math.max(25, Math.min(500, speed)) : 70;
-      clearTimer(); chunks = typingCharacters(normalized); position = 0; total = chunks.length;
+      clearTimer(); runId++; autoSend = settings.autoSend === true; sendIssued = false;
+      chunks = typingCharacters(normalized); position = 0; total = chunks.length;
       expected = initial; pending = null; status = 'running'; message = 'Typing your prepared message…';
       announce(); later(400); return state();
     },
     observe(text, selection) {
-      if (status !== 'running' || disposed) return;
+      if (disposed) return;
+      if (status === 'sending') {
+        if (text !== expected) finish('done', 'Auto-send requested. Check the chat for delivery.');
+        return;
+      }
+      if (status !== 'running') return;
       if (selection && (selection.start !== text.length || selection.end !== text.length)) {
         stop('Stopped because you moved the cursor.'); return;
       }
@@ -235,7 +284,7 @@ function createTyper({ read, insert, allowed, maxLength, changed = () => {}, sch
 
 // One session belongs to one mounted composer. No drafts are stored here persistently.
 function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
-  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null;
+  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null, autoSending = false;
   const read = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
@@ -252,7 +301,7 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
   }
   function apply(edit, expected, recordUndo = true, fromTyper = false) {
     if (disposed || !allowed() || !options().enabled || writing || read() !== expected) return false;
-    if (typer?.state.running && !fromTyper) return false;
+    if (typer?.state.busy && !fromTyper) return false;
     const result = applyEdit(expected, edit);
     if (result.length > maxLength() || result === expected) return false;
     clearPending();
@@ -273,7 +322,7 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
-    if (typer?.state.running) {
+    if (typer?.state.busy) {
       // Prepared messages must be copied literally. Do not expand ;shortcuts
       // or manufacture an extra bullet when the runner types a newline.
       typer.observe(next, selection); clearPending(); announce(); return;
@@ -309,19 +358,28 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
     insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
+    send: typeof target.handleSend === 'function' ? expected => {
+      // Re-check the exact composer and text immediately before the only send
+      // call. Use Discord's normal validation/reply/attachment path.
+      if (disposed || !allowed() || !options().enabled || read() !== expected) throw new Error('The active draft changed.');
+      autoSending = true;
+      try { return target.handleSend(); }
+      finally { autoSending = false; }
+    } : undefined,
     changed: announce, schedule, cancel });
-  // Stop before a user-initiated Send, if this ref exposes that action. This
-  // never invokes the action itself and never modifies the outgoing message.
+  // A manual Send cancels pending auto-send. The single authorized completion
+  // call passes through without treating itself as a user interruption.
   let unpatchSend = () => {};
   if (typeof target.handleSend === 'function' && typeof patcher.before === 'function') {
-    unpatchSend = patcher.before('handleSend', target, () => { typer.stop('Stopped because you tapped Send.'); });
+    unpatchSend = patcher.before('handleSend', target, () => { if (!autoSending) typer.stop('Stopped because you tapped Send.'); });
   }
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
     get typing() { return typer.state; },
-    startTyping(text, interval) { clearPending(); undo = null; return typer.start(text, interval); },
+    get canAutoSend() { return typeof target.handleSend === 'function'; },
+    startTyping(text, interval, settings) { clearPending(); undo = null; return typer.start(text, interval, settings); },
     stopTyping(reason) { typer.stop(reason); },
     observeNative(event) {
       const data = event?.nativeEvent ?? event;
@@ -496,7 +554,7 @@ function createPlugin(api) {
       h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 70 } },
         label('AutoText', colors, { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
         small('Automatically type a prepared message, letter by letter. Open a chat → AutoType → paste your text → Start typing.'),
-        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Tap Stop at any time; tap Send yourself when ready.'),
+        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Enable Auto-send when finished to send the complete message once after typing.'),
         onClose ? button('Back to chat', onClose, colors) : null,
         small(active ? connection : 'Plugin disabled. Enable AutoText to connect live typing.'),
         ...[
@@ -544,7 +602,7 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.1.0'),
+        small('Version 1.2.0'),
       ));
   }
 
@@ -556,6 +614,7 @@ function createPlugin(api) {
     const [prepared, setPrepared] = React.useState('');
     const [typingSpeed, setTypingSpeed] = React.useState(() => [150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
     const [typingError, setTypingError] = React.useState('');
+    const [autoSend, setAutoSend] = React.useState(() => storage.autoSend === true);
     const sessionRef = React.useRef(null);
     const colors = palette(), options = getOptions();
     const ownerAccount = accountNow();
@@ -600,17 +659,19 @@ function createPlugin(api) {
     const text = session?.text ?? '';
     const typing = session?.typing;
     const running = Boolean(typing?.running);
+    const busy = Boolean(typing?.busy);
     const useEdit = edit => {
       try {
         if (!session?.apply(edit, text)) notify('Draft changed or message limit reached. Try again.');
       } catch { issue(); }
     };
-    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions && !running);
+    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions && !busy);
     function startTyping() {
       try {
         if (!session) throw new Error('The chat composer is not connected. Reopen this chat and try again.');
-        session.startTyping(prepared, typingSpeed);
+        session.startTyping(prepared, typingSpeed, { autoSend });
         storage.typingInterval = typingSpeed;
+        storage.autoSend = autoSend;
         setTypingError(''); setTypingOpen(false);
       } catch (error) { setTypingError(error.message || 'Could not start typing.'); }
     }
@@ -628,14 +689,15 @@ function createPlugin(api) {
         ...suggestions.map(p => compactButton(p.text.replace(/\n/g, ' · ').slice(0, 70), () => useEdit(p), 'Insert phrase ' + p.shortcut, p.shortcut))) : null,
       h(RN.ScrollView, stripProps,
         running ? compactButton('■ Stop', () => session.stopTyping(), 'Stop automatic typing')
-          : compactButton('▶ AutoType', () => { setTypingError(''); setTypingOpen(true); }, 'AutoType'),
-        running ? label(`${typing.position}/${typing.total}`, colors, { fontSize: 13, marginHorizontal: 10 }, { accessibilityLabel: `Typed ${typing.position} of ${typing.total} characters` }) : null,
-        !running && options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
-        !running && options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
-        !running && options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
-        !running ? compactButton('Phrases', () => setOpen(true)) : null,
-        !running ? compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled)) : null),
-      !running && typing?.message ? label(typing.message, colors, { fontSize: 12, lineHeight: 16, color: colors.sub, paddingHorizontal: 8, paddingBottom: 4 }, { numberOfLines: 2, accessibilityLiveRegion: 'polite' }) : null,
+          : typing?.sending ? label('Sending…', colors, { paddingHorizontal: 10 })
+            : compactButton('▶ AutoType', () => { setTypingError(''); setTypingOpen(true); }, 'AutoType'),
+        running ? label(`${typing.position}/${typing.total}${typing.autoSend ? ' · Auto-send on' : ''}`, colors, { fontSize: 13, marginHorizontal: 10 }, { accessibilityLabel: `Typed ${typing.position} of ${typing.total} characters${typing.autoSend ? ', auto-send on' : ''}` }) : null,
+        !busy && options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
+        !busy && options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
+        !busy && options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
+        !busy ? compactButton('Phrases', () => setOpen(true)) : null,
+        !busy ? compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled)) : null),
+      !busy && typing?.message ? label(typing.message, colors, { fontSize: 12, lineHeight: 16, color: colors.sub, paddingHorizontal: 8, paddingBottom: 4 }, { numberOfLines: 2, accessibilityLiveRegion: 'polite' }) : null,
       typingOpen ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setTypingOpen(false) },
         h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
           h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
@@ -653,9 +715,16 @@ function createPlugin(api) {
                 ...[[150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
                   () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
                     accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
-              label('Text is added at the end of your current draft. Bullet points, emojis and new lines are kept. Nothing is sent automatically.', colors, { color: colors.sub, fontSize: 13, marginTop: 16 }),
+              h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },
+                label('Auto-send when finished', colors, { flex: 1, fontWeight: '700' }),
+                h(RN.Switch, { value: autoSend, onValueChange: setAutoSend, accessibilityLabel: 'Auto-send when finished' })),
+              label(autoSend
+                ? 'Sends the entire draft once after the final character, including existing text, replies and attachments. Stop cancels it before sending starts.'
+                : 'Leaves the finished message in the box so you can tap Send yourself.', colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
+              autoSend && session && !session.canAutoSend ? label('Auto-send is unavailable here. Turn it off to type normally.', colors, { color: colors.accent, marginTop: 8 }) : null,
+              label('Text is added at the end of your current draft. Bullet points, emojis and new lines are kept.', colors, { color: colors.sub, fontSize: 13, marginTop: 16 }),
               typingError ? label(typingError, colors, { marginTop: 12, color: colors.accent }, { accessibilityLiveRegion: 'polite' }) : null,
-              button('Start typing', startTyping, colors),
+              button(autoSend ? 'Start typing & send' : 'Start typing', startTyping, colors),
               button('Cancel', () => setTypingOpen(false), colors),
             )))) : null,
       open ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setOpen(false) },

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTyper, typingCharacters } from '../src/typer.mjs';
 
-function harness({ initial = '', delayed = false, reject = false, limit = 2000 } = {}) {
+function harness({ initial = '', delayed = false, reject = false, limit = 2000, sendBehavior = 'clear', hasSend = true } = {}) {
   let text = initial, allowed = true, clock = 0, nextId = 0;
-  const tasks = new Map(), native = [], inserted = [];
+  const tasks = new Map(), native = [], inserted = [], sent = [];
   const typer = createTyper({ read: () => text, allowed: () => allowed, maxLength: () => limit,
     schedule: (fn, delay) => { tasks.set(++nextId, { fn, time: clock + delay, delay }); return nextId; },
     cancel: id => tasks.delete(id), now: () => clock,
@@ -15,13 +15,20 @@ function harness({ initial = '', delayed = false, reject = false, limit = 2000 }
       if (delayed) native.push(apply); else apply();
       return true;
     },
+    send: hasSend ? expected => {
+      assert.equal(text, expected); sent.push(text);
+      if (sendBehavior === 'throw') throw new Error('Native send failed');
+      if (sendBehavior === 'false') return false;
+      if (sendBehavior === 'reject') return Promise.reject(new Error('Network failure'));
+      if (sendBehavior === 'clear') { text = ''; typer.observe(''); }
+    } : undefined,
   });
   const next = () => {
     const item = [...tasks].sort((a, b) => a[1].time - b[1].time)[0];
     if (!item) return false;
     tasks.delete(item[0]); clock = item[1].time; item[1].fn(); return true;
   };
-  return { typer, tasks, native, inserted, next, read: () => text,
+  return { typer, tasks, native, inserted, sent, next, read: () => text,
     all() { let n = 0; while (next()) assert(++n < 5000, 'typing loop is bounded'); },
     interrupt(value, selection) { text = value; typer.observe(text, selection); },
     leave() { allowed = false; },
@@ -86,4 +93,51 @@ test('emoji and accent clusters remain intact with and without Intl.Segmenter', 
   const segmenter = Intl.Segmenter;
   try { Intl.Segmenter = undefined; assert.deepEqual(typingCharacters(sample), ['🍓', '👩🏽‍💻', '🇸🇬', 'e\u0301', '1️⃣']); }
   finally { Intl.Segmenter = segmenter; }
+});
+test('auto-send is opt-in and sends a complete multiline message exactly once', () => {
+  const source = 'Hello. Another sentence!\n- One\n- Two 🍓';
+  const manual = harness(); manual.typer.start(source); manual.all();
+  assert.equal(manual.sent.length, 0); assert.equal(manual.read(), source);
+  const auto = harness(); auto.typer.start(source, 25, { autoSend: true }); auto.all();
+  assert.deepEqual(auto.sent, [source]); assert.equal(auto.read(), '');
+  assert.equal(auto.typer.state.status, 'done'); auto.all(); assert.equal(auto.sent.length, 1);
+});
+test('the final native update must be acknowledged before auto-send', () => {
+  const h = harness({ delayed: true }); h.typer.start('a', 25, { autoSend: true });
+  h.next(); h.next(); h.next(); assert.equal(h.sent.length, 0);
+  h.native.shift()(); h.next(); assert.deepEqual(h.sent, ['a']);
+});
+test('Stop, edits, leaving and unload cancel auto-send after the final letter', () => {
+  for (const action of ['stop', 'edit', 'leave', 'dispose']) {
+    const h = harness(); h.typer.start('a', 25, { autoSend: true }); h.next();
+    assert.equal(h.read(), 'a');
+    if (action === 'stop') h.typer.stop();
+    if (action === 'edit') h.interrupt('changed');
+    if (action === 'leave') h.leave();
+    if (action === 'dispose') h.typer.dispose();
+    h.all(); assert.equal(h.sent.length, 0, action);
+  }
+});
+test('failed or unconfirmed native sends are never retried', async () => {
+  for (const sendBehavior of ['throw', 'false', 'reject', 'pending']) {
+    const h = harness({ sendBehavior }); h.typer.start('a', 25, { autoSend: true });
+    h.next(); h.next(); await Promise.resolve(); await Promise.resolve(); h.all();
+    assert.deepEqual(h.sent, ['a'], sendBehavior); assert.equal(h.read(), 'a');
+    assert.equal(h.typer.state.busy, false); assert.equal(h.tasks.size, 0);
+    if (sendBehavior !== 'pending') assert.equal(h.typer.state.status, 'error');
+  }
+});
+test('a new run cannot start while a send is pending and a later manual run does not auto-send', async () => {
+  const h = harness({ sendBehavior: 'pending' });
+  h.typer.start('a', 25, { autoSend: true }); h.next(); h.next();
+  assert.equal(h.typer.state.sending, true);
+  assert.throws(() => h.typer.start('b'), /current run/);
+  h.all(); assert.equal(h.sent.length, 1);
+  h.typer.start('b'); h.all(); assert.equal(h.read(), 'ab'); assert.equal(h.sent.length, 1);
+});
+test('unsupported automatic sending is rejected before typing begins', () => {
+  const h = harness({ hasSend: false });
+  assert.throws(() => h.typer.start('hello', 70, { autoSend: true }), /unavailable/);
+  assert.equal(h.tasks.size, 0); assert.equal(h.read(), '');
+  h.typer.start('hello'); h.all(); assert.equal(h.read(), 'hello');
 });

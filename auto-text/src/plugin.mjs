@@ -99,7 +99,7 @@ export function createPlugin(api) {
       h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 70 } },
         label('AutoText', colors, { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
         small('Automatically type a prepared message, letter by letter. Open a chat → AutoType → paste your text → Start typing.'),
-        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Tap Stop at any time; tap Send yourself when ready.'),
+        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Enable Auto-send when finished to send the complete message once after typing.'),
         onClose ? button('Back to chat', onClose, colors) : null,
         small(active ? connection : 'Plugin disabled. Enable AutoText to connect live typing.'),
         ...[
@@ -147,7 +147,7 @@ export function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.1.0'),
+        small('Version 1.2.0'),
       ));
   }
 
@@ -159,6 +159,7 @@ export function createPlugin(api) {
     const [prepared, setPrepared] = React.useState('');
     const [typingSpeed, setTypingSpeed] = React.useState(() => [150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
     const [typingError, setTypingError] = React.useState('');
+    const [autoSend, setAutoSend] = React.useState(() => storage.autoSend === true);
     const sessionRef = React.useRef(null);
     const colors = palette(), options = getOptions();
     const ownerAccount = accountNow();
@@ -203,17 +204,19 @@ export function createPlugin(api) {
     const text = session?.text ?? '';
     const typing = session?.typing;
     const running = Boolean(typing?.running);
+    const busy = Boolean(typing?.busy);
     const useEdit = edit => {
       try {
         if (!session?.apply(edit, text)) notify('Draft changed or message limit reached. Try again.');
       } catch { issue(); }
     };
-    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions && !running);
+    const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions && !busy);
     function startTyping() {
       try {
         if (!session) throw new Error('The chat composer is not connected. Reopen this chat and try again.');
-        session.startTyping(prepared, typingSpeed);
+        session.startTyping(prepared, typingSpeed, { autoSend });
         storage.typingInterval = typingSpeed;
+        storage.autoSend = autoSend;
         setTypingError(''); setTypingOpen(false);
       } catch (error) { setTypingError(error.message || 'Could not start typing.'); }
     }
@@ -231,14 +234,15 @@ export function createPlugin(api) {
         ...suggestions.map(p => compactButton(p.text.replace(/\n/g, ' · ').slice(0, 70), () => useEdit(p), 'Insert phrase ' + p.shortcut, p.shortcut))) : null,
       h(RN.ScrollView, stripProps,
         running ? compactButton('■ Stop', () => session.stopTyping(), 'Stop automatic typing')
-          : compactButton('▶ AutoType', () => { setTypingError(''); setTypingOpen(true); }, 'AutoType'),
-        running ? label(`${typing.position}/${typing.total}`, colors, { fontSize: 13, marginHorizontal: 10 }, { accessibilityLabel: `Typed ${typing.position} of ${typing.total} characters` }) : null,
-        !running && options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
-        !running && options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
-        !running && options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
-        !running ? compactButton('Phrases', () => setOpen(true)) : null,
-        !running ? compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled)) : null),
-      !running && typing?.message ? label(typing.message, colors, { fontSize: 12, lineHeight: 16, color: colors.sub, paddingHorizontal: 8, paddingBottom: 4 }, { numberOfLines: 2, accessibilityLiveRegion: 'polite' }) : null,
+          : typing?.sending ? label('Sending…', colors, { paddingHorizontal: 10 })
+            : compactButton('▶ AutoType', () => { setTypingError(''); setTypingOpen(true); }, 'AutoType'),
+        running ? label(`${typing.position}/${typing.total}${typing.autoSend ? ' · Auto-send on' : ''}`, colors, { fontSize: 13, marginHorizontal: 10 }, { accessibilityLabel: `Typed ${typing.position} of ${typing.total} characters${typing.autoSend ? ', auto-send on' : ''}` }) : null,
+        !busy && options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
+        !busy && options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
+        !busy && options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
+        !busy ? compactButton('Phrases', () => setOpen(true)) : null,
+        !busy ? compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled)) : null),
+      !busy && typing?.message ? label(typing.message, colors, { fontSize: 12, lineHeight: 16, color: colors.sub, paddingHorizontal: 8, paddingBottom: 4 }, { numberOfLines: 2, accessibilityLiveRegion: 'polite' }) : null,
       typingOpen ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setTypingOpen(false) },
         h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
           h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
@@ -256,9 +260,16 @@ export function createPlugin(api) {
                 ...[[150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
                   () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
                     accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
-              label('Text is added at the end of your current draft. Bullet points, emojis and new lines are kept. Nothing is sent automatically.', colors, { color: colors.sub, fontSize: 13, marginTop: 16 }),
+              h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },
+                label('Auto-send when finished', colors, { flex: 1, fontWeight: '700' }),
+                h(RN.Switch, { value: autoSend, onValueChange: setAutoSend, accessibilityLabel: 'Auto-send when finished' })),
+              label(autoSend
+                ? 'Sends the entire draft once after the final character, including existing text, replies and attachments. Stop cancels it before sending starts.'
+                : 'Leaves the finished message in the box so you can tap Send yourself.', colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
+              autoSend && session && !session.canAutoSend ? label('Auto-send is unavailable here. Turn it off to type normally.', colors, { color: colors.accent, marginTop: 8 }) : null,
+              label('Text is added at the end of your current draft. Bullet points, emojis and new lines are kept.', colors, { color: colors.sub, fontSize: 13, marginTop: 16 }),
               typingError ? label(typingError, colors, { marginTop: 12, color: colors.accent }, { accessibilityLiveRegion: 'polite' }) : null,
-              button('Start typing', startTyping, colors),
+              button(autoSend ? 'Start typing & send' : 'Start typing', startTyping, colors),
               button('Cancel', () => setTypingOpen(false), colors),
             )))) : null,
       open ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setOpen(false) },

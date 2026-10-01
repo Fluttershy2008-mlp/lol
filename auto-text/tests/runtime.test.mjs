@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
-function runtime({ missing = false } = {}) {
+function runtime({ missing = false, missingSend = false, sendBehavior = 'clear' } = {}) {
   let hooks = null, index = 0, jobs = [], timerId = 0;
   const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set(), appListeners = new Set();
   const appState = { currentState: 'active', addEventListener(event, callback) {
@@ -32,6 +32,7 @@ function runtime({ missing = false } = {}) {
     return { render() { hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
   }
   let draft = '', account = 'user1', channel = 'channel1', sendCount = 0;
+  const sentContents = [];
   let liveTree;
   const emitNative = (text, start = text.length, end = start) => {
     const field = nodes(liveTree, n => typeof n.props?.onSelectionOrTextChange === 'function')[0];
@@ -41,9 +42,14 @@ function runtime({ missing = false } = {}) {
   const input = {
     getText: () => draft,
     handleTextChanged() {},
-    handleSend() { sendCount++; emitNative(''); },
+    handleSend() {
+      sendCount++; sentContents.push(draft);
+      if (sendBehavior === 'throw') throw new Error('Discord rejected send');
+      if (sendBehavior === 'clear') emitNative('');
+    },
     insertText(text, start, space, nodes, end) { emitNative(draft.slice(0, start) + text + draft.slice(end)); },
   };
+  if (missingSend) delete input.handleSend;
   const inputRef = { current: input };
   // A floating composer under the guard, including an absolutely positioned
   // accessories area. Native changes deliberately bypass handleTextChanged.
@@ -92,6 +98,7 @@ function runtime({ missing = false } = {}) {
     appListeners,
     userSend() { input.handleSend(); },
     sent: () => sendCount,
+    sentTexts: () => [...sentContents],
   };
 }
 function nodes(root, filter) {
@@ -170,7 +177,7 @@ test('settings can add a multiline phrase without a network or Discord send API'
   assert.equal(r.storage.phrases.find(p => p.shortcut === ';test').text, '- One\n- Two');
   r.plugin.onUnload();
 });
-function openAutoType(r, source) {
+function openAutoType(r, source, autoSend = false) {
   r.plugin.onLoad();
   const tree = r.open();
   const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
@@ -182,7 +189,11 @@ function openAutoType(r, source) {
   view = host.render();
   nodes(view, n => n.props?.accessibilityLabel === 'Message to type')[0].props.onChangeText(source);
   view = host.render();
-  nodes(view, n => n.props?.accessibilityLabel === 'Start typing')[0].props.onPress();
+  if (autoSend) {
+    nodes(view, n => n.props?.accessibilityLabel === 'Auto-send when finished')[0].props.onValueChange(true);
+    view = host.render();
+  }
+  nodes(view, n => n.props?.accessibilityLabel === (autoSend ? 'Start typing & send' : 'Start typing'))[0].props.onPress();
   return host;
 }
 test('AutoType screen runs a multiline message without shortcut expansion or extra bullets', () => {
@@ -225,4 +236,44 @@ test('channel/account changes, backgrounding, manual edits and unload stop autom
     assert.equal(r.read(), action === 'manual' ? 'ax' : 'a', action);
     r.plugin.onUnload(); assert.equal(r.timers.size, 0);
   }
+});
+test('Auto-send switch submits the whole prepared message once through the composer', () => {
+  const r = runtime(); const source = 'Hi. All done!\n- First\n- Second 🍓';
+  const host = openAutoType(r, source, true);
+  assert.equal(r.sent(), 0);
+  for (let i = 0; i < 100; i++) r.flush();
+  assert.deepEqual(r.sentTexts(), [source]); assert.equal(r.read(), '');
+  assert.equal(r.storage.autoSend, true);
+  assert.equal(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length, 0);
+  r.plugin.onUnload(); assert.equal(r.timers.size, 0);
+});
+test('stopping, leaving, editing or manually sending after the last letter prevents automatic submission', () => {
+  for (const action of ['stop', 'channel', 'account', 'background', 'manualEdit', 'manualSend', 'unload']) {
+    const r = runtime(); const host = openAutoType(r, 'a', true); r.flush();
+    assert.equal(r.read(), 'a'); assert.equal(r.sent(), 0);
+    if (action === 'stop') nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing')[0].props.onPress();
+    if (action === 'channel') r.switchChannel();
+    if (action === 'account') r.switchAccount();
+    if (action === 'background') r.background();
+    if (action === 'manualEdit') r.type('changed');
+    if (action === 'manualSend') r.userSend();
+    if (action === 'unload') r.plugin.onUnload();
+    for (let i = 0; i < 10; i++) r.flush();
+    assert.equal(r.sent(), action === 'manualSend' ? 1 : 0, action);
+    r.plugin.onUnload();
+  }
+});
+test('a native send exception leaves the full draft and never attempts another send', () => {
+  const r = runtime({ sendBehavior: 'throw' }); const host = openAutoType(r, 'hello', true);
+  for (let i = 0; i < 30; i++) r.flush();
+  assert.deepEqual(r.sentTexts(), ['hello']); assert.equal(r.read(), 'hello');
+  assert(nodes(host.render(), n => typeof n.props?.children === 'string' && n.props.children.includes('could not be confirmed')).length);
+  r.plugin.onUnload();
+});
+test('unsupported auto-send shows a clear error before any typing or send', () => {
+  const r = runtime({ missingSend: true }); const host = openAutoType(r, 'hello', true);
+  for (let i = 0; i < 10; i++) r.flush();
+  assert.equal(r.read(), ''); assert.equal(r.sent(), 0);
+  assert(nodes(host.render(), n => typeof n.props?.children === 'string' && n.props.children.includes('unavailable')).length);
+  r.plugin.onUnload();
 });

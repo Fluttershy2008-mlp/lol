@@ -21,25 +21,63 @@ export function typingCharacters(text) {
   return result;
 }
 
-export function createTyper({ read, insert, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
+export function createTyper({ read, insert, send, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let disposed = false, timer = null, status = 'idle', message = '', chunks = [], position = 0, total = 0;
   let expected = '', pending = null, interval = 70;
-  const state = () => ({ status, message, position, total, running: status === 'running' });
+  let autoSend = false, sendIssued = false, sendStarted = 0, runId = 0;
+  const state = () => ({ status, message, position, total, autoSend,
+    running: status === 'running', sending: status === 'sending', busy: status === 'running' || status === 'sending' });
   const announce = () => { try { changed(state()); } catch {} };
   const clearTimer = () => { if (timer !== null) cancel(timer); timer = null; };
   function finish(nextStatus, reason) {
+    runId++;
     clearTimer(); status = nextStatus; message = reason;
     chunks = []; pending = null; expected = ''; announce();
   }
   function stop(reason = 'Stopped. The text already typed stays in your message box.') {
     if (status === 'running') finish('stopped', reason);
+    else if (status === 'sending') finish('done', 'Auto-send was already requested. Check Discord for delivery.');
   }
   function ack() {
     expected = pending.after; pending = null; position++; announce();
   }
-  function later(delay) {
+  function later(delay, callback = tick) {
     clearTimer();
-    timer = schedule(() => { timer = null; tick(); }, delay);
+    timer = schedule(() => { timer = null; callback(); }, delay);
+  }
+  function checkSend() {
+    if (disposed || status !== 'sending') return;
+    try {
+      if (!allowed() || read() !== expected) {
+        finish('done', 'Auto-send requested. Check the chat for delivery.'); return;
+      }
+      if (now() - sendStarted >= 3000) {
+        finish('done', 'Auto-send was requested once. If the draft remains, check Discord and tap Send if needed.'); return;
+      }
+      later(100, checkSend);
+    } catch { finish('done', 'Auto-send was requested. Check Discord for delivery.'); }
+  }
+  function requestSend() {
+    if (sendIssued || disposed || status !== 'running') return;
+    // No retries: native send may have succeeded even when its result is
+    // missing or rejected. Mark the attempt before entering Discord's code.
+    sendIssued = true; sendStarted = now(); status = 'sending'; message = 'Sending through Discord…';
+    const token = runId;
+    clearTimer(); announce();
+    if (disposed || runId !== token || status !== 'sending') return;
+    const failed = () => {
+      if (!disposed && runId === token && status === 'sending') {
+        finish('error', 'Auto-send could not be confirmed. Check the chat before sending manually.');
+      }
+    };
+    try {
+      const result = send(expected);
+      if (result === false) { failed(); return; }
+      if (result && typeof result.then === 'function') {
+        Promise.resolve(result).then(value => { if (value === false) failed(); }, failed);
+      }
+      if (!disposed && runId === token && status === 'sending') checkSend();
+    } catch { failed(); }
   }
   function tick() {
     if (disposed || status !== 'running') return;
@@ -54,7 +92,11 @@ export function createTyper({ read, insert, allowed, maxLength, changed = () => 
         } else { stop('Stopped because you changed or sent the draft.'); return; }
       }
       if (actual !== expected) { stop('Stopped because you changed or sent the draft.'); return; }
-      if (position >= total) { finish('done', 'Finished typing. Review your message, then tap Send.'); return; }
+      if (position >= total) {
+        if (autoSend) requestSend();
+        else finish('done', 'Finished typing. Review your message, then tap Send.');
+        return;
+      }
       const char = chunks[position];
       if (expected.length + char.length > maxLength()) { finish('error', 'Typing stopped at the message length limit.'); return; }
       // Set the expected echo BEFORE issuing the command: native updates can
@@ -66,23 +108,30 @@ export function createTyper({ read, insert, allowed, maxLength, changed = () => 
   }
   return {
     get state() { return state(); },
-    start(text, milliseconds = 70) {
+    start(text, milliseconds = 70, settings = {}) {
       if (disposed) throw new Error('Reopen the chat before starting AutoType.');
-      if (status === 'running') throw new Error('Stop the current typing run first.');
+      if (status === 'running' || status === 'sending') throw new Error('Wait for the current run to finish or stop it first.');
       if (!allowed()) throw new Error('Open the chat and resume AutoText before starting.');
       if (typeof text !== 'string' || !text.trim()) throw new Error('Enter the message you want AutoType to type.');
       const normalized = text.replace(/\r\n?/g, '\n');
       const initial = read();
       if (typeof initial !== 'string') throw new Error('Could not read the current message box.');
       if (initial.length + normalized.length > maxLength()) throw new Error('Your message plus the current draft exceeds the message limit. Shorten it or clear the message box first.');
+      if (settings.autoSend === true && typeof send !== 'function') throw new Error('Auto-send is unavailable on this Discord version. Turn it off to type normally.');
       const speed = Number(milliseconds);
       interval = Number.isFinite(speed) ? Math.max(25, Math.min(500, speed)) : 70;
-      clearTimer(); chunks = typingCharacters(normalized); position = 0; total = chunks.length;
+      clearTimer(); runId++; autoSend = settings.autoSend === true; sendIssued = false;
+      chunks = typingCharacters(normalized); position = 0; total = chunks.length;
       expected = initial; pending = null; status = 'running'; message = 'Typing your prepared message…';
       announce(); later(400); return state();
     },
     observe(text, selection) {
-      if (status !== 'running' || disposed) return;
+      if (disposed) return;
+      if (status === 'sending') {
+        if (text !== expected) finish('done', 'Auto-send requested. Check the chat for delivery.');
+        return;
+      }
+      if (status !== 'running') return;
       if (selection && (selection.start !== text.length || selection.end !== text.length)) {
         stop('Stopped because you moved the cursor.'); return;
       }

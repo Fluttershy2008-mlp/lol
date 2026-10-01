@@ -1,6 +1,6 @@
 # AutoText for Revenge
 
-Automatically type a prepared message into Discord **letter by letter**. Paste your full message, choose a speed, and watch it appear in the chat composer. Bullet points, emojis and line breaks are preserved. You tap Send yourself.
+Automatically type a prepared message into Discord **letter by letter**. Paste your full message, choose a speed, and watch it appear in the chat composer. Bullet points, emojis and line breaks are preserved. Choose whether to leave the result as a draft or automatically send the complete message once when typing finishes.
 
 Built for Revenge's Vendetta-compatible mobile plugins. No AI service, account token or API key is needed.
 
@@ -14,22 +14,33 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/
 
 Enable AutoText, then reopen a chat. The compact AutoText bar appears inside the composer, above the typing row. Tap **AutoType** to prepare the message you want typed.
 
-Updating from 1.0.x: update the plugin to **1.1.0**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
+Updating from an earlier version: update the plugin to **1.2.0**, then fully restart Revenge. Keep plugin updates enabled. Your saved phrases stay in place.
 
 ## Automatic typing
 
 1. Open the chat where you want to type.
 2. Tap **▶ AutoType** in the message box.
 3. Paste or enter your full message in **Message to type**. Multiline bullet lists work as entered.
-4. Choose **Slow**, **Normal**, or **Fast**, then tap **Start typing**.
-5. Watch the message appear character by character. Tap **■ Stop** to stop early.
-6. Review the finished message and tap Discord's **Send** button yourself.
+4. Choose **Slow**, **Normal**, or **Fast**.
+5. For automatic sending, turn on **Auto-send when finished**, then tap **Start typing & send**. Otherwise tap **Start typing**.
+6. Watch the message appear character by character. Tap **■ Stop** to stop early and cancel pending auto-send.
+7. With auto-send on, the full draft is submitted once after the last character. With it off, tap Discord's **Send** button yourself.
 
 The text is appended to the end of the current draft; clear the message box first if you want to start empty. Stopping keeps the partial draft. Starting again begins a new run with the prepared text, so clear or edit the message box before repeating it.
 
 Speeds are approximately 150, 70 and 25 milliseconds per visible character, with a short initial delay so the editor can close. Discord's native updates may slow this down. AutoType waits for confirmation before inserting another character and stops if the composer cannot confirm an edit.
 
-It stops on manual edits, cursor movement, channel/account changes, backgrounding, plugin unload, or a user-initiated Send. It never starts another message automatically. The prepared message is held only in memory for the current composer; only your selected speed is saved.
+It stops on manual edits, cursor movement, channel/account changes, backgrounding, plugin unload, or a user-initiated Send. It never starts another message automatically. The prepared message is held only in memory for the current composer; your selected speed and auto-send preference are saved.
+
+### Auto-send behavior
+
+Auto-send is off initially. Your selection is remembered after starting a run. The button says **Start typing & send** and the typing bar shows **Auto-send on** when enabled.
+
+It sends the **whole current draft once**, including any existing text, replies and attachments. It does not split the message at sentence endings or between bullet points. The final native text update must be confirmed, and the active account, channel and exact draft are checked again immediately before submitting.
+
+The plugin uses the composer's normal `handleSend()` action. Discord's usual validation and reply/attachment handling apply. Stop, cursor movement, manual edits, leaving the chat, backgrounding, disabling the plugin, or manually tapping Send cancels a pending automatic submission. Once the native Send action has been called, stopping cannot recall it.
+
+Automatic sending is never retried. The status reports that sending was requested, rather than claiming server delivery. If the draft remains or Discord reports an error, check the chat before sending manually. If the composer lacks the supported send action, the plugin explains that auto-send is unavailable and lets you turn it off.
 
 The whole run is checked against your available message length before starting. Emoji sequences and common combined characters are typed together. Existing shortcut expansion and automatic bullet continuation are suspended during a run so the prepared message stays literal.
 
@@ -65,7 +76,7 @@ Version 1.0.1 puts the toolbar inside the measured floating input column, rather
 
 Discord can change these internal APIs. If the bar is missing, reopen the chat or restart Revenge and check the status in AutoText settings. If the live composer is unsupported, settings still include a practice editor and **Copy draft** button. No message is sent by using that editor.
 
-Automated tests cover automatic typing speed, literal multiline messages, Stop, delayed native acknowledgments, emoji clusters, user-initiated Send, backgrounding, text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.1.0 update has not yet been verified in a physical Android/Revenge session.**
+Automated tests cover optional auto-send, final-character acknowledgment, single submission, native send failures, cancellation immediately before submission, automatic typing speed, literal multiline messages, Stop, delayed native acknowledgments, emoji clusters, user-initiated Send, backgrounding, text formatting, stale-draft protection, rapid typing, native event echoes, native-only input events, cursor movement, toolbar placement within a floating composer, unload cleanup, settings phrase editing, loader evaluation and the manifest hash. **The 1.2.0 update has not yet been verified in a physical Android/Revenge session.**
 
 ## Development
 

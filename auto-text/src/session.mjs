@@ -4,7 +4,7 @@ import { createTyper } from './typer.mjs';
 
 // One session belongs to one mounted composer. No drafts are stored here persistently.
 export function createSession({ target, patcher, options, phrases, maxLength, allowed = () => true, changed = () => {}, report = () => {}, schedule = setTimeout, cancel = clearTimeout }) {
-  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null;
+  let disposed = false, writing = false, timer = null, revision = 0, undo = null, typer = null, autoSending = false;
   const read = () => {
     const value = target.getText();
     return typeof value === 'string' ? value : null;
@@ -21,7 +21,7 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
   }
   function apply(edit, expected, recordUndo = true, fromTyper = false) {
     if (disposed || !allowed() || !options().enabled || writing || read() !== expected) return false;
-    if (typer?.state.running && !fromTyper) return false;
+    if (typer?.state.busy && !fromTyper) return false;
     const result = applyEdit(expected, edit);
     if (result.length > maxLength() || result === expected) return false;
     clearPending();
@@ -42,7 +42,7 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
-    if (typer?.state.running) {
+    if (typer?.state.busy) {
       // Prepared messages must be copied literally. Do not expand ;shortcuts
       // or manufacture an extra bullet when the runner types a newline.
       typer.observe(next, selection); clearPending(); announce(); return;
@@ -78,19 +78,28 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   typer = createTyper({ read, allowed: () => !disposed && allowed() && options().enabled, maxLength,
     insert: (char, expected) => apply({ start: expected.length, end: expected.length, insert: char }, expected, false, true),
+    send: typeof target.handleSend === 'function' ? expected => {
+      // Re-check the exact composer and text immediately before the only send
+      // call. Use Discord's normal validation/reply/attachment path.
+      if (disposed || !allowed() || !options().enabled || read() !== expected) throw new Error('The active draft changed.');
+      autoSending = true;
+      try { return target.handleSend(); }
+      finally { autoSending = false; }
+    } : undefined,
     changed: announce, schedule, cancel });
-  // Stop before a user-initiated Send, if this ref exposes that action. This
-  // never invokes the action itself and never modifies the outgoing message.
+  // A manual Send cancels pending auto-send. The single authorized completion
+  // call passes through without treating itself as a user interruption.
   let unpatchSend = () => {};
   if (typeof target.handleSend === 'function' && typeof patcher.before === 'function') {
-    unpatchSend = patcher.before('handleSend', target, () => { typer.stop('Stopped because you tapped Send.'); });
+    unpatchSend = patcher.before('handleSend', target, () => { if (!autoSending) typer.stop('Stopped because you tapped Send.'); });
   }
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
     get typing() { return typer.state; },
-    startTyping(text, interval) { clearPending(); undo = null; return typer.start(text, interval); },
+    get canAutoSend() { return typeof target.handleSend === 'function'; },
+    startTyping(text, interval, settings) { clearPending(); undo = null; return typer.start(text, interval, settings); },
     stopTyping(reason) { typer.stop(reason); },
     observeNative(event) {
       const data = event?.nativeEvent ?? event;
