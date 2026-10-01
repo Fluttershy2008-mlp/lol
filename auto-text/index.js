@@ -554,7 +554,7 @@ function createPlugin(api) {
       h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 70 } },
         label('AutoText', colors, { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
         small('Automatically type a prepared message, letter by letter. Open a chat → AutoType → paste your text → Start typing.'),
-        small('Choose Slow, Normal or Fast. Bullet points and line breaks are preserved. Enable Auto-send when finished to send the complete message once after typing.'),
+        small('Choose Very slow, Slow, Normal or Fast. Bullet points and line breaks are preserved. Enable Auto-send when finished to send the complete message once after typing.'),
         onClose ? button('Back to chat', onClose, colors) : null,
         small(active ? connection : 'Plugin disabled. Enable AutoText to connect live typing.'),
         ...[
@@ -602,7 +602,7 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.2.0'),
+        small('Version 1.2.1'),
       ));
   }
 
@@ -612,7 +612,7 @@ function createPlugin(api) {
     const [open, setOpen] = React.useState(false);
     const [typingOpen, setTypingOpen] = React.useState(false);
     const [prepared, setPrepared] = React.useState('');
-    const [typingSpeed, setTypingSpeed] = React.useState(() => [150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
+    const [typingSpeed, setTypingSpeed] = React.useState(() => [500, 150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
     const [typingError, setTypingError] = React.useState('');
     const [autoSend, setAutoSend] = React.useState(() => storage.autoSend === true);
     const sessionRef = React.useRef(null);
@@ -712,7 +712,7 @@ function createPlugin(api) {
               label(`${prepared.length} characters · ${text.length} already in the message box`, colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
               label('Typing speed', colors, { fontWeight: '700', marginTop: 20 }),
               h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap' } },
-                ...[[150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
+                ...[[500, 'Very slow'], [150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
                   () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
                     accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
               h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },

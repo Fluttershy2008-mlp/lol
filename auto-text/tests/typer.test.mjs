@@ -45,7 +45,7 @@ test('types a prepared multiline list literally, one visible character at a time
   assert.equal(h.tasks.size, 0);
 });
 test('speed setting controls the interval and existing drafts are preserved', () => {
-  for (const speed of [25, 70, 150]) {
+  for (const speed of [25, 70, 150, 500]) {
     const h = harness({ initial: 'Hello ' }); h.typer.start('world', speed); h.all();
     assert.equal(h.read(), 'Hello world');
     assert.equal(h.inserted[0].time, 400);
