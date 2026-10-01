@@ -11,29 +11,43 @@
     const { showToast } = vendetta.ui.toasts;
     const { findInReactTree } = vendetta.utils;
 
-    const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
-    const ActionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow;
-    const ContextMenus = findByProps("showContextMenu", "hideContextMenu");
-    const MediaModal = findByProps("openMediaModal");
+    let LazyActionSheet, ActionSheetRow, ContextMenus, MediaModal, imageIcon;
+    let UserStore, UserProfileStore, GuildMemberStore, GuildStore, ChannelStore;
 
-    const IconUtils =
-        findByProps("getUserAvatarURL", "getGuildIconURL")
-        ?? findByProps("getUserAvatarURL", "getGuildBannerURL");
+    function optional(resolve) {
+        try { return resolve(); } catch { return undefined; }
+    }
 
-    const UserStore = findByStoreName("UserStore");
-    const UserProfileStore = findByStoreName("UserProfileStore");
-    const GuildMemberStore = findByStoreName("GuildMemberStore");
-    const GuildStore = findByStoreName("GuildStore");
-    const ChannelStore = findByStoreName("ChannelStore");
+    function resolveModules() {
+        LazyActionSheet = optional(() => findByProps("openLazy", "hideActionSheet"));
+        ActionSheetRow = optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);
+        ContextMenus = optional(() => findByProps("showContextMenu"));
+        MediaModal = optional(() => findByProps("openMediaModal"));
+        UserStore = optional(() => findByStoreName("UserStore"));
+        UserProfileStore = optional(() => findByStoreName("UserProfileStore"));
+        GuildMemberStore = optional(() => findByStoreName("GuildMemberStore"));
+        GuildStore = optional(() => findByStoreName("GuildStore"));
+        ChannelStore = optional(() => findByStoreName("ChannelStore"));
+        imageIcon = ["ImageIcon", "ic_image", "ic_image_24px", "ic_gallery_24px"]
+            .map(name => optional(() => getAssetIDByName(name)))
+            .find(id => id != null);
+    }
 
-    const imageIcon =
-        getAssetIDByName("ImageIcon")
-        ?? getAssetIDByName("ic_image")
-        ?? getAssetIDByName("ic_image_24px")
-        ?? getAssetIDByName("ic_gallery_24px");
+    // Discord can split URL helpers between modules. Resolve each independently;
+    // missing helpers must not prevent the entire plugin from starting.
+    function iconUrl(name, ...args) {
+        return optional(() => findByProps(name)?.[name]?.(...args));
+    }
+
+    function cdnUrl(path, hash) {
+        if (!hash) return null;
+        return `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "webp"}?size=4096`;
+    }
 
     const unpatches = [];
-    const patchedLazyModules = new WeakSet();
+    let lazyContexts = new WeakMap();
+    let active = false;
+    let generation = 0;
 
     function logError(...args) {
         try {
@@ -109,7 +123,10 @@
         const openFallback = () => {
             try {
                 if (ReactNative?.Linking?.openURL) {
-                    ReactNative.Linking.openURL(uri);
+                    Promise.resolve(ReactNative.Linking.openURL(uri)).catch(error => {
+                        logError("Browser fallback failed", error);
+                        toast(`Couldn't open ${label.toLowerCase()}`);
+                    });
                     return;
                 }
             } catch (error) {
@@ -190,7 +207,7 @@
         if (!banner || !userId) return null;
 
         try {
-            const url = IconUtils?.getUserBannerURL?.({
+            const url = iconUrl("getUserBannerURL", {
                 id: userId,
                 banner,
                 canAnimate: true,
@@ -216,15 +233,13 @@
         if (!decoration) return null;
 
         try {
-            if (IconUtils?.getAvatarDecorationURL) {
-                const url = IconUtils.getAvatarDecorationURL({
-                    avatarDecoration: decoration,
-                    avatarDecorationData: decoration,
-                    size: 1024,
-                    canAnimate: true,
-                });
-                if (url) return url;
-            }
+            const url = iconUrl("getAvatarDecorationURL", {
+                avatarDecoration: decoration,
+                avatarDecorationData: decoration,
+                size: 1024,
+                canAnimate: true,
+            });
+            if (url) return url;
         } catch {}
 
         const asset = safeString(decoration?.asset) ?? safeString(decoration?.hash);
@@ -234,12 +249,13 @@
     }
 
     function userTargets(user, guildId, suppliedProfile) {
-        if (!user?.id || !IconUtils) return [];
+        if (!user?.id) return [];
         const profile = resolveProfile(user, guildId, suppliedProfile);
         const targets = [];
 
         try {
-            const avatar = IconUtils.getUserAvatarURL?.(user, true);
+            const avatar = iconUrl("getUserAvatarURL", user, true)
+                ?? cdnUrl(`avatars/${user.id}`, safeString(user.avatar));
             if (avatar) targets.push({ label: "Avatar", url: avatar, width: 512, height: 512 });
         } catch {}
 
@@ -251,13 +267,13 @@
         if (guildId) {
             try {
                 const member = GuildMemberStore?.getMember?.(guildId, user.id);
-                if (member?.avatar && IconUtils.getGuildMemberAvatarURLSimple) {
-                    const serverAvatar = IconUtils.getGuildMemberAvatarURLSimple({
+                if (member?.avatar) {
+                    const serverAvatar = iconUrl("getGuildMemberAvatarURLSimple", {
                         userId: user.id,
                         avatar: member.avatar,
                         guildId,
                         canAnimate: true,
-                    });
+                    }) ?? cdnUrl(`guilds/${guildId}/users/${user.id}/avatars`, safeString(member.avatar));
                     if (serverAvatar) {
                         targets.push({ label: "Server Avatar", url: serverAvatar, width: 512, height: 512 });
                     }
@@ -280,23 +296,24 @@
     }
 
     function guildTargets(guild) {
-        if (!guild?.id || !IconUtils) return [];
+        if (!guild?.id) return [];
         const targets = [];
 
         if (guild.icon) {
             try {
-                const icon = IconUtils.getGuildIconURL?.({
+                const icon = iconUrl("getGuildIconURL", {
                     id: guild.id,
                     icon: guild.icon,
                     canAnimate: true,
-                });
+                }) ?? cdnUrl(`icons/${guild.id}`, safeString(guild.icon));
                 if (icon) targets.push({ label: "Server Icon", url: icon, width: 512, height: 512 });
             } catch {}
         }
 
         if (guild.banner) {
             try {
-                const banner = IconUtils.getGuildBannerURL?.(guild, true);
+                const banner = iconUrl("getGuildBannerURL", guild, true)
+                    ?? cdnUrl(`banners/${guild.id}`, safeString(guild.banner));
                 if (banner) targets.push({ label: "Server Banner", url: banner, width: 1024, height: 400 });
             } catch {}
         }
@@ -305,9 +322,10 @@
     }
 
     function channelTargets(channel) {
-        if (!channel?.id || !channel?.icon || !IconUtils?.getChannelIconURL) return [];
+        if (!channel?.id || !channel?.icon) return [];
         try {
-            const icon = IconUtils.getChannelIconURL(channel);
+            const icon = iconUrl("getChannelIconURL", channel)
+                ?? cdnUrl(`channel-icons/${channel.id}`, safeString(channel.icon));
             return icon ? [{ label: "Group DM Icon", url: icon, width: 512, height: 512 }] : [];
         } catch {
             return [];
@@ -557,11 +575,18 @@
         if (typeof LazyActionSheet?.openLazy !== "function" || !ActionSheetRow) return;
 
         const unpatchOpen = before("openLazy", LazyActionSheet, ([componentPromise, sheetKey, props]) => {
-            const targets = targetsFromLazyProps(sheetKey, props ?? {});
-            if (!targets.length || !componentPromise?.then) return;
+            const targets = optional(() => targetsFromLazyProps(sheetKey, props ?? {}));
+            if (!componentPromise?.then) return;
+            const currentGeneration = generation;
 
             Promise.resolve(componentPromise).then(module => {
-                if (!module || patchedLazyModules.has(module)) return;
+                if (!active || currentGeneration !== generation || !module) return;
+                const alreadyPatched = lazyContexts.has(module);
+                if (alreadyPatched) {
+                    lazyContexts.set(module, { sheetKey, targets: targets ?? [] });
+                    return;
+                }
+                if (!targets?.length) return;
 
                 const exportValue = module.default;
                 const holder =
@@ -574,22 +599,19 @@
                                 : null;
 
                 if (!holder) return;
-                patchedLazyModules.add(module);
 
-                let unpatchRender;
-                unpatchRender = after(holder.method, holder.object, (_, rendered) => {
+                const unpatchRender = after(holder.method, holder.object, (_, rendered) => {
                     try {
-                        // Only inject while this particular sheet is being mounted.
-                        injectRows(rendered, targets, String(sheetKey ?? ""));
-                        React.useEffect?.(() => () => {
-                            try { unpatchRender?.(); } catch {}
-                            patchedLazyModules.delete(module);
-                        }, []);
+                        const context = lazyContexts.get(module);
+                        if (active && context) {
+                            injectRows(rendered, context.targets, String(context.sheetKey ?? ""));
+                        }
                     } catch (error) {
                         logError("Action sheet row injection failed", error);
                     }
                 });
 
+                lazyContexts.set(module, { sheetKey, targets });
                 unpatches.push(unpatchRender);
             }).catch(error => logError("Failed to resolve action sheet", error));
         });
@@ -598,20 +620,24 @@
     }
 
     function onLoad() {
-        if (!IconUtils) {
-            throw new Error("ViewIcons: Discord's icon URL module was not found on this build");
-        }
+        if (active) return;
+        active = true;
+        generation++;
+        resolveModules();
 
-        patchUserProfileMenus();
-        patchContextMenus();
-        patchLazyActionSheets();
-        toast("ViewIcons enabled");
+        for (const patch of [patchUserProfileMenus, patchContextMenus, patchLazyActionSheets]) {
+            try { patch(); } catch (error) { logError("Optional menu patch unavailable", error); }
+        }
+        toast(unpatches.length ? "ViewIcons enabled" : "ViewIcons: no supported menus found on this Discord build");
     }
 
     function onUnload() {
+        active = false;
+        generation++;
         for (const unpatch of unpatches.splice(0).reverse()) {
             try { unpatch?.(); } catch (error) { logError("Failed to unpatch", error); }
         }
+        lazyContexts = new WeakMap();
     }
 
     return { onLoad, onUnload };
