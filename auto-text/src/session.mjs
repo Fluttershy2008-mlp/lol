@@ -9,7 +9,7 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     return typeof value === 'string' ? value : null;
   };
   let current = read();
-  if (current === null || typeof target.insertText !== 'function' || typeof target.handleTextChanged !== 'function') {
+  if (current === null || typeof target.insertText !== 'function') {
     throw new Error('This composer does not expose the supported text editing methods.');
   }
   const announce = () => { try { changed(); } catch {} };
@@ -36,11 +36,15 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
     } finally { writing = false; announce(); }
     return true;
   }
-  const unpatch = patcher.after('handleTextChanged', target, args => {
-    if (disposed || typeof args[0] !== 'string') return;
-    const next = args[0];
+  function observe(next, selection) {
+    if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
+    if (selection && (selection.start !== next.length || selection.end !== next.length)) {
+      clearPending();
+      if (next !== previous) undo = null;
+      announce(); return;
+    }
     if (writing || next === previous) { announce(); return; }
     clearPending();
     undo = null;
@@ -59,11 +63,23 @@ export function createSession({ target, patcher, options, phrases, maxLength, al
       }
     }
     announce();
-  });
+  }
+  // Older versions call this public ref method for every edit. Newer builds
+  // can bypass it, so the native onSelectionOrTextChange event is also wired
+  // by the composer adapter. Duplicate events remain harmless.
+  const unpatch = typeof target.handleTextChanged === 'function'
+    ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
+    observeNative(event) {
+      const data = event?.nativeEvent ?? event;
+      if (typeof data?.text !== 'string') return;
+      const selection = Number.isInteger(data.start) && Number.isInteger(data.end)
+        ? { start: data.start, end: data.end } : null;
+      observe(data.text, selection);
+    },
     undo() {
       if (!undo) return false;
       const saved = undo;

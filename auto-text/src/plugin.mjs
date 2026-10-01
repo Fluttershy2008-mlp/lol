@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 import { DEFAULT_OPTIONS, cleanPhrases, validatePhrase, automaticEdit, applyEdit, suggestionsFor, startList } from './core.mjs';
 import { createSession } from './session.mjs';
+import { decorateComposer } from './composer.mjs';
 
 export function createPlugin(api) {
   const { React, ReactNative: RN } = api.metro.common;
@@ -10,6 +11,7 @@ export function createPlugin(api) {
   let active = false, rootUnpatch = null, retry = null, attempts = 0;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
+  const sessionsByRef = new Map();
   const tell = () => { for (const listener of listeners) { try { listener(); } catch {} } };
   const getOptions = () => ({ ...DEFAULT_OPTIONS, ...storage.options });
   const getPhrases = () => cleanPhrases(storage.phrases);
@@ -102,7 +104,8 @@ export function createPlugin(api) {
         ...[
           ['enabled', 'Typing assistance', 'Pause or resume AutoText.'],
           ['suggestions', 'Saved-phrase suggestions', 'Tap a suggestion to finish a saved phrase. Start with three letters or a shortcut like ;br.'],
-          ['shortcuts', 'Expand shortcuts', 'Type a complete shortcut followed by a space. Example: ;brb → Be right back!'],
+          ['shortcuts', 'Expand shortcuts', 'Example: ;brb → Be right back! You can also tap a suggestion.'],
+          ['expandOnMatch', 'Expand without a space', 'Expand a complete shortcut as soon as you finish typing it. Shared prefixes wait for a space or a suggestion tap.'],
           ['bullets', 'Continue lists', 'Enter adds the next bullet or number. Enter on an empty item ends the list.'],
         ].map(([key, title, hint]) => h(RN.View, { key, style: card },
           h(RN.View, { style: { flexDirection: 'row', alignItems: 'center' } },
@@ -130,7 +133,7 @@ export function createPlugin(api) {
               } },
             ]), colors)))),
         label('Try it here', colors, { fontSize: 20, fontWeight: '700', marginTop: 24 }),
-        small('A practice editor. Type ;brb and a space, or type - First point and press Enter. You can also copy a finished draft from here.'),
+        small('A practice editor. Type ;brb, or type - First point and press Enter. You can also copy a finished draft from here.'),
         input('Practice draft', practice, practiceChange, { multiline: true, maxLength: maxLength(), placeholder: '- First point' }),
         ...suggestionsFor(practice, phrases, options.enabled && options.suggestions).map(p => button(p.text.slice(0, 90), () => practiceApply(p), colors, { key: p.shortcut })),
         h(RN.View, { style: row },
@@ -143,7 +146,7 @@ export function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.0.0'),
+        small('Version 1.0.1'),
       ));
   }
 
@@ -162,6 +165,7 @@ export function createPlugin(api) {
       const release = () => {
         const session = sessionRef.current;
         if (session) { session.dispose(); sessions.delete(session); }
+        if (sessionsByRef.get(inputRef) === session) sessionsByRef.delete(inputRef);
         sessionRef.current = null;
       };
       const bind = () => {
@@ -173,7 +177,7 @@ export function createPlugin(api) {
         try {
           const session = createSession({ target: next, patcher: api.patcher, options: getOptions, phrases: getPhrases,
             maxLength, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
-          sessionRef.current = session; sessions.add(session);
+          sessionRef.current = session; sessions.add(session); sessionsByRef.set(inputRef, session);
           connection = 'Connected to the chat composer.'; tell(); render(n => n + 1);
         } catch { issue(); }
       };
@@ -197,15 +201,24 @@ export function createPlugin(api) {
       } catch { issue(); }
     };
     const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions);
-    return h(RN.View, { style: { backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 8, paddingBottom: 5 } },
-      suggestions.length ? h(RN.ScrollView, { horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false },
-        ...suggestions.map(p => button(p.text.replace(/\n/g, ' · ').slice(0, 80), () => useEdit(p), colors, { key: p.shortcut, accessibilityLabel: 'Insert phrase ' + p.shortcut }))) : null,
-      h(RN.ScrollView, { horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false },
-        options.enabled && session ? button('+ Bullet', () => useEdit(startList(text)), colors) : null,
-        options.enabled && session ? button('+ Number', () => useEdit(startList(text, true)), colors) : null,
-        options.enabled && session?.canUndo ? button('Undo', () => { try { session.undo(); } catch { issue(); } }, colors) : null,
-        button('Phrases', () => setOpen(true), colors),
-        button(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled), colors)),
+    const compactButton = (title, onPress, accessibleName = title, key) => h(Button, {
+      key, onPress, activeOpacity: 0.7, accessibilityRole: 'button', accessibilityLabel: accessibleName,
+      style: { height: 44, justifyContent: 'center', paddingHorizontal: 10, flexShrink: 0 },
+    }, label(title, colors, { color: colors.accent, fontSize: 13, lineHeight: 18, fontWeight: '600' }, { numberOfLines: 1, maxFontSizeMultiplier: 1.2 }));
+    const stripProps = {
+      horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false,
+      style: { height: 44, maxHeight: 44, flexGrow: 0, flexShrink: 0 },
+      contentContainerStyle: { alignItems: 'center' },
+    };
+    return h(RN.View, { testID: 'auto-text-toolbar', style: { flexGrow: 0, flexShrink: 0, alignSelf: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: 4 } },
+      suggestions.length ? h(RN.ScrollView, stripProps,
+        ...suggestions.map(p => compactButton(p.text.replace(/\n/g, ' · ').slice(0, 70), () => useEdit(p), 'Insert phrase ' + p.shortcut, p.shortcut))) : null,
+      h(RN.ScrollView, stripProps,
+        options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
+        options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
+        options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
+        compactButton('Phrases', () => setOpen(true)),
+        compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled))),
       open ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setOpen(false) },
         h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
           h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
@@ -244,8 +257,17 @@ export function createPlugin(api) {
             const inputRef = args[0]?.chatInputRef ?? findInput(result);
             if (!inputRef) return;
             const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
-            return h(React.Fragment, null,
-              h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId })), result);
+            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId }));
+            const decorated = decorateComposer(React, RN, result, {
+              toolbar,
+              onNativeEvent: event => {
+                if (active) sessionsByRef.get(inputRef)?.observeNative(event);
+              },
+            });
+            if (!decorated.hasToolbar) connection = 'This composer layout is not supported. The practice editor in AutoText settings can prepare and copy a draft.';
+            // Never fall back to the old sibling layout: floating composers
+            // paint over it. Unsupported layouts retain Discord's original UI.
+            return decorated.tree;
           } catch { /* A missing hook must never break Discord's composer. */ }
         });
         connection = 'Composer hook ready. Reopen your chat if the AutoText bar is not visible.'; tell(); return;
@@ -271,6 +293,7 @@ export function createPlugin(api) {
       mountCleanups.clear();
       for (const session of sessions) { try { session.dispose(); } catch {} }
       sessions.clear();
+      sessionsByRef.clear();
       try { rootUnpatch?.(); } catch {}
       rootUnpatch = null; tell(); listeners.clear();
     },

@@ -5,7 +5,7 @@ export const DEFAULT_PHRASES = [
   { shortcut: ';hello', text: 'Hello everyone! How are you doing?' },
   { shortcut: ';rules', text: '- Be respectful.\n- Keep the chat friendly.\n- Have fun!' },
 ];
-export const DEFAULT_OPTIONS = { enabled: true, bullets: true, shortcuts: true, suggestions: true };
+export const DEFAULT_OPTIONS = { enabled: true, bullets: true, shortcuts: true, suggestions: true, expandOnMatch: true };
 
 export function validatePhrase(phrase, others = [], oldShortcut = null) {
   const shortcut = String(phrase?.shortcut ?? '').trim().toLowerCase();
@@ -74,7 +74,7 @@ export function textEdit(before, after) {
 
 export function automaticEdit(previous, next, options, phrases, maxLength = 2000) {
   if (!options.enabled || typeof previous !== 'string' || typeof next !== 'string') return null;
-  // Only a single space or newline appended by the keyboard triggers edits.
+  // Only a single character appended by the keyboard triggers edits.
   // Pasting, deleting, selecting/replacing, and editing earlier lines are untouched.
   if (next.length !== previous.length + 1 || !next.startsWith(previous) || inCode(previous)) return null;
   const typed = next.slice(-1);
@@ -97,6 +97,17 @@ export function automaticEdit(previous, next, options, phrases, maxLength = 2000
     if (token) {
       const phrase = phrases.find(p => p.shortcut === token[1].toLowerCase());
       if (phrase) edit = { start: previous.length - token[1].length, end: next.length, insert: phrase.text + ' ' };
+    }
+  } else if (options.shortcuts && options.expandOnMatch && /[a-zA-Z0-9_-]/.test(typed)) {
+    const token = /(?:^|\s)(;[a-zA-Z0-9_-]{1,30})$/.exec(next);
+    if (token) {
+      const key = token[1].toLowerCase();
+      const phrase = phrases.find(p => p.shortcut === key);
+      // Allow typing ;hello when ;he is also saved. Shared prefixes wait for
+      // a space or a suggestion tap instead of consuming the shorter token.
+      if (phrase && !phrases.some(p => p.shortcut !== key && p.shortcut.startsWith(key))) {
+        edit = { start: next.length - token[1].length, end: next.length, insert: phrase.text };
+      }
     }
   }
   return edit && applyEdit(next, edit).length <= maxLength ? edit : null;

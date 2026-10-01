@@ -7,7 +7,7 @@ const DEFAULT_PHRASES = [
   { shortcut: ';hello', text: 'Hello everyone! How are you doing?' },
   { shortcut: ';rules', text: '- Be respectful.\n- Keep the chat friendly.\n- Have fun!' },
 ];
-const DEFAULT_OPTIONS = { enabled: true, bullets: true, shortcuts: true, suggestions: true };
+const DEFAULT_OPTIONS = { enabled: true, bullets: true, shortcuts: true, suggestions: true, expandOnMatch: true };
 
 function validatePhrase(phrase, others = [], oldShortcut = null) {
   const shortcut = String(phrase?.shortcut ?? '').trim().toLowerCase();
@@ -76,7 +76,7 @@ function textEdit(before, after) {
 
 function automaticEdit(previous, next, options, phrases, maxLength = 2000) {
   if (!options.enabled || typeof previous !== 'string' || typeof next !== 'string') return null;
-  // Only a single space or newline appended by the keyboard triggers edits.
+  // Only a single character appended by the keyboard triggers edits.
   // Pasting, deleting, selecting/replacing, and editing earlier lines are untouched.
   if (next.length !== previous.length + 1 || !next.startsWith(previous) || inCode(previous)) return null;
   const typed = next.slice(-1);
@@ -99,6 +99,17 @@ function automaticEdit(previous, next, options, phrases, maxLength = 2000) {
     if (token) {
       const phrase = phrases.find(p => p.shortcut === token[1].toLowerCase());
       if (phrase) edit = { start: previous.length - token[1].length, end: next.length, insert: phrase.text + ' ' };
+    }
+  } else if (options.shortcuts && options.expandOnMatch && /[a-zA-Z0-9_-]/.test(typed)) {
+    const token = /(?:^|\s)(;[a-zA-Z0-9_-]{1,30})$/.exec(next);
+    if (token) {
+      const key = token[1].toLowerCase();
+      const phrase = phrases.find(p => p.shortcut === key);
+      // Allow typing ;hello when ;he is also saved. Shared prefixes wait for
+      // a space or a suggestion tap instead of consuming the shorter token.
+      if (phrase && !phrases.some(p => p.shortcut !== key && p.shortcut.startsWith(key))) {
+        edit = { start: next.length - token[1].length, end: next.length, insert: phrase.text };
+      }
     }
   }
   return edit && applyEdit(next, edit).length <= maxLength ? edit : null;
@@ -134,7 +145,7 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     return typeof value === 'string' ? value : null;
   };
   let current = read();
-  if (current === null || typeof target.insertText !== 'function' || typeof target.handleTextChanged !== 'function') {
+  if (current === null || typeof target.insertText !== 'function') {
     throw new Error('This composer does not expose the supported text editing methods.');
   }
   const announce = () => { try { changed(); } catch {} };
@@ -161,11 +172,15 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
     } finally { writing = false; announce(); }
     return true;
   }
-  const unpatch = patcher.after('handleTextChanged', target, args => {
-    if (disposed || typeof args[0] !== 'string') return;
-    const next = args[0];
+  function observe(next, selection) {
+    if (disposed || typeof next !== 'string') return;
     const previous = current;
     current = next;
+    if (selection && (selection.start !== next.length || selection.end !== next.length)) {
+      clearPending();
+      if (next !== previous) undo = null;
+      announce(); return;
+    }
     if (writing || next === previous) { announce(); return; }
     clearPending();
     undo = null;
@@ -184,11 +199,23 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
       }
     }
     announce();
-  });
+  }
+  // Older versions call this public ref method for every edit. Newer builds
+  // can bypass it, so the native onSelectionOrTextChange event is also wired
+  // by the composer adapter. Duplicate events remain harmless.
+  const unpatch = typeof target.handleTextChanged === 'function'
+    ? patcher.after('handleTextChanged', target, args => { observe(args[0]); }) : () => {};
   return {
     get text() { return current; },
     get canUndo() { return Boolean(undo && current === undo.after); },
     apply,
+    observeNative(event) {
+      const data = event?.nativeEvent ?? event;
+      if (typeof data?.text !== 'string') return;
+      const selection = Number.isInteger(data.start) && Number.isInteger(data.end)
+        ? { start: data.start, end: data.end } : null;
+      observe(data.text, selection);
+    },
     undo() {
       if (!undo) return false;
       const saved = undo;
@@ -201,6 +228,64 @@ function createSession({ target, patcher, options, phrases, maxLength, allowed =
 
 /* SPDX-License-Identifier: MIT */
 
+// Work only within the rendered chat-input subtree. In modern Discord the
+// input is a floating column, so a sibling above the guard lives OUTSIDE its
+// measured layout and can be covered by the text field.
+function decorateComposer(React, RN, root, { toolbar, onNativeEvent }) {
+  let floating = null, legacy = null, scanned = 0;
+  function scan(node) {
+    if (++scanned > 1500 || !node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) {
+      let found = false;
+      for (const child of node) found = scan(child) || found;
+      return found;
+    }
+    const props = node.props;
+    if (!props) return false;
+    const containsNative = scan(props.children) || typeof props.onSelectionOrTextChange === 'function';
+    if (containsNative) {
+      if (!floating && props.collapsable === false && typeof props.onStartShouldSetResponder === 'function'
+        && typeof props.onResponderRelease === 'function') floating = node;
+      if (!legacy && /LayoutOfInputContainer/.test(props.onLayout?.name ?? '')) legacy = node;
+    }
+    return containsNative;
+  }
+  scan(root);
+  const anchor = floating ?? legacy;
+  let eventCount = 0, toolbarCount = 0, mapped = 0;
+  function map(node) {
+    if (++mapped > 1500 || !node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) {
+      const next = node.map(map);
+      return next.every((child, i) => child === node[i]) ? node : next;
+    }
+    const props = node.props;
+    if (!props) return node;
+    const patch = {};
+    if (typeof props.onSelectionOrTextChange === 'function') {
+      const original = props.onSelectionOrTextChange;
+      patch.onSelectionOrTextChange = function (...args) {
+        const result = original.apply(this, args);
+        // The original handler first updates Discord's text/selection state.
+        try { onNativeEvent(args[0]); } catch {}
+        return result;
+      };
+      eventCount++;
+    }
+    const children = map(props.children);
+    if (children !== props.children) patch.children = children;
+    if (node === anchor && toolbarCount === 0) {
+      patch.children = [toolbar, ...(Array.isArray(children) ? children : [children])];
+      toolbarCount++;
+    }
+    return Object.keys(patch).length ? React.cloneElement(node, patch) : node;
+  }
+  const tree = map(root);
+  return { tree, hasEvents: eventCount > 0, hasToolbar: toolbarCount > 0 };
+}
+
+/* SPDX-License-Identifier: MIT */
+
 function createPlugin(api) {
   const { React, ReactNative: RN } = api.metro.common;
   const h = React.createElement;
@@ -209,6 +294,7 @@ function createPlugin(api) {
   let active = false, rootUnpatch = null, retry = null, attempts = 0;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
+  const sessionsByRef = new Map();
   const tell = () => { for (const listener of listeners) { try { listener(); } catch {} } };
   const getOptions = () => ({ ...DEFAULT_OPTIONS, ...storage.options });
   const getPhrases = () => cleanPhrases(storage.phrases);
@@ -301,7 +387,8 @@ function createPlugin(api) {
         ...[
           ['enabled', 'Typing assistance', 'Pause or resume AutoText.'],
           ['suggestions', 'Saved-phrase suggestions', 'Tap a suggestion to finish a saved phrase. Start with three letters or a shortcut like ;br.'],
-          ['shortcuts', 'Expand shortcuts', 'Type a complete shortcut followed by a space. Example: ;brb → Be right back!'],
+          ['shortcuts', 'Expand shortcuts', 'Example: ;brb → Be right back! You can also tap a suggestion.'],
+          ['expandOnMatch', 'Expand without a space', 'Expand a complete shortcut as soon as you finish typing it. Shared prefixes wait for a space or a suggestion tap.'],
           ['bullets', 'Continue lists', 'Enter adds the next bullet or number. Enter on an empty item ends the list.'],
         ].map(([key, title, hint]) => h(RN.View, { key, style: card },
           h(RN.View, { style: { flexDirection: 'row', alignItems: 'center' } },
@@ -329,7 +416,7 @@ function createPlugin(api) {
               } },
             ]), colors)))),
         label('Try it here', colors, { fontSize: 20, fontWeight: '700', marginTop: 24 }),
-        small('A practice editor. Type ;brb and a space, or type - First point and press Enter. You can also copy a finished draft from here.'),
+        small('A practice editor. Type ;brb, or type - First point and press Enter. You can also copy a finished draft from here.'),
         input('Practice draft', practice, practiceChange, { multiline: true, maxLength: maxLength(), placeholder: '- First point' }),
         ...suggestionsFor(practice, phrases, options.enabled && options.suggestions).map(p => button(p.text.slice(0, 90), () => practiceApply(p), colors, { key: p.shortcut })),
         h(RN.View, { style: row },
@@ -342,7 +429,7 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.0.0'),
+        small('Version 1.0.1'),
       ));
   }
 
@@ -361,6 +448,7 @@ function createPlugin(api) {
       const release = () => {
         const session = sessionRef.current;
         if (session) { session.dispose(); sessions.delete(session); }
+        if (sessionsByRef.get(inputRef) === session) sessionsByRef.delete(inputRef);
         sessionRef.current = null;
       };
       const bind = () => {
@@ -372,7 +460,7 @@ function createPlugin(api) {
         try {
           const session = createSession({ target: next, patcher: api.patcher, options: getOptions, phrases: getPhrases,
             maxLength, allowed: belongs, changed: () => { if (!closed) render(n => n + 1); }, report: issue });
-          sessionRef.current = session; sessions.add(session);
+          sessionRef.current = session; sessions.add(session); sessionsByRef.set(inputRef, session);
           connection = 'Connected to the chat composer.'; tell(); render(n => n + 1);
         } catch { issue(); }
       };
@@ -396,15 +484,24 @@ function createPlugin(api) {
       } catch { issue(); }
     };
     const suggestions = suggestionsFor(text, getPhrases(), options.enabled && options.suggestions);
-    return h(RN.View, { style: { backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 8, paddingBottom: 5 } },
-      suggestions.length ? h(RN.ScrollView, { horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false },
-        ...suggestions.map(p => button(p.text.replace(/\n/g, ' · ').slice(0, 80), () => useEdit(p), colors, { key: p.shortcut, accessibilityLabel: 'Insert phrase ' + p.shortcut }))) : null,
-      h(RN.ScrollView, { horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false },
-        options.enabled && session ? button('+ Bullet', () => useEdit(startList(text)), colors) : null,
-        options.enabled && session ? button('+ Number', () => useEdit(startList(text, true)), colors) : null,
-        options.enabled && session?.canUndo ? button('Undo', () => { try { session.undo(); } catch { issue(); } }, colors) : null,
-        button('Phrases', () => setOpen(true), colors),
-        button(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled), colors)),
+    const compactButton = (title, onPress, accessibleName = title, key) => h(Button, {
+      key, onPress, activeOpacity: 0.7, accessibilityRole: 'button', accessibilityLabel: accessibleName,
+      style: { height: 44, justifyContent: 'center', paddingHorizontal: 10, flexShrink: 0 },
+    }, label(title, colors, { color: colors.accent, fontSize: 13, lineHeight: 18, fontWeight: '600' }, { numberOfLines: 1, maxFontSizeMultiplier: 1.2 }));
+    const stripProps = {
+      horizontal: true, keyboardShouldPersistTaps: 'always', showsHorizontalScrollIndicator: false,
+      style: { height: 44, maxHeight: 44, flexGrow: 0, flexShrink: 0 },
+      contentContainerStyle: { alignItems: 'center' },
+    };
+    return h(RN.View, { testID: 'auto-text-toolbar', style: { flexGrow: 0, flexShrink: 0, alignSelf: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: 4 } },
+      suggestions.length ? h(RN.ScrollView, stripProps,
+        ...suggestions.map(p => compactButton(p.text.replace(/\n/g, ' · ').slice(0, 70), () => useEdit(p), 'Insert phrase ' + p.shortcut, p.shortcut))) : null,
+      h(RN.ScrollView, stripProps,
+        options.enabled && session ? compactButton('• List', () => useEdit(startList(text)), 'Start bullet list') : null,
+        options.enabled && session ? compactButton('1. List', () => useEdit(startList(text, true)), 'Start numbered list') : null,
+        options.enabled && session?.canUndo ? compactButton('Undo', () => { try { session.undo(); } catch { issue(); } }) : null,
+        compactButton('Phrases', () => setOpen(true)),
+        compactButton(options.enabled ? 'Pause' : 'Resume', () => setOption('enabled', !options.enabled))),
       open ? h(RN.Modal, { visible: true, animationType: 'slide', onRequestClose: () => setOpen(false) },
         h(RN.SafeAreaView ?? RN.View, { style: { flex: 1, backgroundColor: colors.bg } },
           h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
@@ -443,8 +540,17 @@ function createPlugin(api) {
             const inputRef = args[0]?.chatInputRef ?? findInput(result);
             if (!inputRef) return;
             const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
-            return h(React.Fragment, null,
-              h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId })), result);
+            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId }));
+            const decorated = decorateComposer(React, RN, result, {
+              toolbar,
+              onNativeEvent: event => {
+                if (active) sessionsByRef.get(inputRef)?.observeNative(event);
+              },
+            });
+            if (!decorated.hasToolbar) connection = 'This composer layout is not supported. The practice editor in AutoText settings can prepare and copy a draft.';
+            // Never fall back to the old sibling layout: floating composers
+            // paint over it. Unsupported layouts retain Discord's original UI.
+            return decorated.tree;
           } catch { /* A missing hook must never break Discord's composer. */ }
         });
         connection = 'Composer hook ready. Reopen your chat if the AutoText bar is not visible.'; tell(); return;
@@ -470,6 +576,7 @@ function createPlugin(api) {
       mountCleanups.clear();
       for (const session of sessions) { try { session.dispose(); } catch {} }
       sessions.clear();
+      sessionsByRef.clear();
       try { rootUnpatch?.(); } catch {}
       rootUnpatch = null; tell(); listeners.clear();
     },

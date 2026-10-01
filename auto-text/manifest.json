@@ -1,7 +1,7 @@
 {
   "name": "AutoText",
   "description": "Offline saved-phrase suggestions, text shortcuts and automatic bullet/numbered lists while you type. Never sends messages automatically.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -12,5 +12,5 @@
   "vendetta": {
     "icon": "PencilIcon"
   },
-  "hash": "ab9b7e0517175ca157a15f88b2d5ad9744b53714a684bc406170572b1f262c75"
+  "hash": "5b8717b76b90b30e87c2f5c08a0876b08eb6623ffdbe56478d02ad4425a025e6"
 }

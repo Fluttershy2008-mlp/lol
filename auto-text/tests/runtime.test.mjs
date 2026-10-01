@@ -10,6 +10,7 @@ function runtime({ missing = false } = {}) {
   const React = {
     Fragment: 'Fragment', Component: class { constructor(props) { this.props = props; } },
     createElement(type, props, ...children) { return { type, props: { ...props, children: children.length === 1 ? children[0] : children } }; },
+    cloneElement(element, props) { return { ...element, props: { ...element.props, ...props } }; },
     useState(initial) {
       const slot = index++, owner = hooks;
       if (!(slot in owner)) owner[slot] = typeof initial === 'function' ? initial() : initial;
@@ -28,13 +29,28 @@ function runtime({ missing = false } = {}) {
     return { render() { hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
   }
   let draft = '', account = 'user1', channel = 'channel1';
+  let liveTree;
+  const emitNative = (text, start = text.length, end = start) => {
+    const field = nodes(liveTree, n => typeof n.props?.onSelectionOrTextChange === 'function')[0];
+    assert(field, 'native field present');
+    field.props.onSelectionOrTextChange({ nativeEvent: { text, start, end } });
+  };
   const input = {
     getText: () => draft,
     handleTextChanged() {},
-    insertText(text, start, space, nodes, end) { draft = draft.slice(0, start) + text + draft.slice(end); input.handleTextChanged(draft); },
+    insertText(text, start, space, nodes, end) { emitNative(draft.slice(0, start) + text + draft.slice(end)); },
   };
   const inputRef = { current: input };
-  const holder = { default: () => React.createElement('Composer', { chatInputRef: inputRef }) };
+  // A floating composer under the guard, including an absolutely positioned
+  // accessories area. Native changes deliberately bypass handleTextChanged.
+  const holder = { default: () => React.createElement('View', { testID: 'composer-root', chatInputRef: inputRef },
+    React.createElement('View', { testID: 'accessories', style: { position: 'absolute', bottom: '100%' } }),
+    React.createElement('View', { testID: 'measured-container', onLayout: function handleLayoutOfInputContainer() {} },
+      React.createElement('View', { testID: 'floating-box', collapsable: false,
+        onStartShouldSetResponder() {}, onResponderRelease() {}, style: { flexDirection: 'column', overflow: 'hidden' } },
+        React.createElement('View', { testID: 'input-row', style: { flexDirection: 'row' } },
+          React.createElement('NativeInput', { onSelectionOrTextChange(event) { draft = event.nativeEvent.text; } }))))),
+  };
   const original = holder.default;
   const api = {
     plugin: { storage },
@@ -59,7 +75,8 @@ function runtime({ missing = false } = {}) {
     setInterval: fn => { intervals.set(++timerId, fn); return timerId; }, clearInterval: id => intervals.delete(id),
   });
   return { plugin, holder, original, patches, storage, host, timers, intervals, read: () => draft,
-    type(value) { draft = value; input.handleTextChanged(value); },
+    open() { liveTree = holder.default({ channel: { id: channel } }); return liveTree; },
+    type: emitNative,
     flush() { const pending = [...timers]; timers.clear(); pending.forEach(([, fn]) => fn()); },
     switchAccount() { account = 'user2'; },
   };
@@ -79,9 +96,10 @@ test('installable bundle is an expression with a matching manifest hash', () => 
 test('real bundle patches only the composer, mounts a bar, edits native text and fully unloads', () => {
   const r = runtime(); r.plugin.onLoad(); r.plugin.onLoad();
   assert.equal(r.patches.size, 1);
-  const tree = r.holder.default({ channel: { id: 'channel1' } });
-  assert.equal(tree.type, 'Fragment');
-  const bar = tree.props.children[0].props.children;
+  const tree = r.open();
+  assert.equal(tree.props.testID, 'composer-root');
+  const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
+  const bar = box.props.children[0].props.children;
   const host = r.host(bar.type, bar.props);
   host.render();
   assert.equal(r.patches.size, 2); assert.equal(r.intervals.size, 1);
@@ -89,10 +107,34 @@ test('real bundle patches only the composer, mounts a bar, edits native text and
   assert.equal(r.read(), '- test\n- ');
   const rendered = host.render();
   assert(nodes(rendered, n => n.props?.accessibilityLabel === 'Undo').length);
+  for (const strip of nodes(rendered, n => n.type === 'ScrollView')) {
+    assert.equal(strip.props.style.height, 44);
+    assert.equal(strip.props.style.flexGrow, 0);
+  }
   r.plugin.onUnload();
   assert.equal(r.patches.size, 0); assert.equal(r.intervals.size, 0); assert.equal(r.timers.size, 0);
   assert.equal(r.holder.default, r.original);
   assert.equal(host.render(), null);
+});
+test('a complete ;brb expands via native events without a trailing space', () => {
+  const r = runtime(); r.plugin.onLoad();
+  const tree = r.open();
+  const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
+  const bar = box.props.children[0].props.children;
+  const host = r.host(bar.type, bar.props); host.render();
+  for (const value of [';', ';b', ';br', ';brb']) { r.type(value); r.flush(); }
+  assert.equal(r.read(), 'Be right back!');
+  r.plugin.onUnload();
+});
+test('native selection movement cancels an automatic change before it runs', () => {
+  const r = runtime(); r.plugin.onLoad();
+  const tree = r.open();
+  const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
+  const bar = box.props.children[0].props.children;
+  r.host(bar.type, bar.props).render();
+  r.type(';br'); r.type(';brb'); r.type(';brb', 1); r.flush();
+  assert.equal(r.read(), ';brb');
+  r.plugin.onUnload();
 });
 test('missing composer support leaves settings usable and cancels retries on unload', () => {
   const r = runtime({ missing: true }); r.plugin.onLoad();

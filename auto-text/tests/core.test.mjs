@@ -40,6 +40,16 @@ test('shortcut expansion is explicit, case-insensitive and multiline-safe', () =
   assert.equal(type(';unknown', ' '), ';unknown ');
   assert.equal(type(';rules', ' '), phrases[3].text + ' ');
 });
+test('a completed shortcut expands without a space, but shared prefixes wait', () => {
+  assert.equal(type(';br', 'b'), 'Be right back!');
+  assert.equal(type('- ;t', 'y'), '- Thank you so much!');
+  assert.equal(type(';br', 'b', { ...options, expandOnMatch: false }), ';brb');
+  const shared = [{ shortcut: ';hi', text: 'Hi!' }, { shortcut: ';high', text: 'Higher!' }];
+  assert.equal(automaticEdit(';h', ';hi', options, shared), null);
+  const edit = automaticEdit(';hi', ';hi ', options, shared);
+  assert.equal(applyEdit(';hi ', edit), 'Hi! ');
+  assert.equal(automaticEdit('', ';brb', options, phrases), null);
+});
 test('options and message limits are enforced', () => {
   assert.equal(type('- item', '\n', { ...options, enabled: false }), '- item\n');
   assert.equal(type('- item', '\n', { ...options, bullets: false }), '- item\n');
