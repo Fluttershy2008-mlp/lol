@@ -10,6 +10,7 @@ function fixture() {
     GuildStore: { getGuilds: () => ({ 1: { id: '1' } }) },
     GuildChannelStore: { getChannels: () => ({ SELECTABLE: [{ channel: text }], VOCAL: [{ channel: voice }] }) },
     ActiveJoinedThreadsStore: { getActiveJoinedThreadsForGuild: () => ({ 101: { 103: { channel: thread } } }) },
+    ActiveThreadsStore: { getThreadsForGuild: () => ({}) },
     ReadStateStore: { hasUnread: () => true, getMentionCount: () => 0, lastMessageId: id => id + '000' },
     ChannelStore: { getMutablePrivateChannels: () => ({}) },
   };
@@ -25,13 +26,13 @@ test('collects server text, voice and joined thread reads with the original Venc
   assert.deepEqual(bulkReadEvent(result.channels), { type: 'BULK_ACK', context: 'APP', channels: result.channels });
 });
 
-test('ignores malformed private channels in a guild index, categories, forums, unjoined threads and mismatched guilds', () => {
+test('includes forums, media channels and unjoined threads but excludes categories and mismatched guilds', () => {
   const stores = fixture();
   stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: [
     ...[1, 3, 4, 14, 15, 16, 11].map((type, i) => ({ channel: { id: String(200 + i), guild_id: '1', type } })),
     { channel: { id: '300', guild_id: '2', type: 0 } },
   ] });
-  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['103']);
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['204', '205', '206', '103']);
 });
 
 test('deduplicates overlapping channel and joined thread lists without changing store objects', () => {
@@ -90,11 +91,12 @@ test('skips unavailable guilds and reports absent thread support', () => {
   const calls = [];
   stores.GuildChannelStore.getChannels = id => { calls.push(id); return { SELECTABLE: [] }; };
   delete stores.ActiveJoinedThreadsStore;
+  delete stores.ActiveThreadsStore;
   const result = collectUnread(stores);
   assert.deepEqual(calls, ['1']);
   assert.equal(result.channels.length, 0);
   assert.match(result.warnings.join(' '), /unavailable/);
-  assert.match(result.warnings.join(' '), /Joined-thread/);
+  assert.match(result.warnings.join(' '), /Thread tracking/);
 });
 
 test('includes unread DMs and group DMs, deduplicates lists and skips read or malformed private channels', () => {
@@ -164,4 +166,126 @@ test('unresolved private channel IDs are skipped and reported without inventing 
   const result = collectUnread(stores);
   assert.equal(result.channels.length, 3);
   assert.match(result.warnings.join(' '), /1 channel/);
+});
+
+test('forum/media new-post markers are included even when hasUnread is false and the forum was not opened', () => {
+  const stores = fixture();
+  const forum = { id: '300', guild_id: '1', type: 15, last_message_id: '1234567890123456789' };
+  const media = { id: '301', guild_id: '1', type: 16, lastMessageId: '1234567890123456790' };
+  // The visible index exists but omits both channels (collapsed/muted/not selected).
+  stores.ChannelStore.getMutableGuildChannelsForGuild = () => ({ 300: forum, 301: media });
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.lastMessageId = () => null;
+  stores.ReadStateStore.ackMessageId = () => '1234567890123456788';
+  assert.deepEqual(collectUnread(stores).channels, [
+    { channelId: '300', messageId: forum.last_message_id, readStateType: 0 },
+    { channelId: '301', messageId: media.lastMessageId, readStateType: 0 },
+  ]);
+});
+
+test('read forum markers are not repeatedly acked, including snowflakes above Number precision', () => {
+  const stores = fixture();
+  stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: [
+    { id: '300', guild_id: '1', type: 15, last_message_id: '1234567890123456789' },
+    { id: '301', guild_id: '1', type: 16, last_message_id: '1234567890123456788' },
+  ] });
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.lastMessageId = () => null;
+  stores.ReadStateStore.ackMessageId = () => '1234567890123456789';
+  assert.deepEqual(collectUnread(stores).channels, []);
+});
+
+test('unfollowed forum posts use forum unread predicates and channel last-message fallbacks', () => {
+  const stores = fixture();
+  stores.ActiveJoinedThreadsStore.getActiveUnjoinedThreadsForGuild = () => ({ 300: {
+    401: { channel: { id: '401', guild_id: '1', parent_id: '300', type: 11, last_message_id: '700' } },
+    402: { channel: { id: '402', guild_id: '1', parent_id: '300', type: 11, lastMessageId: '800' } },
+  } });
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.lastMessageId = () => null;
+  stores.ReadStateStore.isForumPostUnread = id => id === '401';
+  stores.ReadStateStore.isNewForumThread = (id, parent, guild) => id === '402' && parent === '300' && guild === '1';
+  assert.deepEqual(collectUnread(stores).channels, [
+    { channelId: '401', messageId: '700', readStateType: 0 },
+    { channelId: '402', messageId: '800', readStateType: 0 },
+  ]);
+});
+
+test('forum parent snapshot uses newest post creation ID, never the newer reply ID', () => {
+  const stores = fixture();
+  const forum = { id: '300', guild_id: '1', type: 15 };
+  stores.ChannelStore.getChannel = id => id === '300' ? forum : undefined;
+  const first = { id: '401', guild_id: '1', parent_id: '300', type: 11, last_message_id: '999' };
+  const second = { id: '402', guild_id: '1', parent_id: '300', type: 11, last_message_id: '800' };
+  stores.ActiveThreadsStore.getThreadsForGuild = () => ({ 300: { 401: first, 402: second } });
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.lastMessageId = () => null;
+  stores.ReadStateStore.ackMessageId = () => '400';
+  assert.deepEqual(collectUnread(stores).channels, [{ channelId: '300', messageId: '402', readStateType: 0 }]);
+});
+
+test('cached archived, public, private and announcement threads are included and deduplicated', () => {
+  const stores = fixture();
+  const threads = [10, 11, 12].map((type, i) => Object.freeze({ id: String(400 + i), guild_id: '1', type,
+    thread_metadata: { archived: true }, last_message_id: String(800 + i) }));
+  stores.ChannelStore.getAllThreadsForGuild = () => threads;
+  stores.ActiveThreadsStore.getThreadsForGuild = () => ({ 101: threads });
+  stores.ChannelStore.getMutableGuildChannelsForGuild = () => ({ 400: threads[0] });
+  const result = collectUnread(stores);
+  for (const thread of threads) assert.equal(result.channels.filter(c => c.channelId === thread.id).length, 1);
+  assert.equal(result.channels.length, 6);
+  assert.ok(threads.every(t => t.thread_metadata.archived));
+});
+
+test('read-state fallback resolves cached threads but excludes non-channel states and unavailable guilds', () => {
+  const stores = fixture();
+  stores.GuildStore.getGuilds = () => ({ 1: { id: '1' }, 2: { id: '2', unavailable: true } });
+  stores.ReadStateStore.getAllReadStates = includePrivate => {
+    assert.equal(includePrivate, true);
+    return [{ channelId: '401', type: 0 }, { channelId: '402', type: 0 },
+      { channelId: '403', type: 0 }, { channelId: '404', type: 4 }, { channelId: '405', type: 0 }];
+  };
+  stores.ChannelStore.getChannel = id => id === '405' ? undefined : ({ id, type: 11,
+    guild_id: id === '402' ? '2' : id === '403' ? '3' : '1' });
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['101', '102', '103', '401']);
+});
+
+test('thread indexes accept IDs, wrappers, nested Maps and cycles without duplicate acknowledgements', () => {
+  const stores = fixture();
+  const thread = { id: '401', guild_id: '1', type: 11 };
+  stores.ChannelStore.getChannel = id => id === '401' ? thread : undefined;
+  const index = new Map([['300', ['401', { channel: thread }]]]);
+  index.set('cycle', index);
+  stores.ActiveThreadsStore.getThreadsForGuild = () => index;
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['101', '102', '103', '401']);
+});
+
+test('missing last IDs for unread forum posts or new-post markers are reported rather than fabricated', () => {
+  const stores = fixture();
+  stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: [{ id: '300', guild_id: '1', type: 15 }] });
+  stores.ActiveThreadsStore.getThreadsForGuild = () => [{ id: '401', guild_id: '1', type: 11 }];
+  stores.ReadStateStore.lastMessageId = () => null;
+  stores.ReadStateStore.hasUnread = () => false;
+  stores.ReadStateStore.isForumPostUnread = id => id === '401';
+  stores.ActiveJoinedThreadsStore.getNewThreadCount = (guild, id) => guild === '1' && id === '300' ? 1 : 0;
+  const result = collectUnread(stores);
+  assert.deepEqual(result.channels, []);
+  assert.match(result.warnings.join(' '), /2 channels/);
+});
+
+test('broken optional forum helpers cannot prevent server, thread and DM acknowledgements', () => {
+  const stores = fixture();
+  const broken = () => { throw new Error('unsupported'); };
+  stores.ActiveThreadsStore.getThreadsForGuild = broken;
+  stores.ReadStateStore.isForumPostUnread = broken;
+  stores.ReadStateStore.isNewForumThread = broken;
+  stores.ChannelStore.getAllThreadsForGuild = () => [{ id: '401', type: 11, guild_id: '1', parent_id: '300' }];
+  stores.ChannelStore.getMutablePrivateChannels = () => [{ id: '501', type: 1 }];
+  assert.deepEqual(collectUnread(stores).channels.map(c => c.channelId), ['101', '102', '103', '401', '501']);
+});
+
+test('joined-only builds report limited forum coverage instead of claiming every post was checked', () => {
+  const stores = fixture();
+  delete stores.ActiveThreadsStore;
+  assert.match(collectUnread(stores).warnings.join(' '), /unfollowed forum posts may be skipped/);
 });

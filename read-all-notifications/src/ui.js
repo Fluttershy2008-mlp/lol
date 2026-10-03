@@ -52,7 +52,9 @@ export function createUI({ React, RN, getState, subscribe, updateOptions, reques
     h(RN.Switch, { value: state.options[key], accessibilityLabel: title, onValueChange: value => updateOptions({ [key]: value }) }));
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('Read All Notifications', { fontSize: 24, lineHeight: 30, fontWeight: '700' }),
-      text('Mark unread server channels, joined threads, DMs and group DMs as read in one tap.', { color: colors.muted, marginTop: 8 }),
+      text('Mark unread server channels, forums, media channels, posts, threads, DMs and group DMs as read in one tap.', { color: colors.muted, marginTop: 8 }),
+      text('Includes unfollowed forum posts and cached archived threads. Posts Discord has not loaded cannot be checked individually.',
+        { color: colors.muted, marginTop: 8, fontSize: 13 }),
       text('This does not delete messages, mention history or Android notifications.',
         { color: colors.muted, marginTop: 8, fontSize: 13 }),
       button(state.busy ? 'Reading…' : '✓ Read all notifications', requestReadAll, true),

@@ -19,6 +19,7 @@ function harness({ confirm = false, missingChat = false, noDispatcher = false, d
     GuildChannelStore: { getChannels: () => ({ SELECTABLE: [{ channel: { id: '100', guild_id: '1', type: 0 } }] }) },
     ReadStateStore: { hasUnread: () => true, lastMessageId: () => '999' },
     ActiveJoinedThreadsStore: { getActiveJoinedThreadsForGuild: () => ({}) },
+    ActiveThreadsStore: { getThreadsForGuild: () => ({}) },
     ChannelStore: { getMutablePrivateChannels: () => ({}) }, ThemeStore: { theme: 'light' },
   };
   const effects = [];
@@ -207,5 +208,33 @@ test('Read All includes DMs and group DMs in the same confirmed native acknowled
     { channelId: '202', messageId: '999', readStateType: 0 },
   ] }]);
   assert.match(h.toasts.at(-1), /Marked 3 channels as read/);
+  h.plugin.onUnload();
+});
+
+test('Read All snapshots forum parents and unfollowed posts together with channels and DMs', async () => {
+  const h = harness({ confirm: true });
+  let newestPost = '401', newestReply = '900';
+  h.stores.GuildChannelStore.getChannels = () => ({ SELECTABLE: [{ id: '300', guild_id: '1', type: 15, last_message_id: newestPost }] });
+  h.stores.ActiveThreadsStore.getThreadsForGuild = () => ({ 300: {
+    [newestPost]: { id: newestPost, parent_id: '300', guild_id: '1', type: 11, last_message_id: newestReply },
+  } });
+  h.stores.ChannelStore.getMutablePrivateChannels = () => [{ id: '501', type: 1, last_message_id: '800' }];
+  h.stores.ReadStateStore.hasUnread = id => id === '501';
+  h.stores.ReadStateStore.lastMessageId = () => null;
+  h.stores.ReadStateStore.isForumPostUnread = id => id === newestPost;
+  h.stores.ReadStateStore.ackMessageId = () => '400';
+  h.plugin.onLoad();
+  await h.command.execute();
+  assert.match(h.alerts[0][1], /forums and media channels/);
+  assert.equal(h.events.length, 0);
+  newestPost = '402'; newestReply = '901';
+  h.alerts[0][2][1].onPress();
+  await tick();
+  assert.deepEqual(plain(h.events), [{ type: 'BULK_ACK', context: 'APP', channels: [
+    { channelId: '300', messageId: '401', readStateType: 0 },
+    { channelId: '401', messageId: '900', readStateType: 0 },
+    { channelId: '501', messageId: '800', readStateType: 0 },
+  ] }]);
+  assert.match(h.toasts.at(-1), /Marked 3 channels/);
   h.plugin.onUnload();
 });

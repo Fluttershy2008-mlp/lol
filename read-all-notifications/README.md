@@ -1,7 +1,7 @@
 # ReadAllNotificationsButton for Revenge
 
-A mobile adaptation of Vencord's `readAllNotificationsButton` by kemo, extended
-in version 1.1.0 to include DMs and group DMs.
+A mobile adaptation of Vencord's `readAllNotificationsButton` by kemo. Version
+1.2.0 adds forum/media channels and unfollowed posts alongside server chats and DMs.
 
 ## Install
 
@@ -26,9 +26,21 @@ to the left so it does not overlap PingJumper's right-side arrows.
 
 ## What gets marked as read
 
-Unread server text/announcement channels, voice/stage text chats, active
-joined threads, direct messages and group DMs. Unread mention badges in those
-channels are included. DM support is enabled automatically after updating.
+Unread server text/announcement channels, voice/stage text chats, forum and
+media channels, loaded posts and threads (including unfollowed posts and cached
+archived threads), direct messages and group DMs. Unread mention badges in those
+channels are included. All of these are included automatically after updating.
+
+Forums have two read markers: the parent channel's new-post indicator and each
+post's unread replies. Read All now includes both, even when a forum is absent
+from the visible channel list or its posts have not been followed. It uses the
+newest known post ID for the parent and the newest known message ID for each post.
+
+Individual posts must be available in Discord's local stores. This does not
+download a server's entire archived history or join threads. The parent marker
+covers new posts up to its known latest post, but replies in uncached archived
+threads cannot be checked individually. Missing store support is reported in
+the plugin's settings instead of silently claiming full coverage.
 
 This does not delete messages, clear Discord's recent-mention history, delete
 notifications from the Activity tab, or dismiss Android system notifications.
@@ -44,12 +56,17 @@ remain available. Compatibility with future Discord changes cannot be guaranteed
 - Uses the native `BULK_ACK` event with `context: "APP"`, channel IDs,
   last-message IDs and `readStateType: 0`, as in the supplied Vencord source.
 - Leaves acknowledgement networking to Discord's own handler and queue.
-- Checks guild membership, skips non-message channels, deduplicates channels,
-  and only acknowledges known message IDs.
-- Reads `GuildChannelStore`, with a guild-channel-record fallback, plus
-  `ActiveJoinedThreadsStore` and `ChannelStore`'s private-channel lists. Private
-  channel records and ID arrays are supported. Missing data is reported in
-  plugin settings; unavailable DM lists do not stop server reads.
+- Checks guild membership, skips categories and directory channels, deduplicates
+  channels, and only acknowledges known message/post IDs. Snowflake IDs are
+  compared as decimal strings to avoid JavaScript number precision loss.
+- Merges `GuildChannelStore` with the full cached guild-channel index, plus
+  joined/unjoined `ActiveJoinedThreadsStore` lists, `ActiveThreadsStore`,
+  `ChannelStore.getAllThreadsForGuild` and resolvable channel read states.
+  The private-channel lists still support records and ID arrays. Missing data
+  is reported in plugin settings; missing optional helpers do not stop other reads.
+- Includes forum-specific unread/new-post predicates and uses channel metadata
+  when the read-state store has no last message ID. Forum parents use a thread
+  creation ID, never a thread reply ID or a generated timestamp.
 - Optional confirmation holds the original snapshot. It does not mark messages
   arriving after the snapshot as read. An account change or unloading the plugin
   invalidates the pending action.
@@ -69,7 +86,8 @@ npm test
 
 `build.mjs` builds the installable single-expression `index.js` and updates the
 manifest's SHA-256 hash. The tests check channel selection, exclusions, native
-event shape, the loader contract, UI actions, missing modules, cancellation,
+event shape, forum parent/post snapshots, unfollowed and cached archived threads,
+snowflake precision, the loader contract, UI actions, missing modules, cancellation,
 account changes, duplicate taps, offline/error paths and cleanup.
 
 Tests use mocked Discord stores and native controls. They are not a live-device

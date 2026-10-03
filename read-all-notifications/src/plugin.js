@@ -8,7 +8,7 @@ export function createPlugin(V) {
   const listeners = new Set();
   const cleanup = [];
   let active = false, busy = false, generation = 0, overlay = false, pending = null;
-  let message = 'Ready. Tap Read All to mark your unread server channels, DMs and group DMs as read.';
+  let message = 'Ready. Tap Read All to mark your unread channels, forums, posts, threads, DMs and group DMs as read.';
   let warnings = [];
   const log = error => { try { V.logger?.warn?.('[ReadAllNotificationsButton]', error?.message ?? String(error)); } catch {} };
   const safe = getter => { try { return getter(); } catch { return undefined; } };
@@ -41,6 +41,7 @@ export function createPlugin(V) {
       GuildStore: byStore('GuildStore'), GuildChannelStore: byStore('GuildChannelStore'),
       ChannelStore: byStore('ChannelStore'), ReadStateStore,
       ActiveJoinedThreadsStore: byStore('ActiveJoinedThreadsStore'),
+      ActiveThreadsStore: byStore('ActiveThreadsStore'),
     });
     return { ...result, accountId, UserStore, ReadStateStore };
   }
@@ -88,7 +89,7 @@ export function createPlugin(V) {
         const token = {};
         pending = token;
         const release = () => { if (pending === token) pending = null; };
-        RN.Alert.alert('Read all notifications?', `Mark ${data.channels.length} unread channels as read? This includes server channels, joined threads, DMs and group DMs.`, [
+        RN.Alert.alert('Read all notifications?', `Mark ${data.channels.length} channels as read? This includes server channels, forums and media channels, loaded posts and threads (including unfollowed posts), DMs and group DMs.`, [
           { text: 'Cancel', style: 'cancel', onPress: release },
           { text: 'Read All', onPress: () => {
             if (pending !== token) return;
