@@ -1,11 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { AccountError, createClient, createController } from './core.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
+import { createLoginDialog } from './login-dialog.mjs';
+import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, QR_BASE_URL } from './qr-html.mjs';
 
 export function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
-    const disposers = [];
+    const LoginDialog = createLoginDialog(React, RN);
+    const disposers = [], qrStops = new Set();
+    let qrCounter = 0, qrOpen = 0;
     let active = false, controller, refreshTimer, nativeReady = false;
     const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
     const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
@@ -22,7 +26,7 @@ export function createPlugin(V, host = globalThis) {
     function scheduleRefresh() {
         if (!active) return;
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { if (active) void controller.refreshSaved(); }, 700);
+        refreshTimer = setTimeout(() => { if (active && !qrOpen) void controller.refreshSaved(); }, 700);
     }
     function openSettings() {
         if (!active) return;
@@ -35,6 +39,18 @@ export function createPlugin(V, host = globalThis) {
     function nativeLoginHelp() {
         RN.Alert.alert('Sign in through Discord',
             'Save your current account here first. Open Discord’s account menu and choose Add account, then complete any CAPTCHA, passkey, SMS or device verification. Once that account’s chats have loaded, return here and tap Save current account.\n\nThe native account menu depends on your Discord version. More Alts cannot bypass Discord verification.');
+    }
+    function forgotPassword() {
+        RN.Alert.alert('Reset your Discord password',
+            'Open Discord’s sign-in page and choose “Forgot your password?”. After resetting it, return here to add your account.', [
+                { text: 'Back', style: 'cancel' },
+                { text: 'Open Discord', onPress: () => {
+                    try {
+                        if (typeof RN.Linking?.openURL !== 'function') throw new Error();
+                        Promise.resolve(RN.Linking.openURL('https://discord.com/login')).catch(() => toast('Open discord.com/login in your browser to reset your password.'));
+                    } catch { toast('Open discord.com/login in your browser to reset your password.'); }
+                } }
+            ]);
     }
     async function importOld() {
         // Read only the original, installed Apex MoreAlts storage, only after
@@ -62,12 +78,25 @@ export function createPlugin(V, host = globalThis) {
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
+        const qrSession = React.useRef(null), qrRef = React.useRef(null), qrBlockedUntil = React.useRef(0);
+        function stopQr() {
+            if (qrSession.current) qrOpen = Math.max(0, qrOpen - 1);
+            qrSession.current = null;
+            try { qrRef.current?.injectJavaScript?.('window.stopMoreAltsQr && window.stopMoreAltsQr(); true;'); } catch {}
+            qrRef.current = null;
+        }
+        React.useEffect(() => {
+            qrStops.add(stopQr);
+            return () => { stopQr(); qrStops.delete(stopQr); };
+        }, [instance]);
         React.useEffect(() => {
             mounted.current = true;
             const unsubscribe = instance?.subscribe(() => { if (mounted.current) redraw(x => x + 1); });
             return () => { mounted.current = false; unsubscribe?.(); if (authenticating.current) instance?.cancelLogin(); };
         }, [instance]);
         const osScheme = RN.useColorScheme?.();
+        const screen = RN.useWindowDimensions?.();
+        const qrWidth = Math.max(200, Math.min(264, (screen?.width || 390) - 80));
         let theme;
         try { theme = byStore('ThemeStore')?.theme; } catch {}
         const light = theme ? theme === 'light' : osScheme === 'light';
@@ -93,7 +122,7 @@ export function createPlugin(V, host = globalThis) {
                 storage.settings = { ...storage.settings, [key]: value }; redraw(x => x + 1); scheduleRefresh();
             } }));
         const clearAuth = () => { setLogin(''); setPassword(''); setCode(''); authenticating.current = false; };
-        const cancel = () => { instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
+        const cancel = () => { stopQr(); instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
         const stillHere = () => mounted.current && active && controller === instance;
         async function run(action, success) {
             if (localLock.current || instance.busy) return;
@@ -106,11 +135,58 @@ export function createPlugin(V, host = globalThis) {
         function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            stopQr(); clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            stopQr(); clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         });
+        function startQr() {
+            if (!stillHere() || instance.busy || localLock.current) return;
+            if (Date.now() < qrBlockedUntil.current) {
+                setError(qrErrorMessage('rate-limit', (qrBlockedUntil.current - Date.now()) / 1000)); return;
+            }
+            let WebView;
+            try { WebView = byProps('WebView')?.WebView; } catch {}
+            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update Revenge/Discord, or use email and password.'); return; }
+            stopQr(); instance.cancelLogin();
+            setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
+            const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
+            qrBlockedUntil.current = Date.now() + 3000;
+            qrSession.current = { id, WebView, source: { html: makeQrHtml(id), baseUrl: QR_BASE_URL }, consumed: false };
+            qrOpen++;
+            setPage('qr'); redraw(x => x + 1);
+        }
+        const qr = qrSession.current;
+        const qrContent = page === 'qr' && qr ? h(RN.View, { style: { alignItems: 'center', marginBottom: 16 } },
+            h(qr.WebView, {
+                key: qr.id, ref: node => { if (qrSession.current === qr) qrRef.current = node; }, source: qr.source,
+                originWhitelist: ['*'], onShouldStartLoadWithRequest: request => allowedQrNavigation(request.url),
+                javaScriptEnabled: true, domStorageEnabled: false, sharedCookiesEnabled: false, thirdPartyCookiesEnabled: false,
+                cacheEnabled: false, allowFileAccess: false, allowFileAccessFromFileURLs: false, allowUniversalAccessFromFileURLs: false,
+                mixedContentMode: 'never', setSupportMultipleWindows: false, javaScriptCanOpenWindowsAutomatically: false,
+                scrollEnabled: false, overScrollMode: 'never', showsHorizontalScrollIndicator: false, showsVerticalScrollIndicator: false,
+                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth + 52, borderRadius: 9 },
+                containerStyle: { flex: 0, width: qrWidth, height: qrWidth + 52, borderRadius: 9, overflow: 'hidden' },
+                onOpenWindow: () => {},
+                onError: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
+                onRenderProcessGone: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
+                onMessage: event => {
+                    if (!stillHere() || qrSession.current !== qr || qr.consumed) return;
+                    const data = parseQrMessage(event, qr.id);
+                    if (!data) return;
+                    if (data.type === 'error') {
+                        qr.consumed = true;
+                        if (data.code === 'rate-limit') qrBlockedUntil.current = Date.now() + data.retryAfter * 1000;
+                        setError(qrErrorMessage(data.code, data.retryAfter)); return;
+                    }
+                    if (data.type === 'complete') {
+                        if (localLock.current || instance.busy) { setError('Another account action is finishing. Refresh this code and try again.'); return; }
+                        qr.consumed = true;
+                        void run(() => instance.acceptQrLogin(data.token, data.userId), handleLogin);
+                    }
+                }
+            }), text('Scan with Discord on another signed-in device and approve the login there.', { color: colors.muted, textAlign: 'center', marginTop: 14, fontSize: 14 }),
+            text('Only approve the code you generated here.', { color: colors.muted, textAlign: 'center', fontSize: 12 })) : null;
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
@@ -125,49 +201,44 @@ export function createPlugin(V, host = globalThis) {
             error ? text(error, { color: colors.error }) : null,
             notice ? text(notice, { fontWeight: '600' }) : null,
             busy ? h(RN.ActivityIndicator, { color: '#8993ff', style: { marginBottom: 12 } }) : null];
-        if (page === 'login') {
-            contents.push(text('Add account', { fontSize: 20, fontWeight: '700' }),
-                input('Email or phone number', login, setLogin, { autoComplete: 'username', keyboardType: 'email-address' }),
-                input('Password', password, setPassword, { secureTextEntry: true, autoComplete: 'password' }),
-                button('Sign in and save', () => {
-                    authenticating.current = true;
-                    const typedPassword = password; setPassword('');
-                    void run(() => instance.login(login, typedPassword), handleLogin);
-                }),
-                button('Save current account', saveCurrent, true),
-                button('Use Discord’s normal login', nativeLoginHelp, true),
-                text('Passwords are cleared after submission and are never saved. Discord may require verification in its own login screen.', { color: colors.muted }),
-                button('Cancel', cancel, true, true));
-        } else if (page === 'mfa') {
-            contents.push(text('Two-factor authentication', { fontSize: 20, fontWeight: '700' }),
-                text('Enter your authenticator code or an unused backup code.'),
-                input('Verification code', code, setCode, { secureTextEntry: true, autoComplete: 'one-time-code' }),
-                button('Verify and save', () => { const typedCode = code; setCode(''); void run(() => instance.submitCode(typedCode), handleLogin); }),
-                button('Use Discord’s normal login', nativeLoginHelp, true),
-                button('Back to accounts', cancel, true, true));
-        } else {
-            contents.push(button('Save current account', saveCurrent),
-                button('Add another account', () => { setPage('login'); setError(''); setNotice(''); }, true),
-                input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
-                text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
-            for (const account of matches) contents.push(h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
-                h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 } },
-                    account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
-                    h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
-                        text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
-                currentId !== account.id ? button('Switch account', () => run(() => instance.switchTo(account.id), result => setNotice(`Switched to ${result.user.username}.`))) : null,
-                button('Remove saved account', () => remove(account), true)));
-            if (!matches.length) contents.push(text(query ? 'No matching accounts.' : 'Save your current account to get started.', { color: colors.muted }));
-            contents.push(button('Import accounts from old More Alts', () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)), true),
-                text('For import, keep the original Apex More Alts installed but disabled.', { color: colors.muted }),
-                toggle('Refresh saved sessions after signing in', 'refreshSavedSessions'),
-                toggle('Enable Discord’s native account menu', 'enableNativeSwitcher'),
-                text(nativeReady ? 'Reopen Discord settings after changing the native menu option.' : 'The native menu is unavailable on this build. The saved-account list above still works.', { color: colors.muted }),
-                button('Help with Discord verification', nativeLoginHelp, true),
-                text('Saved sessions stay in Revenge’s local plugin storage. Passwords and verification codes are never stored. Signing out or changing a password can expire a saved session.', { color: colors.muted }));
-        }
+        contents.push(button('Save current account', saveCurrent),
+            button('Add another account', () => { setPage('login'); setError(''); setNotice(''); }, true),
+            input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
+            text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
+        contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
+            h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 } },
+                account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
+                h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
+                    text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
+            currentId !== account.id ? button('Switch account', () => run(() => instance.switchTo(account.id), result => setNotice(`Switched to ${result.user.username}.`))) : null,
+            button('Remove saved account', () => remove(account), true))));
+        if (!matches.length) contents.push(text(query ? 'No matching accounts.' : 'Save your current account to get started.', { color: colors.muted }));
+        contents.push(button('Import accounts from old More Alts', () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)), true),
+            text('For import, keep the original Apex More Alts installed but disabled.', { color: colors.muted }),
+            toggle('Refresh saved sessions after signing in', 'refreshSavedSessions'),
+            toggle('Enable Discord’s native account menu', 'enableNativeSwitcher'),
+            text(nativeReady ? 'Reopen Discord settings after changing the native menu option.' : 'The native menu is unavailable on this build. The saved-account list above still works.', { color: colors.muted }),
+            button('Help with Discord verification', nativeLoginHelp, true),
+            text('Saved sessions stay in Revenge’s local plugin storage. Passwords and verification codes are never stored. Signing out or changing a password can expire a saved session.', { color: colors.muted }));
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
-            h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 } }, ...contents));
+            h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
+                importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
+            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
+                login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
+                onClose: cancel, onBack: () => {
+                    if (page !== 'mfa' && page !== 'qr') { cancel(); return; }
+                    stopQr(); instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');
+                },
+                onForgotPassword: forgotPassword, onNativeLogin: nativeLoginHelp,
+                onSubmit: () => {
+                    authenticating.current = true;
+                    if (page === 'mfa') {
+                        const typedCode = code; setCode(''); void run(() => instance.submitCode(typedCode), handleLogin);
+                    } else {
+                        const typedPassword = password; setPassword(''); void run(() => instance.login(login, typedPassword), handleLogin);
+                    }
+                }
+            }));
     }
     function onLoad() {
         if (active) return;
@@ -180,14 +251,14 @@ export function createPlugin(V, host = globalThis) {
                 if (typeof unpatch === 'function') { nativeReady = true; disposers.push(unpatch); }
             }
         } catch { log('Native menu is unavailable; plugin settings remain accessible.'); }
-        for (const name of ['UserStore', 'AuthenticationStore']) {
+        ['UserStore', 'AuthenticationStore'].forEach(name => {
             try {
                 const store = byStore(name);
                 if (typeof store?.addChangeListener === 'function' && typeof store?.removeChangeListener === 'function') {
                     store.addChangeListener(scheduleRefresh); disposers.push(() => store.removeChangeListener(scheduleRefresh));
                 }
             } catch {}
-        }
+        });
         try {
             const subscription = RN.AppState?.addEventListener?.('change', state => { if (state === 'active') scheduleRefresh(); });
             if (subscription?.remove) disposers.push(() => subscription.remove());
@@ -211,6 +282,7 @@ export function createPlugin(V, host = globalThis) {
     }
     function onUnload() {
         active = false; nativeReady = false; clearTimeout(refreshTimer); controller?.stop();
+        for (const stop of qrStops) { try { stop(); } catch {} } qrStops.clear();
         for (const dispose of disposers.splice(0).reverse()) { try { dispose?.(); } catch {} }
     }
     return { onLoad, onUnload, settings: Settings };

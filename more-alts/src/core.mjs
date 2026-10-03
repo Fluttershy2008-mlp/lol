@@ -153,6 +153,15 @@ export function createController({ storage, client, getSession, getSwitcher, now
                 return completeLogin(data, epoch);
             });
         },
+        acceptQrLogin(token, expectedUserId) {
+            return exclusive(async epoch => {
+                if (!validId(expectedUserId)) fail('mismatch', 'The QR login did not identify the approved account.');
+                const user = await inspectToken(token, epoch);
+                if (user.id !== expectedUserId) fail('mismatch', 'The approved QR account does not match the returned session. Please start again.');
+                const result = saveAccount(storage, user, token); notify();
+                return { kind: 'saved', ...result };
+            });
+        },
         submitCode(code) {
             return exclusive(async epoch => {
                 if (!challenge || now() > challenge.until) { challenge = undefined; fail('mfa-expired', 'The verification step expired. Go back and sign in again.'); }
