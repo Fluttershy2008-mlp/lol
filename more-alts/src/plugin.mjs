@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { AccountError, createClient, createController } from './core.mjs';
+import { createModuleResolver } from './modules.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
 import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, QR_BASE_URL } from './qr-html.mjs';
@@ -8,11 +9,15 @@ export function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
     const LoginDialog = createLoginDialog(React, RN);
+    const resolver = createModuleResolver(V.metro);
+    const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
+    const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [], qrStops = new Set();
     let qrCounter = 0, qrOpen = 0;
-    let active = false, controller, refreshTimer, nativeReady = false;
-    const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
-    const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
+    let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
+    const pendingFrames = new Map();
+    const byProps = resolver.byProps;
+    const byStore = resolver.byStore;
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
     const log = text => { try { V.logger?.warn?.(`[More Alts] ${text}`); } catch {} };
     function getSession() {
@@ -24,9 +29,12 @@ export function createPlugin(V, host = globalThis) {
         return typeof auth?.switchAccountToken === 'function' ? token => auth.switchAccountToken(token) : undefined;
     }
     function scheduleRefresh() {
-        if (!active) return;
-        clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { if (active && !qrOpen) void controller.refreshSaved(); }, 700);
+        if (!active || !optionalReady || !storage.settings.refreshSavedSessions || !storage.accountOrder.length) return;
+        clearTimer(refreshTimer);
+        const instance = controller;
+        refreshTimer = setTimer(() => {
+            if (active && controller === instance && !qrOpen) void instance.refreshSaved().catch(() => {});
+        }, 1500);
     }
     function openSettings() {
         if (!active) return;
@@ -86,6 +94,9 @@ export function createPlugin(V, host = globalThis) {
             qrRef.current = null;
         }
         React.useEffect(() => {
+            // Legacy loaders initialize compatibility features when the manager is opened.
+            if (!resolver.loadedOnly && active && !optionalReady) initializeOptional();
+            scheduleRefresh();
             qrStops.add(stopQr);
             return () => { stopQr(); qrStops.delete(stopQr); };
         }, [instance]);
@@ -240,10 +251,9 @@ export function createPlugin(V, host = globalThis) {
                 }
             }));
     }
-    function onLoad() {
-        if (active) return;
-        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
-        active = true;
+    function initializeOptional() {
+        if (!active || optionalReady) return;
+        optionalReady = true;
         try {
             const native = byProps('getCanUseMultiAccountMobile');
             if (typeof native?.getCanUseMultiAccountMobile === 'function') {
@@ -273,17 +283,60 @@ export function createPlugin(V, host = globalThis) {
             }));
         } catch { log('Use the plugin settings button to manage accounts.'); }
         try {
-            const unreg = V.commands?.registerCommand?.({ name: 'morealts', displayName: 'morealts', type: 1, inputType: 1,
+            // registerCommand itself resolves Discord's built-in command module.
+            const register = !resolver.loadedOnly || byProps('getBuiltInCommands') ? V.commands?.registerCommand : undefined;
+            const unreg = register?.({ name: 'morealts', displayName: 'morealts', type: 1, inputType: 1,
                 applicationId: '-1', description: 'Open More Alts account switcher', displayDescription: 'Open More Alts account switcher',
                 options: [], execute: () => { openSettings(); return undefined; } });
             if (typeof unreg === 'function') disposers.push(unreg);
         } catch {}
         scheduleRefresh();
     }
+    function yieldFrame() {
+        return new Promise(resolve => {
+            const timer = setTimer(() => { pendingFrames.delete(timer); resolve(); }, 0);
+            pendingFrames.set(timer, resolve);
+        });
+    }
+    function onLoad() {
+        if (active) return;
+        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
+        active = true; optionalReady = false;
+        const generation = ++epoch;
+        // No synchronous Discord module searches, API calls or native patches.
+        // Older loaders use the settings button until the manager is opened.
+        if (!resolver.loadedOnly) return;
+        initTimer = setTimer(() => {
+            initTimer = undefined;
+            const initialize = () => {
+                if (!active || epoch !== generation) return;
+                const isActive = () => active && epoch === generation;
+                void resolver.prepare([
+                    ['props', 'getCanUseMultiAccountMobile'], ['store', 'UserStore'],
+                    ['store', 'AuthenticationStore'], ['props', 'getToken'],
+                    ['props', 'SETTING_RENDERER_CONFIG'], ['props', 'getAncestors', 'isBlocked'],
+                    ['store', 'ThemeStore'], ['props', 'getBuiltInCommands']
+                ], yieldFrame, isActive).then(() => {
+                    if (isActive()) initializeOptional();
+                }).catch(() => { if (isActive()) log('Optional shortcuts are unavailable. Use the plugin settings button.'); });
+            };
+            try {
+                if (typeof RN.InteractionManager?.runAfterInteractions === 'function') {
+                    idleTask = RN.InteractionManager.runAfterInteractions(initialize); return;
+                }
+            } catch {}
+            initialize();
+        }, 1500);
+    }
     function onUnload() {
-        active = false; nativeReady = false; clearTimeout(refreshTimer); controller?.stop();
+        active = false; epoch++; optionalReady = false; nativeReady = false;
+        clearTimer(refreshTimer); clearTimer(initTimer); initTimer = undefined;
+        try { idleTask?.cancel?.(); } catch {} idleTask = undefined;
+        for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
+        controller?.stop();
         for (const stop of qrStops) { try { stop(); } catch {} } qrStops.clear();
         for (const dispose of disposers.splice(0).reverse()) { try { dispose?.(); } catch {} }
+        resolver.clear();
     }
     return { onLoad, onUnload, settings: Settings };
 }

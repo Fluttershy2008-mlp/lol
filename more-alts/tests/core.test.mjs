@@ -166,9 +166,24 @@ test('remove never logs out and automatic refresh does not re-add removed accoun
     assert.equal(h.controller.remove(a.id), true); await h.controller.refreshSaved();
     assert.deepEqual(h.storage.accounts, {}); assert.deepEqual(h.switched, []); assert.equal(h.calls.length, 1);
 });
-test('background refresh only validates saved accounts once per observed session', async () => {
+test('background refresh skips unchanged saved tokens and validates a changed session once', async () => {
     const h = harness(); await h.controller.refreshSaved(); assert.equal(h.calls.length, 0);
-    saveAccount(h.storage, a, ta); await h.controller.refreshSaved(); await h.controller.refreshSaved(); assert.equal(h.calls.length, 1);
+    saveAccount(h.storage, a, ta); await h.controller.refreshSaved(); await h.controller.refreshSaved();
+    assert.equal(h.calls.length, 0);
+    const refreshed = 'fixture-refreshed-session-not-real';
+    h.setSession({ user: a, token: refreshed });
+    const next = harness({ storage: h.storage, fetcher: async () => response(a) });
+    next.setSession({ user: a, token: refreshed });
+    await next.controller.refreshSaved(); await next.controller.refreshSaved();
+    assert.equal(next.calls.length, 1); assert.equal(next.storage.accounts[a.id].token, refreshed);
+});
+test('a failed changed-session refresh does not loop and manual save can retry', async () => {
+    let fail = true;
+    const h = harness({ fetcher: async () => response(fail ? {} : a, fail ? 500 : 200) });
+    saveAccount(h.storage, a, 'fixture-outdated-saved-session');
+    await h.controller.refreshSaved(); await h.controller.refreshSaved(); assert.equal(h.calls.length, 1);
+    fail = false; await h.controller.saveCurrent(); assert.equal(h.calls.length, 2);
+    assert.equal(h.storage.accounts[a.id].token, ta);
 });
 test('legacy storage normalization strips secrets outside token, repairs order, and removes malformed entries', () => {
     const storage = { accounts: { [a.id]: { ...a, token: ta, password: 'do-not-keep', addedAt: 22 }, broken: { id: '__proto__', token: ta } }, accountOrder: [a.id, a.id, 'missing'], settings: { exportPasswordHash: 'old-weak-hash' } };

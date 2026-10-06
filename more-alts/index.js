@@ -9,7 +9,7 @@ const validToken = token => typeof token === 'string' && token.length >= 20 && t
 const fail = (code, message) => { throw new AccountError(code, message); };
 function normalizeStorage(storage) {
     const accounts = {};
-    for (const account of Object.values(storage.accounts || {})) {
+    for (const account of Object.values(storage.accounts && typeof storage.accounts === 'object' ? storage.accounts : {})) {
         if (!validId(account?.id) || !validToken(account?.token) || typeof account.username !== 'string') continue;
         accounts[account.id] = cleanAccount(account, account.token, account);
     }
@@ -208,10 +208,13 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
         },
         async refreshSaved() {
             if (busy || stopped || !storage.settings.refreshSavedSessions) return;
-            const session = getSession();
+            let session;
+            try { session = getSession(); } catch { return; }
             if (!session?.user || !validToken(session.token) || !storage.accounts[session.user.id]) return;
             const key = `${session.user.id}:${session.token}`;
             if (refreshKey === key) return;
+            // An unchanged, already saved session needs no startup HTTP request.
+            if (storage.accounts[session.user.id].token === session.token) { refreshKey = key; return; }
             // One background attempt per observed session. Manual Save can retry.
             refreshKey = key;
             try { await exclusive(epoch => saveSession(epoch, session)); } catch {}
@@ -229,6 +232,68 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
         stop() {
             stopped = true; challenge = undefined; generation++; client.stop();
             for (const item of delays) { clearTimeout(item.timer); item.resolve(); } delays.clear(); listeners.clear();
+        }
+    };
+}
+
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+// Vendetta's finders require uninitialized Metro factories while searching.
+// Optional features must never do that during Discord's startup.
+function createModuleResolver(metro, { now = Date.now } = {}) {
+    const entries = new Map();
+    const modules = metro.modules;
+    const loadedOnly = !!modules && typeof modules === 'object';
+    function entry(kind, keys) {
+        const id = JSON.stringify([kind, ...keys]);
+        if (!entries.has(id)) entries.set(id, { kind, keys, value: undefined, checked: -Infinity });
+        return entries.get(id);
+    }
+    function inspect(record, exports) {
+        if (record.value || !exports) return;
+        try {
+            if (record.kind === 'props' ? record.keys.every(key => exports[key] != null)
+                : typeof exports.getName === 'function' && exports.getName.length === 0 && exports.getName() === record.keys[0]) record.value = exports;
+        } catch {}
+    }
+    function inspectModule(module, records) {
+        // Do not invoke the factory, __r, or read exports on uninitialized modules.
+        if (!module?.isInitialized || module.hasError) return;
+        let exports;
+        try { exports = module.publicModule?.exports; } catch { return; }
+        for (const record of records) {
+            try { if (exports?.__esModule) inspect(record, exports.default); } catch {}
+            inspect(record, exports);
+        }
+    }
+    function lookup(kind, keys) {
+        const record = entry(kind, keys);
+        if (record.value || now() - record.checked < 5000) return record.value;
+        record.checked = now();
+        if (loadedOnly) {
+            for (const id in modules) { try { inspectModule(modules[id], [record]); } catch {} if (record.value) break; }
+        } else {
+            // Older loaders without the module registry: user actions only.
+            try { record.value = kind === 'props' ? metro.findByProps(...keys) : metro.findByStoreName(keys[0]); } catch {}
+        }
+        return record.value;
+    }
+    return {
+        loadedOnly,
+        byProps: (...keys) => lookup('props', keys),
+        byStore: name => lookup('store', [name]),
+        clear() { entries.clear(); },
+        async prepare(queries, yieldFrame, isActive) {
+            if (!loadedOnly) return;
+            const records = queries.map(([kind, ...keys]) => entry(kind, keys));
+            let count = 0;
+            for (const id in modules) {
+                if (!isActive()) return;
+                try { inspectModule(modules[id], records); } catch {}
+                if (records.every(record => record.value)) break;
+                if (++count % 64 === 0) await yieldFrame();
+            }
+            if (isActive()) for (const record of records) record.checked = now();
         }
     };
 }
@@ -512,11 +577,15 @@ function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
     const LoginDialog = createLoginDialog(React, RN);
+    const resolver = createModuleResolver(V.metro);
+    const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
+    const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [], qrStops = new Set();
     let qrCounter = 0, qrOpen = 0;
-    let active = false, controller, refreshTimer, nativeReady = false;
-    const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
-    const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
+    let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
+    const pendingFrames = new Map();
+    const byProps = resolver.byProps;
+    const byStore = resolver.byStore;
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
     const log = text => { try { V.logger?.warn?.(`[More Alts] ${text}`); } catch {} };
     function getSession() {
@@ -528,9 +597,12 @@ function createPlugin(V, host = globalThis) {
         return typeof auth?.switchAccountToken === 'function' ? token => auth.switchAccountToken(token) : undefined;
     }
     function scheduleRefresh() {
-        if (!active) return;
-        clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { if (active && !qrOpen) void controller.refreshSaved(); }, 700);
+        if (!active || !optionalReady || !storage.settings.refreshSavedSessions || !storage.accountOrder.length) return;
+        clearTimer(refreshTimer);
+        const instance = controller;
+        refreshTimer = setTimer(() => {
+            if (active && controller === instance && !qrOpen) void instance.refreshSaved().catch(() => {});
+        }, 1500);
     }
     function openSettings() {
         if (!active) return;
@@ -590,6 +662,9 @@ function createPlugin(V, host = globalThis) {
             qrRef.current = null;
         }
         React.useEffect(() => {
+            // Legacy loaders initialize compatibility features when the manager is opened.
+            if (!resolver.loadedOnly && active && !optionalReady) initializeOptional();
+            scheduleRefresh();
             qrStops.add(stopQr);
             return () => { stopQr(); qrStops.delete(stopQr); };
         }, [instance]);
@@ -744,10 +819,9 @@ function createPlugin(V, host = globalThis) {
                 }
             }));
     }
-    function onLoad() {
-        if (active) return;
-        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
-        active = true;
+    function initializeOptional() {
+        if (!active || optionalReady) return;
+        optionalReady = true;
         try {
             const native = byProps('getCanUseMultiAccountMobile');
             if (typeof native?.getCanUseMultiAccountMobile === 'function') {
@@ -777,17 +851,60 @@ function createPlugin(V, host = globalThis) {
             }));
         } catch { log('Use the plugin settings button to manage accounts.'); }
         try {
-            const unreg = V.commands?.registerCommand?.({ name: 'morealts', displayName: 'morealts', type: 1, inputType: 1,
+            // registerCommand itself resolves Discord's built-in command module.
+            const register = !resolver.loadedOnly || byProps('getBuiltInCommands') ? V.commands?.registerCommand : undefined;
+            const unreg = register?.({ name: 'morealts', displayName: 'morealts', type: 1, inputType: 1,
                 applicationId: '-1', description: 'Open More Alts account switcher', displayDescription: 'Open More Alts account switcher',
                 options: [], execute: () => { openSettings(); return undefined; } });
             if (typeof unreg === 'function') disposers.push(unreg);
         } catch {}
         scheduleRefresh();
     }
+    function yieldFrame() {
+        return new Promise(resolve => {
+            const timer = setTimer(() => { pendingFrames.delete(timer); resolve(); }, 0);
+            pendingFrames.set(timer, resolve);
+        });
+    }
+    function onLoad() {
+        if (active) return;
+        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
+        active = true; optionalReady = false;
+        const generation = ++epoch;
+        // No synchronous Discord module searches, API calls or native patches.
+        // Older loaders use the settings button until the manager is opened.
+        if (!resolver.loadedOnly) return;
+        initTimer = setTimer(() => {
+            initTimer = undefined;
+            const initialize = () => {
+                if (!active || epoch !== generation) return;
+                const isActive = () => active && epoch === generation;
+                void resolver.prepare([
+                    ['props', 'getCanUseMultiAccountMobile'], ['store', 'UserStore'],
+                    ['store', 'AuthenticationStore'], ['props', 'getToken'],
+                    ['props', 'SETTING_RENDERER_CONFIG'], ['props', 'getAncestors', 'isBlocked'],
+                    ['store', 'ThemeStore'], ['props', 'getBuiltInCommands']
+                ], yieldFrame, isActive).then(() => {
+                    if (isActive()) initializeOptional();
+                }).catch(() => { if (isActive()) log('Optional shortcuts are unavailable. Use the plugin settings button.'); });
+            };
+            try {
+                if (typeof RN.InteractionManager?.runAfterInteractions === 'function') {
+                    idleTask = RN.InteractionManager.runAfterInteractions(initialize); return;
+                }
+            } catch {}
+            initialize();
+        }, 1500);
+    }
     function onUnload() {
-        active = false; nativeReady = false; clearTimeout(refreshTimer); controller?.stop();
+        active = false; epoch++; optionalReady = false; nativeReady = false;
+        clearTimer(refreshTimer); clearTimer(initTimer); initTimer = undefined;
+        try { idleTask?.cancel?.(); } catch {} idleTask = undefined;
+        for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
+        controller?.stop();
         for (const stop of qrStops) { try { stop(); } catch {} } qrStops.clear();
         for (const dispose of disposers.splice(0).reverse()) { try { dispose?.(); } catch {} }
+        resolver.clear();
     }
     return { onLoad, onUnload, settings: Settings };
 }

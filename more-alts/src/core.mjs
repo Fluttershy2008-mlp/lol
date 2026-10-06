@@ -7,7 +7,7 @@ export const validToken = token => typeof token === 'string' && token.length >= 
 const fail = (code, message) => { throw new AccountError(code, message); };
 export function normalizeStorage(storage) {
     const accounts = {};
-    for (const account of Object.values(storage.accounts || {})) {
+    for (const account of Object.values(storage.accounts && typeof storage.accounts === 'object' ? storage.accounts : {})) {
         if (!validId(account?.id) || !validToken(account?.token) || typeof account.username !== 'string') continue;
         accounts[account.id] = cleanAccount(account, account.token, account);
     }
@@ -206,10 +206,13 @@ export function createController({ storage, client, getSession, getSwitcher, now
         },
         async refreshSaved() {
             if (busy || stopped || !storage.settings.refreshSavedSessions) return;
-            const session = getSession();
+            let session;
+            try { session = getSession(); } catch { return; }
             if (!session?.user || !validToken(session.token) || !storage.accounts[session.user.id]) return;
             const key = `${session.user.id}:${session.token}`;
             if (refreshKey === key) return;
+            // An unchanged, already saved session needs no startup HTTP request.
+            if (storage.accounts[session.user.id].token === session.token) { refreshKey = key; return; }
             // One background attempt per observed session. Manual Save can retry.
             refreshKey = key;
             try { await exclusive(epoch => saveSession(epoch, session)); } catch {}

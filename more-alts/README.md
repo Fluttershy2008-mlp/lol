@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.0
+# More Alts! for Revenge — 3.1.1
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Startup stability (3.1.1)
+
+- Startup no longer calls Vendetta's eager Discord module finders. On current Revenge, lookups inspect already initialized, healthy Metro modules without running module factories.
+- Optional native menu, settings row and command setup starts after a short delay and waits for current UI interactions to finish when supported. Module discovery yields every 64 records so it does not occupy one long JavaScript task.
+- Successful lookups are reused, and missing modules have a five-second retry cooldown. Session polling does not repeat an entire search every 250 ms.
+- Saved sessions with an unchanged token do not make a background validation request. Changed tokens are still verified once, and manual Save and Switch still validate sessions.
+- Disabling the plugin cancels delayed/idle setup and sliced discovery, removes listeners and patches, and rejects stale initialization callbacks after re-enabling.
+
+Optional shortcuts use modules Discord has already loaded. If a shortcut is unavailable, open **Revenge → Plugins → More Alts! → Settings**. Older loaders without the Metro registry defer compatibility setup until this manager is opened. Login, QR sign-in, MFA and saved accounts remain available. Do not clear plugin storage to update.
+
+This addresses startup work and lifecycle hazards found in the code. The tests use a simulated runtime; an Android/Revenge device run is still needed to confirm the reported crash is resolved on your specific Discord version.
 
 ## Add Account design
 
@@ -40,7 +52,7 @@ The original credential path trimmed passwords, assumed every successful login i
 
 CAPTCHA, passkeys, SMS-only MFA, email/device verification and account restrictions still require Discord's normal login. Save your current account, open Discord's native account menu if available, choose Add account, and complete the required steps. After the new account's chats load, use **Save current account** here. This plugin does not solve or bypass challenges. Native menu availability and account switching depend on Discord's internal APIs and can change between builds.
 
-Automatic session refresh only applies to accounts you have already saved and makes one validation attempt per observed account/token pair. It does not sign into accounts automatically or add every account you use. An expired saved session must be renewed by signing in again.
+Automatic session refresh verifies changed tokens and only applies to accounts you have already saved and makes one validation attempt per observed account/token pair. It does not sign into accounts automatically or add every account you use. An expired saved session must be renewed by signing in again.
 
 ## Storage and privacy
 
@@ -60,7 +72,7 @@ npm run build
 npm test
 ```
 
-Tests use synthetic sessions and mocked Discord responses. They cover credentials, MFA, challenge expiry, CAPTCHA handling, cooldowns, slow responses, duplicate submissions, cancellation, the real RSA-OAEP/SHA-256 QR handshake against a simulated Discord server, QR approval/expiry, stale WebView messages, account/session mismatches, failed switches, session refresh, legacy import, settings compatibility, lifecycle cleanup and the installable bundle/hash. This is not a live Android/Revenge device test.
+Tests use synthetic sessions and mocked Discord responses. They cover deferred startup, initialized-only module discovery, lookup caching, cancellation during startup, unchanged-session request suppression, credentials, MFA, challenge expiry, CAPTCHA handling, cooldowns, slow responses, duplicate submissions, cancellation, the real RSA-OAEP/SHA-256 QR handshake against a simulated Discord server, QR approval/expiry, stale WebView messages, account/session mismatches, failed switches, session refresh, legacy import, settings compatibility, lifecycle cleanup and the installable bundle/hash. This is not a live Android/Revenge device test.
 
 ## Credits and license
 
