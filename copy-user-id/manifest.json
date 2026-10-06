@@ -1,0 +1,15 @@
+{
+  "name": "Copy User ID",
+  "description": "Shows the message author's user ID in the long-press menu. Tap to copy it.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "fluttershy_simper"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_copy_id"
+  },
+  "hash": "5874090dfe6bcff59778440c261cc43544d81d9f8f0b444b5ca2a941fe4d089d"
+}
