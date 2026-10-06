@@ -1,0 +1,17 @@
+{
+	"format": 1,
+	"id": "dev.kmmiio99o.server-info",
+	"name": "Server Info",
+	"description": "View server information from the guild context menu.",
+	"author": "kmmiio99o",
+	"icon": "CircleInformationIcon",
+	"version": "1.2.2",
+	"dependencies": {
+		"revenge.api": { "version": ">=1" },
+		"discord": { "version": "*" },
+		"dev.kmmiio99o.lib": { "version": ">=1.2.17" }
+	},
+	"dist": {
+		"script": "index.js"
+	}
+}

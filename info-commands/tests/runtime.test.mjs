@@ -10,7 +10,7 @@ const A = "123456789012345678";
 const B = "223456789012345678";
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-function harness({ modern = false, fallback = false, apiFailure = false, pending = false, cached = true, profileMethod = "openUserProfileModal", profileThrows = false, missingOwner = false } = {}) {
+function harness({ modern = false, fallback = false, apiFailure = false, pending = false, cached = true, profileMethod = "openUserProfileModal", profileThrows = false, missingOwner = false, rich = false } = {}) {
     const requests = [], alerts = [], opens = [], hidden = [], commands = [], notifications = [], copied = [], errors = [], timeouts = [], profiles = [], events = [];
     const guilds = {
         [A]: { id: A, name: "Server A", ownerId: "333456789012345678", features: new Set(["COMMUNITY"]), premiumTier: 2 },
@@ -27,18 +27,36 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         if (url.startsWith("/users/")) return Promise.resolve({ body: { id: A, username: "Test user" } });
         if (url.startsWith("/invites/")) return Promise.resolve({ body: { code: "test", guild: { id: A, name: "Server A" }, expires_at: "2026-10-15T00:00:00Z" } });
         const id = url.match(/\/guilds\/(\d+)/)[1];
-        return Promise.resolve({ body: { id, name: guilds[id].name, owner_id: guilds[id].ownerId, approximate_member_count: 120, approximate_presence_count: 0, features: ["COMMUNITY"], verification_level: 0, nsfw_level: 0, mfa_level: 0, explicit_content_filter: 0, widget_enabled: false, icon: "test" } });
+        return Promise.resolve({ body: { id, name: guilds[id].name, owner_id: guilds[id].ownerId, approximate_member_count: 120, approximate_presence_count: 0, features: ["COMMUNITY"], verification_level: 0, nsfw_level: 0, mfa_level: 0, explicit_content_filter: 0, widget_enabled: false, icon: rich ? guilds[id].icon : "test" } });
     } };
-    const state = [], effects = [], cleanups = [];
-    let cursor = 0;
+    const hookInstances = new Map(), effects = [];
+    let cursor = 0, instance;
     const React = {
         createElement(type, props, ...children) { return { type, key: props?.key, props: { ...props, children } }; },
         useState(initial) {
             const index = cursor++;
-            if (!(index in state)) state[index] = initial;
-            return [state[index], value => { state[index] = value; }];
+            const state = instance.values;
+            if (!(index in state)) state[index] = typeof initial === "function" ? initial() : initial;
+            instance.setters[index] ??= value => { state[index] = typeof value === "function" ? value(state[index]) : value; };
+            return [state[index], instance.setters[index]];
         },
-        useEffect(effect) { if (!effects.length) effects.push(effect); },
+        useReducer(reduce, initial) {
+            const [value, set] = React.useState(initial);
+            const index = cursor - 1;
+            instance.reducers[index] ??= action => set(value => reduce(value, action));
+            return [value, instance.reducers[index]];
+        },
+        useRef(value) { return React.useState(() => ({ current: value }))[0]; },
+        useEffect(effect, deps) {
+            const index = cursor++, owner = instance;
+            const previous = owner.effects[index];
+            if (previous && deps && previous.deps && deps.every((value, i) => value === previous.deps[i])) return;
+            effects.push(() => {
+                previous?.cleanup?.();
+                owner.effects[index] = { deps, cleanup: effect() };
+            });
+        },
+        Fragment: "Fragment",
     };
     const RN = { Text: "Text", View: "View", Image: "Image", ScrollView: "ScrollView", TouchableOpacity: "TouchableOpacity", Dimensions: { get: () => ({ height: 800 }) }, Alert: { alert(...args) { alerts.push(args); } } };
     function ActionSheet() {}
@@ -53,12 +71,30 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         }
         return walk(value);
     }
-    const stores = { ThemeStore: { theme: "dark" }, GuildStore: { getGuild: id => cached ? guilds[id] : null }, UserStore: { getCurrentUser: () => ({ id: "1" }) } };
+    const stores = { ThemeStore: { theme: "dark" }, GuildStore: { getGuild: id => cached ? guilds[id] : null }, UserStore: { getCurrentUser: () => ({ id: "1" }), getUser: id => ({ id, username: "Server owner" }) } };
+    const listeners = new Set(), memberRequests = [];
+    if (rich) {
+        guilds[A].icon = "a_icon"; guilds[A].banner = "a_banner";
+        const friendIds = Array.from({ length: 7 }, (_, i) => String(600000000000000000n + BigInt(i)));
+        stores.GuildRoleStore = { getSortedRoles: () => [{ id: "role1" }, { id: "role2" }] };
+        const channels = [{ channel: { id: "channel1" } }, { channel: { id: "channel2" } }];
+        stores.GuildChannelStore = { getChannels: () => ({ SELECTABLE: channels, VOCAL: [channels[0]] }) };
+        stores.RelationshipStore = { getFriendIDs: () => friendIds };
+        stores.GuildMemberStore = { getMember: (guildId, id) => guildId === A && friendIds.includes(id) ? { nick: `Friend ${friendIds.indexOf(id) + 1}` } : undefined };
+        stores.GuildMemberCountStore = { getMemberCount: () => 200, getOnlineCount: () => 0 };
+        stores.UserStore.getUser = id => ({ id, username: friendIds.includes(id) ? "Friend user" : "Server owner", avatar: "a_avatar" });
+        for (const store of Object.values(stores)) {
+            const callbacks = new Set();
+            store.addChangeListener = fn => { callbacks.add(fn); listeners.add(callbacks); };
+            store.removeChangeListener = fn => { callbacks.delete(fn); if (!callbacks.size) listeners.delete(callbacks); };
+        }
+    }
     const profile = profileMethod ? { [profileMethod](options) {
         if (profileThrows) throw new Error("Unsupported profile opener");
         profiles.push(options); events.push("profile");
     } } : null;
     const modules = [api, contexts, ...(fallback ? [] : [sheets, { ActionSheet }]), { ActionSheetRow }, { colors: {}, meta: { resolveSemanticColor: () => "#2b2d31" } }, ...(profile ? [profile] : [])];
+    if (rich) modules.push({ requestMembersById: (...args) => memberRequests.push(args) });
     function patch(kind, name, obj, callback) {
         const original = obj[name];
         const wrapper = function (...args) {
@@ -88,11 +124,24 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         clearTimeout: timer => { if (timer) timer.cleared = true; },
     };
     const plugin = vm.runInNewContext(source, sandbox);
-    const render = component => { cursor = 0; return component(); };
-    return { plugin, requests, alerts, opens, hidden, commands, notifications, copied, errors, timeouts, menu, contexts, sheets, ActionSheetRow, React, profiles, events, searchTree,
+    const render = (component, props = opens.at(-1)?.props ?? {}) => {
+        function expand(node, path) {
+            if (Array.isArray(node)) return node.map((child, i) => expand(child, `${path}.${i}`));
+            if (!node || typeof node !== "object") return node;
+            if (typeof node.type === "function" && node.type !== ActionSheet && node.type !== ActionSheetRow) {
+                const key = `${path}:${node.type.name}`;
+                if (!hookInstances.has(key)) hookInstances.set(key, { values: [], setters: [], reducers: [], effects: [] });
+                instance = hookInstances.get(key); cursor = 0;
+                return expand(node.type(node.props), `${key}.render`);
+            }
+            return { ...node, props: { ...node.props, children: expand(node.props?.children, `${path}.children`) } };
+        }
+        return expand(React.createElement(component, props), "root");
+    };
+    return { plugin, requests, alerts, opens, hidden, commands, notifications, copied, errors, timeouts, menu, contexts, sheets, ActionSheetRow, React, profiles, events, searchTree, listeners, memberRequests,
         render,
-        mountEffects() { for (const effect of effects.splice(0)) cleanups.push(effect()); },
-        unmount() { cleanups.forEach(fn => fn?.()); },
+        mountEffects() { for (const effect of effects.splice(0)) effect(); },
+        unmount() { for (const state of hookInstances.values()) for (const effect of state.effects) effect?.cleanup?.(); hookInstances.clear(); },
     };
 }
 
@@ -160,14 +209,14 @@ test("no data produces a visible error instead of an empty sheet", async () => {
     h.plugin.onUnload();
 });
 
-test("custom sheet displays loading then details and repeated tap opens once", async () => {
+test("replacement sheet displays cached details immediately and repeated tap opens once", async () => {
     const h = harness(); h.plugin.onLoad();
     const item = h.menu.default(B).at(-1);
     item.action(); item.action();
     assert.equal(h.opens.length, 1);
     const module = await h.opens[0].promise;
     const initial = h.render(module.default);
-    assert.match(JSON.stringify(initial), /Loading server details/);
+    assert.match(JSON.stringify(initial), /Server B/);
     h.mountEffects(); await tick();
     const loaded = h.render(module.default);
     assert.match(JSON.stringify(loaded), /Server B/);
@@ -253,9 +302,9 @@ for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfil
         const { default: component } = await h.opens[0].promise;
         h.render(component); h.mountEffects(); await tick();
         const rendered = h.render(component);
-        const owner = h.searchTree(rendered, node => node?.props?.accessibilityLabel === "View server owner's profile");
+        const owner = h.searchTree(rendered, node => node?.props?.accessibilityLabel === "Owner");
         assert.ok(owner);
-        assert.match(JSON.stringify(owner), /Tap to view profile/);
+        assert.match(JSON.stringify(owner), /Server owner/);
         owner.props.onPress();
         assert.equal(h.profiles.length, 1);
         assert.equal(h.profiles[0].userId, "444456789012345678");
@@ -284,9 +333,9 @@ test("an unavailable owner ID stays plain and is not passed to a profile opener"
     const { default: component } = await h.opens[0].promise;
     h.render(component); h.mountEffects(); await tick();
     const rendered = h.render(component);
-    assert.equal(h.searchTree(rendered, node => node?.props?.accessibilityLabel === "View server owner's profile"), undefined);
-    assert.match(JSON.stringify(rendered), /Owner ID/);
-    assert.match(JSON.stringify(rendered), /Unknown/);
+    assert.equal(h.searchTree(rendered, node => node?.props?.accessibilityLabel === "Owner")?.props?.onPress, undefined);
+    assert.match(JSON.stringify(rendered), /Owner/);
+    assert.match(JSON.stringify(rendered), /—/);
     assert.equal(h.profiles.length, 0);
     h.plugin.onUnload();
 });
@@ -301,3 +350,48 @@ for (const options of [{ profileMethod: null }, { profileThrows: true }]) {
         h.plugin.onUnload();
     });
 }
+
+test("supplied layout renders overview, animated images, expandable friends, and profile/copy actions", async () => {
+    const h = harness({ rich: true }); h.plugin.onLoad();
+    assert.equal(h.memberRequests.length, 0);
+    assert.equal(h.listeners.size, 0);
+    h.menu.default(A).at(-1).action();
+    const { default: component } = await h.opens[0].promise;
+    h.render(component); h.mountEffects(); await tick();
+    let rendered = h.render(component);
+    assert.match(JSON.stringify(rendered), /Overview/);
+    assert.match(JSON.stringify(rendered), /Friends in Server/);
+    assert.match(JSON.stringify(rendered), /a_banner\.gif\?size=1024/);
+    assert.match(JSON.stringify(rendered), /a_icon\.gif\?size=128/);
+    const row = label => h.searchTree(rendered, node => node?.props?.accessibilityLabel === label);
+    assert.match(JSON.stringify(row("Members")), /200/);
+    assert.match(JSON.stringify(row("Online")), /"0"/);
+    assert.match(JSON.stringify(row("Channels")), /"2"/);
+    assert.match(JSON.stringify(row("Roles")), /"2"/);
+    assert.equal(h.memberRequests.length, 1);
+    assert.equal(h.memberRequests[0][0], A);
+    assert.equal(h.memberRequests[0][1].length, 7);
+    assert.equal(h.memberRequests[0][2], false);
+    assert.equal(row("Friend 6 (Friend user)"), undefined);
+    row("Show all 7 friends").props.onPress();
+    rendered = h.render(component);
+    row("Friend 7 (Friend user)").props.onPress();
+    assert.equal(h.profiles.at(-1).userId, "600000000000000006");
+    assert.equal(h.profiles.at(-1).guildId, A);
+    row("ID").props.onPress();
+    assert.deepEqual(h.copied, [A]);
+    h.unmount();
+    assert.equal(h.listeners.size, 0);
+    assert.ok(h.timeouts.every(timer => timer.cleared));
+    h.plugin.onUnload();
+});
+
+test("replacement sheet shows a loading state, then a visible error if there is no cached or fetched guild", async () => {
+    const h = harness({ cached: false, apiFailure: true }); h.plugin.onLoad();
+    h.menu.default(A).at(-1).action();
+    const { default: component } = await h.opens[0].promise;
+    assert.match(JSON.stringify(h.render(component)), /Loading server info/);
+    h.mountEffects(); await tick();
+    assert.match(JSON.stringify(h.render(component)), /Server details are unavailable/);
+    h.unmount(); h.plugin.onUnload();
+});

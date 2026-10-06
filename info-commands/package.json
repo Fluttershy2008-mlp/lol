@@ -2,5 +2,11 @@
   "name": "revenge-info-commands",
   "private": true,
   "type": "module",
-  "scripts": { "build": "node build.mjs", "test": "node --test tests/*.test.mjs" }
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
 }

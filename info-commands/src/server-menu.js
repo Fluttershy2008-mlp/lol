@@ -1,3 +1,4 @@
+import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
 const { React, ReactNative: RN } = vendetta.metro.common;
@@ -163,73 +164,21 @@ export function openServerInfo(id, load) {
     if (sheetKey === key) return;
     if (sheetKey) optional(() => sheets?.hideActionSheet?.(sheetKey));
     const ActionSheet = optional(() => findByProps("ActionSheet")?.ActionSheet);
-    const colors = optional(() => findByProps("colors", "meta"));
-    const theme = optional(() => findByStoreName("ThemeStore")?.theme);
-    const sc = (name, fallback) => optional(() => colors?.meta?.resolveSemanticColor(theme, vendetta.ui.semanticColors?.[name])) ?? fallback;
-    const textColor = sc("TEXT_NORMAL", theme === "light" ? "#1e1f22" : "#f2f3f5");
-    const background = sc("BACKGROUND_SECONDARY", theme === "light" ? "#f2f3f5" : "#2b2d31");
     const epoch = generation;
-    const text = (value, style = {}, props = {}) => React.createElement(RN.Text, {
-        style: { color: textColor, fontSize: 15, ...style }, ...props,
-    }, value);
     const close = () => {
         optional(() => sheets?.hideActionSheet?.(key));
         if (sheetKey === key) sheetKey = undefined;
     };
-    function ServerInfoSheet() {
-        const [data, setData] = React.useState(null);
-        const [error, setError] = React.useState(null);
-        React.useEffect(() => {
-            let mounted = true;
-            Promise.resolve().then(() => load(id)).then(value => {
-                if (mounted && running && epoch === generation) setData(value);
-            }).catch(reason => {
-                if (mounted && running && epoch === generation) setError(reason?.message ?? "Unable to load server details.");
-            });
-            return () => {
-                mounted = false;
-                if (sheetKey === key) sheetKey = undefined;
-            };
+    function ManagedServerInfoSheet(props) {
+        React.useEffect(() => () => {
+            if (sheetKey === key) sheetKey = undefined;
         }, []);
-        const content = [text("Server Info", { fontSize: 22, fontWeight: "700" }, { key: "title" }),
-            React.createElement(RN.TouchableOpacity, { key: "close", onPress: close, accessibilityLabel: "Close server info", style: { paddingVertical: 12 } }, text("Close", { color: "#8ea1ff" }))];
-        if (error) content.push(text(error, {}, { key: "error" }));
-        if (!data && !error) content.push(text("Loading server details…", {}, { key: "loading" }));
-        if (data) {
-            if (data.thumbnail?.url) content.push(React.createElement(RN.Image, { key: "icon", source: { uri: data.thumbnail.url }, style: { width: 72, height: 72, borderRadius: 16, marginBottom: 12 } }));
-            content.push(text(data.title, { fontSize: 20, fontWeight: "600" }, { key: "name" }));
-            content.push(text(data.description, { marginTop: 8 }, { key: "description", selectable: true }));
-            if (data.cachedOnly) content.push(text("Showing cached details. Some information may be unavailable.", { marginTop: 10 }, { key: "cache" }));
-            for (const field of data.fields) {
-                const value = plainText(field.value);
-                const isOwner = field.name === "Owner ID" && guildId(data.ownerId);
-                const row = React.createElement(RN.View, { key: field.name, style: { paddingVertical: 12 } },
-                    text(field.name, { fontWeight: "600", marginBottom: 4 }),
-                    text(value, isOwner ? { color: "#8ea1ff" } : {}, { selectable: !isOwner }));
-                if (isOwner) {
-                    content.push(React.createElement(RN.TouchableOpacity, {
-                        key: field.name,
-                        onPress: () => openOwnerProfile(data.ownerId, id, close),
-                        accessibilityRole: "button",
-                        accessibilityLabel: "View server owner's profile",
-                    }, row, text("Tap to view profile", { color: "#8ea1ff", fontSize: 13 })));
-                    continue;
-                }
-                content.push(field.name === "ID" ? React.createElement(RN.TouchableOpacity, {
-                    key: field.name, onPress: () => copy(id), accessibilityLabel: "Copy server ID",
-                }, row, text("Tap to copy", { color: "#8ea1ff" })) : row);
-            }
-            if (data.image?.url) content.push(React.createElement(RN.Image, { key: "banner", source: { uri: data.image.url }, style: { width: "100%", height: 150, resizeMode: "contain", marginVertical: 12 } }));
-        }
-        return React.createElement(ActionSheet, null, React.createElement(RN.ScrollView, {
-            style: { maxHeight: Math.round((RN.Dimensions?.get?.("window")?.height ?? 700) * 0.8), backgroundColor: background },
-            contentContainerStyle: { padding: 20, paddingBottom: 40 },
-        }, ...content));
+        return React.createElement(ServerInfoSheet, props);
     }
     if (typeof sheets?.openLazy === "function" && ActionSheet && React?.createElement) {
         sheetKey = key;
         try {
-            Promise.resolve(sheets.openLazy(Promise.resolve({ default: ServerInfoSheet }), key, {})).catch(() => {
+            Promise.resolve(sheets.openLazy(Promise.resolve({ default: ManagedServerInfoSheet }), key, { guildId: id, onClose: close })).catch(() => {
                 close(); notify("Unable to open server info");
             });
             return;

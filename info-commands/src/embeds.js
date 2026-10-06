@@ -1,4 +1,4 @@
-import { findByProps } from "@vendetta/metro";
+const { findByProps } = vendetta.metro;
 
 const API = findByProps("get", "post");
 const DISCORD_EPOCH = 1420070400000;

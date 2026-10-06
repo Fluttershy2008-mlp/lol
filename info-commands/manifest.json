@@ -5,12 +5,15 @@
     {
       "name": "fshin",
       "id": "1381008677301129257"
+    },
+    {
+      "name": "kmmiio99o"
     }
   ],
-  "version": "1.1.1",
+  "version": "1.2.0",
   "main": "index.js",
   "vendetta": {
     "icon": "ic_info_24px"
   },
-  "hash": "813e2c93e4780704142d3d34de2216547f16f6675872687c441b409e08dd2c23"
+  "hash": "7af9422e125f4e9e3b9bce5dc4a8854141d55cc6def368350c4b11f03eb81726"
 }
