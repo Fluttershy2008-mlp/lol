@@ -9,7 +9,7 @@ const AUTHOR = '753962426407452713', OTHER = '890228870559698955';
 const MESSAGE = '1425205000123456789';
 const KEY = 'copy-user-id:author', SHEET = 'MessageLongPressActionSheet';
 
-function harness(factory = createPlugin, { ready = true, clipboardError = false } = {}) {
+function harness(factory = createPlugin, { ready = true, clipboardError = false, profileMenus = false, contextEnabled = false } = {}) {
   const copies = [], toasts = [], hidden = [], timers = new Map();
   const React = {
     createElement(type, props, ...children) {
@@ -26,6 +26,19 @@ function harness(factory = createPlugin, { ready = true, clipboardError = false 
   Row.Icon = function Icon() {};
   const host = { openLazy(...args) { return args; }, hideActionSheet(key) { hidden.push(key); } };
   const clipboard = { setString(id) { if (clipboardError) throw new Error('Native clipboard failed'); copies.push(id); } };
+  const menus = {};
+  const contextMenus = { showContextMenu(menu) { return menu; }, hideContextMenu() { hidden.push('context'); } };
+  const profileTree = () => React.createElement(RN.View, null,
+    React.createElement('ContextMenu', { items: Object.freeze([
+      Object.freeze([Object.freeze({ label: 'View Main Profile', action() {} }),
+        Object.freeze({ label: 'Copy Username', action() {} }),
+        Object.freeze({ label: 'View Avatar', action() {} })]),
+      Object.freeze([Object.freeze({ label: 'Block', action() {} })]),
+    ]) }));
+  if (profileMenus) {
+    menus.UserProfileOverflowMenu = { default: () => profileTree() };
+    menus.BotUserProfileOverflowMenu = { default: () => profileTree() };
+  }
   let available = ready, patches = 0, removed = 0, timerID = 0, resumeHandler;
   RN.AppState = { addEventListener(event, callback) { resumeHandler = callback; return { remove() { removed++; } }; } };
   const V = {
@@ -36,7 +49,9 @@ function harness(factory = createPlugin, { ready = true, clipboardError = false 
         if (props.includes('openLazy')) return host;
         if (props.includes('ActionSheetRow')) return { ActionSheetRow: Row };
         if (props.includes('setString')) return clipboard;
+        if (props.includes('showContextMenu') && contextEnabled) return contextMenus;
       },
+      findByName(name) { return available ? menus[name] : undefined; },
       findByStoreName(name) { return name === 'MessageStore' ? {
         getMessage(channel, message) { return channel === '123456789012345678' && message === MESSAGE ? { author: { id: AUTHOR } } : null; },
       } : undefined; },
@@ -44,6 +59,13 @@ function harness(factory = createPlugin, { ready = true, clipboardError = false 
     patcher: { before(method, object, callback) {
       const original = object[method]; patches++;
       object[method] = function(...args) { callback(args); return original.apply(this, args); };
+      return () => { object[method] = original; patches--; };
+    }, after(method, object, callback) {
+      const original = object[method]; patches++;
+      object[method] = function(...args) {
+        const result = original.apply(this, args);
+        return callback(args, result) ?? result;
+      };
       return () => { object[method] = original; patches--; };
     } },
     ui: { toasts: { showToast(message) { toasts.push(message); } }, assets: { getAssetIDByName() { return 4; } } },
@@ -78,7 +100,7 @@ function harness(factory = createPlugin, { ready = true, clipboardError = false 
     if (expand && typeof node.type === 'function' && node.type !== Row) return rows(render(node.type, node.props), expand);
     return rows(node.props?.children, expand);
   }
-  return { plugin, copies, toasts, hidden, React, RN, Row, tree, open, render, rows, host, timers,
+  return { plugin, copies, toasts, hidden, React, RN, Row, tree, open, render, rows, host, timers, menus, profileTree, contextMenus,
     get patches() { return patches; }, get removed() { return removed; },
     makeAvailable() { available = true; }, resume() { resumeHandler('active'); } };
 }
@@ -202,4 +224,110 @@ test('published bundle evaluates in Revenge expression loader and manifest match
   h.plugin.onLoad(); const { wrapped } = await h.open(context(AUTHOR));
   await h.rows(h.render(wrapped.default))[0].props.onPress();
   assert.deepEqual(h.copies, [AUTHOR]); h.plugin.onUnload();
+});
+
+const profileItems = tree => tree.props.children.props.items;
+const copyItems = items => items.flat().filter(item => item.id === KEY);
+
+test('profile overflow adds ID next to Copy Username without changing existing or frozen items', async () => {
+  const h = harness(createPlugin, { profileMenus: true, contextEnabled: true });
+  const original = h.profileTree();
+  h.menus.UserProfileOverflowMenu.default = () => original;
+  h.plugin.onLoad();
+  const output = h.menus.UserProfileOverflowMenu.default({ user: { id: AUTHOR } });
+  const items = profileItems(output);
+  assert.equal(copyItems(items).length, 1);
+  assert.equal(items[0][2].label, `Copy User ID\n${AUTHOR}`);
+  assert.equal(items[0][3].label, 'View Avatar');
+  assert.equal(items[1], profileItems(original)[1]);
+  assert.equal(copyItems(profileItems(original)).length, 0);
+  await items[0][2].action();
+  assert.deepEqual(h.copies, [AUTHOR]); assert.deepEqual(h.hidden, ['context']);
+  // The original message menu continues to work with profile support enabled.
+  const message = await h.open(context(OTHER));
+  await h.rows(h.render(message.wrapped.default))[0].props.onPress();
+  assert.deepEqual(h.copies, [AUTHOR, OTHER]);
+  h.plugin.onUnload();
+});
+
+test('profile callbacks keep the right user across repeated renders and bot profiles', async () => {
+  const h = harness(createPlugin, { profileMenus: true }); h.plugin.onLoad();
+  const first = h.menus.UserProfileOverflowMenu.default({ userId: AUTHOR });
+  const second = h.menus.UserProfileOverflowMenu.default({ displayProfile: { userId: OTHER } });
+  const bot = h.menus.BotUserProfileOverflowMenu.default({ user: { id: OTHER } });
+  await copyItems(profileItems(first))[0].action();
+  await copyItems(profileItems(second))[0].action();
+  await copyItems(profileItems(bot))[0].action();
+  assert.deepEqual(h.copies, [AUTHOR, OTHER, OTHER]); h.plugin.onUnload();
+});
+
+test('profile memo and forward-ref exports are patched and restored', () => {
+  for (const kind of ['memo', 'ref']) {
+    const h = harness(createPlugin, { profileMenus: true });
+    const component = props => h.profileTree();
+    h.menus.UserProfileOverflowMenu.default = kind === 'memo' ? h.React.memo(component) : h.React.forwardRef(component);
+    h.plugin.onLoad();
+    const tree = h.render(h.menus.UserProfileOverflowMenu.default, { userId: AUTHOR });
+    assert.equal(copyItems(profileItems(tree)).length, 1);
+    h.plugin.onUnload();
+    const original = h.render(h.menus.UserProfileOverflowMenu.default, { userId: AUTHOR });
+    assert.equal(copyItems(profileItems(original)).length, 0); assert.equal(h.patches, 0);
+  }
+});
+
+test('user context menus support flat and grouped items without duplicating the profile action', async () => {
+  const h = harness(createPlugin, { contextEnabled: true }); h.plugin.onLoad();
+  const flat = Object.freeze([Object.freeze({ label: 'Copy Username', action() {} })]);
+  for (const items of [flat, Object.freeze([flat])]) {
+    const menu = Object.freeze({ context: { userId: AUTHOR }, items });
+    const added = h.contextMenus.showContextMenu(menu);
+    assert.notEqual(added, menu); assert.equal(copyItems(added.items).length, 1);
+    const repeated = h.contextMenus.showContextMenu(added);
+    assert.equal(repeated, added);
+    await copyItems(added.items)[0].action();
+  }
+  assert.deepEqual(h.copies, [AUTHOR, AUTHOR]); assert.equal(flat.length, 1);
+  h.plugin.onUnload();
+});
+
+test('profile and context menus never use a guild/channel ID or imprecise number', () => {
+  const h = harness(createPlugin, { profileMenus: true, contextEnabled: true }); h.plugin.onLoad();
+  for (const props of [{ guildId: AUTHOR }, { channelId: AUTHOR }, { userId: Number(AUTHOR) },
+    { user: { id: 'invalid' } }]) {
+    const tree = h.menus.UserProfileOverflowMenu.default(props);
+    assert.equal(copyItems(profileItems(tree)).length, 0);
+    const menu = { ...props, items: [{ label: 'Copy Username', action() {} }] };
+    assert.equal(h.contextMenus.showContextMenu(menu), menu);
+  }
+  h.plugin.onUnload();
+});
+
+test('profile actions are deduplicated when overflow and context-menu hooks both run', () => {
+  const h = harness(createPlugin, { profileMenus: true, contextEnabled: true }); h.plugin.onLoad();
+  const tree = h.menus.UserProfileOverflowMenu.default({ userId: AUTHOR });
+  const menu = { userId: AUTHOR, items: profileItems(tree) };
+  assert.equal(h.contextMenus.showContextMenu(menu), menu);
+  assert.equal(copyItems(menu.items).length, 1); h.plugin.onUnload();
+});
+
+test('unload removes all profile hooks and disables already-open profile actions', async () => {
+  const h = harness(createPlugin, { profileMenus: true, contextEnabled: true });
+  const original = h.menus.UserProfileOverflowMenu.default, show = h.contextMenus.showContextMenu;
+  h.plugin.onLoad(); h.plugin.onLoad(); assert.equal(h.patches, 4);
+  const output = h.menus.UserProfileOverflowMenu.default({ userId: AUTHOR });
+  const item = copyItems(profileItems(output))[0];
+  h.plugin.onUnload(); await item.action();
+  assert.deepEqual(h.copies, []); assert.equal(h.patches, 0);
+  assert.equal(h.menus.UserProfileOverflowMenu.default, original);
+  assert.equal(h.contextMenus.showContextMenu, show);
+  h.plugin.onLoad(); await item.action(); assert.deepEqual(h.copies, []);
+  h.plugin.onUnload();
+});
+
+test('late profile module discovery does not install duplicate message hooks', () => {
+  const h = harness(); h.plugin.onLoad(); assert.equal(h.patches, 1);
+  h.menus.UserProfileOverflowMenu = { default: () => h.profileTree() };
+  h.resume(); h.resume(); assert.equal(h.patches, 2);
+  const output = h.menus.UserProfileOverflowMenu.default({ userId: AUTHOR });
+  assert.equal(copyItems(profileItems(output)).length, 1); h.plugin.onUnload();
 });
