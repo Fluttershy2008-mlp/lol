@@ -12,7 +12,7 @@ Disable/remove another installed copy of InfoCommands before enabling this copy 
 
 ## Use
 
-Press and hold a server icon in Discord's server list, then tap **Server Info**. A private, scrollable information sheet shows that server's name, description, owner ID, creation date, members/online counts, boosts, verification/security settings, features, icon/banner, and server ID. Tap the server ID to copy it.
+Press and hold a server icon in Discord's server list, then tap **Server Info**. A private, scrollable information sheet shows that server's name, description, owner ID, creation date, members/online counts, boosts, verification/security settings, features, icon/banner, and server ID. Tap **Owner ID** to open the owner's Discord profile in that server. Tap the server ID to copy it.
 
 The server-info slash command has been replaced by this menu entry. The existing `/userinfo` and `/inviteinfo` commands remain available with their original options/output behavior.
 

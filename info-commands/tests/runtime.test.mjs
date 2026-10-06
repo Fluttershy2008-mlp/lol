@@ -10,15 +10,16 @@ const A = "123456789012345678";
 const B = "223456789012345678";
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-function harness({ modern = false, fallback = false, apiFailure = false, pending = false, cached = true } = {}) {
-    const requests = [], alerts = [], opens = [], hidden = [], commands = [], notifications = [], copied = [], errors = [], timeouts = [];
+function harness({ modern = false, fallback = false, apiFailure = false, pending = false, cached = true, profileMethod = "openUserProfileModal", profileThrows = false, missingOwner = false } = {}) {
+    const requests = [], alerts = [], opens = [], hidden = [], commands = [], notifications = [], copied = [], errors = [], timeouts = [], profiles = [], events = [];
     const guilds = {
         [A]: { id: A, name: "Server A", ownerId: "333456789012345678", features: new Set(["COMMUNITY"]), premiumTier: 2 },
         [B]: { id: B, name: "Server B", ownerId: "444456789012345678", features: ["COMMUNITY"] },
     };
+    if (missingOwner) for (const guild of Object.values(guilds)) delete guild.ownerId;
     const menu = { default: function getGuildsBarGuildMenuItems() { return [{ label: "Mark As Read" }, { label: "Notifications" }, { label: "More Options" }]; } };
     const contexts = { showContextMenu(menu) { return menu; }, hideContextMenu() { hidden.push("context"); } };
-    const sheets = { openLazy(promise, key, props) { opens.push({ promise, key, props }); }, hideActionSheet(key) { hidden.push(key); } };
+    const sheets = { openLazy(promise, key, props) { opens.push({ promise, key, props }); }, hideActionSheet(key) { hidden.push(key); events.push("hide"); } };
     const api = { post() { throw new Error("Unexpected POST"); }, get({ url }) {
         requests.push(url);
         if (pending) return new Promise(() => {});
@@ -53,7 +54,11 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         return walk(value);
     }
     const stores = { ThemeStore: { theme: "dark" }, GuildStore: { getGuild: id => cached ? guilds[id] : null }, UserStore: { getCurrentUser: () => ({ id: "1" }) } };
-    const modules = [api, contexts, ...(fallback ? [] : [sheets, { ActionSheet }]), { ActionSheetRow }, { colors: {}, meta: { resolveSemanticColor: () => "#2b2d31" } }];
+    const profile = profileMethod ? { [profileMethod](options) {
+        if (profileThrows) throw new Error("Unsupported profile opener");
+        profiles.push(options); events.push("profile");
+    } } : null;
+    const modules = [api, contexts, ...(fallback ? [] : [sheets, { ActionSheet }]), { ActionSheetRow }, { colors: {}, meta: { resolveSemanticColor: () => "#2b2d31" } }, ...(profile ? [profile] : [])];
     function patch(kind, name, obj, callback) {
         const original = obj[name];
         const wrapper = function (...args) {
@@ -84,7 +89,7 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
     };
     const plugin = vm.runInNewContext(source, sandbox);
     const render = component => { cursor = 0; return component(); };
-    return { plugin, requests, alerts, opens, hidden, commands, notifications, copied, errors, timeouts, menu, contexts, sheets, ActionSheetRow, React,
+    return { plugin, requests, alerts, opens, hidden, commands, notifications, copied, errors, timeouts, menu, contexts, sheets, ActionSheetRow, React, profiles, events, searchTree,
         render,
         mountEffects() { for (const effect of effects.splice(0)) cleanups.push(effect()); },
         unmount() { cleanups.forEach(fn => fn?.()); },
@@ -112,7 +117,7 @@ test("long press keeps existing entries, adds one row, and loads the pressed ser
     assert.deepEqual(h.requests, [`/guilds/${B}?with_counts=true`]);
     assert.match(h.alerts[0][0], /Server B/);
     assert.match(h.alerts[0][1], /0 online/);
-    h.alerts[0][2][0].onPress();
+    h.alerts[0][2].find(button => button.text === "Copy Server ID").onPress();
     assert.deepEqual(h.copied, [B]);
     h.plugin.onUnload();
 });
@@ -240,3 +245,59 @@ test("userinfo and inviteinfo retain options and generate private command output
     assert.notEqual(i.data.embeds[0].fields.find(f => f.name === "Expires").value, "Never");
     h.plugin.onUnload();
 });
+
+for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
+    test(`Owner ID opens the correct owner's profile using ${method}`, async () => {
+        const h = harness({ profileMethod: method }); h.plugin.onLoad();
+        h.menu.default(B).at(-1).action();
+        const { default: component } = await h.opens[0].promise;
+        h.render(component); h.mountEffects(); await tick();
+        const rendered = h.render(component);
+        const owner = h.searchTree(rendered, node => node?.props?.accessibilityLabel === "View server owner's profile");
+        assert.ok(owner);
+        assert.match(JSON.stringify(owner), /Tap to view profile/);
+        owner.props.onPress();
+        assert.equal(h.profiles.length, 1);
+        assert.equal(h.profiles[0].userId, "444456789012345678");
+        assert.equal(h.profiles[0].guildId, B);
+        assert.deepEqual(h.events.slice(-2), ["hide", "profile"]);
+        assert.equal(h.opens.length, 1);
+        assert.deepEqual(h.copied, []);
+        h.plugin.onUnload();
+    });
+}
+
+test("cached owner ID and older native alert still open the owner's profile", async () => {
+    const h = harness({ fallback: true, apiFailure: true }); h.plugin.onLoad();
+    h.menu.default(A).at(-1).action(); await tick();
+    const button = h.alerts[0][2].find(button => button.text === "View Owner Profile");
+    assert.ok(button); button.onPress();
+    assert.equal(h.profiles[0].userId, "333456789012345678");
+    assert.equal(h.profiles[0].guildId, A);
+    assert.equal(h.alerts[0][2].length, 3);
+    h.plugin.onUnload();
+});
+
+test("an unavailable owner ID stays plain and is not passed to a profile opener", async () => {
+    const h = harness({ missingOwner: true }); h.plugin.onLoad();
+    h.menu.default(A).at(-1).action();
+    const { default: component } = await h.opens[0].promise;
+    h.render(component); h.mountEffects(); await tick();
+    const rendered = h.render(component);
+    assert.equal(h.searchTree(rendered, node => node?.props?.accessibilityLabel === "View server owner's profile"), undefined);
+    assert.match(JSON.stringify(rendered), /Owner ID/);
+    assert.match(JSON.stringify(rendered), /Unknown/);
+    assert.equal(h.profiles.length, 0);
+    h.plugin.onUnload();
+});
+
+for (const options of [{ profileMethod: null }, { profileThrows: true }]) {
+    test(`missing or failing profile helper shows feedback without crashing: ${JSON.stringify(options)}`, async () => {
+        const h = harness({ fallback: true, ...options }); h.plugin.onLoad();
+        h.menu.default(A).at(-1).action(); await tick();
+        assert.doesNotThrow(() => h.alerts[0][2].find(button => button.text === "View Owner Profile").onPress());
+        assert.match(h.notifications.at(-1), /profiles are unavailable/);
+        assert.equal(h.profiles.length, 0);
+        h.plugin.onUnload();
+    });
+}

@@ -7,10 +7,10 @@
       "id": "1381008677301129257"
     }
   ],
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "index.js",
   "vendetta": {
     "icon": "ic_info_24px"
   },
-  "hash": "e179e03b7ce2947c06c7748cd797aea0a5c33d94c0c59697f2db1bd2db4209ae"
+  "hash": "813e2c93e4780704142d3d34de2216547f16f6675872687c441b409e08dd2c23"
 }

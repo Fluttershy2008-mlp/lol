@@ -2,7 +2,7 @@
   "name": "InfoCommands",
   "description": "Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
   "authors": [{ "name": "fshin", "id": "1381008677301129257" }],
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "index.js",
   "vendetta": { "icon": "ic_info_24px" }
 }

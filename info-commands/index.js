@@ -374,6 +374,24 @@ function copy(value) {
     } else notify("Select and copy the server ID below");
 }
 
+function openOwnerProfile(ownerId, serverId, close) {
+    if (!running || !guildId(ownerId)) return;
+    // Discord versions may export these helpers from separate modules.
+    for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
+        const module = optional(() => findByProps(method));
+        if (typeof module?.[method] !== "function") continue;
+        try {
+            close?.();
+            Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }))
+                .catch(() => notify("Unable to open the owner's profile. Try again."));
+            return;
+        } catch (error) {
+            console.error("[InfoCommands] Owner profile opener unavailable", error);
+        }
+    }
+    notify("Owner profiles are unavailable on this Discord version");
+}
+
 function openServerInfo(id, load) {
     if (!running) return;
     const key = `${ITEM_ID}-${id}`;
@@ -419,8 +437,19 @@ function openServerInfo(id, load) {
             if (data.cachedOnly) content.push(text("Showing cached details. Some information may be unavailable.", { marginTop: 10 }, { key: "cache" }));
             for (const field of data.fields) {
                 const value = plainText(field.value);
+                const isOwner = field.name === "Owner ID" && guildId(data.ownerId);
                 const row = React.createElement(RN.View, { key: field.name, style: { paddingVertical: 12 } },
-                    text(field.name, { fontWeight: "600", marginBottom: 4 }), text(value, {}, { selectable: true }));
+                    text(field.name, { fontWeight: "600", marginBottom: 4 }),
+                    text(value, isOwner ? { color: "#8ea1ff" } : {}, { selectable: !isOwner }));
+                if (isOwner) {
+                    content.push(React.createElement(RN.TouchableOpacity, {
+                        key: field.name,
+                        onPress: () => openOwnerProfile(data.ownerId, id, close),
+                        accessibilityRole: "button",
+                        accessibilityLabel: "View server owner's profile",
+                    }, row, text("Tap to view profile", { color: "#8ea1ff", fontSize: 13 })));
+                    continue;
+                }
                 content.push(field.name === "ID" ? React.createElement(RN.TouchableOpacity, {
                     key: field.name, onPress: () => copy(id), accessibilityLabel: "Copy server ID",
                 }, row, text("Tap to copy", { color: "#8ea1ff" })) : row);
@@ -444,10 +473,12 @@ function openServerInfo(id, load) {
     // Native alert remains usable on older clients without custom action sheets.
     Promise.resolve().then(() => load(id)).then(data => {
         if (!running || epoch !== generation) return;
+        const buttons = [{ text: "Copy Server ID", onPress: () => copy(id) }, { text: "Close", style: "cancel" }];
+        if (guildId(data.ownerId)) buttons.unshift({ text: "View Owner Profile", onPress: () => openOwnerProfile(data.ownerId, id) });
         RN.Alert.alert(`Server Info — ${data.title}`, [data.description,
             data.cachedOnly ? "Showing cached details." : "",
             ...data.fields.map(f => `${f.name}: ${plainText(f.value)}`),
-        ].filter(Boolean).join("\n\n"), [{ text: "Copy Server ID", onPress: () => copy(id) }, { text: "Close", style: "cancel" }]);
+        ].filter(Boolean).join("\n\n"), buttons);
     }).catch(error => { if (running && epoch === generation) notify(error?.message ?? "Unable to load server info"); });
 }
 
@@ -702,7 +733,7 @@ async function getServerEmbed(guildId) {
                 fields: fields
             };
             
-    return { ...embed, cachedOnly: !fetched };
+    return { ...embed, ownerId: guild.owner_id, cachedOnly: !fetched };
 }
 // Invite Info Command
 const inviteInfoCommand = common.cmdDisplays({

@@ -238,7 +238,7 @@ async function getServerEmbed(guildId) {
                 fields: fields
             };
             
-    return { ...embed, cachedOnly: !fetched };
+    return { ...embed, ownerId: guild.owner_id, cachedOnly: !fetched };
 }
 // Invite Info Command
 const inviteInfoCommand = common.cmdDisplays({
