@@ -1,0 +1,16 @@
+{
+  "name": "Addon List",
+  "description": "Send, privately preview, or copy your plugin and theme lists. Built-in message splitting for Revenge.",
+  "authors": [
+    {
+      "name": "Kitomanari",
+      "id": "437154602626973697"
+    },
+    {
+      "name": "fluttershy_simper"
+    }
+  ],
+  "version": "2.0.0",
+  "main": "index.js",
+  "hash": "dab5b94781f49f41679ac64dbf711eadf59e3ecef48a8a2ae6264aa6a230da87"
+}
