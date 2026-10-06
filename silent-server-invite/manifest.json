@@ -1,0 +1,16 @@
+{
+  "name": "Silent Server Invite",
+  "description": "Blocks new channel invite requests and copies a saved existing invite. Cannot hide server logs. Experimental legacy Revenge plugin.",
+  "authors": [
+    {
+      "name": "fluttershy_simper",
+      "id": "753962426407452713"
+    }
+  ],
+  "version": "0.1.1",
+  "main": "index.js",
+  "vendetta": {
+    "icon": "Check"
+  },
+  "hash": "12013697784ac237cdbb75b36e308ddcfc246e164f05efefe366eb98baf2add5"
+}
