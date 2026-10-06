@@ -158,6 +158,63 @@ test('message menu handles multiple custom emoji and leaves unrelated menus alon
   assert.equal(await t.host.openLazy(Promise.resolve(original), 'OtherSheet', {}), original);
   t.plugin.onUnload();
 });
+test('plain text long-press preserves the original lazy promise, module, and component tree', async () => {
+  const t = harness(); t.plugin.onLoad(); const R = t.React;
+  let renders = 0;
+  const child = () => { renders++; return R.createElement('Text', {}, 'Copy'); };
+  const tree = R.createElement(child, {});
+  const original = { default: () => tree };
+  const lazy = Promise.resolve(original);
+  for (let i = 0; i < 30; i++) {
+    assert.equal(t.host.openLazy(lazy, 'MessageLongPressActionSheet', { message: { content: 'hello' } }), lazy);
+  }
+  assert.equal(renders, 0);
+  const wrapped = await t.host.openLazy(lazy, 'MessageLongPressActionSheet', {});
+  assert.equal(wrapped.default({ message: { content: 'hello' } }), tree);
+  assert.equal(t.host.openLazy(lazy, 'MessageLongPressActionSheet', { message: { content: '😀' } }), lazy);
+  t.plugin.onUnload();
+});
+test('emoji action injection preserves untouched branches and never opens another sheet during render', async () => {
+  const t = harness(); t.plugin.onLoad(); const R = t.React;
+  const preview = R.createElement('View', {}, R.createElement('Text', {}, 'Preview'));
+  const row = R.createElement('Action', { label: 'Copy', onPress() {} });
+  const rows = R.createElement('View', {}, [row]);
+  const tree = R.createElement('View', {}, [preview, rows]);
+  const module = await t.host.openLazy(Promise.resolve({ default: () => tree }), 'MessageLongPressActionSheet',
+    { message: { content: `<:test:${id}>` } });
+  const output = module.default({});
+  assert.equal(output.props.children[0], preview);
+  assert.equal(output.props.children[1].props.children[0], row);
+  assert.equal(t.nodes(output).filter(n => n.key === 'stealmoji-actions').length, 1);
+  t.plugin.onUnload();
+});
+test('rapid repeated emoji action presses open one picker and dismissal allows the next opening', async () => {
+  const t = harness(); t.modules.push({ ActionSheet: 'ActionSheet' }); t.plugin.onLoad(); const R = t.React;
+  const opens = [], hides = [];
+  const open = t.host.openLazy;
+  t.host.openLazy = (...args) => { opens.push(args); return open(...args); };
+  t.host.hideActionSheet = key => hides.push(key);
+  const tree = R.createElement('View', {}, [R.createElement('Action', { label: 'Copy', onPress() {} })]);
+  const module = await t.host.openLazy(Promise.resolve({ default: () => tree }), 'MessageLongPressActionSheet',
+    { message: { content: `<:test:${id}>` } });
+  const output = module.default({});
+  assert.equal(opens.length, 1, 'long-press itself opens only Discord’s menu');
+  const action = t.nodes(output).find(n => n.props.onPress && n.props.accessibilityLabel === 'Stealmoji · Add / save emoji');
+  action.props.onPress(); action.props.onPress(); action.props.onPress(); await tick();
+  assert.equal(opens.filter(a => a[1] === 'StealmojiPicker').length, 1);
+  assert.deepEqual(hides, ['MessageLongPressActionSheet']);
+  const pickerModule = await opens[1][0];
+  const content = pickerModule.default().props.children;
+  t.mount(content); t.unmount(); // Swipe/back dismissal unmounts Content.
+  action.props.onPress(); await tick();
+  assert.equal(opens.filter(a => a[1] === 'StealmojiPicker').length, 2);
+  assert.equal(pickerModule.default(), null, 'stale lazy picker cannot mount again');
+  const latest = await opens[2][0];
+  latest.default().props.children.props.close();
+  action.props.onPress(); await tick();
+  assert.equal(opens.filter(a => a[1] === 'StealmojiPicker').length, 3);
+  t.plugin.onUnload();
+});
 test('reactions keep selection and add long-press without accumulating wrappers', async () => {
   const t = harness(); t.plugin.onLoad(); const R = t.React; let selected;
   const tab = R.createElement('Tab', { index: 3, reaction: { emoji: { id, name: 'test' } } });

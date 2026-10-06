@@ -25,6 +25,17 @@ Disable the old Stealmoji copy before installing this one, then reload Revenge.
   emoji CDN URL, or its ID. For an animated ID that Discord has not cached, turn
   on **Animated emoji (GIF)**. Unicode emoji cannot be copied into server slots.
 
+## Changes in 2.1.1
+
+- Plain text long-press menus keep Discord's original promise and component tree
+  when there are no custom emoji to act on.
+- Emoji menu edits preserve untouched branches, avoid wrapping React Native
+  controls, and bound fallback tree traversal.
+- Repeated action presses open only one Stealmoji picker. Closing or swiping it
+  away releases the guard; disabling the plugin invalidates pending pickers.
+- Regression tests cover ordinary messages, repeated picker presses, dismissal,
+  and reopening. Native phone testing is still required for your Discord build.
+
 ## Changes in 2.1.0
 
 - Dedicated scrolling server picker matching the original Stealmoji layout:

@@ -4,7 +4,7 @@ export function createPlugin(V, env = globalThis) {
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement, core = createCore(env);
   const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
-  let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume;
+  let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
   const unpatches = [], dialogs = new Set();
   const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
   const byStore = key => { try { return V.metro.findByStoreName(key); } catch {} };
@@ -253,25 +253,36 @@ export function createPlugin(V, env = globalThis) {
     return Boundary ? h(Boundary, null, element) : element;
   }
   function openPicker(emojis, fromKey) {
-    if (!active) return;
-    const sheetHost = host();
-    let Sheet = byProps('ActionSheet')?.ActionSheet;
-    if (!Sheet) { try { Sheet = V.metro.find(m => m?.render?.name === 'ActionSheet'); } catch {} }
-    if (sheetHost?.openLazy && Sheet) {
-      const close = () => { try { sheetHost.hideActionSheet?.(KEY); } catch {} };
-      const component = () => guarded(h(Sheet, { scrollable: true }, h(Picker, { emojis, close, inSheet: true })));
-      sheetHost.hideActionSheet?.(fromKey);
-      sheetHost.openLazy(Promise.resolve({ default: component }), KEY, {});
-      return;
+    if (!active || pickerOpening) return;
+    const opening = { session: generation };
+    pickerOpening = opening;
+    const release = () => { if (pickerOpening === opening) pickerOpening = undefined; };
+    const live = () => active && generation === opening.session && pickerOpening === opening;
+    function Content(props) {
+      React.useEffect(() => release, []);
+      return live() ? h(Picker, props) : null;
     }
-    const manager = byProps('openAlert', 'dismissAlert'), alerts = byProps('AlertModal', 'AlertActions');
-    if (manager?.openAlert && alerts?.AlertModal) {
-      const close = () => { manager.dismissAlert(KEY); dialogs.delete(KEY); };
-      dialogs.add(KEY);
-      manager.openAlert(KEY, guarded(h(alerts.AlertModal, { title: 'Emoji tools', content: h(Picker, { emojis, close }) })));
-      return;
-    }
-    toast('Open Stealmoji’s plugin settings to paste and add this emoji.');
+    try {
+      const sheetHost = host();
+      let Sheet = byProps('ActionSheet')?.ActionSheet;
+      if (!Sheet) { try { Sheet = V.metro.find(m => m?.render?.name === 'ActionSheet'); } catch {} }
+      if (sheetHost?.openLazy && Sheet) {
+        const close = () => { if (!live()) return; try { sheetHost.hideActionSheet?.(KEY); } finally { release(); } };
+        const component = () => live() ? guarded(h(Sheet, { scrollable: true }, h(Content, { emojis, close, inSheet: true }))) : null;
+        sheetHost.hideActionSheet?.(fromKey);
+        sheetHost.openLazy(Promise.resolve({ default: component }), KEY, {});
+        return;
+      }
+      const manager = byProps('openAlert', 'dismissAlert'), alerts = byProps('AlertModal', 'AlertActions');
+      if (manager?.openAlert && alerts?.AlertModal) {
+        const close = () => { if (!live()) return; try { manager.dismissAlert(KEY); } finally { dialogs.delete(KEY); release(); } };
+        dialogs.add(KEY);
+        manager.openAlert(KEY, guarded(h(alerts.AlertModal, { title: 'Emoji tools', content: h(Content, { emojis, close }) })));
+        return;
+      }
+      release();
+      toast('Open Stealmoji’s plugin settings to paste and add this emoji.');
+    } catch (error) { release(); throw error; }
   }
   function action(emojis, key) {
     const Row = byProps('ActionSheetRow')?.ActionSheetRow;
@@ -301,21 +312,31 @@ export function createPlugin(V, env = globalThis) {
     scan(tree);
     if (duplicate) return { tree, done: true };
     if (!best) return { tree, done: false };
+    let replacements = 0;
     function replace(node, depth = 0) {
-      if (!node || depth > 24) return node;
+      if (!node || depth > 24 || ++replacements > 1000) return node;
       if (node === best) return [...best, action(emojis, key)];
-      if (Array.isArray(node)) return node.map(item => replace(item, depth + 1));
-      if (node.props?.children != null) return React.cloneElement(node, { children: replace(node.props.children, depth + 1) });
+      if (Array.isArray(node)) {
+        const children = node.map(item => replace(item, depth + 1));
+        return children.some((child, i) => child !== node[i]) ? children : node;
+      }
+      if (node.props?.children != null) {
+        const children = replace(node.props.children, depth + 1);
+        return children === node.props.children ? node : React.cloneElement(node, { children });
+      }
       return node;
     }
     return { tree: replace(tree), done: true };
   }
   function wrapSheet(component, context, key, session) {
     const caches = Array.from({ length: 6 }, () => new WeakMap());
+    const nativeTypes = new Set([RN.View, RN.ScrollView, RN.Text, RN.Image, RN.Pressable,
+      RN.TouchableOpacity, RN.TextInput, RN.FlatList, RN.Switch]);
+    let visited = 0;
     let openingEmoji = resolveEmoji(context), openingEmojis = messageEmojis(context);
     const live = () => active && generation === session;
     function walk(node, props, level, depth = 0) {
-      if (!node || depth > 24) return node;
+      if (!node || depth > 24 || ++visited > 1000) return node;
       if (Array.isArray(node)) return node.map(child => walk(child, props, level, depth + 1));
       if (!node.props) return node;
       const next = { ...node.props };
@@ -330,9 +351,9 @@ export function createPlugin(V, env = globalThis) {
         });
       }
       for (const field of ['children', 'header']) if (next[field] != null) next[field] = walk(next[field], props, level, depth + 1);
-      if (level < 5 && node.type !== RN.View && node.type !== RN.ScrollView && node.type !== RN.Text && node.type !== RN.Image) {
+      if (level < 5 && !nativeTypes.has(node.type)) {
         const wrapped = wrap(node.type, level + 1);
-        if (wrapped !== node.type) return h(wrapped, { ...next, key: node.key });
+        if (wrapped !== node.type) return h(wrapped, { ...next, key: node.key, ...(node.ref != null ? { ref: node.ref } : {}) });
       }
       return React.cloneElement(node, next);
     }
@@ -344,10 +365,13 @@ export function createPlugin(V, env = globalThis) {
         const messages = key === 'MessageLongPressActionSheet' ? messageEmojis(props, context) : [];
         if (messages.length) openingEmojis = messages;
         const emojis = openingEmoji ? [openingEmoji] : key === 'MessageLongPressActionSheet' ? openingEmojis : [];
+        // Plain text menus need no Stealmoji component wrappers or tree edits.
+        if (key === 'MessageLongPressActionSheet' && !emojis.length && (props?.message || context?.message)) return tree;
         if (emojis.length) {
           const changed = inject(tree, emojis, key, key !== 'MessageLongPressActionSheet');
           if (changed.done) return changed.tree;
         }
+        visited = 0;
         return walk(tree, props, level);
       } catch { return tree; }
     }
@@ -376,6 +400,7 @@ export function createPlugin(V, env = globalThis) {
       const unpatch = V.patcher.before('openLazy', sheetHost, args => {
         const [lazy, key, context] = args;
         if (!active || !['MessageEmojiActionSheet', 'MessageReactions', 'MessageLongPressActionSheet'].includes(key) || !lazy?.then) return;
+        if (key === 'MessageLongPressActionSheet' && context?.message && !resolveEmoji(context) && !messageEmojis(context).length) return;
         const session = generation;
         args[0] = Promise.resolve(lazy).then(module => {
           if (!active || session !== generation || !module?.default) return module;
@@ -401,7 +426,7 @@ export function createPlugin(V, env = globalThis) {
     try { resume = RN.AppState?.addEventListener?.('change', state => { if (state === 'active') connect(); }); } catch {}
   }
   function onUnload() {
-    active = false; generation++; hooked = false;
+    active = false; generation++; hooked = false; pickerOpening = undefined;
     env.clearTimeout(retryTimer);
     try { resume?.remove?.(); } catch {}
     resume = undefined;

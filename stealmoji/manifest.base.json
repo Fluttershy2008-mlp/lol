@@ -1,7 +1,7 @@
 {
   "name": "Stealmoji",
   "description": "Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "authors": [
     { "name": "Fiery", "id": "890228870559698955" },
     { "name": "pylix", "id": "492949202121261067" },
