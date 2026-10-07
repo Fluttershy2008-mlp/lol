@@ -1,4 +1,4 @@
-# SaveAsSticker 1.1.0 — Vencord
+# SaveAsSticker 1.1.1 — Vencord
 
 Copy this complete folder into `Vencord/src/userplugins/saveAsSticker/`.
 The entry point must be `Vencord/src/userplugins/saveAsSticker/index.tsx`.
@@ -16,7 +16,7 @@ Fully restart Discord and enable **SaveAsSticker** under **User Settings → Ven
 Right-click an image/GIF → **Save as Sticker** → choose a server → **Add sticker**.
 For local files, open the plugin's settings/about panel and press **Choose image or GIF**.
 
-Actual animated GIFs are supported (up to 5 seconds, 512 KiB after conversion). GIF links with Tenor/Giphy MP4 or WebM previews are converted locally to animated GIFs at up to 25 FPS. Real GIFs keep every frame. Links must expose downloadable animation through Discord; otherwise use Choose original file. Animated APNG/WebP must be exported as GIF first. A server needs Create Expressions permission and an available sticker slot.
+Actual animated GIFs are supported (up to 5 seconds, 512 KiB after conversion). GIF links with Tenor/Giphy MP4 or WebM previews are converted locally to animated GIFs at up to 25 FPS. Real GIFs keep every frame. Tenor/Giphy page links also work without a Discord embed: right-click the link or its message. Forwarded links are supported. If the host cannot supply downloadable animation, use Choose original file. Animated APNG/WebP must be exported as GIF first. A server needs Create Expressions permission and an available sticker slot.
 
 [Full installation and usage instructions](https://github.com/Fluttershy2008-mlp/lol/tree/main/vencord-save-as-sticker)
 

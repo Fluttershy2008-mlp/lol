@@ -1,4 +1,4 @@
-SaveAsSticker for Vencord, version 1.1.0
+SaveAsSticker for Vencord, version 1.1.1
 Copyright (c) 2026 Fluttershy2008-mlp and contributors
 Licensed under GPL-3.0-or-later; see LICENSE.
 

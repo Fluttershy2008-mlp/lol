@@ -5,11 +5,12 @@ import { mkdir } from "node:fs/promises";
 import { gifFixture } from "./gif-fixture.mjs";
 
 await mkdir(new URL("../.test-build/", import.meta.url), { recursive: true });
-const state = { guilds: {}, stickers: {}, permissions: {}, posts: [], events: [], modals: [], closed: [], reply: null };
+const state = { guilds: {}, stickers: {}, permissions: {}, posts: [], events: [], modals: [], closed: [], reply: null, cachedMessage: null };
 globalThis.__sasMock = {
     Constants: { Endpoints: { GUILD_STICKER_PACKS: id => `/guilds/${id}/stickers` } },
     FluxDispatcher: { dispatch: event => state.events.push(event) },
     GuildStore: { getGuilds: () => state.guilds, getGuild: id => state.guilds[id] },
+    MessageStore: { getMessage: () => state.cachedMessage },
     PermissionsBits: { CREATE_GUILD_EXPRESSIONS: 1n << 43n },
     PermissionStore: { getGuildPermissions: ({ id }) => state.permissions[id] ?? 0n },
     RestAPI: { post: async options => { state.posts.push(options); return state.reply ? state.reply() : { body: { id: "sticker1", name: "saved" } }; } },
@@ -196,4 +197,22 @@ test("both Vencord menus open the selected image and disabling closes the picker
     const controller = state.modals.at(-1).render({ onClose() {}, transitionState: 1 }).props.controller;
     assert.equal(controller.signal.aborted, true);
     assert.ok(state.closed.includes("vc-save-as-sticker"));
+});
+
+test("message menu includes a bare GIF page link and uses fresh cached message content", () => {
+    const page = "https://tenor.com/view/pinkie-pie-gif-123";
+    plugin.start();
+    try {
+        for (const message of [{ content: page }, { messageSnapshots: [{ message: { content: page } }] }, { id: "1", channel_id: "2", content: "stale" }]) {
+            state.cachedMessage = message.id ? { ...message, content: page } : null;
+            const children = [];
+            plugin.contextMenus.message(children, { message });
+            assert.equal(children.length, 1);
+            const item = children[0].props.children[0];
+            assert.equal(item.props.label, "Save as Sticker");
+            item.props.action();
+            const modal = state.modals.at(-1).render({ onClose() {}, transitionState: 1 });
+            assert.equal(modal.props.source.pageUrl, page);
+        }
+    } finally { state.cachedMessage = null; plugin.stop(); }
 });

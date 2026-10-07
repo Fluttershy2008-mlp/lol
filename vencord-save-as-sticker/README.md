@@ -1,6 +1,6 @@
 # SaveAsSticker for Vencord
 
-Version **1.1.0** · Desktop custom plugin by Fluttershy2008-mlp.
+Version **1.1.1** · Desktop custom plugin by Fluttershy2008-mlp.
 
 Right-click an image or animated GIF → **Save as Sticker** → choose a server → **Add sticker**.
 
@@ -34,7 +34,7 @@ Vencord custom plugins require a **source build**. A Revenge install URL, Better
    cd Vencord
    ```
 
-3. Extract the downloaded ZIP into `Vencord/src/userplugins/`. Create `userplugins` if it is missing. The final path must be **`Vencord/src/userplugins/saveAsSticker/index.tsx`**. Copy the entire `saveAsSticker` folder, including `gif.js`, `gif.d.ts`, `media.ts`, `video.ts`, `upload.ts` and `styles.css`.
+3. Extract the downloaded ZIP into `Vencord/src/userplugins/`. Create `userplugins` if it is missing. The final path must be **`Vencord/src/userplugins/saveAsSticker/index.tsx`**. Copy the entire `saveAsSticker` folder, including `gif.js`, `gif.d.ts`, `media.ts`, `video.ts`, `links.ts`, `native.ts`, `upload.ts` and `styles.css`.
 4. Run these commands **inside the Vencord source folder**, where its `package.json` is:
 
    ```sh
@@ -66,7 +66,7 @@ To update, replace the `saveAsSticker` folder with the latest ZIP contents, rebu
 
 ## Use
 
-- Right-click an image/GIF in a message or the image viewer. If you right-click a message containing several images, choose the desired image from the submenu.
+- Right-click an image/GIF, its link, or the message containing it. GIF links are also detected in message text and forwarded messages when Discord’s embed is missing, suppressed, or delayed. If you right-click a message containing several images, choose the desired image from the submenu.
 - Edit the name, select a server, then press **Add sticker**. Only servers where you can create expressions appear; full servers are disabled.
 - If a host blocks downloading or a link is only a preview, use **Choose original file** in the picker. You can also open the plugin's settings/about panel and press **Choose image or GIF**.
 - Uploads use Discord's existing signed-in session. The plugin never asks for a token. Conversion happens locally; the prepared file is uploaded only to your selected Discord server.
@@ -78,13 +78,13 @@ To update, replace the `saveAsSticker` folder with the latest ZIP contents, rebu
 - Animation limit: 5 seconds, at most 250 frames. Source GIFs above 4 megapixels or 80 megapixels across all frames are rejected to avoid freezing Discord. Downloads are limited to 25 MiB.
 - GIF attachments and GIF link embeds work, including Tenor/Giphy GIFV previews delivered as MP4 or WebM. The original GIF is preferred when exposed by Discord; otherwise the video is converted locally into an animated GIF at up to 25 FPS, preserving its full duration with transparent padding. Audio is omitted.
 - Long or oversized animations produce an explanation; they are never silently trimmed. Real GIF files keep every frame. Video previews are sampled at up to 25 FPS and loop continuously.
-- Download failures or still previews fall back to the embed’s animated media/proxy URL when available. Links without accessible animated media need **Choose original file**; a still thumbnail is never substituted for animation.
+- Download failures or still previews fall back to the embed’s animated media/proxy URL when available. Tenor/Giphy page links can also resolve their public GIF/video metadata directly, without needing a Discord embed. The desktop helper reads these public pages without Discord cookies or tokens; no API key is needed. Links without accessible animated media need **Choose original file**; a still thumbnail is never substituted for animation.
 - Animated APNG/WebP must first be exported as GIF. They are rejected instead of silently flattened.
 - Discord's permissions, rate limits and sticker limits still apply. Permissions and capacity are checked again before uploading. Failed uploads are not automatically retried.
 
 ## Verification and development
 
-The release is checked against Vencord commit `3374b8a9d8f6b051c64204917360293aad7f5d75` (1.15.10), including its TypeScript check and desktop build. Automated tests cover the bundled GIF converter, media selection, downloads, multipart uploads, permission/slot checks, duplicate submission prevention, plugin lifecycle, and automatic installer upgrades. Real-browser MP4 and WebM checks verify animation, duration, transparent padding, cancellation, and the five-second limit. No live Discord account/server upload was performed in this development environment.
+The release is checked against Vencord commit `3374b8a9d8f6b051c64204917360293aad7f5d75` (1.15.10), including its TypeScript check and desktop build. Automated tests cover the bundled GIF converter, media selection, downloads, multipart uploads, permission/slot checks, duplicate submission prevention, plugin lifecycle, automatic installer upgrades, bare/forwarded GIF links, page metadata, cancelled downloads, and desktop page-fetch limits. Public Tenor and Giphy pages were checked for real animation URLs. Real-browser MP4 and WebM checks verify animation, duration, transparent padding, cancellation, and the five-second limit. No live Discord account/server upload was performed in this development environment.
 
 For plugin development only, from `vencord-save-as-sticker/`:
 

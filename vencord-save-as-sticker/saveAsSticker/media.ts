@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { prepareGIF } from "./gif";
+import { isGIFPageURL, MAX_PAGE_BYTES, messageLinks, pageMediaURLs } from "./links";
 import { prepareVideoGIF, VideoOptions } from "./video";
 
 export const MAX_UPLOAD_BYTES = 512 * 1024;
@@ -14,6 +15,7 @@ export interface Media {
     gif: boolean;
     video?: boolean;
     fallbackUrls?: string[];
+    pageUrl?: string;
 }
 
 export interface PreparedSticker {
@@ -72,18 +74,32 @@ function mediaFrom(source: any, knownImage = false): Media | null {
     return { url, name: stickerName(name), gif, ...(others.length ? { fallbackUrls: others } : {}) };
 }
 
+function linkedMedia(value: string): Media | null {
+    const url = originalURL(value);
+    if (!url) return null;
+    const name = stickerName(new URL(url).pathname.split("/").filter(Boolean).pop() ?? "sticker");
+    if (isGIFPageURL(url)) return { url, pageUrl: url, name, gif: true, video: true };
+    if (videoExtension.test(url) && gifHost(url)) return { url, name, gif: true, video: true };
+    return mediaFrom({ url });
+}
+
 function embedMedia(embed: any): Media[] {
-    if (embed.type === "gifv" || (embed.type === "video" && gifHost(embed.url ?? ""))) {
+    const pageUrl = isGIFPageURL(embed.url ?? "") ? embed.url as string : undefined;
+    if (embed.type === "gifv" || pageUrl || (embed.type === "video" && gifHost(embed.url ?? ""))) {
         const assets = [embed.image, embed.thumbnail, embed.video].flatMap(sourceURLs);
         // Tenor/Giphy often provide MP4/WebM plus a still thumbnail. Prefer an
         // actual GIF, otherwise convert the video; never save the still thumbnail.
-        const gifURLs = [embed.url, ...assets].filter(u => typeof u === "string" && gifExtension.test(u));
+        const gifURLs = [embed.url, ...assets].filter(u => typeof u === "string" && gifExtension.test(u) && !isGIFPageURL(u));
         const videos = sourceURLs(embed.video);
         const candidates = uniqueURLs([...gifURLs, ...videos]);
+        if (!candidates.length && pageUrl) {
+            const link = linkedMedia(pageUrl)!;
+            return [{ ...link, name: stickerName(embed.title || link.name) }];
+        }
         if (!candidates.length) return [];
         return [{ url: candidates[0], fallbackUrls: candidates.slice(1),
             name: stickerName(embed.title || new URL(candidates[0]).pathname.split("/").pop() || "sticker"),
-            gif: true, video: videos.length > 0 }];
+            gif: true, video: videos.length > 0 || Boolean(pageUrl), ...(pageUrl ? { pageUrl } : {}) }];
     }
     const sources = [embed.image, ...(embed.images ?? []), embed.type === "image" ? embed : null];
     return sources.map(s => mediaFrom(s, true)).filter((s): s is Media => Boolean(s));
@@ -100,38 +116,64 @@ function sameResource(a: string, b: string) {
 export function resolveMedia(props: any): Media[] {
     if (!props) return [];
     const message = props.message;
+    const messages = [message, ...(message?.messageSnapshots ?? message?.message_snapshots ?? []).map(s => s.message)].filter(Boolean);
+    const attachments = messages.flatMap(m => m.attachments ?? []);
+    const embeds = messages.flatMap(m => m.embeds ?? []);
     const selected = [props.itemHref, props.itemSrc, props.src].filter(s => typeof s === "string" && s);
     if (selected.length) {
-        for (const attachment of message?.attachments ?? []) {
+        for (const attachment of attachments) {
             if (selected.some(s => sourceURLs(attachment).some(u => sameResource(s, u)))) {
                 const media = mediaFrom(attachment);
                 return media ? [media] : [];
             }
         }
-        for (const embed of message?.embeds ?? []) {
+        for (const embed of embeds) {
             const urls = [embed.url, ...[embed.image, embed.thumbnail, embed.video, ...(embed.images ?? [])].flatMap(sourceURLs)];
-            if (selected.some(s => urls.some(u => u && sameResource(s, u)))) return embedMedia(embed).slice(0, 1);
+            if (selected.some(s => urls.some(u => u && sameResource(s, u)))) {
+                const sources = embedMedia(embed);
+                if (sources.length) return sources.slice(0, 1);
+            }
         }
         // A clicked video/link must never select an unrelated message attachment.
-        const raw = selected.find(s => gifExtension.test(s)) ?? selected.find(s => imageExtension.test(s));
-        const media = raw ? mediaFrom({ url: raw }) : null;
-        if (media) return [media];
-        // The image viewer may only supply a direct Tenor/Giphy video URL.
-        const linkedVideo = selected.find(s => videoExtension.test(s) && gifHost(s));
-        const url = linkedVideo ? originalURL(linkedVideo) : null;
-        return url ? [{ url, name: stickerName(new URL(url).pathname.split("/").pop() || "sticker"), gif: true, video: true }] : [];
+        const sources = selected.map(linkedMedia).filter((m): m is Media => Boolean(m));
+        // A provider page identifies the animation even if itemSrc is a still poster.
+        const source = sources.find(m => m.pageUrl) ?? sources.find(m => m.gif) ?? sources[0];
+        return source ? [source] : [];
     }
     const media = [
-        ...(message?.attachments ?? []).map(a => mediaFrom(a)),
-        ...(message?.embeds ?? []).flatMap(embedMedia)
+        ...attachments.map(a => mediaFrom(a)),
+        ...embeds.flatMap(embedMedia)
     ].filter((m): m is Media => Boolean(m));
+    for (const value of messages.flatMap(m => messageLinks(m.content))) {
+        const source = linkedMedia(value);
+        if (source && !media.some(m => [m.url, m.pageUrl, ...(m.fallbackUrls ?? [])].some(u => u && sameResource(u, source.url)))) media.push(source);
+    }
     return media.filter((m, i) => media.findIndex(other => other.url === m.url) === i);
 }
 
-export async function downloadMedia(media: Media, signal: AbortSignal): Promise<Blob> {
+export async function downloadMedia(media: Media, signal: AbortSignal, readPage?: (url: string) => Promise<string>): Promise<Blob> {
     let lastError: unknown;
-    for (const url of uniqueURLs([media.url, ...(media.fallbackUrls ?? [])])) {
+    const urls = uniqueURLs([media.url, ...(media.fallbackUrls ?? [])]).filter(u => !isGIFPageURL(u));
+    let triedPage = false;
+    for (let i = 0; i < urls.length || (!triedPage && media.pageUrl); i++) {
         if (signal.aborted) throw signal.reason;
+        if (i === urls.length) {
+            triedPage = true;
+            try {
+                const page = readPage
+                    ? await cancellablePage(readPage, media.pageUrl!, signal)
+                    : await (await downloadURL(media.pageUrl!, signal, MAX_PAGE_BYTES)).text();
+                if (signal.aborted) throw signal.reason;
+                const discovered = pageMediaURLs(page, media.pageUrl!).filter(u => !urls.includes(u));
+                if (!discovered.length) throw new Error("This GIF page did not expose downloadable animation. Choose the original GIF file.");
+                urls.push(...discovered);
+            } catch (error) {
+                if (signal.aborted) throw signal.reason;
+                lastError = error;
+                break;
+            }
+        }
+        const url = urls[i];
         try {
             const blob = await downloadURL(url, signal);
             // If a GIF CDN supplied its thumbnail, try the embed's animated
@@ -149,7 +191,17 @@ export async function downloadMedia(media: Media, signal: AbortSignal): Promise<
     throw lastError ?? new Error("This image link is not a supported HTTPS URL.");
 }
 
-async function downloadURL(url: string, signal: AbortSignal): Promise<Blob> {
+function cancellablePage(readPage: (url: string) => Promise<string>, url: string, signal: AbortSignal): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const aborted = () => reject(signal.reason);
+        signal.addEventListener("abort", aborted, { once: true });
+        if (signal.aborted) { signal.removeEventListener("abort", aborted); aborted(); return; }
+        Promise.resolve().then(() => { if (signal.aborted) throw signal.reason; return readPage(url); })
+            .then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted));
+    });
+}
+
+async function downloadURL(url: string, signal: AbortSignal, maxBytes = MAX_DOWNLOAD_BYTES): Promise<Blob> {
     const controller = new AbortController();
     const cancel = () => controller.abort(signal.reason);
     signal.addEventListener("abort", cancel, { once: true });
@@ -158,10 +210,11 @@ async function downloadURL(url: string, signal: AbortSignal): Promise<Blob> {
     try {
         const res = await fetch(url, { signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer" });
         if (!res.ok) throw new Error(`Image download failed (${res.status}). Reopen the message or choose the original file.`);
-        if (Number(res.headers.get("content-length")) > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image below 25 MiB.");
+        const sizeError = maxBytes === MAX_PAGE_BYTES ? "This GIF page is too large. Choose the original GIF file." : "Choose an image below 25 MiB.";
+        if (Number(res.headers.get("content-length")) > maxBytes) throw new Error(sizeError);
         if (!res.body) {
             const blob = await res.blob();
-            if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image below 25 MiB.");
+            if (blob.size > maxBytes) throw new Error(sizeError);
             return blob;
         }
         const reader = res.body.getReader();
@@ -172,7 +225,7 @@ async function downloadURL(url: string, signal: AbortSignal): Promise<Blob> {
                 const { value, done } = await reader.read();
                 if (done) break;
                 size += value.byteLength;
-                if (size > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image below 25 MiB.");
+                if (size > maxBytes) throw new Error(sizeError);
                 parts.push(new Uint8Array(value));
             }
         } finally {

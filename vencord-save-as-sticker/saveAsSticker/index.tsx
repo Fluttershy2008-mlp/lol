@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SaveAsSticker for Vencord v1.1.0 — Fluttershy2008-mlp
+// SaveAsSticker for Vencord v1.1.1 — Fluttershy2008-mlp
 import "./styles.css";
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
 import { getGuildAcronym } from "@utils/discord";
-import definePlugin from "@utils/types";
+import definePlugin, { PluginNative } from "@utils/types";
 import { RenderModalProps } from "@vencord/discord-types";
-import { closeModal, GuildStore, IconUtils, Menu, Modal, openModal, PermissionStore, React, showToast, StickersStore, useStateFromStores } from "@webpack/common";
+import { closeModal, GuildStore, IconUtils, Menu, MessageStore, Modal, openModal, PermissionStore, React, showToast, StickersStore, useStateFromStores } from "@webpack/common";
 
 import { downloadMedia, Media, PreparedSticker, prepareSticker, resolveMedia, stickerName } from "./media";
 import { eligibleGuilds, errorText, stickerSlots, uploadSticker } from "./upload";
@@ -47,7 +47,8 @@ function StickerModal({ source, controller, ...modalProps }: RenderModalProps & 
         setStatus("Preparing sticker…");
         try {
             check();
-            const blob = file ?? await downloadMedia(source!, current.signal);
+            const native = typeof VencordNative === "undefined" ? undefined : VencordNative.pluginHelpers?.SaveAsSticker as PluginNative<typeof import("./native")> | undefined;
+            const blob = file ?? await downloadMedia(source!, current.signal, native?.fetchGIFPage ? url => native.fetchGIFPage(url) : undefined);
             const result = await prepareSticker(blob, file ? /\.gif$/i.test(file.name) : source?.gif, check, {
                 allowVideo: !file && source?.video,
                 signal: current.signal,
@@ -172,7 +173,10 @@ function openPicker(source?: Media) {
 }
 
 const contextMenuPatch: NavContextMenuPatchCallback = (children, props) => {
-    const sources = resolveMedia(props);
+    const message = props?.message;
+    // Context-menu props can predate Discord's asynchronous embed update.
+    const cached = message?.channel_id && MessageStore?.getMessage?.(message.channel_id, message.id);
+    const sources = resolveMedia(cached ? { ...props, message: cached } : props);
     if (!sources.length) return;
     const group = findGroupChildrenByChildId(["copy-link", "copy-native-link", "save-image"], children);
     const item = sources.length === 1
@@ -191,7 +195,7 @@ export default definePlugin({
     authors: [{ name: "Fluttershy2008-mlp", id: 0n }],
     contextMenus: { "message": contextMenuPatch, "image-context": contextMenuPatch },
     settingsAboutComponent: () => <div className="vc-sas-content">
-        <p>Version 1.1.0. Right-click an image or linked GIF and choose Save as Sticker, or choose a local file here.</p>
+        <p>Version 1.1.1. Right-click an image, GIF link, or its message and choose Save as Sticker, or choose a local file here.</p>
         <button type="button" className="vc-sas-file" onClick={() => openPicker()}>Choose image or GIF</button>
     </div>,
     start() { active = true; },
