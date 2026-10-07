@@ -8,6 +8,16 @@ The picker shows a preview, editable name, searchable server list, server icons 
 
 ## Download
 
+**Windows automatic install/repair:** [Download Install-SaveAsSticker.cmd](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-save-as-sticker/Install-SaveAsSticker.cmd), save it in Downloads, and double-click it. Keep the window open until it says SUCCESS. Discord may close during installation; reopen it afterwards and enable **SaveAsSticker** under Vencord's Plugins settings.
+
+This uses your existing Vencord source checkout (including `%USERPROFILE%\Vencord`) and Node.js 22+. If your checkout is elsewhere, drag that Vencord folder onto the `.cmd` file. It downloads all ten plugin files from a pinned release, checks their SHA-256 hashes, repairs the loose-files and duplicate-wrapper layouts, installs dependencies, builds, and runs Vencord's official installer. Discord Stable is selected when present, followed by Canary or PTB, using the official installer's `--branch auto` option.
+
+Misplaced/previous SaveAsSticker files are moved to `Vencord/SaveAsSticker-Backups/`, outside the plugin folders. Other plugins are preserved. An existing unrelated loose file is never moved merely because its name matches a plugin dependency. Build failure stops before patching Discord. Details are saved to `Vencord/SaveAsSticker-install.log`. The installer does not change PowerShell execution policy or request administrator access.
+
+The generated CMD is self-contained. Its editable source and pinned file hashes are in `installer/`; rebuild it with `npm run build:installer`. Folder repair, download validation, rollback, build/patch failure handling, and the embedded payload are covered by automated tests. The Windows launcher and actual Discord patching require testing on Windows; they were not executed in the development environment.
+
+For manual installation:
+
 **[Download SaveAsSticker-Vencord.zip](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-save-as-sticker/SaveAsSticker-Vencord.zip)**
 
 The ZIP contains the complete `saveAsSticker` folder. The GIF converter is included; there are no extra plugin dependencies to install inside Vencord.
