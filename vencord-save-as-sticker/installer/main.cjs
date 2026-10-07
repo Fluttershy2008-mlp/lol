@@ -72,6 +72,7 @@ function layoutPlan(root, stage, release = RELEASE) {
                 const content = fs.readFileSync(file);
                 const expected = fs.readFileSync(path.join(stage, entry.name));
                 ours = normalizeText(content) === normalizeText(expected)
+                    || (release.previousFiles?.[entry.name] ?? []).includes(sha256(normalizeText(content)))
                     || (lower === "index.tsx" && /name:\s*["']SaveAsSticker["']/.test(content.toString("utf8")));
             }
             if (ours) moves.push(path.relative(root, file));

@@ -26,19 +26,52 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const RELEASE = {
-  "version": "1.0.0",
-  "commit": "6fabf77ceeebc4e1e0f83331921f4724854eac8a",
+  "version": "1.1.0",
+  "commit": "3e16573baefbfa4a833e212bcde2045c24f93ba2",
   "files": {
     "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-    "NOTICE.txt": "c743639dbb7302926ce8e913b90583efa667d0fa6df892c211fd7f654df66ede",
-    "README.md": "60fe634b74c956a8e6b89b6a1597ceec7fad95a716b566fab6f4ce999f2aca44",
+    "NOTICE.txt": "ea9446ca80da6a1a3767ef5b6d44289217c08b688f767a906bffdb33aacddf74",
+    "README.md": "46ae6d7a764d951604dc27553858213e8cdde6125fe343879b2ece473413fed6",
     "THIRD_PARTY_LICENSES.txt": "f6d2684d48840092cb2d976dfd2a25c9c1982e8dbada680eed766994bdc6fd89",
-    "gif.d.ts": "fc0d08cbd5b789fb2db2ecead8789ab47eeacdfad0e0a7efcde9cf6b3634c698",
-    "gif.js": "4f036fb5e1b50dfb9d8a5fb8a6358605a1345b4472737b7be6837987f16532a5",
-    "index.tsx": "8b96529c88eb847e74b8260e442aa41f1f62d7dfbc2eb49cdb4480f16a672cd8",
-    "media.ts": "566fcbcd1bfb7533697ecd4e5326104ffe92dcbd65fa7cfc478141b0d1c5f6d9",
+    "gif.d.ts": "67beaf77b4d86a7164ef3f1d71608d2245f1efd74fc803fb2772cce084535b2c",
+    "gif.js": "a668307f9becdd4aca3a62c955cd336cf137dcca6e64834363981ff9c7220ea1",
+    "index.tsx": "bf86a9355b954121c4e74d328bb2256df96e34010631155960f2b06538d8b0e7",
+    "media.ts": "dd2809a66880f0257677809cd764a0638467b6b9281ab6ec1f7b907df4e5bd9c",
     "styles.css": "e5c14b83e5163488a93a5619d50943612f1ee8eda67d6a5f4ffd0655badcee95",
-    "upload.ts": "5d997049df7524ad0b9d42cef0641870106506b5151a4731c4bbf9800d1e09f3"
+    "upload.ts": "5d997049df7524ad0b9d42cef0641870106506b5151a4731c4bbf9800d1e09f3",
+    "video.ts": "63cb8b4ea38441934e0ab0db100ff4dfdcf2f900a133105a190f6fdcc136f3a5"
+  },
+  "previousFiles": {
+    "LICENSE": [
+      "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    ],
+    "NOTICE.txt": [
+      "c743639dbb7302926ce8e913b90583efa667d0fa6df892c211fd7f654df66ede"
+    ],
+    "README.md": [
+      "60fe634b74c956a8e6b89b6a1597ceec7fad95a716b566fab6f4ce999f2aca44"
+    ],
+    "THIRD_PARTY_LICENSES.txt": [
+      "f6d2684d48840092cb2d976dfd2a25c9c1982e8dbada680eed766994bdc6fd89"
+    ],
+    "gif.d.ts": [
+      "fc0d08cbd5b789fb2db2ecead8789ab47eeacdfad0e0a7efcde9cf6b3634c698"
+    ],
+    "gif.js": [
+      "4f036fb5e1b50dfb9d8a5fb8a6358605a1345b4472737b7be6837987f16532a5"
+    ],
+    "index.tsx": [
+      "8b96529c88eb847e74b8260e442aa41f1f62d7dfbc2eb49cdb4480f16a672cd8"
+    ],
+    "media.ts": [
+      "566fcbcd1bfb7533697ecd4e5326104ffe92dcbd65fa7cfc478141b0d1c5f6d9"
+    ],
+    "styles.css": [
+      "e5c14b83e5163488a93a5619d50943612f1ee8eda67d6a5f4ffd0655badcee95"
+    ],
+    "upload.ts": [
+      "5d997049df7524ad0b9d42cef0641870106506b5151a4731c4bbf9800d1e09f3"
+    ]
   }
 };
 
@@ -106,6 +139,7 @@ function layoutPlan(root, stage, release = RELEASE) {
                 const content = fs.readFileSync(file);
                 const expected = fs.readFileSync(path.join(stage, entry.name));
                 ours = normalizeText(content) === normalizeText(expected)
+                    || (release.previousFiles?.[entry.name] ?? []).includes(sha256(normalizeText(content)))
                     || (lower === "index.tsx" && /name:\s*["']SaveAsSticker["']/.test(content.toString("utf8")));
             }
             if (ours) moves.push(path.relative(root, file));

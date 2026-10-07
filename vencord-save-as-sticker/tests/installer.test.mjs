@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import installer from "../installer/main.cjs";
@@ -40,7 +41,7 @@ test("repairs the screenshot layout and both duplicate wrapper folders; preserve
     create(path.join(user, "otherPlugin", "index.tsx"), "Another user's plugin");
     create(path.join(root, "src", "plugins", "index.ts"), "Upstream index");
     const result = repairLayout(root, releaseDir, RELEASE, () => {});
-    assert.equal(result.moved.length, 12);
+    assert.equal(result.moved.length, Object.keys(RELEASE.files).length + 2);
     assert.equal(fs.existsSync(path.join(user, "index.tsx")), false);
     assert.equal(fs.existsSync(path.join(user, "SaveAsSticker-Vencord")), false);
     for (const name of Object.keys(RELEASE.files)) {
@@ -62,6 +63,19 @@ test("re-running keeps one plugin folder and backs up the previous installation"
     assert.ok(fs.existsSync(path.join(second.backup, "src", "userplugins", "saveAsSticker", "index.tsx")));
 });
 
+test("upgrade repairs recognized older loose files while preserving an unrelated file of the same name", t => {
+    const { root } = fixture(t);
+    const old = "// previous plugin dependency\nexport const oldVersion = true;\n";
+    const hash = createHash("sha256").update(old).digest("hex");
+    const release = { ...RELEASE, previousFiles: { "media.ts": [hash] } };
+    create(path.join(root, "src", "userplugins", "media.ts"), old.replace(/\n/g, "\r\n"));
+    create(path.join(root, "src", "plugins", "media.ts"), "unrelated file");
+    const result = repairLayout(root, releaseDir, release, () => {});
+    assert.deepEqual(result.moved, [path.join("src", "userplugins", "media.ts")]);
+    assert.equal(fs.readFileSync(path.join(root, "src", "plugins", "media.ts"), "utf8"), "unrelated file");
+    assert.equal(fs.readFileSync(path.join(result.backup, "src", "userplugins", "media.ts"), "utf8"), old.replace(/\n/g, "\r\n"));
+});
+
 test("an interrupted/invalid local copy restores the original plugin from backup", t => {
     const { root, parent } = fixture(t);
     const target = path.join(root, "src", "userplugins", "saveAsSticker", "index.tsx");
@@ -80,7 +94,7 @@ test("downloads pinned files and rejects damaged/HTTP-failed downloads", async t
         requests.push(url);
         return new Response(fs.readFileSync(path.join(releaseDir, new URL(url).pathname.split("/").at(-1))));
     });
-    assert.equal(requests.length, 10);
+    assert.equal(requests.length, Object.keys(RELEASE.files).length);
     assert.ok(requests.every(url => url.includes(`/${RELEASE.commit}/`)));
     await assert.rejects(downloadRelease(stage, RELEASE, async () => new Response("damaged")), /checksum/);
     await assert.rejects(downloadRelease(stage, RELEASE, async () => new Response("missing", { status: 404 })), /HTTP 404/);
