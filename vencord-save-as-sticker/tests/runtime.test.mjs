@@ -57,12 +57,50 @@ test("selected attachment preserves signed GIF URL and removes preview transform
     assert.equal(media.originalURL(original + "&format=png&height=80&animated=false"), original);
 });
 
-test("GIF embed resolves original animation; video-only preview never picks another image", () => {
+test("GIF embeds prefer original animation, then use their own MP4 preview", () => {
     const embed = { type: "gifv", url: "https://tenor.com/view/123", video: { url: "https://media.tenor.com/abc/pony.mp4" }, thumbnail: { url: "https://media.tenor.com/abc/pony.gif" } };
     assert.equal(media.resolveMedia({ message: { embeds: [embed] }, itemHref: embed.url })[0].gif, true);
     embed.thumbnail.url = "https://media.tenor.com/abc/pony.png";
-    assert.deepEqual(media.resolveMedia({ message: { embeds: [embed], attachments: [{ url: "https://example.com/other.png" }] }, itemSrc: embed.video.url }), []);
+    const selected = media.resolveMedia({ message: { embeds: [embed], attachments: [{ url: "https://example.com/other.png" }] }, itemSrc: embed.video.url });
+    assert.equal(selected.length, 1);
+    assert.equal(selected[0].url, embed.video.url);
+    assert.equal(selected[0].video, true);
+    assert.equal(selected[0].gif, true);
     assert.deepEqual(media.resolveMedia({ itemSrc: "file:///etc/passwd.png" }), []);
+});
+
+test("linked GIFV with only a still thumbnail and video exposes one animated source", () => {
+    const embed = { type: "gifv", url: "https://tenor.com/view/pinkie-123", title: "Pinkie smile",
+        thumbnail: { url: "https://media.tenor.com/abc/pinkie.png" },
+        video: { url: "https://media.tenor.com/abc/pinkie.mp4", proxyURL: "https://media.discordapp.net/external/abc/pinkie.mp4" } };
+    const sources = media.resolveMedia({ message: { embeds: [embed] } });
+    assert.equal(sources.length, 1);
+    assert.equal(sources[0].name, "Pinkie smile");
+    assert.equal(sources[0].url, embed.video.url);
+    assert.deepEqual(sources[0].fallbackUrls, [embed.video.proxyURL]);
+    assert.equal(sources[0].video, true);
+    assert.equal(media.resolveMedia({ itemSrc: embed.video.url })[0].video, true);
+});
+
+test("ordinary videos and unrelated clicked links still cannot select a different image", () => {
+    const message = { attachments: [{ url: "https://example.com/other.png" }], embeds: [{ type: "video", url: "https://example.com/movie", video: { url: "https://example.com/movie.mp4" } }] };
+    assert.deepEqual(media.resolveMedia({ message, itemHref: "https://example.com/movie" }), []);
+    assert.deepEqual(media.resolveMedia({ message, itemSrc: "https://example.com/movie.mp4" }), []);
+});
+
+test("an unavailable original falls back to the animated proxy, not a still thumbnail", async () => {
+    const saved = globalThis.fetch, requests = [];
+    const mp4Header = Uint8Array.from([0, 0, 0, 20, 102, 116, 121, 112, 105, 115, 111, 109]);
+    try {
+        globalThis.fetch = async url => {
+            requests.push(url);
+            return url.endsWith(".gif") ? new Response("still preview", { headers: { "content-type": "image/png" } })
+                : new Response(mp4Header, { headers: { "content-type": "video/mp4" } });
+        };
+        const downloaded = await media.downloadMedia({ url: "https://example.com/a.gif", gif: true, video: true, fallbackUrls: ["https://example.com/a.mp4"] }, new AbortController().signal);
+        assert.equal(downloaded.type, "video/mp4");
+        assert.deepEqual(requests, ["https://example.com/a.gif", "https://example.com/a.mp4"]);
+    } finally { globalThis.fetch = saved; }
 });
 
 test("message with multiple images exposes choices and decodes filenames", () => {
@@ -145,13 +183,14 @@ test("failed POST is never retried and errors explain permission, capacity, or r
 
 test("both Vencord menus open the selected image and disabling closes the picker", () => {
     plugin.start();
-    for (const [id, props] of [["message", { itemSrc: "https://example.com/pony.gif" }], ["image-context", { src: "https://example.com/pony.gif" }]]) {
+    for (const [id, props] of [["message", { itemSrc: "https://example.com/pony.gif" }], ["image-context", { src: "https://example.com/pony.gif" }],
+        ["message", { message: { embeds: [{ type: "gifv", url: "https://tenor.com/view/pony-123", video: { url: "https://media.tenor.com/abc/pony.mp4" }, thumbnail: { url: "https://media.tenor.com/abc/pony.png" } }] } }]]) {
         const children = [];
         plugin.contextMenus[id](children, props);
         const item = children[0].props.children[0];
         assert.equal(item.props.label, "Save as Sticker"); item.props.action();
         const modal = state.modals.at(-1).render({ onClose() {}, transitionState: 1 });
-        assert.equal(modal.props.source.url, "https://example.com/pony.gif");
+        assert.equal(modal.props.source.url, props.message ? "https://media.tenor.com/abc/pony.mp4" : "https://example.com/pony.gif");
     }
     plugin.stop();
     const controller = state.modals.at(-1).render({ onClose() {}, transitionState: 1 }).props.controller;

@@ -4,3 +4,4 @@ export function prepareGIF(base64: string, check?: () => void): Promise<{
     mimeType: "image/gif";
     extension: "gif";
 }>;
+export function encodeVideoFrames(count: number, durationMs: number, readFrame: (index: number) => Promise<Uint8ClampedArray>, check?: () => void): Promise<Uint8Array<ArrayBuffer>>;

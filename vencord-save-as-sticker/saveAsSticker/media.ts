@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { prepareGIF } from "./gif";
+import { prepareVideoGIF, VideoOptions } from "./video";
 
 export const MAX_UPLOAD_BYTES = 512 * 1024;
 export const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 const imageExtension = /\.(png|apng|jpe?g|webp|gif|bmp)(?:[?#]|$)/i;
 const gifExtension = /\.gif(?:[?#]|$)/i;
+const videoExtension = /\.(mp4|webm|gifv)(?:[?#]|$)/i;
 
 export interface Media {
     url: string;
     name: string;
     gif: boolean;
+    video?: boolean;
+    fallbackUrls?: string[];
 }
 
 export interface PreparedSticker {
@@ -36,9 +40,24 @@ export function originalURL(value: string): string | null {
     }
 }
 
+function sourceURLs(source: any): string[] {
+    return [source?.url, source?.proxy_url, source?.proxyURL].filter(u => typeof u === "string" && u);
+}
+
+function uniqueURLs(urls: string[]) {
+    return [...new Set(urls.map(originalURL).filter((url): url is string => Boolean(url)))];
+}
+
+function gifHost(value: string) {
+    try {
+        const host = new URL(value).hostname;
+        return ["tenor.com", "giphy.com", "imgur.com"].some(domain => host === domain || host.endsWith("." + domain));
+    } catch { return false; }
+}
+
 function mediaFrom(source: any, knownImage = false): Media | null {
     if (!source) return null;
-    const candidates = [source.url, source.proxy_url, source.proxyURL].filter(u => typeof u === "string");
+    const candidates = sourceURLs(source);
     const gifURL = candidates.find(u => gifExtension.test(u));
     const mime = source.content_type ?? source.contentType ?? "";
     const gif = Boolean(gifURL) || mime === "image/gif";
@@ -49,14 +68,25 @@ function mediaFrom(source: any, knownImage = false): Media | null {
     if (!url) return null;
     let name = source.filename ?? source.name ?? new URL(url).pathname.split("/").pop() ?? "sticker";
     try { name = decodeURIComponent(name); } catch { /* Preserve an unusual filename. */ }
-    return { url, name: stickerName(name), gif };
+    const others = uniqueURLs(candidates).filter(u => u !== url);
+    return { url, name: stickerName(name), gif, ...(others.length ? { fallbackUrls: others } : {}) };
 }
 
 function embedMedia(embed: any): Media[] {
-    const sources = embed.type === "gifv"
-        ? [embed.video, embed.image, embed.thumbnail].filter(s => gifExtension.test(s?.url ?? "") || gifExtension.test(s?.proxy_url ?? ""))
-        : [embed.image, ...(embed.images ?? []), embed.type === "image" ? embed : null];
-    return sources.map(s => mediaFrom(s, embed.type !== "gifv")).filter((s): s is Media => Boolean(s));
+    if (embed.type === "gifv" || (embed.type === "video" && gifHost(embed.url ?? ""))) {
+        const assets = [embed.image, embed.thumbnail, embed.video].flatMap(sourceURLs);
+        // Tenor/Giphy often provide MP4/WebM plus a still thumbnail. Prefer an
+        // actual GIF, otherwise convert the video; never save the still thumbnail.
+        const gifURLs = [embed.url, ...assets].filter(u => typeof u === "string" && gifExtension.test(u));
+        const videos = sourceURLs(embed.video);
+        const candidates = uniqueURLs([...gifURLs, ...videos]);
+        if (!candidates.length) return [];
+        return [{ url: candidates[0], fallbackUrls: candidates.slice(1),
+            name: stickerName(embed.title || new URL(candidates[0]).pathname.split("/").pop() || "sticker"),
+            gif: true, video: videos.length > 0 }];
+    }
+    const sources = [embed.image, ...(embed.images ?? []), embed.type === "image" ? embed : null];
+    return sources.map(s => mediaFrom(s, true)).filter((s): s is Media => Boolean(s));
 }
 
 function sameResource(a: string, b: string) {
@@ -73,20 +103,23 @@ export function resolveMedia(props: any): Media[] {
     const selected = [props.itemHref, props.itemSrc, props.src].filter(s => typeof s === "string" && s);
     if (selected.length) {
         for (const attachment of message?.attachments ?? []) {
-            if (selected.some(s => [attachment.url, attachment.proxy_url].some(u => u && sameResource(s, u)))) {
+            if (selected.some(s => sourceURLs(attachment).some(u => sameResource(s, u)))) {
                 const media = mediaFrom(attachment);
                 return media ? [media] : [];
             }
         }
         for (const embed of message?.embeds ?? []) {
-            const urls = [embed.url, embed.image?.url, embed.image?.proxy_url, embed.thumbnail?.url,
-                embed.thumbnail?.proxy_url, embed.video?.url, embed.video?.proxy_url];
+            const urls = [embed.url, ...[embed.image, embed.thumbnail, embed.video, ...(embed.images ?? [])].flatMap(sourceURLs)];
             if (selected.some(s => urls.some(u => u && sameResource(s, u)))) return embedMedia(embed).slice(0, 1);
         }
         // A clicked video/link must never select an unrelated message attachment.
         const raw = selected.find(s => gifExtension.test(s)) ?? selected.find(s => imageExtension.test(s));
         const media = raw ? mediaFrom({ url: raw }) : null;
-        return media ? [media] : [];
+        if (media) return [media];
+        // The image viewer may only supply a direct Tenor/Giphy video URL.
+        const linkedVideo = selected.find(s => videoExtension.test(s) && gifHost(s));
+        const url = linkedVideo ? originalURL(linkedVideo) : null;
+        return url ? [{ url, name: stickerName(new URL(url).pathname.split("/").pop() || "sticker"), gif: true, video: true }] : [];
     }
     const media = [
         ...(message?.attachments ?? []).map(a => mediaFrom(a)),
@@ -96,13 +129,34 @@ export function resolveMedia(props: any): Media[] {
 }
 
 export async function downloadMedia(media: Media, signal: AbortSignal): Promise<Blob> {
+    let lastError: unknown;
+    for (const url of uniqueURLs([media.url, ...(media.fallbackUrls ?? [])])) {
+        if (signal.aborted) throw signal.reason;
+        try {
+            const blob = await downloadURL(url, signal);
+            // If a GIF CDN supplied its thumbnail, try the embed's animated
+            // media/proxy before reporting an error. Never retry an upload.
+            if (media.gif) {
+                const header = new Uint8Array(await blob.slice(0, 32).arrayBuffer());
+                if (!isGIFHeader(header) && !(media.video && videoMime(header))) throw new Error("The link returned a still preview. Choose the original GIF file below.");
+            }
+            return blob;
+        } catch (error) {
+            if (signal.aborted) throw signal.reason;
+            lastError = error;
+        }
+    }
+    throw lastError ?? new Error("This image link is not a supported HTTPS URL.");
+}
+
+async function downloadURL(url: string, signal: AbortSignal): Promise<Blob> {
     const controller = new AbortController();
     const cancel = () => controller.abort(signal.reason);
     signal.addEventListener("abort", cancel, { once: true });
     if (signal.aborted) cancel();
     const timeout = setTimeout(() => controller.abort(new Error("Image download timed out. Try the original file.")), 30_000);
     try {
-        const res = await fetch(media.url, { signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer" });
+        const res = await fetch(url, { signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer" });
         if (!res.ok) throw new Error(`Image download failed (${res.status}). Reopen the message or choose the original file.`);
         if (Number(res.headers.get("content-length")) > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image below 25 MiB.");
         if (!res.body) {
@@ -141,6 +195,13 @@ function bytesToBase64(bytes: Uint8Array) {
     return btoa(value);
 }
 
+const isGIFHeader = (bytes: Uint8Array) => /^GIF8[79]a/.test(String.fromCharCode(...bytes.subarray(0, 6)));
+function videoMime(bytes: Uint8Array) {
+    if (String.fromCharCode(...bytes.subarray(4, 8)) === "ftyp") return "video/mp4";
+    if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return "video/webm";
+    return null;
+}
+
 function animatedPNG(bytes: Uint8Array) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     for (let p = 8; p + 12 <= bytes.length;) {
@@ -152,17 +213,22 @@ function animatedPNG(bytes: Uint8Array) {
     return false;
 }
 
-export async function prepareSticker(input: Blob, expectedGIF = false, check = () => {}): Promise<PreparedSticker> {
+export async function prepareSticker(input: Blob, expectedGIF = false, check = () => {}, options: VideoOptions & { allowVideo?: boolean; } = {}): Promise<PreparedSticker> {
     check();
     if (!input.size || input.size > MAX_DOWNLOAD_BYTES) throw new Error("Choose a non-empty image below 25 MiB.");
     const bytes = new Uint8Array(await input.arrayBuffer());
     check();
     const header = String.fromCharCode(...bytes.subarray(0, 12));
-    if (/^GIF8[79]a/.test(header)) {
+    if (isGIFHeader(bytes)) {
         const result = await prepareGIF(bytesToBase64(bytes), check);
         check();
         const data = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
         return { blob: new Blob([data], { type: "image/gif" }), extension: "gif" };
+    }
+    const videoType = videoMime(bytes);
+    if (options.allowVideo && videoType) {
+        const blob = input.type === videoType ? input : new Blob([input], { type: videoType });
+        return { blob: await prepareVideoGIF(blob, { ...options, check }), extension: "gif" };
     }
     if (expectedGIF || input.type === "image/gif") throw new Error("The link returned a preview instead of a GIF. Choose the original GIF file below.");
     const png = bytes[0] === 137 && header.slice(1, 4) === "PNG";

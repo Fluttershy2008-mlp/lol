@@ -172,3 +172,34 @@ export async function prepareGIF(base64, check = () => {}) {
   }
   throw new Error('This animated GIF is still over 512 KiB after resizing. Use a shorter or simpler GIF.');
 }
+
+// Read video frames on demand so a five-second clip never holds all decoded
+// frames in memory. Video previews are sampled at up to 25 FPS by video.ts.
+export async function encodeVideoFrames(count, durationMs, readFrame, check = () => {}) {
+  if (!Number.isInteger(count) || count < 1 || count > 125 || !Number.isFinite(durationMs) || durationMs <= 0 || durationMs > 5000) {
+    throw new Error('Use a GIF preview that is at most 5 seconds long.');
+  }
+  const centiseconds = Math.max(2, Math.round(durationMs / 10));
+  for (const colors of [256, 128, 64]) {
+    const encoder = GIFEncoder();
+    let oversized = false;
+    for (let i = 0; i < count; i++) {
+      check();
+      const rgba = await readFrame(i);
+      check();
+      if (!(rgba instanceof Uint8Array || rgba instanceof Uint8ClampedArray) || rgba.length !== EDGE * EDGE * 4) throw new Error('Could not decode a GIF preview frame.');
+      const reduced = quantize(rgba, colors - 1, { format: 'rgba4444', oneBitAlpha: true });
+      const palette = [[0, 0, 0, 0], ...reduced.filter(color => color[3] !== 0)];
+      if (palette.length === 1) palette.push([0, 0, 0, 255]);
+      const index = applyPalette(rgba, palette, 'rgba4444');
+      const delay = (Math.round((i + 1) * centiseconds / count) - Math.round(i * centiseconds / count)) * 10;
+      encoder.writeFrame(index, EDGE, EDGE, { palette, delay, repeat: 0, transparent: true, transparentIndex: 0, dispose: 2 });
+      if (encoder.bytesView().length > MAX_BYTES) { oversized = true; break; }
+      await tick();
+    }
+    if (oversized) continue;
+    encoder.finish();
+    if (encoder.bytesView().length <= MAX_BYTES) return encoder.bytes();
+  }
+  throw new Error('This GIF preview is still over 512 KiB after conversion. Use a shorter or simpler animation.');
+}

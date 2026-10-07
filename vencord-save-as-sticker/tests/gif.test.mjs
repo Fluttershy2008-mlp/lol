@@ -1,12 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GifReader } from 'omggif';
-import { prepareGIF, isGIF } from '../saveAsSticker/gif.js';
+import { prepareGIF, isGIF, encodeVideoFrames } from '../saveAsSticker/gif.js';
 import { gifFixture } from './gif-fixture.mjs';
 
 const base64 = bytes => Buffer.from(bytes).toString('base64');
 const pixel = (rgba, x, y) => [...rgba.slice((y * 320 + x) * 4, (y * 320 + x) * 4 + 4)];
 const red = [255, 0, 0, 255], green = [0, 255, 0, 255], blue = [0, 0, 255, 255], clear = [0, 0, 0, 0];
+
+test('video frame encoder preserves rounded duration and checks cancellation between frames', async () => {
+  const frame = new Uint8ClampedArray(320 * 320 * 4);
+  frame.set(red, (160 * 320 + 160) * 4);
+  const bytes = await encodeVideoFrames(3, 110, async () => frame);
+  const gif = new GifReader(bytes);
+  assert.equal(gif.numFrames(), 3);
+  assert.deepEqual([0, 1, 2].map(i => gif.frameInfo(i).delay), [4, 3, 4]);
+  assert.equal(gif.loopCount(), 0);
+  let read = 0;
+  await assert.rejects(encodeVideoFrames(3, 110, async () => { read++; return frame; }, () => {
+    if (read === 1) throw new Error('cancelled');
+  }), /cancelled/);
+  assert.equal(read, 1);
+  await assert.rejects(encodeVideoFrames(126, 5000, async () => frame), /5 seconds/);
+  await assert.rejects(encodeVideoFrames(1, 5010, async () => frame), /5 seconds/);
+  await assert.rejects(encodeVideoFrames(1, 40, async () => new Uint8Array(4)), /decode/);
+});
 async function convert(options) {
   const result = await prepareGIF(base64(gifFixture(options)));
   const bytes = Buffer.from(result.base64, 'base64'), reader = new GifReader(bytes);

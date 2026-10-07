@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// SaveAsSticker for Vencord v1.0.0 — Fluttershy2008-mlp
+// SaveAsSticker for Vencord v1.1.0 — Fluttershy2008-mlp
 import "./styles.css";
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
@@ -48,7 +48,11 @@ function StickerModal({ source, controller, ...modalProps }: RenderModalProps & 
         try {
             check();
             const blob = file ?? await downloadMedia(source!, current.signal);
-            const result = await prepareSticker(blob, file ? /\.gif$/i.test(file.name) : source?.gif, check);
+            const result = await prepareSticker(blob, file ? /\.gif$/i.test(file.name) : source?.gif, check, {
+                allowVideo: !file && source?.video,
+                signal: current.signal,
+                onProgress: (frame, total) => setStatus(`Preparing animation… ${Math.round(frame / total * 100)}%`)
+            });
             check();
             setPrepared(result);
             setPreview(URL.createObjectURL(result.blob));
@@ -187,7 +191,7 @@ export default definePlugin({
     authors: [{ name: "Fluttershy2008-mlp", id: 0n }],
     contextMenus: { "message": contextMenuPatch, "image-context": contextMenuPatch },
     settingsAboutComponent: () => <div className="vc-sas-content">
-        <p>Version 1.0.0. Right-click an image or GIF and choose Save as Sticker, or choose a local file here.</p>
+        <p>Version 1.1.0. Right-click an image or linked GIF and choose Save as Sticker, or choose a local file here.</p>
         <button type="button" className="vc-sas-file" onClick={() => openPicker()}>Choose image or GIF</button>
     </div>,
     start() { active = true; },
