@@ -1,0 +1,12 @@
+SaveAsSticker for Vencord, version 1.0.0
+Copyright (c) 2026 Fluttershy2008-mlp and contributors
+Licensed under GPL-3.0-or-later; see LICENSE.
+
+Uses Vencord's context menu, modal, store and authenticated upload APIs.
+Compatibility references: Vencord ExpressionCloner and ReverseImageSearch.
+Vencord: Copyright (c) 2022-2026 Vendicated and contributors, GPL-3.0-or-later.
+https://github.com/Vendicated/Vencord
+
+GIF conversion is adapted from this repository's SaveAsSticker Revenge plugin.
+Bundled libraries (MIT): omggif 1.0.10, gifenc 1.0.3, base64-js 1.5.1.
+Full third-party license texts are included in THIRD_PARTY_LICENSES.txt.
