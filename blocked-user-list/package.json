@@ -1,0 +1,7 @@
+{
+  "name": "revenge-blocked-user-list",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "test": "node build.mjs && node --test tests/*.test.mjs" }
+}

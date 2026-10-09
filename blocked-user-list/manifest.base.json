@@ -1,0 +1,8 @@
+{
+  "name": "Blocked User List",
+  "description": "Search your blocked users, tap to open their profiles, and unblock them with confirmation.",
+  "version": "1.0.0",
+  "authors": [{ "name": "fluttershy_simper" }],
+  "main": "index.js",
+  "vendetta": { "icon": "WrenchIcon" }
+}
