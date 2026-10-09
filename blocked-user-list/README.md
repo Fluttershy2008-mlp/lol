@@ -12,11 +12,16 @@ In **Settings → Revenge → Plugins**, tap **+**, then paste this folder URL:
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/blocked-user-list/
 ```
 
-Enable the plugin, then open **Blocked User List → Configure** on the Plugins page. Older versions show a settings button (cog or sliders) instead.
+Enable the plugin, then open **Settings → Revenge → Blocked Users**. The new shortcut appears directly beneath **Plugins**, alongside Themes, Fonts and Account Switcher.
+
+To update an existing installation, use **Refetch** on the plugin and reopen Settings (or restart Discord). The install URL stays the same.
+
+The plugin’s **Configure/settings** button on the Plugins page also opens the list.
 
 ## Details
 
 - Shows avatars, display names, usernames and exact user IDs.
+- Adds a native **Blocked Users** settings row, preserving the existing section and other plugins’ rows. Disabling the plugin hides the shortcut.
 - Uses a virtualized list to keep long block lists responsive.
 - Updates when Discord’s relationship/user stores change, and provides Refresh.
 - Rechecks the account and block before an unblock request; repeated taps do not send duplicate requests while a request is pending.

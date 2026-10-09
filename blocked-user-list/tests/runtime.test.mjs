@@ -33,7 +33,7 @@ function setup(options = {}) {
   const stores = { UserStore: userStore, RelationshipStore: relationshipStore, ThemeStore: themeStore };
   const eventListeners = new Map();
   const appListeners = new Set();
-  const modules = {};
+  const modules = { ...(options.modules ?? {}) };
   if (!options.noProfiles) {
     modules[options.profileMethod ?? 'showUserProfile'] = {
       [options.profileMethod ?? 'showUserProfile'](value) { calls.push(['profile', value]); return options.profile?.(value); },
@@ -78,7 +78,7 @@ function setup(options = {}) {
     logger: { error: (...args) => errors.push(args) },
   };
   // Same expression and vendetta injection used by Revenge's compatibility loader.
-  const plugin = new Function('vendetta', `return ${bundle}`)(V);
+  const plugin = new Function('vendetta', 'globalThis', `return ${bundle}`)(V, options.host ?? {});
   if (!options.disabled) plugin.onLoad();
   const render = () => { stateIndex = 0; return plugin.settings(); };
   return { plugin, controller: plugin.controller, relationships, users, calls, alerts, toasts, errors,
@@ -250,4 +250,28 @@ test('screen subscriptions clean up on close and disable; stale actions cannot r
   s.plugin.onLoad();
   assert.equal(await s.controller.unblock(A, value), false);
   assert.equal(s.calls.length, 0);
+});
+
+test('produced bundle adds the Revenge settings shortcut and opens the existing list page', () => {
+  const keys = ['BUNNY', 'BUNNY_PLUGINS', 'BUNNY_THEMES', 'BUNNY_FONTS', 'ACCOUNT_SWITCHER'];
+  const rows = keys.map(key => ({ key }));
+  const api = { registeredSections: { Revenge: rows } };
+  const constants = { SETTING_RENDERER_CONFIG: { ACCOUNT: { parent: null } } };
+  const navigations = [];
+  const s = setup({ host: { bunny: { ui: { settings: api } } }, modules: {
+    constants, navigation: { getRootNavigationRef: () => ({ navigate: (...args) => navigations.push(args) }) },
+  } });
+  const shortcut = rows[2];
+  assert.equal(shortcut.title(), 'Blocked Users');
+  shortcut.onPress();
+  assert.equal(navigations[0][0], 'BUNNY_CUSTOM_PAGE');
+  assert.equal(navigations[0][1].title, 'Blocked Users');
+  assert.equal(navigations[0][1].render, s.plugin.settings);
+  assert.equal(navigations[0][1].render().type, 'FlatList');
+  assert.equal(s.calls.length, 0, 'opening the list must not unblock anyone');
+  s.plugin.onLoad();
+  assert.equal(rows.filter(row => row.key === shortcut.key).length, 1);
+  s.plugin.onUnload(); shortcut.onPress();
+  assert.equal(navigations.length, 1);
+  assert.deepEqual(rows.map(row => row.key), keys);
 });

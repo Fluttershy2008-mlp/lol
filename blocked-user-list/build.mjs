@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-const sources = await Promise.all(['model', 'plugin'].map(name => readFile(new URL(`./src/${name}.mjs`, import.meta.url), 'utf8')));
+const sources = await Promise.all(['model', 'settings-shortcut', 'plugin'].map(name => readFile(new URL(`./src/${name}.mjs`, import.meta.url), 'utf8')));
 const code = sources.map(source => source.replace(/^export /gm, '')).join('\n');
 const bundle = `(() => {\n${code}\nreturn createPlugin(vendetta);\n})()\n`;
 // Verify the same expression-style bundle consumed by Revenge’s loader.

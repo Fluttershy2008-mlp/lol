@@ -1,7 +1,7 @@
 {
   "name": "Blocked User List",
-  "description": "Search your blocked users, tap to open their profiles, and unblock them with confirmation.",
-  "version": "1.0.0",
+  "description": "Adds Blocked Users to Revenge settings. Search blocked users, open their profiles, and unblock with confirmation.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "fluttershy_simper"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "WrenchIcon"
   },
-  "hash": "eb7ebb5c18d5dc0030c821532d65bd3d36cd4fb78caa9edf6e3421f501c727b4"
+  "hash": "a2f66bcf53f7d3a18fcbd5238fc9803cbe9169dba4927619c0b4c8bf233f48db"
 }

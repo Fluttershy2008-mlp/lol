@@ -1,4 +1,4 @@
-export function createPlugin(V) {
+export function createPlugin(V, host = globalThis) {
   const { React, ReactNative: RN } = V.metro.common;
   const h = React.createElement;
   const optional = fn => { try { return fn(); } catch { return undefined; } };
@@ -10,6 +10,7 @@ export function createPlugin(V) {
   const subscriptions = new Set();
   const pending = new Set();
   let active = false, generation = 0;
+  let removeShortcut;
   let userStore, relationshipStore, themeStore, profileActions, relationshipActions;
 
   function resolveStores() {
@@ -185,10 +186,37 @@ export function createPlugin(V) {
     });
   }
 
+  function openSettings() {
+    if (!active) return;
+    try {
+      const navigation = byProps('getRootNavigationRef')?.getRootNavigationRef?.();
+      if (typeof navigation?.navigate !== 'function') throw new Error('Please open Blocked User List’s Configure button on the Plugins page.');
+      navigation.navigate('BUNNY_CUSTOM_PAGE', { title: 'Blocked Users', render: Settings });
+    } catch (error) { log(error); RN.Alert.alert('Blocked Users', error?.message ?? 'Could not open the list.'); }
+  }
+
   return {
-    onLoad() { if (active) return; active = true; generation++; emit(); },
+    onLoad() {
+      if (active) return;
+      active = true; generation++; emit();
+      // Revenge exposes its native settings registry on bunny.ui.settings.
+      // Extend the existing section without replacing Plugins, Themes or Account Switcher.
+      try {
+        removeShortcut = attachSettingsShortcut({
+          api: host.bunny?.ui?.settings ?? host.window?.bunny?.ui?.settings,
+          constants: byProps('SETTING_RENDERER_CONFIG'), Settings, open: openSettings,
+          getAsset: name => V.ui?.assets?.getAssetIDByName?.(name),
+          renderIcon: source => {
+            const Icon = byProps('TableRowIcon')?.TableRowIcon;
+            return Icon ? h(Icon, { source }) : h(RN.Image, { source, style: { width: 24, height: 24 } });
+          },
+          patcher: V.patcher, tree: byProps('getAncestors', 'isBlocked'), log,
+        });
+      } catch (error) { log(error); }
+    },
     onUnload() {
       active = false; generation++; emit();
+      optional(() => removeShortcut?.()); removeShortcut = undefined;
       for (const dispose of [...subscriptions]) dispose();
       listeners.clear(); pending.clear();
       userStore = relationshipStore = themeStore = profileActions = relationshipActions = undefined;
