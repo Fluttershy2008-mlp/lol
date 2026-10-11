@@ -324,3 +324,88 @@ test('settings copy respects detailed defaults and obsolete picker buttons canno
   await pickerButton.props.onPress();
   assert.equal(h.copied.length, count);
 });
+
+
+function setupCore() {
+  const h = setup();
+  let originalCalls = 0, patches = 0, unpatches = 0;
+  const original = { name: 'plugins', id: '-3', applicationId: '-1', type: 1, inputType: 1,
+    description: 'Send list of installed plugins',
+    options: [{ name: 'ephemeral', type: 5, description: 'Only show to me' }],
+    execute: () => { originalCalls++; }
+  };
+  const other = { ...original, id: '123', applicationId: '456', options: [] };
+  const commandModule = { getBuiltInCommands: () => [original, other, ...h.commands.values()] };
+  h.V.metro.common.commands = commandModule;
+  h.V.patcher = { after(name, target, callback) {
+    patches++;
+    const previous = target[name];
+    target[name] = function(...args) { return callback(args, previous.apply(this, args)); };
+    return () => { unpatches++; target[name] = previous; };
+  } };
+  const core = () => commandModule.getBuiltInCommands(1, true, false).find(c => c.id === '-3');
+  return { ...h, original, other, commandModule, core,
+    get originalCalls() { return originalCalls; }, get patches() { return patches; }, get unpatches() { return unpatches; },
+    runCore: (args = []) => core().execute(args, { channel: { id: '123456789012345678' } })
+  };
+}
+
+test('existing /plugins is enhanced in place, exposes visible URLs by default and sends only once', async () => {
+  const h = setupCore(); h.plugin.onLoad(); h.plugin.onLoad();
+  h.V.plugins.plugins['https://example.com/one/'] = { enabled: true, manifest: { name: 'One', authors: ['Me'] } };
+  const command = h.core();
+  assert.equal(command.id, h.original.id); assert.equal(command.applicationId, '-1');
+  assert.ok(command !== h.original); assert.equal(h.core(), command);
+  assert.equal(h.commandModule.getBuiltInCommands().filter(c => c.applicationId === '-1' && c.name === 'plugins').length, 1);
+  assert.ok(h.commandModule.getBuiltInCommands().includes(h.other));
+  assert.equal(h.original.options.length, 1); assert.equal(h.patches, 1);
+  assert.deepEqual(Array.from(command.options, o => o.name), ['ephemeral', 'detailed', 'private', 'copy', 'part']);
+  assert.equal(await h.runCore(), undefined);
+  assert.equal(h.sent.length, 1); assert.equal(h.originalCalls, 0);
+  assert.match(h.sent[0].content, /> \*\*URL\*\*: <https:\/\/example.com\/one\/>/);
+  await h.runCore([flag('detailed', false)]);
+  assert.equal(h.sent.length, 2); assert.ok(!h.sent[1].content.includes('URL'));
+});
+
+test('/plugins keeps ephemeral preview, private override, copy priority and part selection', async () => {
+  const h = setupCore(); h.plugin.onLoad(); many(h, 45);
+  await h.runCore([flag('ephemeral')]);
+  assert.ok(h.local.length > 1); assert.equal(h.sent.length, 0); assert.equal(h.alerts.length, 0);
+  assert.ok(h.local.every(m => m.content.length <= 2000));
+  assert.ok(h.local.some(m => m.content.includes('URL')));
+  const localCount = h.local.length;
+  await h.runCore([flag('ephemeral'), flag('copy'), { name: 'part', value: 2 }]);
+  assert.equal(h.copied.length, 1); assert.ok(h.copied[0].length <= 2000);
+  assert.equal(h.local.length, localCount); assert.equal(h.sent.length, 0);
+  await h.runCore([flag('ephemeral'), flag('private', false)]);
+  assert.equal(h.alerts.length, 1); assert.equal(h.alerts[0].title, 'Send addon list?');
+  await h.alerts[0].onConfirm();
+  assert.ok(h.sent.length > 1); assert.equal(h.originalCalls, 0);
+});
+
+test('/plugins uses Nitro limits and restores the original command on disable or cached invocation', async () => {
+  const h = setupCore(); h.plugin.onLoad(); many(h, 60);
+  h.V.metro.findByStoreName = () => ({ getCurrentUser: () => ({ premiumType: 2 }) });
+  await h.runCore([flag('copy'), { name: 'part', value: 1 }]);
+  assert.ok(h.copied[0].length > 2000 && h.copied[0].length <= 4000);
+  const cached = h.core();
+  h.plugin.onUnload();
+  assert.equal(h.unpatches, 1); assert.equal(h.core(), h.original);
+  await cached.execute([], {});
+  assert.equal(h.originalCalls, 1);
+  h.plugin.onLoad();
+  assert.equal(h.patches, 2);
+  await cached.execute([], {}); assert.equal(h.originalCalls, 2);
+  assert.equal(h.copied.length, 1);
+  await h.runCore([flag('copy'), { name: 'part', value: 1 }]);
+  assert.equal(h.copied.length, 2);
+});
+
+test('an unavailable /plugins hook preserves Addon List commands and unload cleanup', async () => {
+  const h = setupCore();
+  h.V.patcher.after = () => { throw new Error('Unsupported command module'); };
+  h.plugin.onLoad();
+  assert.equal(h.commands.size, 2); assert.equal(h.core(), h.original);
+  await h.run('plugin-list', [flag('copy')]); assert.equal(h.copied.length, 1);
+  h.plugin.onUnload(); assert.equal(h.commands.size, 0);
+});
