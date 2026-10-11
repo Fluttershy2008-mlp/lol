@@ -116,7 +116,7 @@ test('detailed popup includes friend and request IDs without labelling server or
   h.plugin.onUnload();
 });
 
-test('older saved notifications display selectable IDs without modifying history', () => {
+test('older saved notifications display selectable mentions and copy exact IDs without modifying history', async () => {
   const history = [
     { id: '123456789012345678', category: 'friends', text: 'You are no longer friends with SameName.', at: 100, offline: true },
     { id: '987654321098765432', category: 'requests', text: 'The friend request from SameName is no longer pending.', at: 90 },
@@ -124,6 +124,8 @@ test('older saved notifications display selectable IDs without modifying history
     { category: 'friends', text: 'Older entry without an ID.', at: 70 },
   ];
   const h = setup({ storage: { accounts: { me: { snapshots: {}, history, manual: {} } } } });
+  const copied = [];
+  h.V.metro.common.clipboard = { setString: value => copied.push(value) };
   h.plugin.onLoad(); h.clock.tick(5000);
   const nodes = [];
   const walk = value => {
@@ -134,13 +136,38 @@ test('older saved notifications display selectable IDs without modifying history
   walk(h.plugin.settings());
   const texts = nodes.filter(node => node.type === 'Text' && node.props.selectable).map(node => node.props.children[0]);
   assert.deepEqual(texts, [
-    `${history[0].text}\nUser ID: <@123456789012345678>`,
-    `${history[1].text}\nUser ID: <@987654321098765432>`,
-    history[2].text, history[3].text,
+    'User ID: <@123456789012345678>',
+    'User ID: <@987654321098765432>',
   ]);
+  const copyButtons = nodes.filter(node => node.type === 'Pressable' && node.props.accessibilityLabel?.startsWith('Copy <@'));
+  assert.equal(copyButtons.length, 2);
+  for (const button of copyButtons) await button.props.onPress();
+  assert.deepEqual(copied, ['<@123456789012345678>', '<@987654321098765432>']);
   assert.deepEqual(h.storage.accounts.me.history, history);
-  assert.equal(h.toasts.length, 0);
+  assert.deepEqual(h.toasts, ['Copied <@123456789012345678>', 'Copied <@987654321098765432>']);
   h.plugin.onUnload();
+});
+
+test('clipboard failures keep history available and offer manual selection', async () => {
+  for (const clipboard of [undefined, { setString: () => Promise.reject(new Error('Copy failed')) }]) {
+    const h = setup(); h.V.metro.common.clipboard = clipboard;
+    h.plugin.onLoad(); h.clock.tick(5000);
+    delete h.state.relationships['101']; h.dispatch('RELATIONSHIP_REMOVE'); h.clock.tick(1000);
+    const nodes = [];
+    const walk = value => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) return value.forEach(walk);
+      nodes.push(value); walk(value.props?.children);
+    };
+    walk(h.plugin.settings());
+    const button = nodes.find(node => node.props?.accessibilityLabel === 'Copy <@101>');
+    assert.ok(button);
+    await assert.doesNotReject(() => button.props.onPress());
+    assert.equal(h.alerts.length, 1);
+    assert.equal(h.storage.accounts.me.history.length, 1);
+    assert.ok(nodes.some(node => node.type === 'Text' && node.props.selectable && node.props.children[0] === 'User ID: <@101>'));
+    h.plugin.onUnload();
+  }
 });
 
 test('self initiated actions are ignored, promises preserved and rejection is reversible', async () => {
@@ -274,9 +301,10 @@ test('settings render with only native React components and every switch is acti
 });
 
 test('install bundle evaluates with the actual Revenge loader wrapper and matches manifest hash', () => {
-  const bundle = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.main, 'index.js');
+  assert.equal(manifest.main, `index-v${manifest.version}.js`);
+  const bundle = readFileSync(new URL(`../${manifest.main}`, import.meta.url), 'utf8');
+  assert.equal(bundle, readFileSync(new URL('../index.js', import.meta.url), 'utf8'));
   assert.equal(manifest.hash, createHash('sha256').update(bundle).digest('hex'));
   const h = setup();
   const rows = [{ key: 'BUNNY_PLUGINS' }, { key: 'CUSTOMRPC_FLUTTERSHY_SETTINGS' }, { key: 'BUNNY_THEMES' }];
@@ -289,7 +317,13 @@ test('install bundle evaluates with the actual Revenge loader wrapper and matche
   const context = { setTimeout: h.clock.setTimeout, clearTimeout: h.clock.clearTimeout, setInterval: h.clock.setInterval, clearInterval: h.clock.clearInterval, Date, Map, Set, WeakMap, bunny: { ui: { settings: settingsAPI } } };
   const plugin = vm.runInNewContext(`vendetta => { return ${bundle} }`, context)(h.V);
   assert.equal(typeof plugin.onLoad, 'function'); assert.equal(typeof plugin.onUnload, 'function'); assert.equal(typeof plugin.settings, 'function');
-  plugin.onLoad(); plugin.settings();
+  plugin.onLoad();
+  h.storage.accounts.me = { snapshots: {}, manual: {}, history: [
+    { id: '1271475632622014529', category: 'friends', text: 'You are no longer friends with paulx_103.', at: 100 },
+  ] };
+  const rendered = JSON.stringify(plugin.settings());
+  assert.ok(rendered.includes('User ID: <@1271475632622014529>'));
+  assert.ok(rendered.includes('Version 1.1.3'));
   assert.equal(rows[2].key, SHORTCUT_KEY);
   constants.SETTING_RENDERER_CONFIG[SHORTCUT_KEY].onPress();
   assert.equal(opened.length, 1);

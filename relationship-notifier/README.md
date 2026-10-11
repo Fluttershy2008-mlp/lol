@@ -24,6 +24,13 @@ The first successful check saves your starting lists. It cannot recover removals
 from before installation. Future updates use the same install URL; leave plugin
 updates enabled and restart Discord to download them.
 
+If the screen still shows plain numbers, open **Revenge → Plugins**, open the
+RelationshipNotifier plugin card's menu and tap **Refetch**, then reopen its
+settings. The page should say **Version 1.1.3** near the top and display
+`User ID: <@123456789012345678>`. Refetch updates the existing installation and
+preserves its locally saved history. This release uses a versioned download
+filename to avoid receiving an older cached bundle.
+
 ## Features
 
 - Alerts for lost friends, disappearing incoming friend requests, server removals
@@ -36,7 +43,8 @@ updates enabled and restart Discord to download them.
 - Friend and incoming-request notifications show a **User ID** line in Discord
   mention format (`<@123456789012345678>`) alongside
   the saved name, including older history entries that already contain an ID.
-  Notification text in history is selectable so you can copy the ID. Single
+  Tap the User ID line to copy the complete `<@ID>` mention; it is also
+  selectable for manual copying. Single
   toast alerts and detailed popups include it too.
 - Filters for your own unfriending, blocking, request acceptance/rejection and
   server/group leaves where Discord's action or REST modules can be identified.
@@ -95,7 +103,8 @@ npm test
   cleanup. Runtime tests
   simulate Discord stores and events; they are not physical Android app tests.
 
-The committed `index.js` is the installable build. Do not edit it directly;
+The committed `index.js` and versioned file named by `manifest.main` are the
+installable builds. Do not edit them directly;
 edit `src/`, rebuild and commit the updated manifest and build together.
 
 ## Attribution and license

@@ -23,6 +23,12 @@ const banner = `/*! RelationshipNotifier for Revenge ${manifest.version}
 const bundle = `(() => {\n${banner}\n'use strict';\n${sources}\nreturn createPlugin(vendetta);\n})()\n`;
 new vm.Script(`vendetta => { return ${bundle} }`);
 writeFileSync(new URL('index.js', root), bundle);
+// A new URL for each release prevents an older cached index.js from being
+// paired with a newer manifest by the mobile loader or an upstream cache.
+if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) throw new Error('Invalid release version');
+manifest.main = `index-v${manifest.version}.js`;
+writeFileSync(new URL(manifest.main, root), bundle);
 manifest.hash = createHash('sha256').update(bundle).digest('hex');
 writeFileSync(new URL('manifest.json', root), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Built RelationshipNotifier ${manifest.version}: ${Buffer.byteLength(bundle)} bytes`);
+

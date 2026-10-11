@@ -1,5 +1,5 @@
 (() => {
-/*! RelationshipNotifier for Revenge 1.1.2
+/*! RelationshipNotifier for Revenge 1.1.3
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -22,10 +22,15 @@ const CATEGORIES = ['friends', 'requests', 'guilds', 'groups'];
 const OPTIONS = { friends: 'friends', requests: 'friendRequestCancels', guilds: 'servers', groups: 'groups' };
 
 // Format at display time so notifications saved by older versions gain IDs too.
-function formatNotification(entry) {
+function userMention(entry) {
   const isUser = entry.category === 'friends' || entry.category === 'requests';
   return isUser && typeof entry.id === 'string' && entry.id.length
-    ? `${entry.text}\nUser ID: <@${entry.id}>` : entry.text;
+    ? `<@${entry.id}>` : null;
+}
+
+function formatNotification(entry) {
+  const mention = userMention(entry);
+  return mention ? `${entry.text}\nUser ID: ${mention}` : entry.text;
 }
 
 function createTracker({ storage, notify, changed = () => {}, now = Date.now }) {
@@ -141,7 +146,7 @@ function createTracker({ storage, notify, changed = () => {}, now = Date.now }) 
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme }) {
+function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention }) {
   const h = React.createElement;
   const Pressable = RN.Pressable ?? RN.TouchableOpacity;
   const choices = [
@@ -173,6 +178,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
     const counts = tracker.counts();
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('RelationshipNotifier', { fontSize: 24, lineHeight: 30, fontWeight: '800' }),
+      note('Version 1.1.3 · User IDs use <@ID> format. Tap a User ID to copy it.'),
       note('See changes to your friends, requests, servers and group chats.'),
       h(RN.View, { style: { padding: 16, marginVertical: 16, borderRadius: 12, backgroundColor: colors.card } },
         text(status.message, { fontWeight: '700' }),
@@ -188,14 +194,19 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
       note('Saved on this device for the current account. The latest 100 are kept.'),
       history.length ? null : note('No changes detected yet. The first check saves your starting list.'),
       ...history.map((entry, index) => h(RN.View, { key: `${entry.at}:${index}`, style: { padding: 14, marginTop: 10, borderRadius: 10, backgroundColor: colors.card } },
-        h(RN.Text, { selectable: true, style: { color: colors.text, fontSize: 15, lineHeight: 21 } }, formatNotification(entry)),
+        text(entry.text),
+        userMention(entry) ? h(Pressable, {
+          accessibilityRole: 'button', accessibilityLabel: `Copy ${userMention(entry)}`,
+          accessibilityHint: 'Copies the Discord user mention.',
+          onPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
+        }, h(RN.Text, { selectable: true, style: { color: colors.accent, fontSize: 15, lineHeight: 21 } }, `User ID: ${userMention(entry)}`)) : null,
         note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
       )),
       history.length ? action('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.2 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.3 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }
@@ -684,6 +695,19 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
 
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
+    copyMention: async mention => {
+      try {
+        let clipboard = V.metro.common.clipboard;
+        if (typeof clipboard?.setString !== 'function') clipboard = RN.Clipboard;
+        if (typeof clipboard?.setString !== 'function') clipboard = byProps('setString', 'getString');
+        if (typeof clipboard?.setString !== 'function') throw new Error('Clipboard unavailable. Long-press the User ID text to copy it.');
+        await clipboard.setString(mention);
+        try { V.ui?.toasts?.showToast?.(`Copied ${mention}`, icon); } catch {}
+      } catch (error) {
+        log(error);
+        try { RN.Alert.alert('Copy user mention', error?.message ?? 'Could not copy. Long-press the User ID text instead.'); } catch {}
+      }
+    },
     subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
     getTheme: () => { try { return byStore('ThemeStore')?.theme; } catch { return undefined; } },
     testNotification: () => deliver([{ text: 'RelationshipNotifier is ready! Removal alerts will appear here.' }], tracker.options()),

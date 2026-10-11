@@ -333,6 +333,19 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
 
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
+    copyMention: async mention => {
+      try {
+        let clipboard = V.metro.common.clipboard;
+        if (typeof clipboard?.setString !== 'function') clipboard = RN.Clipboard;
+        if (typeof clipboard?.setString !== 'function') clipboard = byProps('setString', 'getString');
+        if (typeof clipboard?.setString !== 'function') throw new Error('Clipboard unavailable. Long-press the User ID text to copy it.');
+        await clipboard.setString(mention);
+        try { V.ui?.toasts?.showToast?.(`Copied ${mention}`, icon); } catch {}
+      } catch (error) {
+        log(error);
+        try { RN.Alert.alert('Copy user mention', error?.message ?? 'Could not copy. Long-press the User ID text instead.'); } catch {}
+      }
+    },
     subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
     getTheme: () => { try { return byStore('ThemeStore')?.theme; } catch { return undefined; } },
     testNotification: () => deliver([{ text: 'RelationshipNotifier is ready! Removal alerts will appear here.' }], tracker.options()),
