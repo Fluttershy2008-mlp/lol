@@ -36,7 +36,7 @@ function createPlugin(V, env = globalThis) {
       if (!active || session !== generation) return;
       try {
         if (typeof clipboard?.setString !== 'function') throw new Error('Clipboard unavailable');
-        await clipboard.setString(id);
+        await clipboard.setString(`<@${id}>`);
         if (!active || session !== generation) return;
         optional(hide);
         toast('Copied user ID');

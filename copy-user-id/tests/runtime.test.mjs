@@ -106,7 +106,7 @@ function harness(factory = createPlugin, { ready = true, clipboardError = false,
 }
 const context = id => ({ message: { id: MESSAGE, author: { id } } });
 
-test('adds one author ID action to a frozen copy-text group and copies only that ID', async () => {
+test('adds one author ID action to a frozen copy-text group and copies that author as <@ID>', async () => {
   const h = harness(); h.plugin.onLoad();
   const original = h.tree();
   const { module, wrapped } = await h.open(context(AUTHOR), () => original);
@@ -118,7 +118,7 @@ test('adds one author ID action to a frozen copy-text group and copies only that
   assert.equal(output.props.children[1].props.children[1], row);
   assert.equal(h.rows(original).length, 0);
   await row.props.onPress();
-  assert.deepEqual(h.copies, [AUTHOR]);
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`]);
   assert.deepEqual(h.hidden, [SHEET]);
   assert.deepEqual(h.toasts, ['Copied user ID']);
   h.plugin.onUnload();
@@ -130,7 +130,7 @@ test('separate menu openings keep their own author, including own and bot messag
   const second = await h.open(context(OTHER));
   await h.rows(h.render(first.wrapped.default))[0].props.onPress();
   await h.rows(h.render(second.wrapped.default))[0].props.onPress();
-  assert.deepEqual(h.copies, [AUTHOR, OTHER]); h.plugin.onUnload();
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`, `<@${OTHER}>`]); h.plugin.onUnload();
 });
 
 test('never substitutes a message ID, a reply author, or an imprecise number', async () => {
@@ -223,7 +223,7 @@ test('published bundle evaluates in Revenge expression loader and manifest match
   const h = harness(V => vm.runInNewContext(`vendetta => { return ${bundle} }`, { setTimeout, clearTimeout })(V));
   h.plugin.onLoad(); const { wrapped } = await h.open(context(AUTHOR));
   await h.rows(h.render(wrapped.default))[0].props.onPress();
-  assert.deepEqual(h.copies, [AUTHOR]); h.plugin.onUnload();
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`]); h.plugin.onUnload();
 });
 
 const profileItems = tree => tree.props.children.props.items;
@@ -242,11 +242,11 @@ test('profile overflow adds ID next to Copy Username without changing existing o
   assert.equal(items[1], profileItems(original)[1]);
   assert.equal(copyItems(profileItems(original)).length, 0);
   await items[0][2].action();
-  assert.deepEqual(h.copies, [AUTHOR]); assert.deepEqual(h.hidden, ['context']);
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`]); assert.deepEqual(h.hidden, ['context']);
   // The original message menu continues to work with profile support enabled.
   const message = await h.open(context(OTHER));
   await h.rows(h.render(message.wrapped.default))[0].props.onPress();
-  assert.deepEqual(h.copies, [AUTHOR, OTHER]);
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`, `<@${OTHER}>`]);
   h.plugin.onUnload();
 });
 
@@ -258,7 +258,7 @@ test('profile callbacks keep the right user across repeated renders and bot prof
   await copyItems(profileItems(first))[0].action();
   await copyItems(profileItems(second))[0].action();
   await copyItems(profileItems(bot))[0].action();
-  assert.deepEqual(h.copies, [AUTHOR, OTHER, OTHER]); h.plugin.onUnload();
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`, `<@${OTHER}>`, `<@${OTHER}>`]); h.plugin.onUnload();
 });
 
 test('profile memo and forward-ref exports are patched and restored', () => {
@@ -286,7 +286,7 @@ test('user context menus support flat and grouped items without duplicating the 
     assert.equal(repeated, added);
     await copyItems(added.items)[0].action();
   }
-  assert.deepEqual(h.copies, [AUTHOR, AUTHOR]); assert.equal(flat.length, 1);
+  assert.deepEqual(h.copies, [`<@${AUTHOR}>`, `<@${AUTHOR}>`]); assert.equal(flat.length, 1);
   h.plugin.onUnload();
 });
 

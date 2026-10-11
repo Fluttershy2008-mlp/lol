@@ -1,8 +1,8 @@
 # Copy User ID
 
-Long-press a Discord message to see **Copy User ID** followed by the message author's ID. Tap the row to copy only the ID to your clipboard. Works for messages in servers and DMs, including your own messages. Developer Mode is not required.
+Long-press a Discord message to see **Copy User ID** followed by the message author's ID. Tap the row to copy the ID in Discord mention format, such as `<@753962426407452713>`, to your clipboard. Works for messages in servers and DMs, including your own messages. Developer Mode is not required.
 
-You can also open someone's profile and tap **⋯** to see **Copy User ID** beside **Copy Username**. The profile option displays that person's ID and copies only the ID when tapped. Supports regular and bot profile overflow menus. Both options are included in the same plugin.
+You can also open someone's profile and tap **⋯** to see **Copy User ID** beside **Copy Username**. The profile option displays that person's ID and copies it as `<@ID>` when tapped. Supports regular and bot profile overflow menus. Both options are included in the same plugin.
 
 ## Install in Revenge
 
@@ -14,7 +14,7 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/copy-user-id/
 
 Open **Settings → Revenge → Plugins → +**, paste/import the URL, install, and enable **Copy User ID**. Then long-press a message and tap the new row beside the copy-text actions.
 
-Already installed? Update the plugin and restart Discord to load version **1.1.0**. The install URL is unchanged.
+Already installed? Update the plugin and restart Discord to load version **1.1.1**. The install URL is unchanged.
 
 ## Compatibility
 
