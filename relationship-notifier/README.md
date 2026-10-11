@@ -26,7 +26,7 @@ updates enabled and restart Discord to download them.
 
 If the screen still shows plain numbers, open **Revenge → Plugins**, open the
 RelationshipNotifier plugin card's menu and tap **Refetch**, then reopen its
-settings. The page should say **Version 1.1.3** near the top and display
+settings. The page should say **Version 1.1.4** near the top and display
 `User ID: <@123456789012345678>`. Refetch updates the existing installation and
 preserves its locally saved history. This release uses a versioned download
 filename to avoid receiving an older cached bundle.
@@ -43,8 +43,9 @@ filename to avoid receiving an older cached bundle.
 - Friend and incoming-request notifications show a **User ID** line in Discord
   mention format (`<@123456789012345678>`) alongside
   the saved name, including older history entries that already contain an ID.
-  Tap the User ID line to copy the complete `<@ID>` mention; it is also
-  selectable for manual copying. Single
+  Tap the User ID line to open their native Discord profile, including users
+  no longer in your friends list. Long-press it or tap **Copy mention** to copy
+  the complete `<@ID>` mention; it is also selectable for manual copying. Single
   toast alerts and detailed popups include it too.
 - Filters for your own unfriending, blocking, request acceptance/rejection and
   server/group leaves where Discord's action or REST modules can be identified.
@@ -58,8 +59,10 @@ filename to avoid receiving an older cached bundle.
 ## Behavior and limits
 
 This plugin observes the normal Discord client's stores and events. It does not
-send messages, leave servers, modify relationships, make additional Discord API
-requests or upload your relationship history anywhere. It stores IDs, display
+send messages, leave servers, modify relationships or upload your relationship
+history anywhere. Tracking makes no extra Discord API requests; tapping a user
+opens Discord's native profile UI, which may fetch their profile normally.
+It stores IDs, display
 names, membership snapshots and timestamps locally in Revenge's plugin storage.
 
 Alerts describe changes, not their cause. Discord does not reveal whether a

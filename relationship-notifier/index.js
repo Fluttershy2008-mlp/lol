@@ -1,5 +1,5 @@
 (() => {
-/*! RelationshipNotifier for Revenge 1.1.3
+/*! RelationshipNotifier for Revenge 1.1.4
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -146,7 +146,7 @@ function createTracker({ storage, notify, changed = () => {}, now = Date.now }) 
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention }) {
+function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile }) {
   const h = React.createElement;
   const Pressable = RN.Pressable ?? RN.TouchableOpacity;
   const choices = [
@@ -178,7 +178,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
     const counts = tracker.counts();
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('RelationshipNotifier', { fontSize: 24, lineHeight: 30, fontWeight: '800' }),
-      note('Version 1.1.3 · User IDs use <@ID> format. Tap a User ID to copy it.'),
+      note('Version 1.1.4 · Tap a User ID to open their profile. Long-press to copy <@ID>.'),
       note('See changes to your friends, requests, servers and group chats.'),
       h(RN.View, { style: { padding: 16, marginVertical: 16, borderRadius: 12, backgroundColor: colors.card } },
         text(status.message, { fontWeight: '700' }),
@@ -196,17 +196,21 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
       ...history.map((entry, index) => h(RN.View, { key: `${entry.at}:${index}`, style: { padding: 14, marginTop: 10, borderRadius: 10, backgroundColor: colors.card } },
         text(entry.text),
         userMention(entry) ? h(Pressable, {
-          accessibilityRole: 'button', accessibilityLabel: `Copy ${userMention(entry)}`,
-          accessibilityHint: 'Copies the Discord user mention.',
-          onPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
+          accessibilityRole: 'button', accessibilityLabel: `Open profile for ${entry.name || entry.id}`,
+          accessibilityHint: 'Opens the Discord profile. Long-press to copy the user mention.',
+          onPress: () => openProfile(entry.id), onLongPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
         }, h(RN.Text, { selectable: true, style: { color: colors.accent, fontSize: 15, lineHeight: 21 } }, `User ID: ${userMention(entry)}`)) : null,
+        userMention(entry) ? h(Pressable, {
+          accessibilityRole: 'button', accessibilityLabel: `Copy ${userMention(entry)}`,
+          onPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
+        }, text('Copy mention', { color: colors.muted, fontSize: 13 })) : null,
         note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
       )),
       history.length ? action('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.3 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.4 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }
@@ -693,8 +697,37 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
     setStatus('Plugin is disabled');
   }
 
+  async function openProfile(id) {
+    if (!running || typeof id !== 'string' || !/^\d+$/.test(id)) return;
+    let failure;
+    // Prefer Discord's native mobile profile sheet; some builds expose only
+    // the older profile action modules. Discord handles fetching uncached users.
+    for (const method of ['showUserProfileActionSheet', 'showUserProfileActionSheetPostConnection', 'openUserProfile', 'showUserProfile', 'openUserProfileModal']) {
+      const candidates = [];
+      if (method.startsWith('showUserProfileActionSheet')) {
+        try {
+          const named = V.metro.findByName?.(method);
+          const fn = typeof named === 'function' ? named : named?.default;
+          if (typeof fn === 'function') candidates.push({ fn, target: named });
+        } catch {}
+      }
+      const module = byProps(method);
+      if (typeof module?.[method] === 'function') candidates.push({ fn: module[method], target: module });
+      for (const { fn, target } of candidates) {
+        try {
+          const result = await fn.call(target, { userId: id });
+          if (result === false) throw new Error('Discord could not open this profile.');
+          return;
+        } catch (error) { failure = error; log(error); }
+        if (!running) return;
+      }
+    }
+    try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+  }
+
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
+    openProfile,
     copyMention: async mention => {
       try {
         let clipboard = V.metro.common.clipboard;

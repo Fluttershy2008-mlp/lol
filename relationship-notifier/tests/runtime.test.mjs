@@ -76,6 +76,74 @@ function setup({ storage = {}, map = false, connected = true, host = {} } = {}) 
   return { plugin, V, clock, dispatch, stores, state, actions, api, storage, toasts, alerts, errors, patches, subscriptions, failAction: () => { failAction = true; }, appState: () => appStateHandler };
 }
 
+function profileHarness() {
+  const id = '1271475632622014529';
+  const h = setup({ storage: { accounts: { me: { snapshots: {}, manual: {}, history: [
+    { id, category: 'friends', name: 'paulx_103', text: 'You are no longer friends with paulx_103.', at: 100 },
+    { id: '201', category: 'guilds', name: 'Cloudsdale', text: 'Server removal', at: 90 },
+  ] } } } });
+  const nodes = [];
+  const walk = value => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    nodes.push(value); walk(value.props?.children);
+  };
+  h.plugin.onLoad(); h.clock.tick(5000);
+  walk(h.plugin.settings());
+  const buttons = nodes.filter(node => node.type === 'Pressable' && node.props.accessibilityLabel?.startsWith('Open profile for'));
+  assert.equal(buttons.length, 1, 'servers do not have user-profile controls');
+  return { ...h, id, button: buttons[0], nodes };
+}
+
+test('tap opens native mobile profile for a saved user absent from cache; long-press copies instead', async () => {
+  for (const namespace of [false, true]) {
+    const h = profileHarness(), opened = [], copied = [];
+    const sheet = options => opened.push(options);
+    h.V.metro.findByName = name => name === 'showUserProfileActionSheet' ? (namespace ? { default: sheet } : sheet) : undefined;
+    h.stores.UserStore.getUser = () => undefined;
+    h.V.metro.common.clipboard = { setString: text => copied.push(text) };
+    await h.button.props.onPress();
+    assert.deepEqual(opened, [{ userId: h.id }]);
+    assert.deepEqual(copied, []);
+    await h.button.props.onLongPress();
+    assert.deepEqual(copied, [`<@${h.id}>`]);
+    assert.equal(opened.length, 1);
+    assert.equal(h.storage.accounts.me.history.length, 2);
+    h.plugin.onUnload();
+    await h.button.props.onPress(); assert.equal(opened.length, 1);
+  }
+});
+
+test('profile module fallbacks preserve the exact user ID and module receiver', async () => {
+  for (const method of ['showUserProfileActionSheet', 'showUserProfileActionSheetPostConnection', 'openUserProfile', 'showUserProfile', 'openUserProfileModal']) {
+    const h = profileHarness(), opened = [];
+    const actions = { [method](options) { assert.equal(this, actions); opened.push(options); } };
+    const find = h.V.metro.findByProps;
+    h.V.metro.findByProps = (...keys) => keys.every(key => key in actions) ? actions : find(...keys);
+    await h.button.props.onPress();
+    assert.deepEqual(opened, [{ userId: h.id }]);
+    h.plugin.onUnload();
+  }
+});
+
+test('a rejected mobile profile opener falls back; missing openers leave history usable', async () => {
+  const h = profileHarness(), opened = [];
+  h.V.metro.findByName = () => () => Promise.reject(new Error('Unsupported sheet'));
+  const actions = { openUserProfile: options => opened.push(options) };
+  const find = h.V.metro.findByProps;
+  h.V.metro.findByProps = (...keys) => keys.every(key => key in actions) ? actions : find(...keys);
+  await assert.doesNotReject(() => h.button.props.onPress());
+  assert.deepEqual(opened, [{ userId: h.id }]);
+  assert.equal(h.alerts.length, 0);
+  h.plugin.onUnload();
+  const missing = profileHarness();
+  await assert.doesNotReject(() => missing.button.props.onPress());
+  assert.equal(missing.alerts.length, 1);
+  assert.equal(missing.alerts[0][0], 'Could not open profile');
+  assert.equal(missing.storage.accounts.me.history.length, 2);
+  missing.plugin.onUnload();
+});
+
 test('object and Map relationship stores both detect all supported removals', () => {
   for (const map of [false, true]) {
     const h = setup({ map }); h.plugin.onLoad(); h.clock.tick(5000);
@@ -323,7 +391,7 @@ test('install bundle evaluates with the actual Revenge loader wrapper and matche
   ] };
   const rendered = JSON.stringify(plugin.settings());
   assert.ok(rendered.includes('User ID: <@1271475632622014529>'));
-  assert.ok(rendered.includes('Version 1.1.3'));
+  assert.ok(rendered.includes(`Version ${manifest.version}`));
   assert.equal(rows[2].key, SHORTCUT_KEY);
   constants.SETTING_RENDERER_CONFIG[SHORTCUT_KEY].onPress();
   assert.equal(opened.length, 1);

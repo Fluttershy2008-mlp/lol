@@ -331,8 +331,37 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
     setStatus('Plugin is disabled');
   }
 
+  async function openProfile(id) {
+    if (!running || typeof id !== 'string' || !/^\d+$/.test(id)) return;
+    let failure;
+    // Prefer Discord's native mobile profile sheet; some builds expose only
+    // the older profile action modules. Discord handles fetching uncached users.
+    for (const method of ['showUserProfileActionSheet', 'showUserProfileActionSheetPostConnection', 'openUserProfile', 'showUserProfile', 'openUserProfileModal']) {
+      const candidates = [];
+      if (method.startsWith('showUserProfileActionSheet')) {
+        try {
+          const named = V.metro.findByName?.(method);
+          const fn = typeof named === 'function' ? named : named?.default;
+          if (typeof fn === 'function') candidates.push({ fn, target: named });
+        } catch {}
+      }
+      const module = byProps(method);
+      if (typeof module?.[method] === 'function') candidates.push({ fn: module[method], target: module });
+      for (const { fn, target } of candidates) {
+        try {
+          const result = await fn.call(target, { userId: id });
+          if (result === false) throw new Error('Discord could not open this profile.');
+          return;
+        } catch (error) { failure = error; log(error); }
+        if (!running) return;
+      }
+    }
+    try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+  }
+
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
+    openProfile,
     copyMention: async mention => {
       try {
         let clipboard = V.metro.common.clipboard;
