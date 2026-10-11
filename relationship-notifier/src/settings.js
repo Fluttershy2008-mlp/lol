@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+import { formatNotification } from './tracker.js';
 
 export function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme }) {
   const h = React.createElement;
@@ -47,13 +48,15 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
       note('Saved on this device for the current account. The latest 100 are kept.'),
       history.length ? null : note('No changes detected yet. The first check saves your starting list.'),
       ...history.map((entry, index) => h(RN.View, { key: `${entry.at}:${index}`, style: { padding: 14, marginTop: 10, borderRadius: 10, backgroundColor: colors.card } },
-        text(entry.text), note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
+        h(RN.Text, { selectable: true, style: { color: colors.text, fontSize: 15, lineHeight: 21 } }, formatNotification(entry)),
+        note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
       )),
       history.length ? action('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.0 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.1 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }
+

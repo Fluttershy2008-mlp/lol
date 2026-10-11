@@ -33,6 +33,10 @@ updates enabled and restart Discord to download them.
 - In-app toast alerts, an optional popup that stays until dismissed, and the
   latest 100 notifications in plugin settings. Multiple changes are grouped in
   one alert, with every detected change retained in history.
+- Friend and incoming-request notifications show a **User ID** line alongside
+  the saved name, including older history entries that already contain an ID.
+  Notification text in history is selectable so you can copy the ID. Single
+  toast alerts and detailed popups include it too.
 - Filters for your own unfriending, blocking, request acceptance/rejection and
   server/group leaves where Discord's action or REST modules can be identified.
 - Skips temporary server outages, accepted requests and ordinary 1-to-1 DM
@@ -108,3 +112,4 @@ Revenge compatibility was checked against its public source:
 [Vendetta API](https://github.com/revenge-mod/revenge-bundle/blob/main/src/core/vendetta/api.tsx),
 [plugin loader](https://github.com/revenge-mod/revenge-bundle/blob/main/src/core/vendetta/plugins.ts),
 and [toast API](https://github.com/revenge-mod/revenge-bundle/blob/main/src/lib/ui/toasts.ts).
+

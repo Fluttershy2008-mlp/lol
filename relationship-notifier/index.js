@@ -1,5 +1,5 @@
 (() => {
-/*! RelationshipNotifier for Revenge 1.1.0
+/*! RelationshipNotifier for Revenge 1.1.1
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -20,6 +20,13 @@ const DEFAULTS = Object.freeze({
 
 const CATEGORIES = ['friends', 'requests', 'guilds', 'groups'];
 const OPTIONS = { friends: 'friends', requests: 'friendRequestCancels', guilds: 'servers', groups: 'groups' };
+
+// Format at display time so notifications saved by older versions gain IDs too.
+function formatNotification(entry) {
+  const isUser = entry.category === 'friends' || entry.category === 'requests';
+  return isUser && typeof entry.id === 'string' && entry.id.length
+    ? `${entry.text}\nUser ID: ${entry.id}` : entry.text;
+}
 
 function createTracker({ storage, notify, changed = () => {}, now = Date.now }) {
   let accountId = null;
@@ -131,6 +138,7 @@ function createTracker({ storage, notify, changed = () => {}, now = Date.now }) 
   };
 }
 
+
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme }) {
@@ -180,16 +188,18 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
       note('Saved on this device for the current account. The latest 100 are kept.'),
       history.length ? null : note('No changes detected yet. The first check saves your starting list.'),
       ...history.map((entry, index) => h(RN.View, { key: `${entry.at}:${index}`, style: { padding: 14, marginTop: 10, borderRadius: 10, backgroundColor: colors.card } },
-        text(entry.text), note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
+        h(RN.Text, { selectable: true, style: { color: colors.text, fontSize: 15, lineHeight: 21 } }, formatNotification(entry)),
+        note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
       )),
       history.length ? action('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.0 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.1 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }
+
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
@@ -341,6 +351,7 @@ function registerSettingsShortcut({ settingsAPI, Settings, constants, treeManage
   };
 }
 
+
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setInterval, clearInterval }, host = globalThis) {
@@ -362,7 +373,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
 
   function deliver(events, options) {
     if (!running || !events.length) return;
-    const body = events.length === 1 ? events[0].text : `${events.length} relationship changes detected. Open RelationshipNotifier settings to see them.`;
+    const body = events.length === 1 ? formatNotification(events[0]) : `${events.length} relationship changes detected. Open RelationshipNotifier settings to see them.`;
     let shown = false;
     try {
       if (typeof V.ui?.toasts?.showToast === 'function') {
@@ -372,7 +383,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
     } catch (error) { log(error); }
     if (options.notices || !shown) {
       try {
-        const detail = events.slice(0, 5).map(item => item.text).join('\n\n') + (events.length > 5 ? `\n\nAnd ${events.length - 5} more. See notification history.` : '');
+        const detail = events.slice(0, 5).map(formatNotification).join('\n\n') + (events.length > 5 ? `\n\nAnd ${events.length - 5} more. See notification history.` : '');
         RN.Alert.alert('RelationshipNotifier', detail);
       } catch (error) { log(error); }
     }
@@ -679,6 +690,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
   });
   return { onLoad: load, onUnload: unload, settings };
 }
+
 
 return createPlugin(vendetta);
 })()

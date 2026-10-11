@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-import { createTracker } from './tracker.js';
+import { createTracker, formatNotification } from './tracker.js';
 import { createSettings } from './settings.js';
 import { registerSettingsShortcut } from './shortcut.js';
 
@@ -22,7 +22,7 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
 
   function deliver(events, options) {
     if (!running || !events.length) return;
-    const body = events.length === 1 ? events[0].text : `${events.length} relationship changes detected. Open RelationshipNotifier settings to see them.`;
+    const body = events.length === 1 ? formatNotification(events[0]) : `${events.length} relationship changes detected. Open RelationshipNotifier settings to see them.`;
     let shown = false;
     try {
       if (typeof V.ui?.toasts?.showToast === 'function') {
@@ -32,7 +32,7 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
     } catch (error) { log(error); }
     if (options.notices || !shown) {
       try {
-        const detail = events.slice(0, 5).map(item => item.text).join('\n\n') + (events.length > 5 ? `\n\nAnd ${events.length - 5} more. See notification history.` : '');
+        const detail = events.slice(0, 5).map(formatNotification).join('\n\n') + (events.length > 5 ? `\n\nAnd ${events.length - 5} more. See notification history.` : '');
         RN.Alert.alert('RelationshipNotifier', detail);
       } catch (error) { log(error); }
     }
@@ -339,3 +339,4 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
   });
   return { onLoad: load, onUnload: unload, settings };
 }
+

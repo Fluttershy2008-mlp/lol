@@ -13,6 +13,13 @@ export const DEFAULTS = Object.freeze({
 const CATEGORIES = ['friends', 'requests', 'guilds', 'groups'];
 const OPTIONS = { friends: 'friends', requests: 'friendRequestCancels', guilds: 'servers', groups: 'groups' };
 
+// Format at display time so notifications saved by older versions gain IDs too.
+export function formatNotification(entry) {
+  const isUser = entry.category === 'friends' || entry.category === 'requests';
+  return isUser && typeof entry.id === 'string' && entry.id.length
+    ? `${entry.text}\nUser ID: ${entry.id}` : entry.text;
+}
+
 export function createTracker({ storage, notify, changed = () => {}, now = Date.now }) {
   let accountId = null;
   if (!storage.options || typeof storage.options !== 'object') storage.options = { ...DEFAULTS };
@@ -122,3 +129,4 @@ export function createTracker({ storage, notify, changed = () => {}, now = Date.
     },
   };
 }
+

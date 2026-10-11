@@ -89,6 +89,60 @@ test('object and Map relationship stores both detect all supported removals', ()
   }
 });
 
+test('reconnect alert identifies a removed friend even when the user cache is empty', () => {
+  const id = '123456789012345678';
+  const first = setup();
+  first.state.relationships = { [id]: 1 };
+  first.stores.UserStore.getUser = userId => ({ id: userId, username: 'SameName', discriminator: '0' });
+  first.plugin.onLoad(); first.clock.tick(5000); first.plugin.onUnload();
+  const h = setup({ storage: JSON.parse(JSON.stringify(first.storage)) });
+  h.state.relationships = {}; h.stores.UserStore.getUser = () => undefined;
+  h.plugin.onLoad(); h.clock.tick(5000);
+  assert.deepEqual(h.toasts, [`You are no longer friends with SameName.\nUser ID: ${id}`]);
+  assert.equal(h.storage.accounts.me.history[0].id, id);
+  assert.equal(h.storage.accounts.me.history[0].offline, true);
+  h.plugin.onUnload();
+});
+
+test('detailed popup includes friend and request IDs without labelling server or group IDs as users', () => {
+  const h = setup({ storage: { options: { notices: true } } });
+  h.plugin.onLoad(); h.clock.tick(5000);
+  h.state.relationships = {}; h.state.guilds = {}; h.state.channels = {};
+  h.dispatch('RELATIONSHIP_REMOVE'); h.clock.tick(1000);
+  assert.equal(h.alerts.length, 1);
+  assert.match(h.alerts[0][1], /Alice\.\nUser ID: 101/);
+  assert.match(h.alerts[0][1], /Bob is no longer pending\.\nUser ID: 102/);
+  assert.doesNotMatch(h.alerts[0][1], /User ID: (201|301)/);
+  h.plugin.onUnload();
+});
+
+test('older saved notifications display selectable IDs without modifying history', () => {
+  const history = [
+    { id: '123456789012345678', category: 'friends', text: 'You are no longer friends with SameName.', at: 100, offline: true },
+    { id: '987654321098765432', category: 'requests', text: 'The friend request from SameName is no longer pending.', at: 90 },
+    { id: '201', category: 'guilds', text: 'You are no longer in the server Cloudsdale.', at: 80 },
+    { category: 'friends', text: 'Older entry without an ID.', at: 70 },
+  ];
+  const h = setup({ storage: { accounts: { me: { snapshots: {}, history, manual: {} } } } });
+  h.plugin.onLoad(); h.clock.tick(5000);
+  const nodes = [];
+  const walk = value => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    nodes.push(value); walk(value.props?.children);
+  };
+  walk(h.plugin.settings());
+  const texts = nodes.filter(node => node.type === 'Text' && node.props.selectable).map(node => node.props.children[0]);
+  assert.deepEqual(texts, [
+    `${history[0].text}\nUser ID: 123456789012345678`,
+    `${history[1].text}\nUser ID: 987654321098765432`,
+    history[2].text, history[3].text,
+  ]);
+  assert.deepEqual(h.storage.accounts.me.history, history);
+  assert.equal(h.toasts.length, 0);
+  h.plugin.onUnload();
+});
+
 test('self initiated actions are ignored, promises preserved and rejection is reversible', async () => {
   const h = setup(); h.plugin.onLoad(); h.clock.tick(5000);
   assert.equal(await h.actions.removeRelationship('101'), 'removed');
@@ -256,3 +310,4 @@ test('shortcut registration failures do not stop relationship alerts', () => {
   assert.equal(h.toasts.length, 1); assert.match(h.toasts[0], /Alice/);
   h.plugin.onUnload(); assert.equal(h.patches.size, 0); assert.equal(h.clock.jobs.size, 0);
 });
+
