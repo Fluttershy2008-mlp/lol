@@ -1,7 +1,7 @@
 (() => {
   // Vendetta-compatible expression, evaluated with Revenge's per-plugin API.
   function createPlugin(V) {
-    const LIMIT = 2000; // Works for both free and Nitro accounts.
+    const BASE_LIMIT = 2000, NITRO_LIMIT = 4000;
     const storage = V.plugin.storage;
     let active = false, generation = 0;
     let disposers = [];
@@ -45,6 +45,14 @@
       return arg ? arg.value === true || arg.value === 'true' : Boolean(fallback);
     }
 
+    function messageLimit() {
+      // Resolve at use time; Discord's current user may be unavailable on load.
+      const userStore = optional(() => V.metro.findByStoreName?.('UserStore')) || find('getCurrentUser');
+      const user = optional(() => userStore?.getCurrentUser?.());
+      // Full Nitro only. Basic, Classic and unavailable stores use the base cap.
+      return user?.premiumType === 2 ? NITRO_LIMIT : BASE_LIMIT;
+    }
+
     async function listText(kind, detailed) {
       const registry = kind === 'Plugin' ? V.plugins?.plugins : V.themes?.themes;
       if (!registry || typeof registry !== 'object') throw new Error(`${kind} storage is unavailable in this Revenge version.`);
@@ -59,8 +67,9 @@
         if (detailed) {
           lines.push(`> **Name**: ${name}`, `> **${kind === 'Plugin' ? 'Status' : 'Selected'}**: ${state}`,
             `> **Description**: ${markdown(data.description, 'No description')}`, `> **Authors**: ${authors(data.authors)}`);
-          const url = link(entry.id || id);
-          if (url) lines.push(`> **[Install](${url})**`);
+          const url = link(entry.id) || link(id);
+          // Visible URL, without a link preview or a duplicated hidden target.
+          if (url) lines.push(`> **URL**: <${url}>`);
           lines.push('');
         } else lines.push(`> **${name}** — ${state} — ${authors(data.authors)}`);
       }
@@ -68,12 +77,17 @@
       return lines.join('\n').trimEnd();
     }
 
-    function split(text) {
+    function split(text, limit) {
+      // A URL must stay complete and clickable; never silently shorten it.
+      if (text.split('\n').some(line => line.startsWith('> **URL**: <') && line.length > limit))
+        throw new Error(`An install URL exceeds the ${limit}-character message limit.`);
       const chunks = [];
       let remaining = text;
-      while (remaining.length > LIMIT) {
-        let end = remaining.lastIndexOf('\n', LIMIT - 1) + 1;
-        if (end < LIMIT / 2) end = LIMIT;
+      while (remaining.length > limit) {
+        const block = remaining.lastIndexOf('\n\n', limit - 2);
+        // Keep whole addon details together when practical, then whole lines.
+        let end = block >= limit / 2 ? block + 2 : remaining.lastIndexOf('\n', limit - 1) + 1;
+        if (end <= 0) end = limit;
         const code = remaining.charCodeAt(end - 1);
         if (code >= 0xd800 && code <= 0xdbff) end--;
         chunks.push(remaining.slice(0, end));
@@ -83,11 +97,45 @@
       return chunks;
     }
 
-    async function copyText(text) {
+    async function copyText(text, label) {
       const clipboard = optional(() => V.metro.common.clipboard) || find('setString');
       if (typeof clipboard?.setString !== 'function') throw new Error('Clipboard is unavailable. Try the private preview option.');
       await clipboard.setString(text);
-      toast('Addon list copied.');
+      toast(label || 'Addon list copied.');
+    }
+
+    async function copyList(text, limit, part, session = generation) {
+      const chunks = split(text, limit);
+      if (part !== undefined && (!Number.isInteger(part) || part < 1 || part > chunks.length))
+        throw new Error(`Choose a copy part from 1 to ${chunks.length}.`);
+      const index = part === undefined ? 0 : part - 1;
+      const label = i => `Copied part ${i + 1}/${chunks.length} (${chunks[i].length}/${limit} characters).`;
+      if (chunks.length === 1 || part !== undefined) {
+        await copyText(chunks[index], label(index));
+        return;
+      }
+      const confirm = V.ui?.alerts?.showConfirmationAlert;
+      if (typeof confirm !== 'function')
+        throw new Error(`This list needs ${chunks.length} messages. Use copy with part: 1, then part: 2, and so on.`);
+      const { React, ReactNative: RN } = V.metro.common;
+      const h = React.createElement;
+      const dark = optional(() => RN.Appearance?.getColorScheme?.()) !== 'light';
+      const color = dark ? '#f2f3f5' : '#202225';
+      const content = h(RN.ScrollView, { style: { maxHeight: 320 } },
+        h(RN.Text, { style: { color, marginBottom: 12 } },
+          `Part 1 is copied. Choose a part, tap Done, then paste it into Discord. Reopen copy to choose the next part, or use the command's part option. Each part fits the ${limit}-character limit.`),
+        ...chunks.map((chunk, i) => h(RN.TouchableOpacity, {
+          key: String(i), accessibilityRole: 'button', accessibilityLabel: `Copy part ${i + 1} of ${chunks.length}`,
+          style: { padding: 12, marginVertical: 4, borderRadius: 8, backgroundColor: dark ? '#35373c' : '#e3e5e8' },
+          onPress: async () => {
+            if (!active || session !== generation) return;
+            try { await copyText(chunk, label(i)); }
+            catch (error) { log(error); toast(plain(error?.message, 'Could not copy part.')); }
+          }
+        }, h(RN.Text, { style: { color } }, `Copy part ${i + 1}/${chunks.length} — ${chunk.length}/${limit} characters`))));
+      await copyText(chunks[0], label(0));
+      if (!active || session !== generation) return;
+      confirm({ title: 'Copy addon list in parts', content, confirmText: 'Done', onConfirm: () => {} });
     }
 
     async function sendChunks(channelID, chunks, session) {
@@ -127,9 +175,14 @@
       try {
         const text = await listText(kind, option(args, 'detailed', storage[kind === 'Plugin' ? 'pluginListAlwaysDetailed' : 'themeListAlwaysDetailed']));
         if (!active || session !== generation) return;
-        if (option(args, 'copy')) { await copyText(text); return; }
+        const limit = messageLimit();
+        if (option(args, 'copy')) {
+          const part = (Array.isArray(args) ? args : []).find(item => item?.name === 'part');
+          await copyList(text, limit, part ? Number(part.value) : undefined, session);
+          return;
+        }
         if (!channelID) throw new Error('Open a channel before using this command.');
-        const chunks = split(text);
+        const chunks = split(text, limit);
         if (option(args, 'private', storage.privatePreview)) {
           const bot = find('sendBotMessage');
           if (typeof bot?.sendBotMessage !== 'function') throw new Error('Private preview is unavailable. Use copy instead.');
@@ -145,7 +198,7 @@
         let used = false;
         confirm({
           title: 'Send addon list?',
-          content: `Your list will send ${chunks.length} messages to this channel. Everyone who can read the channel will see it.`,
+          content: `Your list will send ${chunks.length} messages, each within ${limit} characters, to this channel. Everyone who can read the channel will see it.`,
           confirmText: 'Send list', cancelText: 'Cancel',
           onConfirm: () => {
             if (used) return;
@@ -182,9 +235,10 @@
             description: `Send, privately preview, or copy your ${kind.toLowerCase()} list.`,
             inputType: 1, type: 1, applicationId: '-1',
             options: [
-              { name: 'detailed', description: 'Include descriptions and install links.', type: 5, required: false },
+              { name: 'detailed', description: 'Include descriptions, authors and visible install URLs.', type: 5, required: false },
               { name: 'private', description: 'Show the list only to you in this channel.', type: 5, required: false },
-              { name: 'copy', description: 'Copy the list instead of sending it.', type: 5, required: false }
+              { name: 'copy', description: 'Copy message-sized parts instead of sending the list.', type: 5, required: false },
+              { name: 'part', description: 'With copy: true, copy this part of a long list (starting at 1).', type: 4, required: false, minValue: 1 }
             ],
             execute: (args, ctx) => execute(kind, args, ctx)
           });
@@ -208,13 +262,17 @@
         key: kind, accessibilityRole: 'button', accessibilityLabel: `Copy ${kind.toLowerCase()} list`,
         style: { padding: 14, marginVertical: 6, borderRadius: 8, backgroundColor: dark ? '#35373c' : '#e3e5e8' },
         onPress: async () => {
-          try { await copyText(await listText(kind, Boolean(storage[kind === 'Plugin' ? 'pluginListAlwaysDetailed' : 'themeListAlwaysDetailed']))); }
+          const session = generation;
+          try {
+            const text = await listText(kind, Boolean(storage[kind === 'Plugin' ? 'pluginListAlwaysDetailed' : 'themeListAlwaysDetailed']));
+            if (active && session === generation) await copyList(text, messageLimit(), undefined, session);
+          }
           catch (error) { log(error); toast(plain(error?.message, 'Could not copy list.')); }
         }
       }, h(RN.Text, { style: { color, fontSize: 16 } }, `Copy ${kind.toLowerCase()} list`));
       return h(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { padding: 16 } },
         h(RN.Text, { style: { color, fontSize: 22, fontWeight: 'bold', marginBottom: 8 } }, 'Addon List'),
-        h(RN.Text, { style: { color: muted, marginBottom: 12 } }, 'Use /plugin-list or /theme-list. Commands send to the current channel unless private preview or copy is selected. Long lists ask before sending multiple messages.'),
+        h(RN.Text, { style: { color: muted, marginBottom: 12 } }, 'Use /plugin-list or /theme-list. Detailed lists show install URLs. Copy splits long lists into parts with character counts: 2,000 normally, 4,000 with full Nitro. Long public lists ask before sending multiple messages.'),
         row('pluginListAlwaysDetailed', 'Detailed plugin lists by default'),
         row('themeListAlwaysDetailed', 'Detailed theme lists by default'),
         row('privatePreview', 'Private previews by default'),

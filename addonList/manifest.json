@@ -1,6 +1,6 @@
 {
   "name": "Addon List",
-  "description": "Send, privately preview, or copy your plugin and theme lists. Built-in message splitting for Revenge.",
+  "description": "Send, preview or copy plugin and theme lists with visible URLs and Discord/Nitro message-sized parts.",
   "authors": [
     {
       "name": "Kitomanari",
@@ -10,7 +10,7 @@
       "name": "fluttershy_simper"
     }
   ],
-  "version": "2.0.0",
+  "version": "2.1.0",
   "main": "index.js",
-  "hash": "dab5b94781f49f41679ac64dbf711eadf59e3ecef48a8a2ae6264aa6a230da87"
+  "hash": "dc02fac469a638e6433b89029ba83adfa48ddfa8224fb0497dc73db6d09f355d"
 }
