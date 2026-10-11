@@ -2,7 +2,7 @@
 
 Theme by **fluttershy_simper**.
 
-Fiery red, gold, orange and teal accents with dark plum panels and cream text. The wallpaper is gently dimmed, and Discord's built-in fonts keep chat readable.
+Golden headings, cream text, fiery orange controls and ruby-red accents with warm dark panels. Version 1.1.0 expands the raw brand and primary palettes, includes BLURPLE mappings, and adds newer mobile button, channel, card and icon colour tokens. The wallpaper and theme author are preserved.
 
 ## Install
 
@@ -12,7 +12,7 @@ Paste this URL into Revenge's theme installer:
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/Sunset_Shimmer_Theme.json
 ```
 
-Enable the theme and reload Discord. Use the dark appearance for the intended look. This JSON uses the same spec-2 theme format as the supplied theme.
+For an existing installation, refresh the theme and reload Discord. If Revenge still shows the cached colours, remove this theme and install it again using the URL above, then reload Discord. Use the dark appearance for the intended look. This JSON uses the same spec-2 theme format as the supplied theme.
 
 ## Wallpaper source
 
