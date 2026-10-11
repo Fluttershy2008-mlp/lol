@@ -2,7 +2,7 @@
 
 Theme by **fluttershy_simper**.
 
-Golden headings, cream text, fiery orange controls and ruby-red accents with warm dark panels. Version 1.1.0 expands the raw brand and primary palettes, includes BLURPLE mappings, and adds newer mobile button, channel, card and icon colour tokens. The wallpaper and theme author are preserved.
+Version 1.2.0 focuses on the surrounding interface: ember-orange outlines, warm red-brown cards and panels, selected-row backgrounds, and current primary/secondary control mappings. Existing text colours, the wallpaper and the theme author are preserved.
 
 ## Install
 
