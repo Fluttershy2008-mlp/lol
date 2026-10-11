@@ -17,7 +17,7 @@ const OPTIONS = { friends: 'friends', requests: 'friendRequestCancels', guilds: 
 export function formatNotification(entry) {
   const isUser = entry.category === 'friends' || entry.category === 'requests';
   return isUser && typeof entry.id === 'string' && entry.id.length
-    ? `${entry.text}\nUser ID: ${entry.id}` : entry.text;
+    ? `${entry.text}\nUser ID: <@${entry.id}>` : entry.text;
 }
 
 export function createTracker({ storage, notify, changed = () => {}, now = Date.now }) {

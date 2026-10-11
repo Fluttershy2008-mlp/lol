@@ -33,7 +33,8 @@ updates enabled and restart Discord to download them.
 - In-app toast alerts, an optional popup that stays until dismissed, and the
   latest 100 notifications in plugin settings. Multiple changes are grouped in
   one alert, with every detected change retained in history.
-- Friend and incoming-request notifications show a **User ID** line alongside
+- Friend and incoming-request notifications show a **User ID** line in Discord
+  mention format (`<@123456789012345678>`) alongside
   the saved name, including older history entries that already contain an ID.
   Notification text in history is selectable so you can copy the ID. Single
   toast alerts and detailed popups include it too.

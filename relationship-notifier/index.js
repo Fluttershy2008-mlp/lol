@@ -1,5 +1,5 @@
 (() => {
-/*! RelationshipNotifier for Revenge 1.1.1
+/*! RelationshipNotifier for Revenge 1.1.2
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -25,7 +25,7 @@ const OPTIONS = { friends: 'friends', requests: 'friendRequestCancels', guilds: 
 function formatNotification(entry) {
   const isUser = entry.category === 'friends' || entry.category === 'requests';
   return isUser && typeof entry.id === 'string' && entry.id.length
-    ? `${entry.text}\nUser ID: ${entry.id}` : entry.text;
+    ? `${entry.text}\nUser ID: <@${entry.id}>` : entry.text;
 }
 
 function createTracker({ storage, notify, changed = () => {}, now = Date.now }) {
@@ -195,7 +195,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.1 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.2 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }

@@ -98,7 +98,7 @@ test('reconnect alert identifies a removed friend even when the user cache is em
   const h = setup({ storage: JSON.parse(JSON.stringify(first.storage)) });
   h.state.relationships = {}; h.stores.UserStore.getUser = () => undefined;
   h.plugin.onLoad(); h.clock.tick(5000);
-  assert.deepEqual(h.toasts, [`You are no longer friends with SameName.\nUser ID: ${id}`]);
+  assert.deepEqual(h.toasts, [`You are no longer friends with SameName.\nUser ID: <@${id}>`]);
   assert.equal(h.storage.accounts.me.history[0].id, id);
   assert.equal(h.storage.accounts.me.history[0].offline, true);
   h.plugin.onUnload();
@@ -110,9 +110,9 @@ test('detailed popup includes friend and request IDs without labelling server or
   h.state.relationships = {}; h.state.guilds = {}; h.state.channels = {};
   h.dispatch('RELATIONSHIP_REMOVE'); h.clock.tick(1000);
   assert.equal(h.alerts.length, 1);
-  assert.match(h.alerts[0][1], /Alice\.\nUser ID: 101/);
-  assert.match(h.alerts[0][1], /Bob is no longer pending\.\nUser ID: 102/);
-  assert.doesNotMatch(h.alerts[0][1], /User ID: (201|301)/);
+  assert.match(h.alerts[0][1], /Alice\.\nUser ID: <@101>/);
+  assert.match(h.alerts[0][1], /Bob is no longer pending\.\nUser ID: <@102>/);
+  assert.doesNotMatch(h.alerts[0][1], /User ID: <@(201|301)>/);
   h.plugin.onUnload();
 });
 
@@ -134,8 +134,8 @@ test('older saved notifications display selectable IDs without modifying history
   walk(h.plugin.settings());
   const texts = nodes.filter(node => node.type === 'Text' && node.props.selectable).map(node => node.props.children[0]);
   assert.deepEqual(texts, [
-    `${history[0].text}\nUser ID: 123456789012345678`,
-    `${history[1].text}\nUser ID: 987654321098765432`,
+    `${history[0].text}\nUser ID: <@123456789012345678>`,
+    `${history[1].text}\nUser ID: <@987654321098765432>`,
     history[2].text, history[3].text,
   ]);
   assert.deepEqual(h.storage.accounts.me.history, history);
