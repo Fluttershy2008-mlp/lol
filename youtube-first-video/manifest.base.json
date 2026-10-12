@@ -1,8 +1,0 @@
-{
-  "name": "YouTube First Video",
-  "description": "Find a YouTube channel's oldest available public upload, including Shorts and past livestreams. Tap a channel link, long-press a message, or use /ytfirst.",
-  "version": "1.0.0",
-  "authors": [{ "name": "fluttershy_simper" }],
-  "main": "index.js",
-  "vendetta": { "icon": "PlayIcon" }
-}
