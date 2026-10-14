@@ -1,0 +1,15 @@
+{
+  "name": "Server Leaver",
+  "description": "Leave all unprotected servers with a preview and confirmation. Protect servers by ID or tap Protect. Keeps owned servers; includes progress and Stop.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "fluttershy_simper"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ic_leave"
+  },
+  "hash": "1a912b9497275b2d09a446432d1c720cd56cb843b113cb40ece4a16d79a9c917"
+}
