@@ -46,7 +46,12 @@ function setup(options = {}) {
       delete relationships[id]; relationshipStore.emit();
       return Promise.resolve({ ok: true });
     },
-    addRelationship() { throw new Error('Should never add relationships'); },
+    addRelationship(value) {
+      calls.push(['add', value]);
+      if (options.add) return options.add(value, relationships);
+      relationships[value.userId] = value.type; relationshipStore.emit();
+      return Promise.resolve({ ok: true });
+    },
   };
   let stateIndex = 0;
   const states = [];
@@ -274,4 +279,128 @@ test('produced bundle adds the Revenge settings shortcut and opens the existing 
   s.plugin.onUnload(); shortcut.onPress();
   assert.equal(navigations.length, 1);
   assert.deepEqual(rows.map(row => row.key), keys);
+});
+
+
+test('blocking by ID preserves exact pasted digits and uses a block relationship', async () => {
+  const s = setup();
+  const value = s.controller.snapshot().token;
+  assert.equal(await s.controller.block(`  ${B}\n`, value), true);
+  assert.deepEqual(s.calls, [['add', { userId: B, type: 2, location: 'Blocked User List' }]]);
+  assert.deepEqual(s.controller.snapshot().rows.map(row => row.id).sort(), [A, B]);
+  assert.equal(s.relationships[C], 5);
+  assert.equal(s.toasts.at(-1), 'User blocked');
+});
+
+test('invalid, self and already-blocked IDs never send relationship requests', async () => {
+  const s = setup();
+  const value = s.controller.snapshot().token;
+  for (const id of ['', '123', 'abc', '<@100000000000000002>', '100000000000000000000', Number(B), ACCOUNT, A]) {
+    assert.equal(await s.controller.block(id, value), false);
+  }
+  assert.equal(s.calls.length, 0);
+  assert.match(s.toasts.at(-1), /already blocked/);
+});
+
+test('stale block actions after account change or disable never run', async () => {
+  const s = setup();
+  const value = s.controller.snapshot().token;
+  s.switchAccount(OTHER);
+  assert.equal(await s.controller.block(B, value), false);
+  const other = s.controller.snapshot().token;
+  s.plugin.onUnload(); s.plugin.onLoad();
+  assert.equal(await s.controller.block(B, other), false);
+  assert.equal(s.calls.length, 0);
+});
+
+test('pending blocks deduplicate submissions and prevent an opposite action', async () => {
+  const request = deferred();
+  const s = setup({ add: () => request.promise });
+  const value = s.controller.snapshot().token;
+  const first = s.controller.block(B, value);
+  assert.equal(s.controller.isPending(B, value), true);
+  assert.equal(await s.controller.block(B, value), false);
+  assert.equal(await s.controller.unblock(B, value), false);
+  assert.equal(s.calls.length, 1);
+  assert.equal(s.controller.snapshot().rows.some(row => row.id === B), false);
+  request.resolve({ ok: true });
+  assert.equal(await first, true);
+  assert.match(s.toasts.at(-1), /Block requested/);
+  assert.equal(s.controller.isPending(B, value), false);
+});
+
+test('block failures report errors, release pending state and allow retry', async () => {
+  for (const add of [() => Promise.reject(new Error('Network offline')), () => ({ ok: false, status: 404 }), () => false]) {
+    const s = setup({ add });
+    const value = s.controller.snapshot().token;
+    assert.equal(await s.controller.block(B, value), false);
+    assert.equal(s.relationships[B], 1);
+    assert.equal(s.alerts.at(-1)[0], 'Could not block user');
+    assert.equal(s.controller.isPending(B, value), false);
+    assert.equal(await s.controller.block(B, value), false);
+    assert.equal(s.calls.length, 2);
+  }
+  const s = setup({ noActions: true });
+  assert.equal(await s.controller.block(B, s.controller.snapshot().token), false);
+  assert.match(s.alerts.at(-1)[1], /unavailable/);
+});
+
+test('block completion after an account switch or unload stays silent', async () => {
+  for (const stop of [s => s.switchAccount(OTHER), s => s.plugin.onUnload()]) {
+    const request = deferred();
+    const s = setup({ add: () => request.promise });
+    const work = s.controller.block(B, s.controller.snapshot().token);
+    stop(s); request.resolve({ ok: true });
+    await work;
+    assert.equal(s.toasts.length, 0);
+    assert.equal(s.alerts.length, 0);
+  }
+});
+
+const nodes = root => !root || typeof root !== 'object' ? [] : [root, ...(root.props?.children ?? []).flatMap(nodes)];
+const headerNodes = s => nodes(s.render().props.ListHeaderComponent);
+const headerButton = (s, label) => headerNodes(s).find(node => node.type === 'Pressable' && node.props.accessibilityLabel === label);
+const blockInput = s => headerNodes(s).find(node => node.type === 'TextInput' && node.props.accessibilityLabel === 'User ID to block');
+
+test('block button opens a paste field; cancel and empty submission do not block', () => {
+  const s = setup();
+  assert.equal(blockInput(s), undefined);
+  headerButton(s, 'Block User ID').props.onPress();
+  assert.equal(blockInput(s).props.value, '');
+  assert.equal(headerButton(s, 'Block').props.disabled, true);
+  headerButton(s, 'Cancel').props.onPress();
+  assert.equal(blockInput(s), undefined);
+  assert.equal(s.calls.length, 0);
+});
+
+test('UI paste and Block submit works, disables duplicates and closes after success', async () => {
+  const request = deferred();
+  const s = setup({ add: () => request.promise });
+  headerButton(s, 'Block User ID').props.onPress();
+  blockInput(s).props.onChangeText(B);
+  assert.equal(blockInput(s).props.value, B);
+  headerButton(s, 'Block').props.onPress();
+  assert.equal(headerButton(s, 'Blocking…').props.disabled, true);
+  assert.equal(blockInput(s).props.editable, false);
+  assert.equal(headerButton(s, 'Cancel').props.disabled, true);
+  request.resolve({ ok: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(blockInput(s), undefined);
+  assert.equal(s.calls.length, 1);
+});
+
+test('UI keeps failed input for retry and hides the form across account switches', async () => {
+  const s = setup({ add: () => false });
+  headerButton(s, 'Block User ID').props.onPress();
+  blockInput(s).props.onChangeText(B);
+  const staleSubmit = headerButton(s, 'Block').props.onPress;
+  staleSubmit();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(blockInput(s).props.value, B);
+  assert.equal(headerButton(s, 'Block').props.disabled, false);
+  s.switchAccount(OTHER);
+  assert.equal(blockInput(s), undefined);
+  staleSubmit();
+  await Promise.resolve();
+  assert.equal(s.calls.length, 1);
 });

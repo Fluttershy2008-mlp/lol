@@ -1,8 +1,14 @@
 {
   "name": "Blocked User List",
-  "description": "Adds Blocked Users to Revenge settings. Search blocked users, open their profiles, and unblock with confirmation.",
-  "version": "1.1.0",
-  "authors": [{ "name": "fluttershy_simper" }],
+  "description": "Adds Blocked Users to Revenge settings. Block by user ID, search blocked users, open profiles, and unblock with confirmation.",
+  "version": "1.2.0",
+  "authors": [
+    {
+      "name": "fluttershy_simper"
+    }
+  ],
   "main": "index.js",
-  "vendetta": { "icon": "WrenchIcon" }
+  "vendetta": {
+    "icon": "WrenchIcon"
+  }
 }

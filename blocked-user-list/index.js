@@ -158,7 +158,7 @@ function createPlugin(V, host = globalThis) {
   const pending = new Set();
   let active = false, generation = 0;
   let removeShortcut;
-  let userStore, relationshipStore, themeStore, profileActions, relationshipActions;
+  let userStore, relationshipStore, themeStore, profileActions, relationshipActions, blockActions;
 
   function resolveStores() {
     userStore = byStore('UserStore') ?? byProps('getUser', 'getCurrentUser');
@@ -272,9 +272,46 @@ function createPlugin(V, host = globalThis) {
     ]);
   }
 
+  async function block(rawID, value) {
+    if (!live(value)) return false;
+    const id = typeof rawID === 'string' ? rawID.trim() : '';
+    const idKey = key(id, value);
+    if (pending.has(idKey)) return false;
+    try {
+      if (!validID(id)) throw new Error('Paste a Discord user ID containing 17–20 digits.');
+      if (id === value.account) throw new Error('You cannot block your own account.');
+      resolveStores();
+      if (isBlocked(relationshipStore, id)) {
+        toast('This user is already blocked.');
+        return false;
+      }
+      blockActions ??= byProps('addRelationship', 'removeRelationship') ?? byProps('addRelationship');
+      if (typeof blockActions?.addRelationship !== 'function') {
+        throw new Error('Blocking by ID is unavailable on this Discord version.');
+      }
+      pending.add(idKey); emit();
+      // Discord mobile takes an options object. Type 2 is a block, never a friend request.
+      const result = await blockActions.addRelationship({ userId: id, type: BLOCKED, location: 'Blocked User List' });
+      if (result === false || result?.ok === false || Number(result?.status) >= 400) {
+        throw new Error('Discord could not block this user. Check the ID and try again.');
+      }
+      if (live(value)) {
+        // Only Discord's relationship store decides when the new row appears.
+        toast(isBlocked(relationshipStore, id) ? 'User blocked' : 'Block requested. Tap Refresh if the list has not updated.');
+        emit();
+      }
+      return true;
+    } catch (error) {
+      log(error);
+      if (live(value)) RN.Alert.alert('Could not block user', error?.message ?? 'Please try again.');
+      return false;
+    } finally { pending.delete(idKey); if (live(value)) emit(); }
+  }
+
   function Settings() {
     const [query, setQuery] = React.useState('');
     const [revision, update] = React.useState(0);
+    const [blockForm, setBlockForm] = React.useState(null);
     const refresh = React.useCallback(() => update(value => value + 1), []);
     const data = snapshot();
     React.useEffect(() => subscribe(refresh), [refresh, data.token.account, generation, userStore, relationshipStore, themeStore]);
@@ -292,6 +329,14 @@ function createPlugin(V, host = globalThis) {
         backgroundColor: c.button, opacity: disabled ? 0.5 : 1, alignItems: 'center', justifyContent: 'center', ...extra },
     }, text(label, { color: c.accent, fontWeight: '700' }));
     const rows = searchRows(data.rows, query);
+    const form = blockForm && live(blockForm.token) ? blockForm : null;
+    const blocking = Boolean(form && pending.has(key(form.id.trim(), form.token)));
+    const submitBlock = () => {
+      if (!form || blocking) return;
+      void block(form.id, form.token).then(success => {
+        if (success && live(form.token)) setBlockForm(current => current === form ? null : current);
+      });
+    };
     const header = h(RN.View, { style: { paddingBottom: 14 } },
       text('Blocked User List', { fontSize: 25, lineHeight: 32, fontWeight: '800' }),
       text('Tap a user to view their profile, or unblock them below.', { color: c.muted, marginTop: 6 }),
@@ -304,6 +349,25 @@ function createPlugin(V, host = globalThis) {
         autoCorrect: false, autoCapitalize: 'none', returnKeyType: 'search',
         style: { color: c.text, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 10, padding: 12, minHeight: 46 },
       }),
+      h(RN.View, { style: { marginTop: 12 } },
+        button('Block User ID', () => setBlockForm({ id: '', token: data.token }), Boolean(data.error) || Boolean(form)),
+        form ? h(RN.View, { style: { backgroundColor: c.card, borderRadius: 10, padding: 12, marginTop: 10 } },
+          text('Block someone by their user ID', { fontWeight: '700' }),
+          text('Paste their copied Discord user ID below, then tap Block.', { color: c.muted, marginVertical: 8 }),
+          h(RN.TextInput, {
+            accessibilityLabel: 'User ID to block', value: form.id,
+            onChangeText: id => {
+              if (live(form.token) && !blocking) setBlockForm(current => current?.token === form.token ? { ...current, id } : current);
+            },
+            placeholder: 'Paste user ID here', placeholderTextColor: c.muted,
+            autoCorrect: false, autoCapitalize: 'none', keyboardType: 'number-pad',
+            editable: !blocking, maxLength: 64, returnKeyType: 'done', onSubmitEditing: submitBlock,
+            style: { color: c.text, borderColor: c.border, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 46 },
+          }),
+          h(RN.View, { style: { flexDirection: 'row', marginTop: 10 } },
+            button('Cancel', () => setBlockForm(null), blocking, { flex: 1, marginRight: 10 }),
+            button(blocking ? 'Blocking…' : 'Block', submitBlock, blocking || !form.id.trim(), { flex: 1 })),
+        ) : null),
       query.trim() && !data.error ? text(`${rows.length} matching ${rows.length === 1 ? 'user' : 'users'}`, { color: c.muted, marginTop: 10 }) : null,
     );
     return h(RN.FlatList, {
@@ -327,7 +391,7 @@ function createPlugin(V, host = globalThis) {
               text(row.id, { color: c.muted, fontSize: 12 }, { selectable: true }))),
           h(RN.View, { style: { flexDirection: 'row' } },
             button('Profile', () => { void openProfile(row.id, data.token); }, false, { flex: 1, marginRight: 10 }),
-            button(busy ? 'Unblocking…' : 'Unblock', () => requestUnblock(row, data.token), busy, { flex: 1 })),
+            button(busy ? 'Updating…' : 'Unblock', () => requestUnblock(row, data.token), busy, { flex: 1 })),
         );
       },
     });
@@ -366,11 +430,11 @@ function createPlugin(V, host = globalThis) {
       optional(() => removeShortcut?.()); removeShortcut = undefined;
       for (const dispose of [...subscriptions]) dispose();
       listeners.clear(); pending.clear();
-      userStore = relationshipStore = themeStore = profileActions = relationshipActions = undefined;
+      userStore = relationshipStore = themeStore = profileActions = relationshipActions = blockActions = undefined;
     },
     settings: Settings,
     // Kept internal to the evaluated plugin object; Revenge only uses lifecycle/settings.
-    controller: { snapshot, subscribe, openProfile, requestUnblock, unblock, isPending: (id, value) => pending.has(key(id, value)) },
+    controller: { snapshot, subscribe, openProfile, requestUnblock, unblock, block, isPending: (id, value) => pending.has(key(id, value)) },
   };
 }
 
