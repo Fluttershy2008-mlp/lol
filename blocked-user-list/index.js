@@ -53,6 +53,94 @@ function searchRows(rows, query) {
   return needle ? rows.filter(row => `${row.name}\n${row.tag}\n${row.id}`.toLowerCase().includes(needle)) : rows;
 }
 
+// Webhook authors are not Discord user accounts. These rules only hide local chat rows.
+function normalizeID(value) {
+  if (typeof value !== 'string') return '';
+  const text = value.trim();
+  return validID(text) ? text : (text.match(/^<@!?(\d{17,20})>$/)?.[1] ?? '');
+}
+
+const appEntryKey = entry => `app:${entry.id}:${entry.name}`;
+
+function appEntries(storage, account) {
+  const entries = storage?.appBlocksByAccount?.[account];
+  return Array.isArray(entries) ? entries.filter(entry => validID(entry?.id)
+    && typeof entry.name === 'string' && entry.name.length <= 128) : [];
+}
+
+function shouldHideAppMessage(message, entries) {
+  if (!message || !entries.length) return false;
+  // Match only the message's own identity, never mentions, replies or command users.
+  const ids = [message.author?.id, message.authorId, message.author_id,
+    message.webhookId, message.webhook_id, message.applicationId, message.application_id,
+    message.application?.id].filter(validID);
+  const name = message.author?.username ?? message.username;
+  return entries.some(entry => ids.includes(entry.id) && (!entry.name || name === entry.name));
+}
+
+// Collection projection reused from ../hide-blocked-and-ignored-messages (CC0-1.0).
+/* SPDX-License-Identifier: CC0-1.0 */
+const sameItems = (a, b) => a.length === b.length && a.every((item, i) => item === b[i]);
+
+// Project the list BEFORE Discord groups blocked messages or generates native
+// rows. Leave MessageStore.getMessage and the real channel cache untouched.
+// Pagination/loading flags and the ChannelMessages prototype are preserved.
+function createCollectionFilter(shouldHide, reportUnsupported = () => {}) {
+  let cache = new WeakMap();
+
+  function project(collection) {
+    if (!collection || typeof collection !== 'object') return collection;
+    const raw = Array.isArray(collection) ? collection : collection._array;
+    if (!Array.isArray(raw)) {
+      reportUnsupported();
+      return collection;
+    }
+    const visible = raw.filter(message => !shouldHide(message));
+    if (visible.length === raw.length) return collection;
+    if (Array.isArray(collection)) {
+      const previous = cache.get(collection);
+      if (previous && sameItems(previous.visible, visible)) return previous.view;
+      cache.set(collection, { visible, view: visible });
+      return visible;
+    }
+
+    const descriptors = Object.getOwnPropertyDescriptors(collection);
+    const keys = Reflect.ownKeys(descriptors);
+    const previous = cache.get(collection);
+    // Discord usually replaces a ChannelMessages instance on changes, but some
+    // builds mutate it. Compare visible rows and descriptor values on each read.
+    if (previous && sameItems(previous.visible, visible)
+      && keys.length === previous.keys.length
+      && keys.every(key => {
+        const a = descriptors[key], b = previous.descriptors[key];
+        return b && a.value === b.value && a.get === b.get && a.set === b.set;
+      })) return previous.view;
+
+    const projected = { ...descriptors };
+    projected._array = { value: visible, writable: true, enumerable: true, configurable: true };
+    // Keep indexed lookups consistent with the displayed collection. Native
+    // MessageStore.getMessage still uses the complete original map for replies.
+    if (collection._map instanceof Map) {
+      const visibleIds = new Set(visible.map(message => message?.id));
+      projected._map = { value: new Map([...collection._map].filter(([id]) => visibleIds.has(id))),
+        writable: true, enumerable: true, configurable: true };
+    } else if (collection._map && typeof collection._map === 'object') {
+      const map = Object.create(Object.getPrototypeOf(collection._map));
+      for (const message of visible) {
+        if (message?.id && Object.prototype.hasOwnProperty.call(collection._map, message.id)) {
+          Object.defineProperty(map, message.id, { value: collection._map[message.id],
+            writable: true, enumerable: true, configurable: true });
+        }
+      }
+      projected._map = { value: map, writable: true, enumerable: true, configurable: true };
+    }
+    const view = Object.create(Object.getPrototypeOf(collection), projected);
+    cache.set(collection, { visible, view, descriptors, keys });
+    return view;
+  }
+  return { project, clear: () => { cache = new WeakMap(); } };
+}
+
 const SHORTCUT_KEY = 'FLUTTERSHY_BLOCKED_USERS';
 const SETTINGS_CONFIG = 'SETTING_RENDERER_CONFIG';
 const SHORTCUT_LAYER = Symbol.for('blocked-user-list.settings-layer.v1');
@@ -159,6 +247,8 @@ function createPlugin(V, host = globalThis) {
   let active = false, generation = 0;
   let removeShortcut;
   let userStore, relationshipStore, themeStore, profileActions, relationshipActions, blockActions;
+  let messageStore, appLists, removeAppFilter, appFilterError;
+  const storage = V.plugin?.storage;
 
   function resolveStores() {
     userStore = byStore('UserStore') ?? byProps('getUser', 'getCurrentUser');
@@ -172,13 +262,88 @@ function createPlugin(V, host = globalThis) {
   function emit() { for (const listener of listeners) optional(listener); }
   function key(id, value) { return `${value.generation}:${value.account}:${id}`; }
 
+  function refreshAppMessages() {
+    appLists?.clear();
+    optional(() => messageStore?.emitChange?.());
+    emit();
+  }
+
+  function ensureAppFilter() {
+    if (removeAppFilter) return true;
+    try {
+      messageStore = byStore('MessageStore') ?? byProps('getMessages', 'getMessage');
+      if (typeof messageStore?.getMessages !== 'function' || typeof V.patcher?.after !== 'function') {
+        throw new Error('APP message hiding is unavailable on this Discord build.');
+      }
+      appLists = createCollectionFilter(message => shouldHideAppMessage(message, appEntries(storage, currentAccount())), () => {
+        if (appFilterError) return;
+        appFilterError = 'This Discord build uses an unsupported message-list format.';
+        log(new Error(appFilterError)); emit();
+      });
+      const remove = V.patcher.after('getMessages', messageStore, (_args, result) => {
+        if (!active) return result;
+        try { return appEntries(storage, currentAccount()).length ? appLists.project(result) : result; }
+        catch (error) { log(error); return result; }
+      });
+      if (typeof remove !== 'function') throw new Error('APP message hiding could not be installed.');
+      removeAppFilter = remove;
+      appFilterError = null;
+      return true;
+    } catch (error) {
+      appFilterError = error?.message ?? String(error); log(error);
+      return false;
+    }
+  }
+
+  function blockApp(rawID, name, value) {
+    if (!live(value)) return false;
+    try {
+      const id = normalizeID(rawID);
+      const scopeName = typeof name === 'string' ? name.trim() : '';
+      if (!id) throw new Error('Paste the copied APP/webhook user ID (17–20 digits).');
+      if (id === value.account) throw new Error('You cannot block your own account.');
+      if (scopeName.length > 128) throw new Error('The character name must be 128 characters or fewer.');
+      if (!storage) throw new Error('Plugin storage is unavailable. Please restart Revenge.');
+      if (!ensureAppFilter()) throw new Error(appFilterError);
+      const entry = { id, name: scopeName };
+      const entries = appEntries(storage, value.account);
+      if (entries.some(item => appEntryKey(item) === appEntryKey(entry))) {
+        toast('This APP/webhook is already blocked locally.'); return false;
+      }
+      // Assign serializable objects so Revenge persists changes across restarts.
+      storage.appBlocksByAccount = { ...(storage.appBlocksByAccount ?? {}), [value.account]: [...entries, entry] };
+      refreshAppMessages();
+      toast('APP/webhook messages hidden on this device');
+      return true;
+    } catch (error) {
+      log(error);
+      if (live(value)) RN.Alert.alert('Could not block APP/webhook', error?.message ?? 'Please try again.');
+      return false;
+    }
+  }
+
+  function unblockApp(row, value) {
+    if (!live(value) || row.kind !== 'app' || !storage) return false;
+    const entries = appEntries(storage, value.account);
+    if (!entries.some(entry => appEntryKey(entry) === row.localKey)) return false;
+    storage.appBlocksByAccount = { ...(storage.appBlocksByAccount ?? {}),
+      [value.account]: entries.filter(entry => appEntryKey(entry) !== row.localKey) };
+    refreshAppMessages(); toast('APP/webhook unblocked locally');
+    return true;
+  }
+
   function snapshot() {
     resolveStores();
     const value = token();
     try {
       if (!active) throw new Error('Enable Blocked User List from the Plugins page to use it.');
       if (!validID(value.account)) throw new Error('Discord is still loading your account. Tap Refresh to try again.');
-      return { token: value, rows: makeRows(blockedIDs(relationshipStore), id => userStore?.getUser?.(id)), error: null };
+      const localRows = appEntries(storage, value.account).map(entry => ({
+        id: entry.id, kind: 'app', localKey: appEntryKey(entry), name: entry.name || 'APP / webhook',
+        tag: entry.name ? 'Local block · exact character name' : 'Local block · all messages from this ID', avatar: null,
+      }));
+      return { token: value, rows: [...localRows, ...makeRows(blockedIDs(relationshipStore), id => userStore?.getUser?.(id))],
+        appFilterError, error: null };
     } catch (error) { return { token: value, rows: [], error: error?.message ?? String(error) }; }
   }
 
@@ -266,6 +431,12 @@ function createPlugin(V, host = globalThis) {
 
   function requestUnblock(row, value) {
     if (!live(value) || !validID(row.id) || pending.has(key(row.id, value))) return;
+    if (row.kind === 'app') {
+      RN.Alert.alert('Unblock this APP/webhook?', `${row.name}\n${row.id}\n\nIts messages will appear again on this device.`, [
+        { text: 'Cancel', style: 'cancel' }, { text: 'Unblock', onPress: () => unblockApp(row, value) },
+      ]);
+      return;
+    }
     RN.Alert.alert('Unblock this user?', `${row.name}\n${row.tag}\n${row.id}\n\nThis removes them from your blocked-user list.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Unblock', onPress: () => { void unblock(row.id, value); } },
@@ -274,7 +445,7 @@ function createPlugin(V, host = globalThis) {
 
   async function block(rawID, value) {
     if (!live(value)) return false;
-    const id = typeof rawID === 'string' ? rawID.trim() : '';
+    const id = normalizeID(rawID);
     const idKey = key(id, value);
     if (pending.has(idKey)) return false;
     try {
@@ -330,19 +501,21 @@ function createPlugin(V, host = globalThis) {
     }, text(label, { color: c.accent, fontWeight: '700' }));
     const rows = searchRows(data.rows, query);
     const form = blockForm && live(blockForm.token) ? blockForm : null;
-    const blocking = Boolean(form && pending.has(key(form.id.trim(), form.token)));
+    const blocking = Boolean(form && pending.has(key(normalizeID(form.id), form.token)));
     const submitBlock = () => {
       if (!form || blocking) return;
-      void block(form.id, form.token).then(success => {
+      const work = form.mode === 'app' ? Promise.resolve(blockApp(form.id, form.name, form.token)) : block(form.id, form.token);
+      void work.then(success => {
         if (success && live(form.token)) setBlockForm(current => current === form ? null : current);
       });
     };
     const header = h(RN.View, { style: { paddingBottom: 14 } },
       text('Blocked User List', { fontSize: 25, lineHeight: 32, fontWeight: '800' }),
-      text('Tap a user to view their profile, or unblock them below.', { color: c.muted, marginTop: 6 }),
+      text('Manage blocked users and locally hidden APP/webhook messages.', { color: c.muted, marginTop: 6 }),
+      data.appFilterError ? text(data.appFilterError, { color: c.muted, marginTop: 8 }) : null,
       h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 } },
-        text(data.error ? 'List unavailable' : `${data.rows.length} blocked ${data.rows.length === 1 ? 'user' : 'users'}`, { flex: 1, fontWeight: '700' }),
-        button('Refresh', refresh)),
+        text(data.error ? 'List unavailable' : `${data.rows.length} blocked ${data.rows.length === 1 ? 'entry' : 'entries'}`, { flex: 1, fontWeight: '700' }),
+        button('Refresh', () => { ensureAppFilter(); refreshAppMessages(); refresh(); })),
       h(RN.TextInput, {
         accessibilityLabel: 'Search blocked users by name, username or user ID', value: query, onChangeText: setQuery,
         placeholder: 'Search name, username or ID', placeholderTextColor: c.muted,
@@ -350,10 +523,14 @@ function createPlugin(V, host = globalThis) {
         style: { color: c.text, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 10, padding: 12, minHeight: 46 },
       }),
       h(RN.View, { style: { marginTop: 12 } },
-        button('Block User ID', () => setBlockForm({ id: '', token: data.token }), Boolean(data.error) || Boolean(form)),
+        button('Block APP / Webhook ID', () => setBlockForm({ id: '', name: '', mode: 'app', token: data.token }), Boolean(data.error) || Boolean(form)),
+        h(RN.View, { style: { marginTop: 8 } },
+          button('Block User ID', () => setBlockForm({ id: '', mode: 'user', token: data.token }), Boolean(data.error) || Boolean(form))),
         form ? h(RN.View, { style: { backgroundColor: c.card, borderRadius: 10, padding: 12, marginTop: 10 } },
-          text('Block someone by their user ID', { fontWeight: '700' }),
-          text('Paste their copied Discord user ID below, then tap Block.', { color: c.muted, marginVertical: 8 }),
+          text(form.mode === 'app' ? 'Block an APP or Tupperbox webhook' : 'Block someone by their user ID', { fontWeight: '700' }),
+          text(form.mode === 'app'
+            ? 'Copy User ID from the APP/proxy message and paste it here. This hides matching chat messages on this device while this plugin is enabled.'
+            : 'Paste their copied Discord user ID below, then tap Block.', { color: c.muted, marginVertical: 8 }),
           h(RN.TextInput, {
             accessibilityLabel: 'User ID to block', value: form.id,
             onChangeText: id => {
@@ -364,6 +541,18 @@ function createPlugin(V, host = globalThis) {
             editable: !blocking, maxLength: 64, returnKeyType: 'done', onSubmitEditing: submitBlock,
             style: { color: c.text, borderColor: c.border, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 46 },
           }),
+          form.mode === 'app' ? h(RN.View, { style: { marginTop: 10 } },
+            text('Optional: exact character name', { fontWeight: '700' }),
+            text('Tupperbox characters can share an ID. Enter a name such as Allo to hide only that character. Leave blank to hide every message from this ID.', { color: c.muted, marginVertical: 8 }),
+            h(RN.TextInput, {
+              accessibilityLabel: 'Exact APP character name (optional)', value: form.name,
+              onChangeText: name => {
+                if (live(form.token)) setBlockForm(current => current?.token === form.token ? { ...current, name } : current);
+              },
+              placeholder: 'e.g. Allo', placeholderTextColor: c.muted, autoCorrect: false,
+              autoCapitalize: 'none', maxLength: 128,
+              style: { color: c.text, borderColor: c.border, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 46 },
+            })) : null,
           h(RN.View, { style: { flexDirection: 'row', marginTop: 10 } },
             button('Cancel', () => setBlockForm(null), blocking, { flex: 1, marginRight: 10 }),
             button(blocking ? 'Blocking…' : 'Block', submitBlock, blocking || !form.id.trim(), { flex: 1 })),
@@ -372,7 +561,7 @@ function createPlugin(V, host = globalThis) {
     );
     return h(RN.FlatList, {
       style: { flex: 1, backgroundColor: c.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 },
-      data: rows, keyExtractor: row => row.id, extraData: `${revision}:${query}:${data.token.account}:${generation}`,
+      data: rows, keyExtractor: row => row.localKey ?? row.id, extraData: `${revision}:${query}:${data.token.account}:${generation}`,
       keyboardShouldPersistTaps: 'handled', keyboardDismissMode: 'on-drag',
       initialNumToRender: 12, maxToRenderPerBatch: 12, windowSize: 7,
       ListHeaderComponent: header,
@@ -380,8 +569,8 @@ function createPlugin(V, host = globalThis) {
       renderItem: ({ item: row }) => {
         const busy = pending.has(key(row.id, data.token));
         return h(RN.View, { style: { backgroundColor: c.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
-          h(Pressable, { accessibilityRole: 'button', accessibilityLabel: `Open ${row.name}’s profile`,
-            onPress: () => { void openProfile(row.id, data.token); }, style: { flexDirection: 'row', alignItems: 'center', paddingBottom: 12 } },
+          h(Pressable, { accessibilityRole: 'button', accessibilityLabel: row.kind === 'app' ? `Local APP block ${row.name}` : `Open ${row.name}’s profile`,
+            disabled: row.kind === 'app', onPress: () => { void openProfile(row.id, data.token); }, style: { flexDirection: 'row', alignItems: 'center', paddingBottom: 12 } },
             row.avatar ? h(RN.Image, { source: { uri: row.avatar }, style: { width: 46, height: 46, borderRadius: 23, marginRight: 12 } })
               : h(RN.View, { style: { width: 46, height: 46, borderRadius: 23, marginRight: 12, backgroundColor: c.button, alignItems: 'center', justifyContent: 'center' } },
                 text(row.name === 'Unknown user' ? '?' : row.name.slice(0, 1).toUpperCase(), { fontSize: 22, fontWeight: '700' })),
@@ -390,7 +579,7 @@ function createPlugin(V, host = globalThis) {
               text(row.tag, { color: c.muted, fontSize: 13 }, { numberOfLines: 1 }),
               text(row.id, { color: c.muted, fontSize: 12 }, { selectable: true }))),
           h(RN.View, { style: { flexDirection: 'row' } },
-            button('Profile', () => { void openProfile(row.id, data.token); }, false, { flex: 1, marginRight: 10 }),
+            row.kind !== 'app' ? button('Profile', () => { void openProfile(row.id, data.token); }, false, { flex: 1, marginRight: 10 }) : null,
             button(busy ? 'Updating…' : 'Unblock', () => requestUnblock(row, data.token), busy, { flex: 1 })),
         );
       },
@@ -410,6 +599,7 @@ function createPlugin(V, host = globalThis) {
     onLoad() {
       if (active) return;
       active = true; generation++; emit();
+      resolveStores(); ensureAppFilter(); refreshAppMessages();
       // Revenge exposes its native settings registry on bunny.ui.settings.
       // Extend the existing section without replacing Plugins, Themes or Account Switcher.
       try {
@@ -427,6 +617,9 @@ function createPlugin(V, host = globalThis) {
     },
     onUnload() {
       active = false; generation++; emit();
+      optional(() => removeAppFilter?.()); removeAppFilter = undefined;
+      appLists?.clear(); appLists = undefined;
+      optional(() => messageStore?.emitChange?.()); messageStore = undefined; appFilterError = null;
       optional(() => removeShortcut?.()); removeShortcut = undefined;
       for (const dispose of [...subscriptions]) dispose();
       listeners.clear(); pending.clear();
@@ -434,7 +627,7 @@ function createPlugin(V, host = globalThis) {
     },
     settings: Settings,
     // Kept internal to the evaluated plugin object; Revenge only uses lifecycle/settings.
-    controller: { snapshot, subscribe, openProfile, requestUnblock, unblock, block, isPending: (id, value) => pending.has(key(id, value)) },
+    controller: { snapshot, subscribe, openProfile, requestUnblock, unblock, block, blockApp, unblockApp, isPending: (id, value) => pending.has(key(id, value)) },
   };
 }
 

@@ -31,6 +31,24 @@ function setup(options = {}) {
   const relationshipStore = makeStore({ getRelationships: () => relationships, isBlocked: id => relationships[id] === 2 });
   const themeStore = makeStore({ theme: 'dark' });
   const stores = { UserStore: userStore, RelationshipStore: relationshipStore, ThemeStore: themeStore };
+  const storage = options.storage ?? {};
+  const messages = [];
+  const messageStore = {
+    getMessages: () => messages,
+    getMessage: (_channel, id) => messages.find(message => message.id === id),
+    emitChange() {},
+  };
+  if (!options.noMessages) stores.MessageStore = messageStore;
+  const patcher = {
+    after(name, object, callback) {
+      const original = object[name];
+      object[name] = function (...args) {
+        const result = original.apply(this, args);
+        return callback(args, result) ?? result;
+      };
+      return () => { object[name] = original; };
+    },
+  };
   const eventListeners = new Map();
   const appListeners = new Set();
   const modules = { ...(options.modules ?? {}) };
@@ -71,6 +89,7 @@ function setup(options = {}) {
     AppState: { addEventListener: (_event, fn) => { appListeners.add(fn); return { remove: () => appListeners.delete(fn) }; } },
   };
   const V = {
+    plugin: { storage }, patcher,
     metro: {
       common: { React, ReactNative: RN, FluxDispatcher: {
         subscribe: (type, fn) => { if (!eventListeners.has(type)) eventListeners.set(type, new Set()); eventListeners.get(type).add(fn); },
@@ -88,7 +107,7 @@ function setup(options = {}) {
   const render = () => { stateIndex = 0; return plugin.settings(); };
   return { plugin, controller: plugin.controller, relationships, users, calls, alerts, toasts, errors,
     userStore, relationshipStore, themeStore, eventListeners, appListeners, effects, render,
-    switchAccount: value => { account = value; userStore.emit(); }, stores };
+    storage, messages, messageStore, switchAccount: value => { account = value; userStore.emit(); }, stores };
 }
 
 test('bundle is installable and manifest hash matches its exact bytes', async () => {
@@ -295,7 +314,7 @@ test('blocking by ID preserves exact pasted digits and uses a block relationship
 test('invalid, self and already-blocked IDs never send relationship requests', async () => {
   const s = setup();
   const value = s.controller.snapshot().token;
-  for (const id of ['', '123', 'abc', '<@100000000000000002>', '100000000000000000000', Number(B), ACCOUNT, A]) {
+  for (const id of ['', '123', 'abc', '<@100000000000000002>garbage', '100000000000000000000', Number(B), ACCOUNT, A]) {
     assert.equal(await s.controller.block(id, value), false);
   }
   assert.equal(s.calls.length, 0);
@@ -403,4 +422,111 @@ test('UI keeps failed input for retry and hides the form across account switches
   staleSubmit();
   await Promise.resolve();
   assert.equal(s.calls.length, 1);
+});
+
+
+test('APP block hides existing and incoming webhook rows without a Discord relationship request', () => {
+  const s = setup();
+  s.messages.push({ id: 'old', author: { id: B, username: 'Allo', bot: true }, webhook_id: B },
+    { id: 'friend', author: { id: C, username: 'Friend' } });
+  assert.equal(s.controller.blockApp(`<@${B}>`, '', s.controller.snapshot().token), true);
+  assert.deepEqual(s.messageStore.getMessages().map(message => message.id), ['friend']);
+  s.messages.push({ id: 'new', author: { id: B, username: 'Another Tupper' }, webhookId: B });
+  assert.deepEqual(s.messageStore.getMessages().map(message => message.id), ['friend']);
+  assert.equal(s.messages.length, 3, 'the underlying cache must remain intact');
+  assert.equal(s.messageStore.getMessage('', 'old').author.username, 'Allo');
+  assert.equal(s.calls.length, 0, 'webhooks must never be passed to addRelationship');
+});
+
+test('character-specific rules keep other tuppers sharing the webhook visible', () => {
+  const s = setup();
+  s.messages.push({ id: 'allo', author: { id: B, username: 'Allo' }, webhook_id: B },
+    { id: 'other', author: { id: B, username: 'Other' }, webhook_id: B });
+  assert.equal(s.controller.blockApp(B, 'Allo', s.controller.snapshot().token), true);
+  assert.deepEqual(s.messageStore.getMessages().map(message => message.id), ['other']);
+  assert.equal(s.controller.snapshot().rows.find(row => row.kind === 'app').name, 'Allo');
+});
+
+test('local APP entries persist through reload and stay separate for each account', () => {
+  const storage = {};
+  const first = setup({ storage });
+  first.controller.blockApp(B, '', first.controller.snapshot().token);
+  first.plugin.onUnload();
+  const second = setup({ storage });
+  second.messages.push({ id: 'proxy', author: { id: B } });
+  assert.equal(second.messageStore.getMessages().length, 0);
+  second.switchAccount(OTHER);
+  assert.equal(second.messageStore.getMessages().length, 1);
+  assert.equal(second.controller.snapshot().rows.some(row => row.kind === 'app'), false);
+  second.switchAccount(ACCOUNT);
+  assert.equal(second.messageStore.getMessages().length, 0);
+});
+
+test('local unblock confirmation restores messages, preserves native blocks and rejects stale actions', () => {
+  const s = setup();
+  const value = s.controller.snapshot().token;
+  s.controller.blockApp(B, 'Allo', value);
+  s.messages.push({ id: 'proxy', author: { id: B, username: 'Allo' } });
+  const row = s.controller.snapshot().rows.find(row => row.kind === 'app');
+  s.controller.requestUnblock(row, value);
+  assert.equal(s.messageStore.getMessages().length, 0, 'cancel leaves the rule intact');
+  const confirm = s.alerts.at(-1)[2][1].onPress;
+  s.switchAccount(OTHER); confirm(); s.switchAccount(ACCOUNT);
+  assert.equal(s.messageStore.getMessages().length, 0);
+  s.controller.requestUnblock(row, value);
+  s.alerts.at(-1)[2][1].onPress();
+  assert.equal(s.messageStore.getMessages().length, 1);
+  assert.equal(s.relationships[A], 2);
+  assert.equal(s.calls.length, 0);
+});
+
+test('disable restores original APP messages and re-enable installs one filter', () => {
+  const s = setup();
+  s.messages.push({ id: 'proxy', author: { id: B } });
+  s.controller.blockApp(B, '', s.controller.snapshot().token);
+  assert.equal(s.messageStore.getMessages().length, 0);
+  s.plugin.onUnload();
+  assert.equal(s.messageStore.getMessages(), s.messages);
+  s.plugin.onLoad(); s.plugin.onLoad();
+  assert.equal(s.messageStore.getMessages().length, 0);
+  s.plugin.onUnload();
+  assert.equal(s.messageStore.getMessages(), s.messages);
+});
+
+test('bad APP IDs, duplicates, stale sessions and missing message modules do not create rules', () => {
+  const s = setup();
+  const value = s.controller.snapshot().token;
+  for (const id of ['bad', '123', ACCOUNT]) assert.equal(s.controller.blockApp(id, '', value), false);
+  assert.equal(s.controller.blockApp(B, 'x'.repeat(129), value), false);
+  assert.equal(s.controller.blockApp(B, '', value), true);
+  assert.equal(s.controller.blockApp(B, '', value), false);
+  assert.equal(s.storage.appBlocksByAccount[ACCOUNT].length, 1);
+  s.switchAccount(OTHER);
+  assert.equal(s.controller.blockApp(C, '', value), false);
+  const missing = setup({ noMessages: true });
+  assert.equal(missing.controller.blockApp(B, '', missing.controller.snapshot().token), false);
+  assert.equal(missing.storage.appBlocksByAccount, undefined);
+  assert.match(missing.alerts.at(-1)[1], /unavailable/);
+});
+
+test('APP UI accepts copied mention IDs, optional names, and provides local-only unblock', async () => {
+  const s = setup();
+  headerButton(s, 'Block APP / Webhook ID').props.onPress();
+  blockInput(s).props.onChangeText(`<@${B}>`);
+  headerNodes(s).find(node => node.props?.accessibilityLabel === 'Exact APP character name (optional)').props.onChangeText('Allo');
+  headerButton(s, 'Block').props.onPress();
+  await Promise.resolve();
+  assert.equal(blockInput(s), undefined);
+  const tree = s.render();
+  const row = tree.props.data.find(row => row.kind === 'app');
+  const rendered = nodes(tree.props.renderItem({ item: row }));
+  assert.equal(rendered.some(node => node.props?.accessibilityLabel === 'Profile'), false);
+  assert.equal(rendered.some(node => node.props?.accessibilityLabel === 'Unblock'), true);
+  assert.equal(s.calls.length, 0);
+});
+
+test('native User ID form also accepts IDs copied as Discord mentions', async () => {
+  const s = setup();
+  assert.equal(await s.controller.block(`<@!${B}>`, s.controller.snapshot().token), true);
+  assert.equal(s.calls[0][1].userId, B);
 });
