@@ -14,3 +14,6 @@ const manifest = JSON.parse(await readFile(new URL('manifest.base.json', root), 
 manifest.hash = createHash('sha256').update(bundle).digest('hex');
 await writeFile(new URL('manifest.json', root), JSON.stringify(manifest, null, 2) + '\n');
 console.log('Built AutoText ' + manifest.version + ' (' + Buffer.byteLength(bundle) + ' bytes)');
+
+const { updateBundle } = await import('../compatibility/update-bundle.mjs');
+updateBundle(new URL('.', import.meta.url));

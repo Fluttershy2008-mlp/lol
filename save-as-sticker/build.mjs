@@ -19,3 +19,6 @@ const source = '(() => {\n/*!\n' + licenses.replace(/\*\//g, '* /') + '\n*/\ncon
   + compatible.code + '\nreturn module.exports.default;\n})()\n';
 writeFileSync(new URL('./index.js', import.meta.url), source);
 await import('./sync.mjs');
+
+const { updateBundle } = await import('../compatibility/update-bundle.mjs');
+updateBundle(new URL('.', import.meta.url));

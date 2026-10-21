@@ -167,7 +167,8 @@ function nodes(element) {
 
 test("published manifest hashes the exact executable bundle", () => {
   const m = JSON.parse(readFileSync(new URL("../dist/message-logger/manifest.json", import.meta.url)));
-  assert.equal(m.version, "2.0.3"); assert.equal(m.main, "index.js");
+  const sourceManifest = JSON.parse(readFileSync(new URL("../plugins/message-logger/manifest.json", import.meta.url)));
+  assert.equal(m.version, sourceManifest.version); assert.equal(m.main, "index.js");
   assert.equal(m.hash, createHash("sha256").update(bundle).digest("hex"));
 });
 

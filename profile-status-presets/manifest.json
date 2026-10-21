@@ -1,7 +1,7 @@
 {
   "name": "Profile Status Presets",
   "description": "Save custom statuses with emojis and expiry times, then switch in one tap. Includes a Revenge settings shortcut and /statuspresets.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -12,5 +12,5 @@
   "vendetta": {
     "icon": "PencilIcon"
   },
-  "hash": "1ab665821c97781d3aec5836f7d1d7f6277b0eee8e815ac6ac22c52e5588d47e"
+  "hash": "c904b51c3f08da64b3bd0dededa1765edb726fa267a61c260b5d1da6fcbbf791"
 }

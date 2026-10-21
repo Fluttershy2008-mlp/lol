@@ -33,7 +33,7 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
     const counts = tracker.counts();
     return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
       text('RelationshipNotifier', { fontSize: 24, lineHeight: 30, fontWeight: '800' }),
-      note('Version 1.1.4 · Tap a User ID to open their profile. Long-press to copy <@ID>.'),
+      note('Version 1.1.5 · Tap a User ID to open their profile. Long-press to copy <@ID>.'),
       note('See changes to your friends, requests, servers and group chats.'),
       h(RN.View, { style: { padding: 16, marginVertical: 16, borderRadius: 12, backgroundColor: colors.card } },
         text(status.message, { fontWeight: '700' }),
@@ -65,7 +65,7 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
       ])) : null,
       note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.4 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      text('1.1.5 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
     );
   };
 }

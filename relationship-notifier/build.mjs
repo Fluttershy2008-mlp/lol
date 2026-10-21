@@ -32,3 +32,6 @@ manifest.hash = createHash('sha256').update(bundle).digest('hex');
 writeFileSync(new URL('manifest.json', root), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Built RelationshipNotifier ${manifest.version}: ${Buffer.byteLength(bundle)} bytes`);
 
+
+const { updateBundle } = await import('../compatibility/update-bundle.mjs');
+updateBundle(new URL('.', import.meta.url));

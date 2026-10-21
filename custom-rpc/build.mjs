@@ -22,3 +22,6 @@ writeFileSync(new URL('index.js', root), bundle);
 manifest.hash = createHash('sha256').update(bundle).digest('hex');
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Built CustomRPC ${manifest.version} (${Buffer.byteLength(bundle)} bytes)`);
+
+const { updateBundle } = await import('../compatibility/update-bundle.mjs');
+updateBundle(new URL('.', import.meta.url));

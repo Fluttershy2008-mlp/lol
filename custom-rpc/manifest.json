@@ -1,7 +1,7 @@
 {
   "name": "CustomRPC",
   "description": "Custom Rich Presence for Revenge: activity text, images, buttons, timers and party size. Adapted from Vencord CustomRPC.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -15,5 +15,5 @@
   "vendetta": {
     "icon": "RichActivityIcon"
   },
-  "hash": "7abfb69f38f2828c80624fe0913e1f35f549b2278f9e03b4dbdba7d45801c0ac"
+  "hash": "1c29cf00d7b95ee5ca26357102e368513dc3ebfb9a81682b6cf55f2190766fc0"
 }

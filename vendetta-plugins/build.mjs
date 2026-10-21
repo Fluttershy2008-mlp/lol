@@ -1,4 +1,5 @@
 // copied from beef for now
+import { wrapPlugin } from "../compatibility/build.mjs";
 
 import { readFile, writeFile, readdir } from "fs/promises";
 import { createHash } from "crypto";
@@ -64,6 +65,8 @@ for (let plug of requested.length ? requested : available) {
     });
     await bundle.close();
 
+    const compatible = wrapPlugin(await readFile(outPath, "utf8"), manifest.name);
+    await writeFile(outPath, compatible);
     const toHash = await readFile(outPath);
     manifest.hash = createHash("sha256").update(toHash).digest("hex");
     manifest.main = "index.js";

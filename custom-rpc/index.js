@@ -1,5 +1,169 @@
 (() => {
-/*! CustomRPC for Revenge v1.1.1
+// SPDX-License-Identifier: CC0-1.0
+// Shared by the separately installable Revenge bundles; no global API changes.
+function withRevengeCompatibility(api, factory, pluginName) {
+    var active = true;
+    var generation = 0;
+    var disposers = new Set();
+    var warnings = new Set();
+    var delayKey = Symbol.for('bunny.api.patcher.delay');
+    var raw = api.patcher;
+    function warn(message, error) {
+        if (warnings.has(message)) return;
+        warnings.add(message);
+        try { api.logger?.warn?.('[' + pluginName + '] ' + message, error); } catch (_) {}
+    }
+    function clear() {
+        active = false;
+        generation++;
+        Array.from(disposers).reverse().forEach(function (dispose) { dispose(); });
+    }
+    function patchKind(kind) {
+        function patch(method, parent, callback, once) {
+            var epoch = generation;
+            var cancelled = false;
+            var unpatch;
+            var unsubscribe;
+            var uiPatch = method === 'render' || method === 'type' || method === 'default';
+            function dispose() {
+                if (cancelled) return;
+                cancelled = true;
+                disposers.delete(dispose);
+                try { unsubscribe?.(); } catch (error) { warn('Could not cancel a module subscription.', error); }
+                try { unpatch?.(); } catch (error) { warn('Could not remove a ' + method + ' patch.', error); }
+            }
+            if (!active) return dispose;
+            disposers.add(dispose);
+            function install(target) {
+                if (cancelled || !active || epoch !== generation) return;
+                try {
+                    var owner = target;
+                    var key = method;
+                    // React memo/forwardRef exports are objects, not functions.
+                    // Inspect the resolved module, not just the lazy proxy.
+                    for (var depth = 0; uiPatch && depth < 8; depth++) {
+                        var value = owner?.[key];
+                        if (value?.$$typeof === Symbol.for('react.memo')) {
+                            owner = value; key = 'type';
+                        } else if (value?.$$typeof === Symbol.for('react.forward_ref')) {
+                            owner = value; key = 'render';
+                        } else break;
+                    }
+                    if (uiPatch && typeof owner?.[key] !== 'function') {
+                        warn('Skipped unavailable Discord component method: ' + method);
+                        dispose();
+                        return;
+                    }
+                    var remove = raw[kind](key, owner, function () {
+                        if (!active || cancelled || epoch !== generation) {
+                            if (kind === 'after') return arguments[1];
+                            if (kind === 'instead') return arguments[1].apply(this, arguments[0]);
+                            return;
+                        }
+                        try { return callback.apply(this, arguments); }
+                        finally { if (once) dispose(); }
+                    });
+                    // A module can synchronously unload the plugin while installing.
+                    if (cancelled || !active || epoch !== generation) remove?.();
+                    else unpatch = remove;
+                } catch (error) {
+                    dispose();
+                    // Required data/action patches must still fail visibly.
+                    // Only optional UI methods can safely be skipped.
+                    if (!uiPatch) throw error;
+                    warn('Skipped incompatible Discord component patch: ' + method, error);
+                }
+            }
+            try {
+                var delay = parent?.[delayKey];
+                if (typeof delay === 'function') {
+                    var cancel = delay.call(parent, function (target) {
+                        try { install(target); }
+                        catch (error) {
+                            // The caller is now Discord's module loader, outside
+                            // the plugin loader's onLoad error boundary.
+                            warn('Deferred Discord method is unavailable: ' + method, error);
+                        }
+                    });
+                    if (typeof cancel === 'function') {
+                        if (cancelled) cancel();
+                        else unsubscribe = cancel;
+                    }
+                } else install(parent);
+            } catch (error) {
+                dispose();
+                if (!uiPatch) throw error;
+                warn('Could not resolve Discord component: ' + method, error);
+            }
+            return dispose;
+        }
+        patch.await = function (method, promise, callback, once) {
+            var epoch = generation;
+            var cancelled = false;
+            var remove;
+            function dispose() {
+                if (cancelled) return;
+                cancelled = true;
+                disposers.delete(dispose);
+                remove?.();
+            }
+            if (!active) return dispose;
+            disposers.add(dispose);
+            Promise.resolve(promise).then(function (target) {
+                if (!cancelled && active && epoch === generation) remove = patch(method, target, callback, once);
+            }).catch(function (error) {
+                warn('Deferred patch failed: ' + method, error);
+                dispose();
+            });
+            return dispose;
+        };
+        return patch;
+    }
+    var guardedPatcher;
+    function currentPatcher() {
+        if (!guardedPatcher || raw !== api.patcher) {
+            raw = api.patcher;
+            guardedPatcher = Object.create(raw || null);
+            ['before', 'after', 'instead'].forEach(function (kind) {
+                if (typeof raw?.[kind] === 'function') Object.defineProperty(guardedPatcher, kind, { value: patchKind(kind), enumerable: true });
+            });
+        }
+        return guardedPatcher;
+    }
+    var localAPI = Object.create(api);
+    Object.defineProperty(localAPI, 'patcher', { get: currentPatcher, enumerable: true });
+    var plugin;
+    try { plugin = factory(localAPI); }
+    catch (error) { clear(); throw error; }
+    if (!plugin || typeof plugin !== 'object') { clear(); throw new Error(pluginName + ': invalid plugin exports'); }
+    var result = Object.assign({}, plugin);
+    result.onLoad = function () {
+        active = true;
+        var epoch = generation;
+        function failed(error) {
+            if (active && epoch === generation) {
+                try { result.onUnload(); } catch (cleanupError) { warn('Startup cleanup failed.', cleanupError); }
+            }
+            throw error;
+        }
+        try {
+            var pending = plugin.onLoad?.apply(this, arguments);
+            if (pending && typeof pending.then === 'function') return Promise.resolve(pending).catch(failed);
+            return pending;
+        } catch (error) {
+            return failed(error);
+        }
+    };
+    result.onUnload = function () {
+        clear();
+        return plugin.onUnload?.apply(this, arguments);
+    };
+    return result;
+}
+
+return withRevengeCompatibility(vendetta, function(vendetta) {
+return (() => {
+/*! CustomRPC for Revenge v1.1.2
  * Adapted from Vencord CustomRPC, Copyright (c) 2023-2025 Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -13,4 +177,6 @@ var N=Object.defineProperty;var X=Object.getOwnPropertyDescriptor;var Z=Object.g
 `));return}await n.apply(p.config)}return s(e.KeyboardAvoidingView,{style:{flex:1,backgroundColor:S.bg},behavior:e.Platform?.OS==="ios"?"padding":void 0},s(e.ScrollView,{keyboardShouldPersistTaps:"handled",contentContainerStyle:{padding:16,paddingBottom:64}},s(e.Text,{style:{color:S.text,fontSize:25,fontWeight:"800",marginBottom:6}},"CustomRPC"),U("Set the activity shown on your Discord profile. Enter a name, choose a type, then tap Save & apply."),s(e.View,{style:{backgroundColor:S.card,padding:16,borderRadius:12}},s(e.Text,{style:{color:m.running?z?"#85e0ad":"#176d3e":S.muted,fontWeight:"700",marginBottom:6}},m.busy?"APPLYING\u2026":m.running?"ACTIVE":"STOPPED"),s(e.Text,{accessibilityLiveRegion:"polite",style:{color:S.text,lineHeight:20}},m.message),...m.warnings.map((p,C)=>s(e.Text,{key:C,style:{color:S.error,marginTop:8,lineHeight:20}},p)),b?s(e.Text,{style:{color:S.muted,marginTop:8}},"Edits are saved as a draft. Tap Save & apply to publish them."):null),A(m.busy?"Applying\u2026":"Save & apply",R,!0,m.busy),A("Stop activity",()=>n.stop(),!1,!m.running&&!m.busy&&!i.enabled),E("Activity",[s(l,{key:"type",options:$,value:r.type,onChange:p=>O("type",p),colors:S}),w("appName","Application name",{placeholder:"Your game or activity name"}),w("appID","Application ID (optional for text)",{placeholder:"Discord application ID",numeric:!0,maxLength:21}),U("For application images, create an application in the Discord Developer Portal and copy its Application ID."),A("Open Developer Portal",()=>a("https://discord.com/developers/applications")),w("details","Details \xB7 line 1"),w("state","State \xB7 line 2"),r.type===1?P("streamLink","Stream link \xB7 Twitch or YouTube"):null],!0),E("Images",[U("Use an image key uploaded to your application or a direct image/GIF URL. Gallery links will not work. Animation depends on Discord\u2019s activity renderer."),w("imageBig","Large image URL or key",{url:!0,maxLength:2048}),w("imageBigTooltip","Large image text"),P("imageBigURL","Large image click URL (optional)"),w("imageSmall","Small image URL or key",{url:!0,maxLength:2048}),w("imageSmallTooltip","Small image text"),P("imageSmallURL","Small image click URL (optional)")]),E("Buttons",[U("Add up to two buttons. Each needs both a label and a link. Discord may hide these on your own profile; check from another account."),w("buttonOneText","Button 1 text",{maxLength:31}),P("buttonOneURL","Button 1 URL"),w("buttonTwoText","Button 2 text",{maxLength:31}),P("buttonTwoURL","Button 2 URL")]),E("Timer",[s(l,{key:"timestamp",options:j,value:r.timestampMode,onChange:p=>O("timestampMode",p),colors:S}),r.timestampMode==="elapsed"?U("The timer starts when the plugin loads. Applying edits or reconnecting does not reset it."):null,r.timestampMode==="elapsed"?A("Restart elapsed timer",()=>n.restartTimer(),!1,m.busy):null,r.timestampMode==="midnight"?U("Starts at local midnight on the day the plugin loads. It keeps counting past 24 hours until the plugin reloads."):null,r.timestampMode==="custom"?U("Use Unix timestamps in milliseconds. Leave the end empty for an elapsed timer."):null,r.timestampMode==="custom"?w("startTime","Start timestamp (milliseconds)",{numeric:!0,maxLength:16}):null,r.timestampMode==="custom"?w("endTime","End timestamp (milliseconds)",{numeric:!0,maxLength:16}):null,r.timestampMode==="custom"?A("Set start to now",()=>O("startTime",String(Date.now()))):null]),E("Party & text links",[...r.type===0?[U("Leave both sizes empty to hide the party count."),w("partySize","Current party size",{numeric:!0,maxLength:9}),w("partyMaxSize","Maximum party size",{numeric:!0,maxLength:9})]:[U("Party size is available for Playing activities.")],P("detailsURL","Details click URL (optional)"),P("stateURL","State click URL (optional)")]),s(e.View,{style:{marginTop:18}},U("Keep activity sharing enabled and your status online. Android may stop the activity when Discord is closed or suspended. Avoid running another custom RPC plugin at the same time.")),A("Discard draft changes",()=>{let p=I(i.config??H);i.draft=p,d(p),y({})},!1,m.busy||!b),A(m.busy?"Applying\u2026":"Save & apply",R,!0,m.busy),s(e.Text,{style:{color:S.muted,marginTop:20,fontSize:12,textAlign:"center"}},"CustomRPC 1.1.1 \xB7 Adapted from Vencord \xB7 GPL-3.0-or-later")))}}var D="CUSTOMRPC_FLUTTERSHY_SETTINGS",_="SETTING_RENDERER_CONFIG",q=Symbol.for("customrpc.settings.renderer.v1"),Y=Object.freeze({type:"pressable",parent:null,title:()=>"CustomRPC",useTitle:()=>"CustomRPC",usePredicate:()=>!1,onPress:()=>{},withArrow:!0});function J(t,e){if(!t)return;let i;try{i=t[q],i||(i={row:Y,getter:void 0},Object.defineProperty(t,q,{value:i,configurable:!0}))}catch{return}function n(){try{let a=Object.getOwnPropertyDescriptor(t,_);if(i.getter&&a?.get===i.getter)return t[_][D]===i.row;if(a?.configurable===!1)return!1;let o=!1,s=a?.value??t[_],u=()=>({...a?.get&&!o?a.get.call(t):s,[D]:i.row});return Object.defineProperty(t,_,{configurable:!0,enumerable:a?.enumerable??!0,get:u,set(c){a?.set?a.set.call(t,c):(o=!0,s=c)}}),i.getter=u,t[_][D]===i.row}catch{return!1}}if(i.row=e,!n()){i.row=Y;return}return{ensure:n,release(){i.row===e&&(i.row=Y)}}}function Q({settingsAPI:t,Settings:e,constants:i,treeManager:n,patcher:a,openSettings:o,renderIcon:s,getAssetID:u,log:c=()=>{}}){let h=t?.registeredSections;if(!h||typeof h!="object")return c("Settings shortcut is unavailable on this Revenge version. Use the plugin settings button."),()=>{};let l=Object.values(h).find(y=>Array.isArray(y)&&y.some(L=>L?.key==="BUNNY_PLUGINS"));if(!l||l.some(y=>y?.key===D))return()=>{};let g;for(let y of["RichActivityIcon","GameControllerIcon","WrenchIcon"])try{let L=u?.(y);if(L!=null){g=L;break}}catch{}let r=!0,d={type:"pressable",parent:null,title:()=>"CustomRPC",useTitle:()=>"CustomRPC",icon:g,IconComponent:g!=null&&s?()=>s(g):void 0,usePredicate:()=>r,onPress:()=>{r&&o?.()},withArrow:!0},m=J(i,d);if(!m)return r=!1,c("Could not register a native settings row safely. Use the plugin settings button."),()=>{};let f;try{typeof n?.getAncestors=="function"&&typeof a?.before=="function"&&(f=a.before("getAncestors",n,y=>{y[0]===D&&m.ensure()}))}catch{}let T={key:D,title:()=>"CustomRPC",icon:g,usePredicate:d.usePredicate,rawTabsConfig:d,render:async()=>({default:e})};try{l.splice(l.findIndex(y=>y?.key==="BUNNY_PLUGINS")+1,0,T)}catch{return r=!1,f?.(),m.release(),c("Could not add the settings shortcut. Use the plugin settings button."),()=>{}}return()=>{r=!1;for(let y of new Set([l,...Object.values(h)])){if(!Array.isArray(y))continue;let L=y.indexOf(T);if(L!==-1)try{y.splice(L,1)}catch{}}f?.(),f=void 0,m.release()}}var ae=(()=>{let t=typeof vendetta<"u"?vendetta:globalThis.vendetta;if(!t?.metro?.common||!t?.plugin?.storage)throw new Error("CustomRPC requires Revenge\u2019s Vendetta plugin support.");let{React:e,ReactNative:i,FluxDispatcher:n}=t.metro.common,a=t.plugin.storage,o=(...l)=>{try{return t.metro.findByProps(...l)}catch{return}},s=F(o),u=W({storage:a,dispatcher:n??o("dispatch","subscribe"),resolveAsset:s,appState:i.AppState,log:l=>t.logger?.error?.("[CustomRPC]",l?.message??String(l))}),c=K({React:e,RN:i,storage:a,controller:u,openURL:l=>{try{i.Linking.openURL(l)?.catch?.(()=>i.Alert.alert("Could not open link",l))}catch{i.Alert.alert("Could not open link",l)}},getTheme:()=>{try{return t.metro.findByStoreName("ThemeStore")?.theme}catch{return}}}),h;return{onLoad(){u.load(),h||(h=Q({settingsAPI:globalThis.bunny?.ui?.settings??globalThis.window?.bunny?.ui?.settings,Settings:c,constants:o("SETTING_RENDERER_CONFIG"),treeManager:o("getAncestors","isBlocked"),patcher:t.patcher,openSettings:()=>{try{let l=o("getRootNavigationRef")?.getRootNavigationRef?.();if(!l?.navigate)throw new Error("Settings navigation is unavailable. Open CustomRPC from the Plugins page.");l.navigate("BUNNY_CUSTOM_PAGE",{title:"CustomRPC",render:()=>e.createElement(c)})}catch(l){i.Alert.alert("CustomRPC",l?.message??"Could not open settings.")}},renderIcon:l=>{let g=o("TableRowIcon")?.TableRowIcon;return g?e.createElement(g,{source:l}):e.createElement(i.Image,{source:l,style:{width:24,height:24}})},getAssetID:l=>t.ui?.assets?.getAssetIDByName(l),log:l=>t.logger?.warn?.("[CustomRPC]",l)}))},onUnload(){try{h?.()}finally{h=void 0,u.unload()}},settings:c}})();
 
 return module.exports.default;
+})()
+}, "CustomRPC");
 })()

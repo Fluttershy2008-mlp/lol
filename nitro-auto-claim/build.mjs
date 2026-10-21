@@ -7,3 +7,6 @@ manifest.hash = createHash('sha256').update(bundle).digest('hex');
 await writeFile(new URL('./index.js', import.meta.url), bundle);
 await writeFile(new URL('./manifest.json', import.meta.url), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Built ${manifest.name} ${manifest.version}`);
+
+const { updateBundle } = await import('../compatibility/update-bundle.mjs');
+updateBundle(new URL('.', import.meta.url));

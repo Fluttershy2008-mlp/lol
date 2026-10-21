@@ -1,7 +1,7 @@
 {
   "name": "Nitro Auto Claim",
   "description": "Automatically attempts to redeem Discord gift links in new messages, with duplicate protection and result history.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -12,5 +12,5 @@
   "vendetta": {
     "icon": "GiftIcon"
   },
-  "hash": "37039cfa08183f86f4a626173f843e984eb9a62d5881b5c7d222fe87927c3d09"
+  "hash": "473d1d53aa17c1b9c079e66eecd9c11b892fd58f4fae01bd93740a6addbbebed"
 }

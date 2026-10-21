@@ -1,7 +1,7 @@
 {
   "name": "ExpressionCloner",
   "description": "Clone custom emojis and supported stickers from their action sheets to servers you manage.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_emoji_24px"
   },
-  "hash": "3ec34eae7b40d322a7cd51807313e262228fabaca9a65f346f90854494776f0b"
+  "hash": "88972caa5aa2334621877c8d6a9b65f8d2e81c0268a5a591ae2e1ca889a0c5f6"
 }

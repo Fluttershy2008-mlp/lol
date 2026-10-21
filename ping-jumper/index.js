@@ -1,4 +1,168 @@
 (() => {
+// SPDX-License-Identifier: CC0-1.0
+// Shared by the separately installable Revenge bundles; no global API changes.
+function withRevengeCompatibility(api, factory, pluginName) {
+    var active = true;
+    var generation = 0;
+    var disposers = new Set();
+    var warnings = new Set();
+    var delayKey = Symbol.for('bunny.api.patcher.delay');
+    var raw = api.patcher;
+    function warn(message, error) {
+        if (warnings.has(message)) return;
+        warnings.add(message);
+        try { api.logger?.warn?.('[' + pluginName + '] ' + message, error); } catch (_) {}
+    }
+    function clear() {
+        active = false;
+        generation++;
+        Array.from(disposers).reverse().forEach(function (dispose) { dispose(); });
+    }
+    function patchKind(kind) {
+        function patch(method, parent, callback, once) {
+            var epoch = generation;
+            var cancelled = false;
+            var unpatch;
+            var unsubscribe;
+            var uiPatch = method === 'render' || method === 'type' || method === 'default';
+            function dispose() {
+                if (cancelled) return;
+                cancelled = true;
+                disposers.delete(dispose);
+                try { unsubscribe?.(); } catch (error) { warn('Could not cancel a module subscription.', error); }
+                try { unpatch?.(); } catch (error) { warn('Could not remove a ' + method + ' patch.', error); }
+            }
+            if (!active) return dispose;
+            disposers.add(dispose);
+            function install(target) {
+                if (cancelled || !active || epoch !== generation) return;
+                try {
+                    var owner = target;
+                    var key = method;
+                    // React memo/forwardRef exports are objects, not functions.
+                    // Inspect the resolved module, not just the lazy proxy.
+                    for (var depth = 0; uiPatch && depth < 8; depth++) {
+                        var value = owner?.[key];
+                        if (value?.$$typeof === Symbol.for('react.memo')) {
+                            owner = value; key = 'type';
+                        } else if (value?.$$typeof === Symbol.for('react.forward_ref')) {
+                            owner = value; key = 'render';
+                        } else break;
+                    }
+                    if (uiPatch && typeof owner?.[key] !== 'function') {
+                        warn('Skipped unavailable Discord component method: ' + method);
+                        dispose();
+                        return;
+                    }
+                    var remove = raw[kind](key, owner, function () {
+                        if (!active || cancelled || epoch !== generation) {
+                            if (kind === 'after') return arguments[1];
+                            if (kind === 'instead') return arguments[1].apply(this, arguments[0]);
+                            return;
+                        }
+                        try { return callback.apply(this, arguments); }
+                        finally { if (once) dispose(); }
+                    });
+                    // A module can synchronously unload the plugin while installing.
+                    if (cancelled || !active || epoch !== generation) remove?.();
+                    else unpatch = remove;
+                } catch (error) {
+                    dispose();
+                    // Required data/action patches must still fail visibly.
+                    // Only optional UI methods can safely be skipped.
+                    if (!uiPatch) throw error;
+                    warn('Skipped incompatible Discord component patch: ' + method, error);
+                }
+            }
+            try {
+                var delay = parent?.[delayKey];
+                if (typeof delay === 'function') {
+                    var cancel = delay.call(parent, function (target) {
+                        try { install(target); }
+                        catch (error) {
+                            // The caller is now Discord's module loader, outside
+                            // the plugin loader's onLoad error boundary.
+                            warn('Deferred Discord method is unavailable: ' + method, error);
+                        }
+                    });
+                    if (typeof cancel === 'function') {
+                        if (cancelled) cancel();
+                        else unsubscribe = cancel;
+                    }
+                } else install(parent);
+            } catch (error) {
+                dispose();
+                if (!uiPatch) throw error;
+                warn('Could not resolve Discord component: ' + method, error);
+            }
+            return dispose;
+        }
+        patch.await = function (method, promise, callback, once) {
+            var epoch = generation;
+            var cancelled = false;
+            var remove;
+            function dispose() {
+                if (cancelled) return;
+                cancelled = true;
+                disposers.delete(dispose);
+                remove?.();
+            }
+            if (!active) return dispose;
+            disposers.add(dispose);
+            Promise.resolve(promise).then(function (target) {
+                if (!cancelled && active && epoch === generation) remove = patch(method, target, callback, once);
+            }).catch(function (error) {
+                warn('Deferred patch failed: ' + method, error);
+                dispose();
+            });
+            return dispose;
+        };
+        return patch;
+    }
+    var guardedPatcher;
+    function currentPatcher() {
+        if (!guardedPatcher || raw !== api.patcher) {
+            raw = api.patcher;
+            guardedPatcher = Object.create(raw || null);
+            ['before', 'after', 'instead'].forEach(function (kind) {
+                if (typeof raw?.[kind] === 'function') Object.defineProperty(guardedPatcher, kind, { value: patchKind(kind), enumerable: true });
+            });
+        }
+        return guardedPatcher;
+    }
+    var localAPI = Object.create(api);
+    Object.defineProperty(localAPI, 'patcher', { get: currentPatcher, enumerable: true });
+    var plugin;
+    try { plugin = factory(localAPI); }
+    catch (error) { clear(); throw error; }
+    if (!plugin || typeof plugin !== 'object') { clear(); throw new Error(pluginName + ': invalid plugin exports'); }
+    var result = Object.assign({}, plugin);
+    result.onLoad = function () {
+        active = true;
+        var epoch = generation;
+        function failed(error) {
+            if (active && epoch === generation) {
+                try { result.onUnload(); } catch (cleanupError) { warn('Startup cleanup failed.', cleanupError); }
+            }
+            throw error;
+        }
+        try {
+            var pending = plugin.onLoad?.apply(this, arguments);
+            if (pending && typeof pending.then === 'function') return Promise.resolve(pending).catch(failed);
+            return pending;
+        } catch (error) {
+            return failed(error);
+        }
+    };
+    result.onUnload = function () {
+        clear();
+        return plugin.onUnload?.apply(this, arguments);
+    };
+    return result;
+}
+
+return withRevengeCompatibility(vendetta, function(vendetta) {
+return (() => {
     "use strict";
 
     // PingJumper for Revenge / Vendetta-compatible Discord mobile clients.
@@ -6,7 +170,10 @@
     //   \u2191 older ping
     //   \u2193 newer ping
 
-    const { findByProps, findByStoreName, findByTypeName } = vendetta.metro;
+    const optional = callback => { try { return callback(); } catch { return undefined; } };
+    const findByProps = (...args) => optional(() => vendetta.metro.findByProps(...args));
+    const findByStoreName = (...args) => optional(() => vendetta.metro.findByStoreName(...args));
+    const findByTypeName = (...args) => optional(() => vendetta.metro.findByTypeName?.(...args));
     const { React, ReactNative } = vendetta.metro.common;
     const { before, after } = vendetta.patcher;
     const { getAssetIDByName } = vendetta.ui.assets;
@@ -15,12 +182,14 @@
 
     const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
     const ActionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow;
-    const APIUtils = findByProps("getAPIBaseURL", "get");
+    const APIUtils = findByProps("getAPIBaseURL", "get") ?? findByProps("get", "post");
     const OpenURL = findByProps("openUrl");
 
     const UserStore = findByStoreName("UserStore");
     const ChannelStore = findByStoreName("ChannelStore");
-    const ChatView = findByTypeName?.("ChatView");
+    const ChatView = findByTypeName("ChatView")
+        ?? optional(() => vendetta.metro.findByName?.("ChatView", false));
+    const chatMethod = ChatView?.type ? "type" : "default";
 
     const iconJump =
         getAssetIDByName("LinkIcon")
@@ -47,6 +216,13 @@
     let hasMore = true;
     let busy = false;
     let lastRefresh = 0;
+    let active = false, generation = 0;
+    function resolveSheet(promise, callback) {
+        const epoch = generation;
+        return Promise.resolve(promise).then(module => {
+            if (active && epoch === generation) return callback(module);
+        }).catch(error => logError("Could not extend this action sheet", error));
+    }
 
     function logError(...args) {
         try {
@@ -357,9 +533,9 @@
     }
 
     function patchChatArrows() {
-        if (!ChatView?.type) return () => {};
+        if (!ChatView?.[chatMethod]) return () => {};
 
-        return after("type", ChatView, (_, rendered) => {
+        return after(chatMethod, ChatView, (_, rendered) => {
             try {
                 return React.createElement(
                     React.Fragment,
@@ -399,15 +575,11 @@
         const unpatchOpen = before("openLazy", LazyActionSheet, ([componentPromise, sheetName, args]) => {
             if (sheetName !== "MessageLongPressActionSheet" || !args?.message) return;
 
-            Promise.resolve(componentPromise).then(module => {
+            resolveSheet(componentPromise, module => {
                 if (!module?.default) return;
 
                 const unpatchSheet = after("default", module, (_, component) => {
                     try {
-                        React.useEffect?.(() => () => {
-                            try { unpatchSheet(); } catch {}
-                        }, []);
-
                         let buttons = findInReactTree(component, node =>
                             Array.isArray(node)
                             && node.some(child => child?.type === ActionSheetRow || child?.type?.name === "ActionSheetRow")
@@ -446,7 +618,7 @@
                     } catch (error) {
                         logError("Failed to add message action", error);
                     }
-                });
+                }, true);
 
                 nested.push(unpatchSheet);
             }).catch(error => logError("Failed to patch message action sheet", error));
@@ -487,16 +659,19 @@
     }
 
     function onLoad() {
+        if (active) return;
         if (!UserStore || !APIUtils?.get) {
             throw new Error("PingJumper: required Discord modules were not found on this build");
         }
 
-        if (ChatView?.type) unpatches.push(patchChatArrows());
+        active = true;
+        generation++;
+        if (ChatView?.[chatMethod]) unpatches.push(patchChatArrows());
         if (LazyActionSheet && ActionSheetRow) unpatches.push(patchMessageActionSheet());
         commandUnregister = registerCommandIfAvailable();
 
         showToast(
-            ChatView?.type
+            ChatView?.[chatMethod]
                 ? "PingJumper enabled - use \u2191 / \u2193 in chat"
                 : "PingJumper enabled - use /lastping or the message menu",
             iconJump,
@@ -504,6 +679,8 @@
     }
 
     function onUnload() {
+        active = false;
+        generation++;
         try {
             commandUnregister?.();
         } catch {}
@@ -520,4 +697,6 @@
     }
 
     return { onLoad, onUnload };
+})()
+}, "PingJumper");
 })()

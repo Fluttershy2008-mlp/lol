@@ -1,7 +1,7 @@
 {
   "name": "Message Logger V2",
   "description": "Vencord-style deleted messages, edit history, attachment records and ignore filters for Revenge. Open with /messagelogger.",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -16,5 +16,5 @@
   "vendetta": {
     "icon": "ic_audit_log_24px"
   },
-  "hash": "a7d3cdb2029fd2754304570e61b84ec0d0c5926d8914c1605a9348c095eb07ae"
+  "hash": "36267c57d05c91d8e50b9d1d306f8dbad3ba49772f01df09055e8bac4ac45dda"
 }
