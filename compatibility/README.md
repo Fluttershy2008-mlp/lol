@@ -21,7 +21,7 @@ Use the update action for each installed plugin in Revenge's Plugins settings, t
 
 The reported client build is Discord 350.8 Stable. Validation uses the existing plugin tests, the real Spitroast patcher, and simulated lazy-module and React-component shapes. It is not a device test of every feature on 350.8.
 
-Automated result: 594 tests passed, 0 failed; the optional Hermes execution test was skipped because `HERMES_BINARY` was not supplied.
+The earlier compatibility release reported 594 passing tests, but that number is not a test result for this toast follow-up. The new toast fallback was smoke-tested with mocked Android APIs. The complete Node test suite and on-device crash regression remain unverified.
 
 From the repository root:
 
@@ -32,6 +32,16 @@ npm run test:revenge
 ```
 
 The older source-only addons under `vendetta-plugins/plugins` are not part of the 22 published root-folder installs, except Message Logger, whose source lives there. Their build pipeline also embeds the shared guard, but they are not represented as device-validated ports.
+
+## October 22, 2026 — Discord ToastContainer crash mitigation
+
+Discord Android's `useToastContainer` can throw `Cannot read property 'position' of undefined` when older Revenge toast calls enqueue incompatible UI. Several plugins previously called `vendetta.ui.toasts.showToast` directly.
+
+All 22 published compatibility bundles now use a **per-plugin safe toast adapter**, including the Message Logger V2 and root SaveAsSticker aliases. It routes messages to `ReactNative.ToastAndroid.show` when exposed by the client, otherwise to the Revenge warning log. Native Android notifications do not show the old custom icons. It never patches Discord's global toast service, and preserves all other Revenge UI modules.
+
+This prevents these installed plugin bundles from invoking the suspect old toast bridge; it **does not guarantee** a fix for toasts enqueued by Revenge's core, Discord itself, older cached plugins, or external plugins. The Fluttershy Chat Background companion v1.0.1 already avoids legacy toasts and was left unchanged.
+
+The updated `manifest.json` versions and SHA-256 hashes match the redistributed bundles; related `manifest.base.json` versions have been synchronized. RelationshipNotifier v1.1.6 also includes its versioned entrypoint `index-v1.1.6.js`.
 
 ## Separate Revenge core issue
 
@@ -46,25 +56,25 @@ These plugin updates do not change Revenge's internal theme implementation. The 
 
 | Plugin | Version | Existing install URL |
 | --- | --- | --- |
-| Addon List | 2.2.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/addonList/) |
-| AutoText | 1.2.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/) |
-| Blocked User List | 1.3.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/blocked-user-list/) |
-| Copy User ID | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/copy-user-id/) |
-| CustomRPC | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/custom-rpc/) |
-| ExpressionCloner | 1.1.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/expression-cloner/) |
-| Friends List | 1.0.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/friends-list/) |
-| HideBlockedAndIgnoredMessages | 1.1.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/hide-blocked-and-ignored-messages/) |
-| InfoCommands | 1.2.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/info-commands/) |
-| Message Logger | 2.0.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/) |
-| Message Logger V2 | 2.0.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/) |
-| More Alts! | 3.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/) |
-| Nitro Auto Claim | 1.0.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/nitro-auto-claim/) |
-| PingJumper | 1.1.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/) |
-| Profile Status Presets | 1.0.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/profile-status-presets/) |
-| ReadAllNotificationsButton | 1.2.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/read-all-notifications/) |
-| RelationshipNotifier | 1.1.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/relationship-notifier/) |
-| SaveAsSticker | 1.3.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/) |
-| Server Leaver | 1.0.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/server-leaver/) |
-| Stealmoji | 2.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/) |
-| ValidUser | 2.1.1 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valid-user/) |
-| ViewIcons | 1.0.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/view-icons/) |
+| Addon List | 2.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/addonList/) |
+| AutoText | 1.2.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/) |
+| Blocked User List | 1.3.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/blocked-user-list/) |
+| Copy User ID | 1.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/copy-user-id/) |
+| CustomRPC | 1.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/custom-rpc/) |
+| ExpressionCloner | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/expression-cloner/) |
+| Friends List | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/friends-list/) |
+| HideBlockedAndIgnoredMessages | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/hide-blocked-and-ignored-messages/) |
+| InfoCommands | 1.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/info-commands/) |
+| Message Logger | 2.0.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/) |
+| Message Logger V2 | 2.0.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/) |
+| More Alts! | 3.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/) |
+| Nitro Auto Claim | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/nitro-auto-claim/) |
+| PingJumper | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/) |
+| Profile Status Presets | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/profile-status-presets/) |
+| ReadAllNotificationsButton | 1.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/read-all-notifications/) |
+| RelationshipNotifier | 1.1.6 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/relationship-notifier/) |
+| SaveAsSticker | 1.3.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/) |
+| Server Leaver | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/server-leaver/) |
+| Stealmoji | 2.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/) |
+| ValidUser | 2.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valid-user/) |
+| ViewIcons | 1.0.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/view-icons/) |
