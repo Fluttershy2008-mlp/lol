@@ -1,7 +1,7 @@
 {
   "name": "Copy User ID",
   "description": "Shows user IDs in message long-press and profile menus. Tap to copy as <@ID>.",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "authors": [
     {
       "name": "fluttershy_simper"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_copy_id"
   },
-  "hash": "d767d9cf79a2515ee02a18f35dbf0ece9017d153dcbbe88e01e126486ceb50d0"
+  "hash": "ee3839b428ce99e8ef106fbe2bdceeeab1b521a3bb27ca249bec68ae2f3aae84"
 }

@@ -1,6 +1,8 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
+// SPDX-License-Identifier: CC0-1.0
+// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -132,6 +134,39 @@ function withRevengeCompatibility(api, factory, pluginName) {
     }
     var localAPI = Object.create(api);
     Object.defineProperty(localAPI, 'patcher', { get: currentPatcher, enumerable: true });
+    // Discord's legacy JS toast bridge can queue a broken ToastContainer on
+    // newer Android builds (useToastContainer reads .position of undefined).
+    // Keep this adapter per-plugin. Never change api.ui or Discord's global UI.
+    function safeToast(message) {
+        var label = typeof message === 'string' || typeof message === 'number'
+            ? String(message)
+            : String(message?.message ?? message?.text ?? '');
+        if (!label) return;
+        try {
+            var nativeToast = api.metro?.common?.ReactNative?.ToastAndroid;
+            if (typeof nativeToast?.show === 'function') {
+                return nativeToast.show(label, nativeToast.SHORT ?? 0);
+            }
+        } catch (error) {
+            warn('Native Android notification failed.', error);
+        }
+        warn('Notification logged because the Discord toast bridge is unsafe: ' + label);
+    }
+    var lastUI, lastToasts, adaptedUI;
+    function currentUI() {
+        var ui = api.ui;
+        if (!ui?.toasts) return ui;
+        if (ui !== lastUI || ui.toasts !== lastToasts) {
+            lastUI = ui;
+            lastToasts = ui.toasts;
+            adaptedUI = Object.create(ui);
+            var toasts = Object.create(ui.toasts);
+            Object.defineProperty(toasts, 'showToast', { value: safeToast, enumerable: true });
+            Object.defineProperty(adaptedUI, 'toasts', { value: toasts, enumerable: true });
+        }
+        return adaptedUI;
+    }
+    Object.defineProperty(localAPI, 'ui', { get: currentUI, enumerable: true });
     var plugin;
     try { plugin = factory(localAPI); }
     catch (error) { clear(); throw error; }
@@ -160,7 +195,6 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
-
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
   // Vendetta-compatible expression, evaluated with Revenge's per-plugin API.
