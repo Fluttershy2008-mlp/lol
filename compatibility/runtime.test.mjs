@@ -174,3 +174,67 @@ test('all published Revenge manifests point at guarded bundles with exact hashes
     assert.deepEqual(readFileSync(new URL('message-logger/index.js', root)), readFileSync(new URL('message-logger-v2/index.js', root)));
     assert.deepEqual(readFileSync(new URL('index.js', root)), readFileSync(new URL('save-as-sticker/index.js', root)));
 });
+
+test('Android native toast fallback bypasses broken Discord toast bridge', () => {
+    const messages = [];
+    let legacyCalls = 0;
+    const ui = { toasts: { showToast() { legacyCalls++; throw new Error('ToastContainer is broken'); } }, components: { Row: 1 } };
+    const api = {
+        patcher, ui,
+        metro: { common: { ReactNative: { ToastAndroid: { SHORT: 3, show: (message, duration) => messages.push([message, duration]) } } } },
+        logger: { warn: () => { throw new Error('native fallback should not warn'); } },
+    };
+    const p = create(api, local => ({
+        onLoad() {
+            local.ui.toasts.showToast('Plugin enabled', 123);
+            assert.equal(local.ui.components, ui.components);
+        },
+    }), 'Safe toast');
+    p.onLoad();
+    assert.equal(legacyCalls, 0);
+    assert.deepEqual(messages, [['Plugin enabled', 3]]);
+    assert.equal(api.ui, ui);
+    assert.equal(api.ui.toasts.showToast !== p.ui?.toasts?.showToast, true);
+    p.onUnload();
+});
+
+test('missing Android ToastAndroid logs a notification without crashing Discord', () => {
+    let legacyCalls = 0;
+    const warnings = [];
+    const api = {
+        patcher,
+        ui: { toasts: { showToast: () => { legacyCalls++; throw new Error('bad bridge'); } } },
+        metro: { common: { ReactNative: {} } },
+        logger: { warn: (...args) => warnings.push(args) },
+    };
+    const plugin = create(api, local => ({ onLoad() {
+        assert.doesNotThrow(() => local.ui.toasts.showToast('Copied user ID'));
+        assert.doesNotThrow(() => local.ui.toasts.showToast('Copied user ID'));
+    } }), 'Safe toast');
+    plugin.onLoad();
+    assert.equal(legacyCalls, 0);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0][0], /Copied user ID/);
+    plugin.onUnload();
+});
+
+test('toast adapter follows late-loaded UI and does not alter the global toast service', () => {
+    const notices = [];
+    const original = function () { throw new Error('legacy toast'); };
+    const api = { patcher, ui: undefined, logger: { warn: (...args) => notices.push(args) } };
+    const plugin = create(api, local => ({
+        onLoad() {
+            assert.equal(local.ui, undefined);
+            api.ui = { toasts: { showToast: original } };
+            const first = local.ui.toasts;
+            first.showToast('one');
+            assert.equal(api.ui.toasts.showToast, original);
+            api.ui = { toasts: { showToast: original } };
+            assert.notEqual(local.ui.toasts, first);
+            local.ui.toasts.showToast('two');
+        },
+    }), 'Safe toast');
+    plugin.onLoad();
+    assert.equal(notices.length, 2);
+    plugin.onUnload();
+});
