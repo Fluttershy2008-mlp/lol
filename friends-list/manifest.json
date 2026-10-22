@@ -1,7 +1,7 @@
 {
   "name": "Friends List",
   "description": "Shows your total Discord friend count, a searchable friends list, and profile buttons. Adds Friends List beside Blocked Users in Revenge settings.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "authors": [
     {
       "name": "fluttershy_simper"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "FriendsIcon"
   },
-  "hash": "1ad78c504901cf10d67f61eee6cf3614aa58d1ba797935a191b7b6a723c73b2a"
+  "hash": "c87b9c78052499f47fe1853332b3cbbe6bc14f1bed22d83368a98518fe6d5fed"
 }
