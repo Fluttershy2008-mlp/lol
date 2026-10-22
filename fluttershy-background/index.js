@@ -10,16 +10,14 @@
     const listeners = new Set();
     let active = false;
     let unpatch = null;
-    let imageErrorShown = false;
+    let imageErrorLogged = false;
 
     function optional(fn) {
         try { return fn(); } catch (_) { return undefined; }
     }
 
-    function notify(text) {
-        optional(() => vendetta.ui.toasts.showToast(text));
-    }
-
+    // Avoid the legacy toast bridge: its queued UI can fail asynchronously in
+    // newer Discord builds, outside a synchronous try/catch in this plugin.
     function log(text, error) {
         optional(() => vendetta.logger.warn("[Fluttershy Background] " + text, error));
     }
@@ -161,10 +159,9 @@
                 width: "100%", height: "100%", opacity: 0.35,
             },
             onError(error) {
-                if (!active || imageErrorShown) return;
-                imageErrorShown = true;
+                if (!active || imageErrorLogged) return;
+                imageErrorLogged = true;
                 log("Wallpaper download failed.", error?.nativeEvent?.error);
-                notify("Fluttershy wallpaper could not load. Check your connection and reopen the chat.");
             },
         }), foreground(content));
     }
@@ -174,7 +171,7 @@
         if (!React?.createElement || !React?.cloneElement || !RN?.View || !RN?.Image || typeof vendetta.patcher?.after !== "function") {
             throw new Error("Fluttershy Background: this client does not expose the required Revenge Classic APIs.");
         }
-        imageErrorShown = false;
+        imageErrorLogged = false;
         const seen = new WeakMap();
         for (const name of NAMES) {
             for (const module of modulesFor(name)) {
@@ -197,7 +194,6 @@
                         if (typeof unpatch !== "function") throw new Error("The patcher did not return a cleanup function.");
                         active = true;
                         listeners.forEach(listener => listener(true));
-                        notify("Fluttershy background enabled. Reopen the chat or reload Discord.");
                         return;
                     } catch (error) {
                         unpatch = null;

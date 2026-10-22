@@ -1,7 +1,7 @@
 {
   "name": "Fluttershy Chat Background",
   "description": "Shows the Fluttershy wallpaper behind chat messages when the built-in theme background renderer does not work.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Fluttershy2008"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ImageIcon"
   },
-  "hash": "e14a6b2874a54344232526d483abc1e4e94da82f9e4ff3979b87d9c60533334b"
+  "hash": "d598c269259363978540c6b661fd9640cf181b04e798ff2bad8b956f530ff138"
 }

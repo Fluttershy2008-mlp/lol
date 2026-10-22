@@ -26,7 +26,7 @@ If the chat still has a solid background, install and enable **Fluttershy Chat B
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/fluttershy-background/
 ```
 
-Then reopen a chat or fully restart Discord. The companion draws the same wallpaper directly behind the message view. It supports callable default/named exports, React memo/forwardRef, and class renderers, including the named ChatView fallback. Its image layer cannot intercept touches. It does not read messages or change global patching APIs.
+Then reopen a chat or fully restart Discord. Use companion version **1.0.1** or later; that version removes the legacy toast calls that could trigger a `useToastContainer` crash. The companion draws the same wallpaper directly behind the message view. It supports callable default/named exports, React memo/forwardRef, and class renderers, including the named ChatView fallback. Its image layer cannot intercept touches. It does not read messages or change global patching APIs.
 
 This companion is for Revenge Classic/Vendetta-compatible plugin APIs. Leave it enabled while using the Fluttershy wallpaper; disable it to stop drawing that wallpaper. If no supported chat renderer is found, enabling it reports an error instead of claiming success.
 
@@ -51,4 +51,4 @@ The wallpaper uses 35% visibility and no blur. The JSON includes the original th
 
 The theme author credit refers to the theme design and configuration. Wallpaper, characters, and font resources belong to their respective owners.
 
-Validation checks JSON syntax, colour formats, text contrast against a conservative bright wallpaper bound, resource responses, and the companion's renderer handling. All 13 companion tests pass. Appearance has not been tested on a physical Discord installation.
+Validation checks JSON syntax, colour formats, text contrast against a conservative bright wallpaper bound, resource responses, and the companion's renderer handling. All 15 companion tests pass, including zero toast-service access during startup and image-error handling. Appearance has not been tested on a physical Discord installation.

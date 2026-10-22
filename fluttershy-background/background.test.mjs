@@ -182,15 +182,45 @@ test('unloading hides a mounted background and restores the exact original child
     off.plugin.onUnload();
 });
 
-test('handles background image failures without throwing or repeating toasts', () => {
+test('logs image failures once without opening a toast', () => {
     const mod = { default: () => makeElement('View', {}) }, h = harness(mod);h.plugin.onLoad();
     const wrapper = mod.default(); const image = wrapper.type(wrapper.props).props.children[0];
     image.props.onError({ nativeEvent: { error: 'network' } });
     image.props.onError({ nativeEvent: { error: 'network' } });
-    assert.equal(h.toasts.filter(t => t.includes('could not load')).length, 1);
+    assert.equal(h.warnings.filter(args => args[0].includes('Wallpaper download failed')).length, 1);
+    assert.equal(h.toasts.length, 0);
     h.plugin.onUnload();
     image.props.onError({ nativeEvent: { error: 'network' } });
-    assert.equal(h.toasts.filter(t => t.includes('could not load')).length, 1);
+    assert.equal(h.warnings.filter(args => args[0].includes('Wallpaper download failed')).length, 1);
+    assert.equal(h.toasts.length, 0);
+});
+
+test('does not queue toast rendering on startup or image failure', () => {
+    const pendingToasts = [];
+    const mod = { default: () => makeElement('View', {}) }, h = harness(mod);
+    // The legacy bridge can return successfully before the newer ToastContainer
+    // crashes while rendering the queued object. A synchronous try/catch cannot
+    // protect the app from this delayed failure.
+    h.api.ui.toasts.showToast = content => pendingToasts.push({ content });
+    h.plugin.onLoad();
+    const wrapper = mod.default();
+    const image = wrapper.type(wrapper.props).props.children[0];
+    image.props.onError({ nativeEvent: { error: 'network' } });
+    h.plugin.onUnload();
+    assert.equal(pendingToasts.length, 0, 'The background plugin must not enqueue legacy toast UI');
+});
+
+test('works without accessing a client toast service', () => {
+    let accesses = 0;
+    const mod = { default: () => makeElement('View', {}) }, h = harness(mod);
+    Object.defineProperty(h.api.ui, 'toasts', {
+        get() { accesses++; throw new Error('Toast service is incompatible'); },
+    });
+    h.plugin.onLoad();
+    const wrapper = mod.default();
+    wrapper.type(wrapper.props).props.children[0].props.onError({ nativeEvent: { error: 'network' } });
+    h.plugin.onUnload();
+    assert.equal(accesses, 0);
 });
 
 test('removes the core background wrapper while enabled to avoid duplicate wallpapers', () => {
