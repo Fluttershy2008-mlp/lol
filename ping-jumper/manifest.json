@@ -1,7 +1,7 @@
 {
   "name": "PingJumper",
   "description": "Floating up/down arrows let you jump through recent Discord pings on mobile.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "authors": [
     {
       "name": "Fluttershy2008-mlp"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_link_24px"
   },
-  "hash": "4e36292e0099b6c09f7fe6135d30f3eda4f351338d0acc094099ad507355c5cf"
+  "hash": "a5db088dd33507c7014b8fcebf9e4102d3fac8e66869921cb6e136c98abef68f"
 }

@@ -1,7 +1,7 @@
 {
   "name": "ReadAllNotificationsButton",
   "description": "Mark unread channels, forums, media channels, loaded posts and threads, DMs and group DMs as read with one button.",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -18,5 +18,5 @@
   "vendetta": {
     "icon": "Check"
   },
-  "hash": "da44f595f35ed24e4e73719f935778cf7cdddbb4627c766b1c3127937217fe9c"
+  "hash": "5015589dd16eab12ee0477859014a9c9d43c22632ea06723b9a5fd1071d94df4"
 }
