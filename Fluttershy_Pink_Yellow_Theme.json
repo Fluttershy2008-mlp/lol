@@ -1,7 +1,7 @@
 {
   "name": "Fluttershy - Pink & Yellow",
-  "description": "A gentle Fluttershy theme with buttery-yellow accents, soft pink messages, cosy dark rose panels and a matching G4 Fluttershy chat wallpaper.",
-  "version": "2.0.0",
+  "description": "Fluttershy pink-and-yellow colours with transparent chat layers and a matching G4 wallpaper. The Fluttershy Chat Background companion supports newer Discord chat renderers.",
+  "version": "2.0.1",
   "authors": [
     {
       "name": "Fluttershy2008"
@@ -9,457 +9,366 @@
   ],
   "semanticColors": {
     "CHAT_BACKGROUND": [
-      "#160F13",
-      "#160F13",
-      "#160F13"
+      "#160F1300",
+      "#160F1300"
     ],
     "BACKGROUND_PRIMARY": [
-      "#160F13",
-      "#160F13",
-      "#160F13"
+      "#160F1300",
+      "#160F1300"
     ],
     "BACKGROUND_MOBILE_PRIMARY": [
-      "#160F13",
-      "#160F13",
-      "#160F13"
+      "#160F1300",
+      "#160F1300"
     ],
     "BG_BASE_PRIMARY": [
-      "#160F13",
-      "#160F13",
-      "#160F13"
+      "#160F1300",
+      "#160F1300"
     ],
     "HOME_BACKGROUND": [
-      "#160F13",
       "#160F13",
       "#160F13"
     ],
     "BACKGROUND_SECONDARY": [
       "#20161C",
-      "#20161C",
       "#20161C"
     ],
     "BACKGROUND_MOBILE_SECONDARY": [
-      "#20161C",
       "#20161C",
       "#20161C"
     ],
     "BG_BASE_SECONDARY": [
       "#20161C",
-      "#20161C",
       "#20161C"
     ],
     "BACKGROUND_FLOATING": [
-      "#20161C",
       "#20161C",
       "#20161C"
     ],
     "PANEL_BG": [
       "#20161C",
-      "#20161C",
       "#20161C"
     ],
     "BG_SURFACE_OVERLAY": [
-      "#20161C",
       "#20161C",
       "#20161C"
     ],
     "BG_SURFACE_OVERLAY_TMP": [
       "#20161C",
-      "#20161C",
       "#20161C"
     ],
     "BACKGROUND_SECONDARY_ALT": [
-      "#2B1D25",
       "#2B1D25",
       "#2B1D25"
     ],
     "BG_BASE_TERTIARY": [
       "#2B1D25",
-      "#2B1D25",
       "#2B1D25"
     ],
     "BACKGROUND_NESTED_FLOATING": [
-      "#2B1D25",
       "#2B1D25",
       "#2B1D25"
     ],
     "CARD_SECONDARY_BG": [
       "#2B1D25",
-      "#2B1D25",
       "#2B1D25"
     ],
     "EMBED_BACKGROUND": [
-      "#2B1D25",
       "#2B1D25",
       "#2B1D25"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND": [
       "#2B1D25",
-      "#2B1D25",
       "#2B1D25"
     ],
     "INPUT_BACKGROUND": [
-      "#2B1D25",
       "#2B1D25",
       "#2B1D25"
     ],
     "BACKGROUND_TERTIARY": [
       "#100B0E",
-      "#100B0E",
       "#100B0E"
     ],
     "BACKGROUND_BASE_LOWEST": [
-      "#100B0E",
       "#100B0E",
       "#100B0E"
     ],
     "CHANNELTEXTAREA_BACKGROUND": [
       "#100B0E",
-      "#100B0E",
       "#100B0E"
     ],
     "REDESIGN_CHAT_INPUT_BACKGROUND": [
-      "#100B0E",
       "#100B0E",
       "#100B0E"
     ],
     "KEYBOARD": [
       "#100B0E",
-      "#100B0E",
       "#100B0E"
     ],
     "CARD_PRIMARY_BG": [
-      "#36232E",
       "#36232E",
       "#36232E"
     ],
     "BG_SURFACE_RAISED": [
       "#36232E",
-      "#36232E",
       "#36232E"
     ],
     "BACKGROUND_ACCENT": [
-      "#49303D",
       "#49303D",
       "#49303D"
     ],
     "BACKGROUND_MODIFIER_SELECTED": [
       "#49303D",
-      "#49303D",
       "#49303D"
     ],
     "CARD_PRIMARY_PRESSED_BG": [
-      "#49303D",
       "#49303D",
       "#49303D"
     ],
     "FORUM_POST_TAG_BACKGROUND": [
       "#49303D",
-      "#49303D",
       "#49303D"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND_PRESSED": [
-      "#49303D",
       "#49303D",
       "#49303D"
     ],
     "REDESIGN_BUTTON_SECONDARY_BACKGROUND": [
       "#49303D",
-      "#49303D",
       "#49303D"
     ],
     "REDESIGN_BUTTON_SECONDARY_ALT_BACKGROUND": [
-      "#49303D",
       "#49303D",
       "#49303D"
     ],
     "ANDROID_RIPPLE": [
       "#F5B6D140",
-      "#F5B6D140",
       "#F5B6D140"
     ],
     "CONTEXT_MENU_BACKDROP_BACKGROUND": [
-      "#100B0EE6",
       "#100B0EE6",
       "#100B0EE6"
     ],
     "BG_BACKDROP": [
       "#100B0EE6",
-      "#100B0EE6",
       "#100B0EE6"
     ],
     "BACKGROUND_MENTIONED": [
-      "#F6E59B20",
       "#F6E59B20",
       "#F6E59B20"
     ],
     "MENTION_BACKGROUND": [
       "#F6E59B20",
-      "#F6E59B20",
       "#F6E59B20"
     ],
     "BACKGROUND_MENTIONED_HOVER": [
-      "#F6E59B2B",
       "#F6E59B2B",
       "#F6E59B2B"
     ],
     "BACKGROUND_MESSAGE_HOVER": [
       "#F5B6D114",
-      "#F5B6D114",
       "#F5B6D114"
     ],
     "BACKGROUND_MODIFIER_HOVER": [
-      "#F5B6D114",
       "#F5B6D114",
       "#F5B6D114"
     ],
     "BG_MOD_FAINT": [
       "#F5B6D114",
-      "#F5B6D114",
       "#F5B6D114"
     ],
     "BACKGROUND_MODIFIER_ACTIVE": [
-      "#F5B6D126",
       "#F5B6D126",
       "#F5B6D126"
     ],
     "BG_MOD_SUBTLE": [
       "#F5B6D126",
-      "#F5B6D126",
       "#F5B6D126"
     ],
     "BACKGROUND_MODIFIER_ACCENT": [
-      "#F5B6D133",
       "#F5B6D133",
       "#F5B6D133"
     ],
     "BG_MOD_STRONG": [
       "#F5B6D133",
-      "#F5B6D133",
       "#F5B6D133"
     ],
     "BORDER_FAINT": [
-      "#F5B6D133",
       "#F5B6D133",
       "#F5B6D133"
     ],
     "BORDER_SUBTLE": [
       "#49303D",
-      "#49303D",
       "#49303D"
     ],
     "BORDER_STRONG": [
-      "#705365",
       "#705365",
       "#705365"
     ],
     "REDESIGN_BUTTON_SECONDARY_BORDER": [
       "#705365",
-      "#705365",
       "#705365"
     ],
     "THREAD_CHANNEL_SPINE": [
       "#705365",
-      "#705365",
       "#705365"
     ],
     "CHANNEL_ICON": [
-      "#F5B6D1",
-      "#F5B6D1",
-      "#F5B6D1"
+      "#FFE0EE",
+      "#FFE0EE"
     ],
     "INTERACTIVE_NORMAL": [
-      "#F5B6D1",
-      "#F5B6D1",
-      "#F5B6D1"
+      "#FFE0EE",
+      "#FFE0EE"
     ],
     "TEXT_LINK": [
-      "#F5B6D1",
-      "#F5B6D1",
-      "#F5B6D1"
+      "#FFE0EE",
+      "#FFE0EE"
     ],
     "REPLY_BAR": [
-      "#F5B6D1",
-      "#F5B6D1",
-      "#F5B6D1"
+      "#FFE0EE",
+      "#FFE0EE"
     ],
     "SCROLLBAR_THIN_THUMB": [
-      "#F5B6D1",
       "#F5B6D1",
       "#F5B6D1"
     ],
     "HEADER_PRIMARY": [
       "#F6E59B",
-      "#F6E59B",
       "#F6E59B"
     ],
     "INTERACTIVE_ACTIVE": [
-      "#F6E59B",
       "#F6E59B",
       "#F6E59B"
     ],
     "MENTION_FOREGROUND": [
       "#F6E59B",
-      "#F6E59B",
       "#F6E59B"
     ],
     "REDESIGN_CHANNEL_CATEGORY_NAME_TEXT": [
-      "#F6E59B",
       "#F6E59B",
       "#F6E59B"
     ],
     "TEXT_WARNING": [
       "#F6E59B",
-      "#F6E59B",
       "#F6E59B"
     ],
     "STATUS_WARNING": [
       "#F6E59B",
-      "#F6E59B",
       "#F6E59B"
     ],
     "HEADER_SECONDARY": [
-      "#E6C4D5",
-      "#E6C4D5",
-      "#E6C4D5"
+      "#FAE5F0",
+      "#FAE5F0"
     ],
     "TEXT_SECONDARY": [
-      "#E6C4D5",
-      "#E6C4D5",
-      "#E6C4D5"
+      "#FAE5F0",
+      "#FAE5F0"
     ],
     "CHANNELS_DEFAULT": [
-      "#E6C4D5",
-      "#E6C4D5",
-      "#E6C4D5"
+      "#FAE5F0",
+      "#FAE5F0"
     ],
     "INTERACTIVE_HOVER": [
-      "#FFF7D6",
       "#FFF7D6",
       "#FFF7D6"
     ],
     "TEXT_PRIMARY": [
       "#FFF7D6",
-      "#FFF7D6",
       "#FFF7D6"
     ],
     "TEXT_NORMAL": [
-      "#F9DDEA",
       "#F9DDEA",
       "#F9DDEA"
     ],
     "TEXT_DEFAULT": [
       "#F9DDEA",
-      "#F9DDEA",
       "#F9DDEA"
     ],
     "REDESIGN_CHANNEL_NAME_TEXT": [
       "#F9DDEA",
-      "#F9DDEA",
       "#F9DDEA"
     ],
     "TEXT_MUTED": [
-      "#E1C0D2",
-      "#E1C0D2",
-      "#E1C0D2"
+      "#FAE5F0",
+      "#FAE5F0"
     ],
     "INTERACTIVE_MUTED": [
-      "#E1C0D2",
-      "#E1C0D2",
-      "#E1C0D2"
+      "#FAE5F0",
+      "#FAE5F0"
     ],
     "REDESIGN_BUTTON_PRIMARY_BACKGROUND": [
-      "#A64B73",
       "#A64B73",
       "#A64B73"
     ],
     "REDESIGN_BUTTON_PRIMARY_PRESSED_BACKGROUND": [
       "#87395C",
-      "#87395C",
       "#87395C"
     ],
     "REDESIGN_BUTTON_PRIMARY_TEXT": [
-      "#FFFFFF",
       "#FFFFFF",
       "#FFFFFF"
     ],
     "REDESIGN_BUTTON_TERTIARY_BACKGROUND": [
       "#2B1D25",
-      "#2B1D25",
       "#2B1D25"
     ],
     "REDESIGN_BUTTON_DANGER_BACKGROUND": [
-      "#9B3556",
       "#9B3556",
       "#9B3556"
     ],
     "STATUS_DANGER_BACKGROUND": [
       "#9B3556",
-      "#9B3556",
       "#9B3556"
     ],
     "STATUS_DANGER": [
-      "#FF9EB5",
       "#FF9EB5",
       "#FF9EB5"
     ],
     "TEXT_DANGER": [
       "#FF9EB5",
-      "#FF9EB5",
       "#FF9EB5"
     ],
     "STATUS_DANGER_TEXT": [
-      "#FFFFFF",
       "#FFFFFF",
       "#FFFFFF"
     ],
     "STATUS_POSITIVE": [
       "#A7E1D5",
-      "#A7E1D5",
       "#A7E1D5"
     ],
     "TEXT_POSITIVE": [
-      "#A7E1D5",
       "#A7E1D5",
       "#A7E1D5"
     ],
     "SPOILER_HIDDEN_BACKGROUND": [
       "#705365",
-      "#705365",
       "#705365"
     ],
     "SPOILER_REVEALED_BACKGROUND": [
-      "#49303D",
       "#49303D",
       "#49303D"
     ],
     "POLLS_NORMAL_FILL_HOVER": [
       "#49303D",
-      "#49303D",
       "#49303D"
     ],
     "POLLS_NORMAL_IMAGE_BACKGROUND": [
-      "#2B1D25",
       "#2B1D25",
       "#2B1D25"
     ],
     "POLLS_VICTOR_FILL": [
       "#4C5140",
-      "#4C5140",
       "#4C5140"
     ],
     "SCROLLBAR_THIN_TRACK": [
-      "#00000000",
       "#00000000",
       "#00000000"
     ],
     "SCROLLBAR_AUTO_TRACK": [
       "#00000000",
-      "#00000000",
       "#00000000"
     ],
     "SCROLLBAR_AUTO_THUMB": [
-      "#B985A080",
       "#B985A080",
       "#B985A080"
     ]
@@ -643,9 +552,9 @@
     "version": 0,
     "iconpack": "rosiecord-plumpy",
     "mentionLineColor": "#F6E59B",
-    "backgroundImageUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-pastel.jpg",
-    "backgroundAlpha": 0.28,
-    "blur": 0.8,
+    "backgroundImageUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-pastel.jpg?v=2.0.1",
+    "backgroundAlpha": 0.35,
+    "blur": 0,
     "customIconOverlays": true,
     "customMessageMentionLineColor": true,
     "icons": {
@@ -688,8 +597,8 @@
   },
   "spec": 2,
   "background": {
-    "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-pastel.jpg",
-    "alpha": 0.28,
-    "blur": 0.8
+    "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/fluttershy-pastel.jpg?v=2.0.1",
+    "alpha": 0.35,
+    "blur": 0
   }
 }
