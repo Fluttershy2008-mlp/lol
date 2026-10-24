@@ -1,7 +1,7 @@
 {
   "name": "Rainbow Dash 🌈 Sonic Rainboom",
-  "description": "Rainbow Dash with dark sky-blue panels, cyan and rainbow accents, and transparent chat surfaces. Use the Rainbow Dash Chat Background companion if your Revenge Classic build does not display the wallpaper. Static artwork source: https://wallpapersafari.com/w/1A6Dch",
-  "version": "1.3.0",
+  "description": "Rainbow Dash with dark sky-blue panels, cyan and rainbow accents, and transparent chat backgrounds. Includes current Discord Android channel, card, input and NEUTRAL colour tokens checked against Decord. Static artwork source: https://wallpapersafari.com/w/1A6Dch",
+  "version": "1.4.0",
   "authors": [
     {
       "name": "Fluttershy_simper67",
@@ -509,6 +509,316 @@
       "#133F44",
       "#133F44",
       "#133F44"
+    ],
+    "CHANNEL_BACKGROUND_DEFAULT": [
+      "#07142100",
+      "#07142100",
+      "#07142100"
+    ],
+    "CARD_BACKGROUND_DEFAULT": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CARD_SECONDARY_BACKGROUND_DEFAULT": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CHAT_INPUT_BACKGROUND": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CHAT_INPUT_ACTION_BUTTON_BACKGROUND": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "INPUT_BACKGROUND_DEFAULT": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "MODAL_FOOTER_BACKGROUND": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "BACKGROUND_CODE": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CHAT_BANNER_BG": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CARD_MUTED_BG": [
+      "#0D2238",
+      "#0D2238",
+      "#0D2238"
+    ],
+    "CARD_SECONDARY_BACKGROUND_ACTIVE": [
+      "#14314A",
+      "#14314A",
+      "#14314A"
+    ],
+    "CARD_PRIMARY_PRESSED_BG": [
+      "#14314A",
+      "#14314A",
+      "#14314A"
+    ],
+    "CARD_SECONDARY_PRESSED_BG": [
+      "#14314A",
+      "#14314A",
+      "#14314A"
+    ],
+    "CARD_MUTED_PRESSED_BG": [
+      "#14314A",
+      "#14314A",
+      "#14314A"
+    ],
+    "MESSAGE_BACKGROUND_HOVER": [
+      "#14314A",
+      "#14314A",
+      "#14314A"
+    ],
+    "MODAL_BACKGROUND": [
+      "#050D18",
+      "#050D18",
+      "#050D18"
+    ],
+    "CHAT_BORDER": [
+      "#264760",
+      "#264760",
+      "#264760"
+    ],
+    "CARD_BORDER_DEFAULT": [
+      "#264760",
+      "#264760",
+      "#264760"
+    ],
+    "INPUT_BORDER_DEFAULT": [
+      "#264760",
+      "#264760",
+      "#264760"
+    ],
+    "BORDER_NORMAL": [
+      "#264760",
+      "#264760",
+      "#264760"
+    ],
+    "BORDER_MUTED": [
+      "#173149",
+      "#173149",
+      "#173149"
+    ],
+    "TEXT_FEEDBACK_INFO": [
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
+    ],
+    "ICON_FEEDBACK_INFO": [
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
+    ],
+    "INPUT_BORDER_ACTIVE": [
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
+    ],
+    "BORDER_FOCUS": [
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
+    ],
+    "CHAT_INPUT_ACTION_ICON_ACTIVE_TINT": [
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
+    ],
+    "CHAT_INPUT_ICON_DEFAULT_TINT": [
+      "#D9EEFF",
+      "#D9EEFF",
+      "#D9EEFF"
+    ],
+    "CHAT_INPUT_ACTION_BUTTON_ICON_DEFAULT_TINT": [
+      "#D9EEFF",
+      "#D9EEFF",
+      "#D9EEFF"
+    ],
+    "INPUT_ICON_DEFAULT": [
+      "#D9EEFF",
+      "#D9EEFF",
+      "#D9EEFF"
+    ],
+    "ICON_SUBTLE": [
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
+    ],
+    "INPUT_PLACEHOLDER_TEXT_DEFAULT": [
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
+    ],
+    "INPUT_TEXT_DEFAULT": [
+      "#EAF5FF",
+      "#EAF5FF",
+      "#EAF5FF"
+    ],
+    "MESSAGES_ITEM_CHANNEL_TEXT_DEFAULT": [
+      "#EAF5FF",
+      "#EAF5FF",
+      "#EAF5FF"
+    ],
+    "BACKGROUND_BRAND": [
+      "#0873AB",
+      "#0873AB",
+      "#0873AB"
+    ],
+    "CHAT_INPUT_SEND_BUTTON_ACTIVE_BACKGROUND": [
+      "#0873AB",
+      "#0873AB",
+      "#0873AB"
+    ],
+    "CHAT_INPUT_SEND_BUTTON_ICON_ACTIVE_TINT": [
+      "#FFFFFF",
+      "#FFFFFF",
+      "#FFFFFF"
+    ],
+    "BACKGROUND_MOD_MUTED": [
+      "#69D6FF10",
+      "#69D6FF10",
+      "#69D6FF10"
+    ],
+    "BACKGROUND_MOD_SUBTLE": [
+      "#69D6FF16",
+      "#69D6FF16",
+      "#69D6FF16"
+    ],
+    "BACKGROUND_MOD_NORMAL": [
+      "#69D6FF20",
+      "#69D6FF20",
+      "#69D6FF20"
+    ],
+    "BACKGROUND_MOD_STRONG": [
+      "#69D6FF2E",
+      "#69D6FF2E",
+      "#69D6FF2E"
+    ],
+    "MESSAGE_HIGHLIGHT_BACKGROUND_DEFAULT": [
+      "#69D6FF26",
+      "#69D6FF26",
+      "#69D6FF26"
+    ],
+    "BACKGROUND_FEEDBACK_INFO": [
+      "#69D6FF26",
+      "#69D6FF26",
+      "#69D6FF26"
+    ],
+    "MESSAGE_HIGHLIGHT_BACKGROUND_HOVER": [
+      "#69D6FF38",
+      "#69D6FF38",
+      "#69D6FF38"
+    ],
+    "BACKGROUND_FEEDBACK_WARNING": [
+      "#FFD45A26",
+      "#FFD45A26",
+      "#FFD45A26"
+    ],
+    "MESSAGE_MENTIONED_BACKGROUND_DEFAULT": [
+      "#FFD45A26",
+      "#FFD45A26",
+      "#FFD45A26"
+    ],
+    "MESSAGE_MENTIONED_BACKGROUND_HOVER": [
+      "#FFD45A38",
+      "#FFD45A38",
+      "#FFD45A38"
+    ],
+    "MESSAGE_AUTOMOD_BACKGROUND_DEFAULT": [
+      "#EF587426",
+      "#EF587426",
+      "#EF587426"
+    ],
+    "BACKGROUND_FEEDBACK_CRITICAL": [
+      "#EF587426",
+      "#EF587426",
+      "#EF587426"
+    ],
+    "MESSAGE_AUTOMOD_BACKGROUND_HOVER": [
+      "#EF587438",
+      "#EF587438",
+      "#EF587438"
+    ],
+    "TEXT_FEEDBACK_CRITICAL": [
+      "#FFC2D0",
+      "#FFC2D0",
+      "#FFC2D0"
+    ],
+    "INPUT_TEXT_ERROR_DEFAULT": [
+      "#FFC2D0",
+      "#FFC2D0",
+      "#FFC2D0"
+    ],
+    "ICON_FEEDBACK_CRITICAL": [
+      "#FFC2D0",
+      "#FFC2D0",
+      "#FFC2D0"
+    ],
+    "INPUT_BORDER_ERROR_DEFAULT": [
+      "#EF5874",
+      "#EF5874",
+      "#EF5874"
+    ],
+    "BORDER_FEEDBACK_CRITICAL": [
+      "#EF5874",
+      "#EF5874",
+      "#EF5874"
+    ],
+    "TEXT_FEEDBACK_POSITIVE": [
+      "#7DDD9B",
+      "#7DDD9B",
+      "#7DDD9B"
+    ],
+    "ICON_FEEDBACK_POSITIVE": [
+      "#7DDD9B",
+      "#7DDD9B",
+      "#7DDD9B"
+    ],
+    "BORDER_FEEDBACK_POSITIVE": [
+      "#7DDD9B",
+      "#7DDD9B",
+      "#7DDD9B"
+    ],
+    "TEXT_FEEDBACK_WARNING": [
+      "#FFDB82",
+      "#FFDB82",
+      "#FFDB82"
+    ],
+    "ICON_FEEDBACK_WARNING": [
+      "#FFDB82",
+      "#FFDB82",
+      "#FFDB82"
+    ],
+    "BORDER_FEEDBACK_WARNING": [
+      "#FFDB82",
+      "#FFDB82",
+      "#FFDB82"
+    ],
+    "BORDER_FEEDBACK_INFO": [
+      "#69D6FF",
+      "#69D6FF",
+      "#69D6FF"
+    ],
+    "BACKGROUND_FEEDBACK_POSITIVE": [
+      "#7DDD9B26",
+      "#7DDD9B26",
+      "#7DDD9B26"
     ]
   },
   "rawColors": {
@@ -643,7 +953,107 @@
     "GUILD_BOOSTING_PURPLE_FOR_GRADIENTS": "#AA8AE6",
     "ROLE_DEFAULT": "#D9EEFF",
     "WHITE_500": "#FFFFFF",
-    "WHITE_630": "#EAF5FF"
+    "WHITE_630": "#EAF5FF",
+    "NEUTRAL_1": "#FFFFFF",
+    "NEUTRAL_2": "#FAFDFF",
+    "NEUTRAL_3": "#F5FAFF",
+    "NEUTRAL_4": "#EFF8FF",
+    "NEUTRAL_5": "#EAF5FF",
+    "NEUTRAL_6": "#E8F4FF",
+    "NEUTRAL_7": "#E5F3FF",
+    "NEUTRAL_8": "#E3F2FF",
+    "NEUTRAL_9": "#E0F1FF",
+    "NEUTRAL_10": "#DEF0FF",
+    "NEUTRAL_11": "#DBEFFF",
+    "NEUTRAL_12": "#D9EEFF",
+    "NEUTRAL_13": "#D8EDFD",
+    "NEUTRAL_14": "#D7EBFB",
+    "NEUTRAL_15": "#D5EAF9",
+    "NEUTRAL_16": "#D4E8F7",
+    "NEUTRAL_17": "#D3E6F5",
+    "NEUTRAL_18": "#D1E5F4",
+    "NEUTRAL_19": "#D0E3F2",
+    "NEUTRAL_20": "#CEE2F0",
+    "NEUTRAL_21": "#CDE0EE",
+    "NEUTRAL_22": "#CBDFED",
+    "NEUTRAL_23": "#CADDEB",
+    "NEUTRAL_24": "#C6DAE8",
+    "NEUTRAL_25": "#C3D6E6",
+    "NEUTRAL_26": "#BFD3E3",
+    "NEUTRAL_27": "#BBCFE0",
+    "NEUTRAL_28": "#B8CCDE",
+    "NEUTRAL_29": "#B4C8DB",
+    "NEUTRAL_30": "#B0C5D8",
+    "NEUTRAL_31": "#ABC1D5",
+    "NEUTRAL_32": "#A7BED3",
+    "NEUTRAL_33": "#A2BBD0",
+    "NEUTRAL_34": "#9EB7CD",
+    "NEUTRAL_35": "#99B4CA",
+    "NEUTRAL_36": "#93AFC5",
+    "NEUTRAL_37": "#8DA9C1",
+    "NEUTRAL_38": "#87A4BC",
+    "NEUTRAL_39": "#819FB7",
+    "NEUTRAL_40": "#7B99B3",
+    "NEUTRAL_41": "#7594AE",
+    "NEUTRAL_42": "#6F8FA9",
+    "NEUTRAL_43": "#698AA4",
+    "NEUTRAL_44": "#6485A0",
+    "NEUTRAL_45": "#5E7F9B",
+    "NEUTRAL_46": "#587A96",
+    "NEUTRAL_47": "#527591",
+    "NEUTRAL_48": "#4F728E",
+    "NEUTRAL_49": "#4D708B",
+    "NEUTRAL_50": "#4A6D88",
+    "NEUTRAL_51": "#486A85",
+    "NEUTRAL_52": "#456783",
+    "NEUTRAL_53": "#426580",
+    "NEUTRAL_54": "#40627D",
+    "NEUTRAL_55": "#3D5F7A",
+    "NEUTRAL_56": "#3B5D77",
+    "NEUTRAL_57": "#385A74",
+    "NEUTRAL_58": "#365771",
+    "NEUTRAL_59": "#33556E",
+    "NEUTRAL_60": "#30526C",
+    "NEUTRAL_61": "#2E4F69",
+    "NEUTRAL_62": "#2B4C66",
+    "NEUTRAL_63": "#294A63",
+    "NEUTRAL_64": "#264760",
+    "NEUTRAL_65": "#24465F",
+    "NEUTRAL_66": "#22445E",
+    "NEUTRAL_67": "#1F435E",
+    "NEUTRAL_68": "#1D415D",
+    "NEUTRAL_69": "#1B405C",
+    "NEUTRAL_70": "#193C58",
+    "NEUTRAL_71": "#183953",
+    "NEUTRAL_72": "#16354F",
+    "NEUTRAL_73": "#14314A",
+    "NEUTRAL_74": "#132F47",
+    "NEUTRAL_75": "#122C44",
+    "NEUTRAL_76": "#112A41",
+    "NEUTRAL_77": "#0F273E",
+    "NEUTRAL_78": "#0E253B",
+    "NEUTRAL_79": "#0D2238",
+    "NEUTRAL_80": "#0C2035",
+    "NEUTRAL_81": "#0C1E31",
+    "NEUTRAL_82": "#0B1C2E",
+    "NEUTRAL_83": "#0A1A2B",
+    "NEUTRAL_84": "#091828",
+    "NEUTRAL_85": "#081624",
+    "NEUTRAL_86": "#071421",
+    "NEUTRAL_87": "#071320",
+    "NEUTRAL_88": "#06121E",
+    "NEUTRAL_89": "#06111D",
+    "NEUTRAL_90": "#060F1B",
+    "NEUTRAL_91": "#050E1A",
+    "NEUTRAL_92": "#050D18",
+    "NEUTRAL_93": "#050C16",
+    "NEUTRAL_94": "#040B14",
+    "NEUTRAL_95": "#040912",
+    "NEUTRAL_96": "#030810",
+    "NEUTRAL_97": "#02060C",
+    "NEUTRAL_98": "#020408",
+    "NEUTRAL_99": "#010204",
+    "NEUTRAL_100": "#000000"
   },
   "background": {
     "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/rainbow-dash-portrait.png",

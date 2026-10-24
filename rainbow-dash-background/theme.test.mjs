@@ -18,11 +18,13 @@ test('theme and companion use the same wallpaper, visibility and author', () => 
 });
 
 test('all chat appearance slots let the wallpaper through while cards remain solid', () => {
-    for (const key of ['CHAT_BACKGROUND', 'BACKGROUND_PRIMARY', 'BACKGROUND_MOBILE_PRIMARY', 'BG_BASE_PRIMARY', 'BACKGROUND_BASE_LOWEST']) {
+    // CHANNEL_BACKGROUND_DEFAULT is the actual ChatView surface token in the
+    // Decord 350008 / 351109 / 352207 snapshots, unlike older CHAT_BACKGROUND.
+    for (const key of ['CHANNEL_BACKGROUND_DEFAULT', 'CHAT_BACKGROUND', 'BACKGROUND_PRIMARY', 'BACKGROUND_MOBILE_PRIMARY', 'BG_BASE_PRIMARY', 'BACKGROUND_BASE_LOWEST']) {
         assert.ok(theme.semanticColors[key].length >= 2, key);
         for (const color of theme.semanticColors[key]) assert.equal(color, '#07142100', key);
     }
-    for (const key of ['CARD_PRIMARY_BG', 'CARD_SECONDARY_BG', 'EMBED_BACKGROUND', 'REDESIGN_CHAT_INPUT_BACKGROUND', 'BACKGROUND_FLOATING']) {
+    for (const key of ['CARD_BACKGROUND_DEFAULT', 'CARD_SECONDARY_BACKGROUND_DEFAULT', 'CHAT_INPUT_BACKGROUND', 'INPUT_BACKGROUND_DEFAULT', 'CARD_PRIMARY_BG', 'CARD_SECONDARY_BG', 'EMBED_BACKGROUND', 'REDESIGN_CHAT_INPUT_BACKGROUND', 'BACKGROUND_FLOATING']) {
         for (const color of theme.semanticColors[key]) assert.match(color, /^#[0-9A-F]{6}$/i, key);
     }
     assert.ok(theme.semanticColors.TEXT_NORMAL.every(color => color === '#EAF5FF'));
@@ -41,7 +43,7 @@ test('both palette slots and AMOLED have complete, valid colour values', () => {
         for (const value of values) assert.match(value, color, name);
     }
     for (const [name, value] of Object.entries(theme.rawColors)) assert.match(value, color, name);
-    assert.equal(theme.version, '1.3.0');
+    assert.equal(theme.version, '1.4.0');
     assert.equal(theme.authors[0].id, '753962426407452713');
     assert.ok(!JSON.stringify(theme).includes('PASTE_'));
 });
@@ -65,5 +67,24 @@ test('the repository wallpaper is a PNG with portrait dimensions', () => {
     assert.equal(png.toString('ascii', 12, 16), 'IHDR');
     const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
     assert.ok(width > 0 && height > width);
+});
+
+test('the current native NEUTRAL ramp keeps light text and dark surfaces ordered and opaque', () => {
+    const luminance = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+        .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+    let previous = Infinity;
+    for (let i = 1; i <= 100; i++) {
+        const value = theme.rawColors['NEUTRAL_' + i];
+        assert.match(value, /^#[0-9A-F]{6}$/i);
+        const current = luminance(value);
+        assert.ok(current <= previous, 'Native palette reverses brightness at NEUTRAL_' + i);
+        previous = current;
+    }
+    // These native roles are mapped by Decord's dark appearance snapshot.
+    const background = luminance(theme.rawColors.NEUTRAL_86);
+    for (const key of ['NEUTRAL_5', 'NEUTRAL_23']) {
+        assert.ok((luminance(theme.rawColors[key]) + 0.05) / (background + 0.05) >= 4.5, key);
+    }
 });
 

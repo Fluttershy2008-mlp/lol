@@ -1,9 +1,11 @@
 # Rainbow Dash Chat Background
 
-Companion version **1.0.0** for Rainbow Dash Sonic Rainboom **1.3.0**.
+Companion version **1.0.0** for Rainbow Dash Sonic Rainboom **1.4.0**.
 Theme and companion by **Fluttershy_simper67**.
 
 This update addresses a solid grey chat with no wallpaper on the user's Samsung Galaxy S26 Ultra running One UI 9 / Android 17. The theme now makes the chat background surfaces transparent, and the companion draws the image directly behind the messages when Revenge Classic's own wallpaper renderer cannot.
+
+Version 1.4.0 uses the Discord Android colour names found in the supplied [Decord repository](https://github.com/everestmcarthur/decord). Its ChatView sets the chat surface to `CHANNEL_BACKGROUND_DEFAULT`, which earlier versions of this theme omitted. The update sets that specific surface transparent and adds the current card, chat-input, message-highlight and feedback tokens. It also supplies the 100-colour `NEUTRAL` palette used by native surfaces and text, keeping those raw colours opaque and ordered by brightness.
 
 ## Install the update
 
@@ -11,7 +13,7 @@ This update addresses a solid grey chat with no wallpaper on the user's Samsung 
 2. In **Settings > Revenge > Themes**, import and select this updated theme URL:
 
    ```text
-   https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/Rainbow_Dash_Sonic_Rainboom.json?v=1.3.0
+   https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/Rainbow_Dash_Sonic_Rainboom.json?v=1.4.0
    ```
 
 3. Use Discord's dark appearance. Enable **Show Chat Background** in the theme options if that setting is available.
@@ -21,9 +23,9 @@ This update addresses a solid grey chat with no wallpaper on the user's Samsung 
    https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/rainbow-dash-background/
    ```
 
-5. Enable **Rainbow Dash Chat Background**, then fully close and reopen Discord. Select the 1.3.0 theme if the older entry is still present.
+5. Enable **Rainbow Dash Chat Background**, then fully close and reopen Discord. Select the 1.4.0 theme if an older entry is still present. The companion remains version 1.0.0; this update changes the theme's colour definitions, not the plugin code.
 
-The original theme URL continues to work. The version query requests a fresh copy instead of a cached 1.2.0 theme.
+The original theme URL continues to work. The version query requests a fresh copy instead of a cached older theme.
 
 ## Compatibility and behaviour
 
@@ -44,7 +46,15 @@ node rainbow-dash-background/build.mjs
 node --test rainbow-dash-background/background.test.mjs rainbow-dash-background/theme.test.mjs
 ```
 
-The focused checks cover renderer variants, cleanup, image errors, no toast access, the empty-channel welcome screen, non-intercepting viewport-sized artwork, status-icon props, matching theme and companion resources, contrast, PNG integrity, and the manifest hash. These are mocked renderer and configuration checks, not an on-device test.
+The focused checks cover renderer variants, cleanup, image errors, no toast access, the empty-channel welcome screen, non-intercepting viewport-sized artwork, status-icon props, matching theme and companion resources, current chat-surface tokens, the native neutral palette, contrast, PNG integrity, and the manifest hash. These are mocked renderer and configuration checks, not an on-device test.
+
+The 62 newly added semantic tokens were checked against all three Decord colour snapshots: stable `350008`, beta `351109`, and alpha `352207`. The chat background token is also present in each channel's extracted ChatView source. These are reference snapshots, not a detection of the user's installed Discord version.
+
+References used for the correction:
+
+- [ChatView source, stable snapshot](https://github.com/everestmcarthur/decord/blob/f411b5cfbaa69e2faf3388d09ca0e23328169715/stable/source/modules/chat/native/ChatView.tsx).
+- [Stable semantic colour definitions](https://github.com/everestmcarthur/decord/blob/9e84a4ec8a8ea48a04e9f75bc6d75bfbbb558f12/stable/semantic.json).
+- [Native raw colour definitions](https://github.com/everestmcarthur/decord/blob/9e84a4ec8a8ea48a04e9f75bc6d75bfbbb558f12/stable/raw.json).
 
 ## Artwork and API references
 
