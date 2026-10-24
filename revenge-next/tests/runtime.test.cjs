@@ -35,6 +35,8 @@ function environment(modules = [], initial = {}) {
         StyleSheet: { create: value => value, absoluteFillObject: {} }, Platform: { OS: 'android' },
         Dimensions: { get: () => ({ width: 480, height: 900 }) }, Linking: { openURL: async () => {} },
     };
+    // React Native exposes its public components as lazy, getter-only exports.
+    Object.defineProperty(RN, 'Button', { enumerable: true, get: () => 'NativeButton' });
     const createFilterGenerator = (fn, key) => (...args) => {
         const filter = (id, value) => fn(args, id, value, true);
         filter.key = key(args); return filter;
@@ -74,6 +76,28 @@ function environment(modules = [], initial = {}) {
     };
     return { api, host, writes, errors, cleanup, copied, toasts, timers, pendingIntervals, modules, stores, React, RN };
 }
+
+test('getter-only React Native exports can be inherited without writes or eager reads', async () => {
+    const env = environment();
+    let unusedReads = 0;
+    const nativeButton = Object.getOwnPropertyDescriptor(env.RN, 'Button');
+    const nativeButtonGetter = nativeButton.get;
+    Object.defineProperty(env.RN, 'UnusedDeprecatedComponent', { enumerable: true, get() {
+        unusedReads++;
+        throw new Error('The adapter must not enumerate React Native exports');
+    } });
+    Object.freeze(env.RN);
+    const bridge = createLegacyAdapter(env.api, metadata, env.host);
+    const general = bridge.adapter.ui.components.General;
+    assert.equal(general.Button, env.api.unscoped.discord.design.Design.Button);
+    assert.equal(Object.hasOwn(general, 'Button'), true);
+    assert.equal(Object.getPrototypeOf(general), env.RN);
+    assert.equal(general.Text, env.RN.Text);
+    assert.equal(Object.getOwnPropertyDescriptor(env.RN, 'Button').get, nativeButtonGetter);
+    assert.equal(Object.getOwnPropertyDescriptor(env.RN, 'Button').set, undefined);
+    assert.equal(unusedReads, 0);
+    await bridge.dispose();
+});
 
 test('patch adapter preserves arguments, receiver, return values, once and teardown', async () => {
     const env = environment(), bridge = createLegacyAdapter(env.api, metadata, env.host), V = bridge.adapter;

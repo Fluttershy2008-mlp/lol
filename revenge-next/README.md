@@ -20,6 +20,8 @@ Open Browse Plugins after adding it. Enable a plugin after installing it and res
 
 This catalogue contains **21 plugin preview ports and four native theme packages**, all labelled **Next preview**. They are experimental: package validation and simulated runtime checks passed, but they have not been tested on a physical Android device. Install the plugins you use, one at a time.
 
+**Plugin release 1.0.0-beta2:** fixes the shared `Cannot assign to property 'Button' which has only a getter` startup error in all 21 plugin ports. The adapter now defines its own Button override while inheriting React Native's lazy exports. Regression checks cover getter-only and frozen native exports. Refresh the repository in Revenge Next, install the available plugin updates, then fully restart Discord.
+
 ## Included plugins
 
 Addon List, AutoText, Blocked User List, Copy User ID, CustomRPC, ExpressionCloner, Friends List, HideBlockedAndIgnoredMessages, InfoCommands, Message Logger, More Alts!, Nitro Auto Claim, PingJumper, Profile Status Presets, ReadAllNotificationsButton, RelationshipNotifier, SaveAsSticker, Server Leaver, Stealmoji, ValidUser and ViewIcons.

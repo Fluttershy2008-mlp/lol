@@ -49,18 +49,32 @@ class PackageTests(unittest.TestCase):
 
     def test_sources_are_exact_versions_and_credits_are_preserved(self):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
+        index = json.loads((HERE / "index.json").read_text())["plugins"]
         for plugin_id, source in sources.items():
             data = (HERE.parent / source["path"]).read_bytes()
             self.assertEqual(source["sha256"], hashlib.sha256(data).hexdigest())
             if source["kind"] != "compatibility-preview":
                 continue
             directory = (HERE.parent / source["path"]).parent
-            package = next((HERE / "pool").glob(plugin_id + "@*.zip"))
+            version = index[plugin_id]["channels"]["latest"]
+            package = HERE / "pool" / f"{plugin_id}@{version}.zip"
             with zipfile.ZipFile(package) as z:
                 if (directory / "LICENSE").exists():
                     self.assertEqual(z.read("LICENSE"), (directory / "LICENSE").read_bytes())
                 self.assertIn("NOTICE.txt", z.namelist())
                 self.assertIn("ADAPTER_LICENSE.txt", z.namelist())
+
+    def test_all_21_plugin_ports_offer_the_current_adapter_release(self):
+        sources = json.loads((HERE / "sources.json").read_text())["plugins"]
+        index = json.loads((HERE / "index.json").read_text())["plugins"]
+        release = json.loads((HERE / "repo.config.json").read_text())["portVersion"]
+        ports = {key: source for key, source in sources.items() if source["kind"] == "compatibility-preview"}
+        self.assertEqual(len(ports), 21)
+        for plugin_id in ports:
+            plugin = index[plugin_id]
+            self.assertEqual(plugin["channels"]["latest"], release, plugin_id)
+            self.assertEqual(plugin["channels"]["beta"], release, plugin_id)
+            self.assertIn(release, plugin["versions"], plugin_id)
 
     def test_native_theme_converts_dark_light_and_midnight(self):
         colors = builder.theme_colors({"semanticColors": {"A": ["#123", "#abcdef", "#00112233"], "B": ["#ff0011"]},

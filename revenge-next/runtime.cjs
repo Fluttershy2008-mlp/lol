@@ -197,7 +197,11 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         alerts.openAlert(key, h(design.AlertModal, { title: options.title, content: h(Input) }));
     }
     const components = {
-        General: Object.assign(Object.create(RN), { Button: design.Button }),
+        // Define an own property so React Native's inherited getter is never
+        // assigned to. Keep the other native exports lazy and unchanged.
+        General: Object.create(RN, {
+            Button: { value: design.Button, enumerable: true, writable: true, configurable: true },
+        }),
         Forms: { FormRow: design.TableRow, FormSection: design.TableRowGroup, FormSwitchRow: design.TableSwitchRow,
             FormInput: design.TextInput, FormText: design.Text, FormDivider: RN.View },
         Button: design.Button,
