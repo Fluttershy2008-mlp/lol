@@ -1,0 +1,16 @@
+{
+  "name": "Rainbow Dash Chat Background",
+  "description": "Shows the Rainbow Dash wallpaper behind chat on Revenge Classic/Vendetta, with flexible sizing for Samsung One UI 9 / Android 17. Requires a supported chat renderer.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "Fluttershy_simper67",
+      "id": "753962426407452713"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ImageIcon"
+  },
+  "hash": "349e76972fa62d1c14fd9cd355c758a210b85eb1344e8e5488cad57daa9e392e"
+}

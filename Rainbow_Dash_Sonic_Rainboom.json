@@ -1,7 +1,7 @@
 {
   "name": "Rainbow Dash 🌈 Sonic Rainboom",
-  "description": "A dark sky-blue Rainbow Dash theme with cyan accents, rainbow colours and a static portrait background. Wallpaper source: https://wallpapersafari.com/w/1A6Dch",
-  "version": "1.2.0",
+  "description": "Rainbow Dash with dark sky-blue panels, cyan and rainbow accents, and transparent chat surfaces. Use the Rainbow Dash Chat Background companion if your Revenge Classic build does not display the wallpaper. Static artwork source: https://wallpapersafari.com/w/1A6Dch",
+  "version": "1.3.0",
   "authors": [
     {
       "name": "Fluttershy_simper67",
@@ -11,402 +11,502 @@
   "spec": 2,
   "semanticColors": {
     "CHAT_BACKGROUND": [
-      "#071421",
-      "#071421"
+      "#07142100",
+      "#07142100",
+      "#07142100"
     ],
     "BACKGROUND_PRIMARY": [
-      "#071421",
-      "#071421"
+      "#07142100",
+      "#07142100",
+      "#07142100"
     ],
     "BACKGROUND_MOBILE_PRIMARY": [
-      "#071421",
-      "#071421"
+      "#07142100",
+      "#07142100",
+      "#07142100"
     ],
     "BG_BASE_PRIMARY": [
-      "#071421",
-      "#071421"
+      "#07142100",
+      "#07142100",
+      "#07142100"
     ],
     "BG_BASE_TERTIARY": [
+      "#071421",
       "#071421",
       "#071421"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND": [
       "#071421",
+      "#071421",
       "#071421"
     ],
     "KEYBOARD": [
+      "#071421",
       "#071421",
       "#071421"
     ],
     "PANEL_BG": [
       "#071421",
-      "#071421"
-    ],
-    "BACKGROUND_BASE_LOWER": [
       "#071421",
       "#071421"
     ],
+    "BACKGROUND_BASE_LOWER": [
+      "#07142100",
+      "#07142100",
+      "#07142100"
+    ],
     "BACKGROUND_FLOATING": [
+      "#050D18",
       "#050D18",
       "#050D18"
     ],
     "BACKGROUND_NESTED_FLOATING": [
       "#050D18",
+      "#050D18",
       "#050D18"
     ],
     "BACKGROUND_SECONDARY": [
+      "#050D18",
       "#050D18",
       "#050D18"
     ],
     "BACKGROUND_SECONDARY_ALT": [
       "#050D18",
+      "#050D18",
       "#050D18"
     ],
     "BACKGROUND_MOBILE_SECONDARY": [
+      "#050D18",
       "#050D18",
       "#050D18"
     ],
     "BG_BASE_SECONDARY": [
       "#050D18",
+      "#050D18",
       "#050D18"
     ],
     "HOME_BACKGROUND": [
       "#050D18",
-      "#050D18"
-    ],
-    "BACKGROUND_BASE_LOWEST": [
       "#050D18",
       "#050D18"
     ],
+    "BACKGROUND_BASE_LOWEST": [
+      "#07142100",
+      "#07142100",
+      "#07142100"
+    ],
     "BG_SURFACE_OVERLAY": [
+      "#050D18",
       "#050D18",
       "#050D18"
     ],
     "BG_SURFACE_OVERLAY_TMP": [
       "#050D18",
+      "#050D18",
       "#050D18"
     ],
     "BACKGROUND_TERTIARY": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "BACKGROUND_ACCENT": [
       "#0D2238",
-      "#0D2238"
-    ],
-    "BACKGROUND_BASE_LOW": [
       "#0D2238",
       "#0D2238"
     ],
+    "BACKGROUND_BASE_LOW": [
+      "#07142100",
+      "#07142100",
+      "#07142100"
+    ],
     "CHANNELTEXTAREA_BACKGROUND": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "REDESIGN_CHAT_INPUT_BACKGROUND": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND_PRESSED": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "FORUM_POST_TAG_BACKGROUND": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "CARD_PRIMARY_BG": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "CARD_SECONDARY_BG": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "EMBED_BACKGROUND": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "REDESIGN_BUTTON_SECONDARY_BACKGROUND": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "REDESIGN_BUTTON_SECONDARY_ALT_BACKGROUND": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "POLLS_NORMAL_IMAGE_BACKGROUND": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "POLLS_NORMAL_FILL_HOVER": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "BACKGROUND_SURFACE_HIGH": [
       "#0D2238",
+      "#0D2238",
       "#0D2238"
     ],
     "BG_SURFACE_RAISED": [
+      "#0D2238",
       "#0D2238",
       "#0D2238"
     ],
     "BACKGROUND_SURFACE_HIGHER": [
       "#14314A",
+      "#14314A",
       "#14314A"
     ],
     "BACKGROUND_MESSAGE_HOVER": [
+      "#14314A",
       "#14314A",
       "#14314A"
     ],
     "BACKGROUND_SURFACE_HIGHEST": [
       "#1B405C",
+      "#1B405C",
       "#1B405C"
     ],
     "ANDROID_RIPPLE": [
+      "#1B405C",
       "#1B405C",
       "#1B405C"
     ],
     "SPOILER_HIDDEN_BACKGROUND": [
       "#1B405C",
+      "#1B405C",
       "#1B405C"
     ],
     "BORDER_STRONG": [
+      "#264760",
       "#264760",
       "#264760"
     ],
     "REDESIGN_BUTTON_SECONDARY_BORDER": [
       "#264760",
+      "#264760",
       "#264760"
     ],
     "BORDER_SUBTLE": [
+      "#173149",
       "#173149",
       "#173149"
     ],
     "BORDER_FAINT": [
       "#173149",
+      "#173149",
       "#173149"
     ],
     "BACKGROUND_MODIFIER_ACCENT": [
+      "#69D6FF20",
       "#69D6FF20",
       "#69D6FF20"
     ],
     "BG_MOD_FAINT": [
       "#69D6FF20",
+      "#69D6FF20",
       "#69D6FF20"
     ],
     "BACKGROUND_MODIFIER_HOVER": [
+      "#69D6FF16",
       "#69D6FF16",
       "#69D6FF16"
     ],
     "BG_MOD_SUBTLE": [
       "#69D6FF16",
+      "#69D6FF16",
       "#69D6FF16"
     ],
     "BACKGROUND_MODIFIER_ACTIVE": [
+      "#69D6FF2E",
       "#69D6FF2E",
       "#69D6FF2E"
     ],
     "BG_MOD_STRONG": [
       "#69D6FF2E",
+      "#69D6FF2E",
       "#69D6FF2E"
     ],
     "BACKGROUND_MODIFIER_SELECTED": [
+      "#69D6FF30",
       "#69D6FF30",
       "#69D6FF30"
     ],
     "SCROLLBAR_THIN_THUMB": [
       "#69D6FF80",
+      "#69D6FF80",
       "#69D6FF80"
     ],
     "SCROLLBAR_AUTO_THUMB": [
+      "#69D6FF80",
       "#69D6FF80",
       "#69D6FF80"
     ],
     "SCROLLBAR_THIN_TRACK": [
       "#00000000",
+      "#00000000",
       "#00000000"
     ],
     "SCROLLBAR_AUTO_TRACK": [
+      "#00000000",
       "#00000000",
       "#00000000"
     ],
     "CONTEXT_MENU_BACKDROP_BACKGROUND": [
       "#030A13CC",
+      "#030A13CC",
       "#030A13CC"
     ],
     "BG_BACKDROP": [
+      "#030A13CC",
       "#030A13CC",
       "#030A13CC"
     ],
     "BACKGROUND_MENTIONED": [
       "#FFD45A26",
+      "#FFD45A26",
       "#FFD45A26"
     ],
     "MENTION_BACKGROUND": [
+      "#FFD45A26",
       "#FFD45A26",
       "#FFD45A26"
     ],
     "BACKGROUND_MENTIONED_HOVER": [
       "#FFD45A38",
+      "#FFD45A38",
       "#FFD45A38"
     ],
     "MENTION_FOREGROUND": [
+      "#FFD86B",
       "#FFD86B",
       "#FFD86B"
     ],
     "HEADER_PRIMARY": [
       "#F3FAFF",
+      "#F3FAFF",
       "#F3FAFF"
     ],
     "TEXT_STRONG": [
+      "#F3FAFF",
       "#F3FAFF",
       "#F3FAFF"
     ],
     "INTERACTIVE_ACTIVE": [
       "#F3FAFF",
+      "#F3FAFF",
       "#F3FAFF"
     ],
     "INTERACTIVE_HOVER": [
+      "#F3FAFF",
       "#F3FAFF",
       "#F3FAFF"
     ],
     "ICON_STRONG": [
       "#F3FAFF",
+      "#F3FAFF",
       "#F3FAFF"
     ],
     "TEXT_NORMAL": [
+      "#EAF5FF",
       "#EAF5FF",
       "#EAF5FF"
     ],
     "TEXT_PRIMARY": [
       "#EAF5FF",
+      "#EAF5FF",
       "#EAF5FF"
     ],
     "TEXT_DEFAULT": [
+      "#EAF5FF",
       "#EAF5FF",
       "#EAF5FF"
     ],
     "CHANNELS_DEFAULT": [
       "#EAF5FF",
+      "#EAF5FF",
       "#EAF5FF"
     ],
     "REDESIGN_CHANNEL_NAME_TEXT": [
       "#EAF5FF",
+      "#EAF5FF",
       "#EAF5FF"
     ],
     "HEADER_SECONDARY": [
-      "#BBD0E0",
-      "#BBD0E0"
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
     ],
     "TEXT_MUTED": [
-      "#BBD0E0",
-      "#BBD0E0"
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
     ],
     "TEXT_SECONDARY": [
-      "#BBD0E0",
-      "#BBD0E0"
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
     ],
     "TEXT_SUBTLE": [
-      "#BBD0E0",
-      "#BBD0E0"
+      "#CADDEB",
+      "#CADDEB",
+      "#CADDEB"
     ],
     "INTERACTIVE_NORMAL": [
+      "#D9EEFF",
       "#D9EEFF",
       "#D9EEFF"
     ],
     "ICON_DEFAULT": [
       "#D9EEFF",
+      "#D9EEFF",
       "#D9EEFF"
     ],
     "INTERACTIVE_MUTED": [
+      "#718EA5",
       "#718EA5",
       "#718EA5"
     ],
     "ICON_MUTED": [
       "#718EA5",
+      "#718EA5",
       "#718EA5"
     ],
     "CHANNEL_ICON": [
-      "#69D6FF",
-      "#69D6FF"
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
     ],
     "REDESIGN_CHANNEL_CATEGORY_NAME_TEXT": [
-      "#69D6FF",
-      "#69D6FF"
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
     ],
     "TEXT_LINK": [
-      "#69D6FF",
-      "#69D6FF"
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
     ],
     "TEXT_BRAND": [
-      "#69D6FF",
-      "#69D6FF"
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
     ],
     "ICON_BRAND": [
-      "#69D6FF",
-      "#69D6FF"
+      "#A0E7FF",
+      "#A0E7FF",
+      "#A0E7FF"
     ],
     "REDESIGN_BUTTON_PRIMARY_BACKGROUND": [
+      "#0873AB",
       "#0873AB",
       "#0873AB"
     ],
     "REDESIGN_BUTTON_PRIMARY_TEXT": [
       "#FFFFFF",
+      "#FFFFFF",
       "#FFFFFF"
     ],
     "STATUS_POSITIVE_TEXT": [
+      "#FFFFFF",
       "#FFFFFF",
       "#FFFFFF"
     ],
     "STATUS_WARNING_TEXT": [
       "#FFFFFF",
+      "#FFFFFF",
       "#FFFFFF"
     ],
     "REDESIGN_BUTTON_DANGER_BACKGROUND": [
+      "#B82F4E",
       "#B82F4E",
       "#B82F4E"
     ],
     "STATUS_DANGER_BACKGROUND": [
       "#B82F4E",
+      "#B82F4E",
       "#B82F4E"
     ],
     "STATUS_DANGER": [
+      "#FF8AA2",
       "#FF8AA2",
       "#FF8AA2"
     ],
     "STATUS_DANGER_TEXT": [
       "#FF8AA2",
+      "#FF8AA2",
       "#FF8AA2"
     ],
     "TEXT_DANGER": [
+      "#FF8AA2",
       "#FF8AA2",
       "#FF8AA2"
     ],
     "STATUS_POSITIVE": [
       "#7DDD9B",
+      "#7DDD9B",
       "#7DDD9B"
     ],
     "TEXT_POSITIVE": [
+      "#7DDD9B",
       "#7DDD9B",
       "#7DDD9B"
     ],
     "STATUS_POSITIVE_BACKGROUND": [
       "#246B44",
+      "#246B44",
       "#246B44"
     ],
     "STATUS_WARNING": [
+      "#FFDB82",
       "#FFDB82",
       "#FFDB82"
     ],
     "TEXT_WARNING": [
       "#FFDB82",
+      "#FFDB82",
       "#FFDB82"
     ],
     "STATUS_WARNING_BACKGROUND": [
       "#805A16",
+      "#805A16",
       "#805A16"
     ],
     "POLLS_VICTOR_FILL": [
+      "#133F44",
       "#133F44",
       "#133F44"
     ]
@@ -546,8 +646,8 @@
     "WHITE_630": "#EAF5FF"
   },
   "background": {
-    "url": "https://cdn.wallpapersafari.com/4/86/1A6Dch.png",
-    "alpha": 0.27,
+    "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/assets/rainbow-dash-portrait.png",
+    "alpha": 0.32,
     "blur": 0
   }
 }
