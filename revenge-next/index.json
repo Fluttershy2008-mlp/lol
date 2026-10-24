@@ -31,11 +31,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.addon-list@1.0.0-beta3.zip",
+          "sha256": "845782c0ccda5b39fc61d9ae50ff0f2baedc2d5636fcf4755477cf1403d5781d",
+          "size": 19547,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Addon List (Next preview)",
       "description": "Revenge Next preview. Send, preview or copy plugin and theme lists with visible URLs and Discord/Nitro message-sized parts.",
@@ -72,11 +85,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.auto-text@1.0.0-beta3.zip",
+          "sha256": "88452d7cb5e205628d030eb3c2ac53584dee37969d12ab728c62e0b744459232",
+          "size": 27446,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "AutoText (Next preview)",
       "description": "Revenge Next preview. Type a prepared message letter by letter with speed controls, Stop, bullet points and optional auto-send once the full message is finished.",
@@ -110,11 +136,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.blocked-user-list@1.0.0-beta3.zip",
+          "sha256": "1d015fe63ca42014c0361e6bc9b3a5f82b3d6829afb6ab074ed2055bb84f7823",
+          "size": 21520,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Blocked User List (Next preview)",
       "description": "Revenge Next preview. Manage blocked users and locally hide APP, bot and Tupperbox/webhook messages by ID, with optional exact character names.",
@@ -148,11 +187,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.copy-user-id@1.0.0-beta3.zip",
+          "sha256": "9c58041e757b3613c250227b256a048a253c6f44bd8d05081f9ea89e5573a5fc",
+          "size": 15080,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Copy User ID (Next preview)",
       "description": "Revenge Next preview. Shows user IDs in message long-press and profile menus. Tap to copy as <@ID>.",
@@ -186,11 +238,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.custom-rpc@1.0.0-beta3.zip",
+          "sha256": "6c132837e2e3759e147dfa6a47f2f24a947fb17082c8dfa916dfcab057c41019",
+          "size": 32249,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "CustomRPC (Next preview)",
       "description": "Revenge Next preview. Custom Rich Presence for Revenge: activity text, images, buttons, timers and party size. Adapted from Vencord CustomRPC.",
@@ -227,11 +292,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.expression-cloner@1.0.0-beta3.zip",
+          "sha256": "08bd281e73c24df1a1a6fedd0115f2c8996ee9c70b9185b93a8cb2ad5f41deb6",
+          "size": 19406,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ExpressionCloner (Next preview)",
       "description": "Revenge Next preview. Clone custom emojis and supported stickers from their action sheets to servers you manage.",
@@ -293,11 +371,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.friends-list@1.0.0-beta3.zip",
+          "sha256": "61a229cc4fbbbf0a86982dced122993298647e25577ee15326de012f0c6f3950",
+          "size": 17691,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Friends List (Next preview)",
       "description": "Revenge Next preview. Shows your total Discord friend count, a searchable friends list, and profile buttons. Adds Friends List beside Blocked Users in Revenge settings.",
@@ -331,11 +422,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta3.zip",
+          "sha256": "3921b2bbd23452a3eee79de91fa2900e5f46ce975d236a546f58d78725752a0f",
+          "size": 18527,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "HideBlockedAndIgnoredMessages (Next preview)",
       "description": "Revenge Next preview. Hides blocked and ignored messages without placeholder text, including bot responses to their slash commands and optional replies.",
@@ -373,11 +477,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.info-commands@1.0.0-beta3.zip",
+          "sha256": "8d358449f944fbcf4f6f9a078443c03a0333f114a83e3ca5ed007ff34d1f2f0d",
+          "size": 28151,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "InfoCommands (Next preview)",
       "description": "Revenge Next preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
@@ -414,11 +531,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.message-logger@1.0.0-beta3.zip",
+          "sha256": "ae1129834f50c26567ef15df4dcf8583b1f481c998332254b47e5811c23756a6",
+          "size": 33711,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Message Logger (Next preview)",
       "description": "Revenge Next preview. Vencord-style deleted messages, edit history, attachment records and ignore filters for Revenge. Open with /messagelogger.",
@@ -455,11 +585,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.more-alts@1.0.0-beta3.zip",
+          "sha256": "5fb55004b759bb783ba3ec80a597bb2b30e77c97e13ee71a0efa0001b0a257b1",
+          "size": 58162,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "More Alts! (Next preview)",
       "description": "Revenge Next preview. Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Revenge settings.",
@@ -498,11 +641,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.nitro-auto-claim@1.0.0-beta3.zip",
+          "sha256": "8fc70b0cc26f1ac26de88ee99b2c0e84179c0ea18cb432d862bdb3a8638afe81",
+          "size": 16374,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Nitro Auto Claim (Next preview)",
       "description": "Revenge Next preview. Automatically attempts to redeem Discord gift links in new messages, with duplicate protection and result history.",
@@ -536,11 +692,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.ping-jumper@1.0.0-beta3.zip",
+          "sha256": "635645f2731eb6ffdf9a35a51c343c76bd4b1e8a0e5c30d5d5da5b943c0c99ea",
+          "size": 15282,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "PingJumper (Next preview)",
       "description": "Revenge Next preview. Floating up/down arrows let you jump through recent Discord pings on mobile.",
@@ -574,11 +743,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.profile-status-presets@1.0.0-beta3.zip",
+          "sha256": "0a3ae95c0e41bd05020727479a2b269f045d076d88a033b22ee018cf30dfd2e0",
+          "size": 33637,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Profile Status Presets (Next preview)",
       "description": "Revenge Next preview. Save custom statuses with emojis and expiry times, then switch in one tap. Includes a Revenge settings shortcut and /statuspresets.",
@@ -640,11 +822,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.read-all-notifications@1.0.0-beta3.zip",
+          "sha256": "9749185528bec39f777d53ec48b9f0353ce1e10b8eb9a20cd2d2b58f15fa2b37",
+          "size": 30327,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ReadAllNotificationsButton (Next preview)",
       "description": "Revenge Next preview. Mark unread channels, forums, media channels, loaded posts and threads, DMs and group DMs as read with one button.",
@@ -682,11 +877,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.relationship-notifier@1.0.0-beta3.zip",
+          "sha256": "ee4bf8cbb950dc8f39a91e64f8fdd71d0fc45335f26800500bdb2900d928a252",
+          "size": 34733,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "RelationshipNotifier (Next preview)",
       "description": "Revenge Next preview. Alerts when friends, incoming requests, servers or group chats disappear. Includes reconnect checks and notification history. Adapted from Vencord.",
@@ -724,11 +932,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta3.zip",
+          "sha256": "4f5a1f777a10c3bad6d7b10e5026f4b7bb487608dd5eea16f48df08bbe33dbd8",
+          "size": 29533,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "SaveAsSticker (Next preview)",
       "description": "Revenge Next preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
@@ -762,11 +983,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.server-leaver@1.0.0-beta3.zip",
+          "sha256": "276bfdf91421d6089ff8f631430c44d8d0c74e87c6f6edbe090a0ef9ddefba21",
+          "size": 19156,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Server Leaver (Next preview)",
       "description": "Revenge Next preview. Leave all unprotected servers with a preview and confirmation. Protect servers by ID or tap Protect. Keeps owned servers; includes progress and Stop.",
@@ -800,11 +1034,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.stealmoji@1.0.0-beta3.zip",
+          "sha256": "c454cab47c7493d0878d649b71c16efbc49e0b3dbaeec14a8866616305577ba9",
+          "size": 33701,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Stealmoji (Next preview)",
       "description": "Revenge Next preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",
@@ -899,11 +1146,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.valid-user@1.0.0-beta3.zip",
+          "sha256": "d2f4464840ff6b0471e14e1e68e560d6e2c49c9a4e1aa3b3bbee241c127c6349",
+          "size": 21809,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ValidUser (Next preview)",
       "description": "Revenge Next preview. Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",
@@ -942,11 +1202,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.view-icons@1.0.0-beta3.zip",
+          "sha256": "1acb7dee356aecebe1dbe306570a95ce61ffb11bd0ec75ce5e79434c0f05f852",
+          "size": 16527,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ViewIcons (Next preview)",
       "description": "Revenge Next preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Revenge mobile.",

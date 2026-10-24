@@ -146,6 +146,22 @@ def build(check=False):
             transformed = transformed.replace("entry.enabled ? 'Enabled' : 'Disabled'",
                 "entry.enabled === undefined ? 'Installed' : entry.enabled ? 'Enabled' : 'Disabled'")
             transformed = transformed.replace("entry.selected ? 'Selected' : 'Not selected'", "'Installed'")
+        if directory.name == "info-commands":
+            # Classic's helper depends on a window global and an old lodash
+            # barrel. Use the scoped local-message adapter for Next output.
+            old = "if (window.sendMessage) return window.sendMessage(...arguments);"
+            if transformed.count(old) != 1:
+                raise RuntimeError("InfoCommands local-output bridge needs updating")
+            transformed = transformed.replace(old,
+                "return vendetta.commands.sendLocalMessage(arguments[0].channelId, arguments[0], arguments[1]);")
+        if directory.name == "auto-text":
+            # A saved phrase card and its suggestion share one sibling list.
+            # Give them separate React keys so suggestions cannot reuse a card.
+            for old, new in (("key: phrase.shortcut", "key: 'phrase.' + phrase.shortcut"),
+                             ("key: p.shortcut", "key: 'suggestion.' + p.shortcut")):
+                if transformed.count(old) != 1:
+                    raise RuntimeError("AutoText React key bridge needs updating")
+                transformed = transformed.replace(old, new)
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + runtime + "\nreturn { default: createNextPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         files = {"manifest.json": dump(manifest), "index.js": script}

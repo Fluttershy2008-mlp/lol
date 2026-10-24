@@ -38,12 +38,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'revenge-next/package-lock.json'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Verify deterministic package output
         run: python3 revenge-next/build.py --check
       - name: Check Next adapter and plugin integration
-        run: node --test revenge-next/tests/runtime.test.cjs
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
+          node --test revenge-next/tests/*.test.cjs
       - name: Check ZIP integrity and index metadata
         run: python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'

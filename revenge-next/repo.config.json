@@ -3,7 +3,7 @@
   "description": "Revenge Next preview ports and native colour themes by Fluttershy2008-mlp.",
   "icon": "GlobeEarthIcon",
   "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next",
-  "portVersion": "1.0.0-beta2",
+  "portVersion": "1.0.0-beta3",
   "themeVersion": "1.0.0-beta1",
   "sourceCommit": "b77722dec20ba713ae58dad00ebce671ed80a8ce",
   "exclude": {

@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/revenge-mod/revenge-bundle-next",
+  "revision": "fa6cb81897b3b2649e7d8600d70d2b945daf041f",
+  "files": {
+    "_internal.ts": "lib/patcher/src/_internal.ts",
+    "instead.ts": "lib/patcher/src/hooks/instead.ts",
+    "LICENSE": "lib/patcher/LICENSE"
+  },
+  "purpose": "Run integration fixtures against the actual Next instead-patcher, rather than an approximate patcher. Type annotations and imports are adapted in memory by the test loader."
+}

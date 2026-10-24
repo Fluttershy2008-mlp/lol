@@ -20,7 +20,7 @@ Open Browse Plugins after adding it. Enable a plugin after installing it and res
 
 This catalogue contains **21 plugin preview ports and four native theme packages**, all labelled **Next preview**. They are experimental: package validation and simulated runtime checks passed, but they have not been tested on a physical Android device. Install the plugins you use, one at a time.
 
-**Plugin release 1.0.0-beta2:** fixes the shared `Cannot assign to property 'Button' which has only a getter` startup error in all 21 plugin ports. The adapter now defines its own Button override while inheriting React Native's lazy exports. Regression checks cover getter-only and frozen native exports. Refresh the repository in Revenge Next, install the available plugin updates, then fully restart Discord.
+**Plugin release 1.0.0-beta3:** fixes Next menu lookups, split REST exports, Classic-only page routes, More Alts' command initialization, InfoCommands' local output, and missing server-picker icons. It also preserves the beta2 fix for `Cannot assign to property 'Button' which has only a getter`. All 21 ports have automated startup, React settings, teardown/restart and feature checks. See the [per-plugin compatibility audit](COMPATIBILITY.md) for exactly what was tested and what still needs an Android device. Refresh the repository in Revenge Next, install the available plugin updates, then fully restart Discord.
 
 ## Included plugins
 
@@ -28,7 +28,7 @@ Addon List, AutoText, Blocked User List, Copy User ID, CustomRPC, ExpressionClon
 
 These are packaged with an isolated compatibility adapter. It translates module lookups, patcher calling conventions, local commands, clipboard access and JSON storage to the documented Next APIs. It maps `onLoad`/`onUnload` and settings to the Next lifecycle, tracks patches and timers, and keeps notifications on the Android toast API. It does not replace global Vendetta, React or Discord APIs. Discord's private modules can still change, and individual UI features may be unavailable.
 
-Open each plugin's settings through its entry in the Next Plugins page. Shortcuts written for the Classic settings sidebar do not carry over. Classic settings, history and saved accounts are not imported automatically. More Alts' optional import from the original Classic Apex plugin is unavailable; add your own accounts through its normal login flow. Discord's account verification and gift redemption checks still apply.
+Open each plugin's settings through its entry in the Next Plugins page. Classic sidebar entries do not carry over, but commands and actions that open a custom plugin page now use a native Next settings route. Classic settings, history and saved accounts are not imported automatically. More Alts' optional import from the original Classic Apex plugin is unavailable; add your own accounts through its normal login flow. Discord's account verification and gift redemption checks still apply.
 
 Message Logger and Message Logger V2 are the same original implementation, so the catalogue offers one Message Logger entry. Addon List reports an item as **Installed** when the native list does not expose its enabled or selected state.
 
@@ -47,11 +47,12 @@ Host requirements: Revenge Next API **1.2.1 or newer, below 2**. Native themes a
 
 ## Build and verify
 
-Python 3.12+ and Node.js 24+ are sufficient; no npm packages are needed. From the repository root:
+Building packages uses only Python's standard library. The runtime tests require Node.js 24+ and the pinned React test dependencies. From the repository root:
 
 ```sh
 python3 revenge-next/build.py --check
-node --test revenge-next/tests/runtime.test.cjs
+npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
+node --test revenge-next/tests/*.test.cjs
 python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
 ```
 
@@ -59,6 +60,6 @@ To publish a source or adapter change, bump `portVersion` in `repo.config.json` 
 
 Each ZIP contains its Next manifest and compiled script. The index records the exact byte size, SHA-256, absolute HTTPS URL and required dependencies. Builds are deterministic. `.build/` holds regenerated scripts for local tests and is not published. Original plugin credits and available licence notices are included in the ZIPs. `sources.json` records the exact original source hashes and versions used for each build.
 
-Validation covers all 25 package checksums/manifests, all script expressions, all 21 original plugin factories against a simulated Next API, native theme registration, a Copy User ID message-menu integration, patch teardown, storage persistence, commands, timers and failure cleanup. It is not an on-device compatibility claim for all features or for a particular One UI/Android version.
+Validation covers all package checksums/manifests, all script expressions, all 21 packaged ports with real React and Next's actual patcher, native theme registration, per-plugin actions, combined-plugin hooks, patch teardown, storage persistence, commands, timers and failure cleanup. Discord and React Native modules are simulated. It is not an on-device compatibility claim for all features or for a particular One UI/Android version. The native patcher fixture is pinned and credited in `tests/vendor/next-patcher/SOURCE.json`.
 
 Format and API references: [Revenge publishing guide](https://revenge.palmdevs.me/docs/plugin-development/getting-started/publishing-your-plugin/), [Plugin API](https://revenge.palmdevs.me/docs/plugin-development/api-reference/plugin-api/), [official Next source](https://github.com/revenge-mod/revenge-bundle-next), [Themes API source](https://github.com/revenge-mod/revenge-community-plugins/tree/main/plugins/api.themes).

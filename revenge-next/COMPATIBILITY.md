@@ -1,0 +1,65 @@
+# Revenge Next compatibility audit — beta3
+
+All **21 plugin ports** pass the dedicated automated Next suite. Every port is started, mounted with real React, unmounted, stopped and restarted; tests check that timers, AppState subscriptions and store/Flux listeners are released. All 21 are also started together with curated menu APIs and split HTTP exports, then stopped in a different order. This is an automated simulation, **not confirmation from a physical Android device**.
+
+The suite uses React 19.2.0 and the actual Revenge Next `instead` patcher from [`fa6cb81897b3b2649e7d8600d70d2b945daf041f`](https://github.com/revenge-mod/revenge-bundle-next/tree/fa6cb81897b3b2649e7d8600d70d2b945daf041f). Discord stores, React Native views, REST, downloads, account sessions and native modules are fixtures. Tests never use real credentials, redeem gifts, leave real servers, post messages or upload files.
+
+## Per-plugin coverage
+
+All rows below pass automated checks in addition to the lifecycle/settings checks above.
+
+| Plugin | Feature checked in the packaged Next port | Still needs a phone |
+| --- | --- | --- |
+| Addon List | Copy installed Next metadata and URLs; no public send during copy | Native registry on the installed client; public sends and long-list confirmation |
+| AutoText | Save a phrase, expand it in the practice editor, copy the draft | Live composer connection, native text insertion and auto-send |
+| Blocked User List | Render blocked users; confirm before a simulated unblock | Live relationship updates and local APP/webhook filtering |
+| Copy User ID | Inject a lazy message-menu row and copy the exact mention | Current Discord message/profile menu layouts |
+| CustomRPC | Edit, apply and stop an activity through Flux | Activity visibility on another account and image assets |
+| ExpressionCloner | Inject Clone Sticker; open server picker with working row icons | Emoji/sticker uploads and permission/slot handling on real servers |
+| Friends List | Search and open a cached user's profile | Live profile sheet and relationship-store variants |
+| HideBlockedAndIgnoredMessages | Filter blocked/ignored authors without deleting source records; restore on stop | Native message collections, pagination and reply layouts |
+| InfoCommands | User info with split HTTP; normal and ephemeral results remain local | Real user/invite responses and native server-info sheet |
+| Message Logger | Retain a cached deletion; open the channel's history via a registered Next route | Native message normalization, edit history and retention limits |
+| More Alts! | Initialize command before opening settings; open Next route; verify and save a simulated current session | Real login, MFA/QR WebView, account switching and Android session persistence |
+| Nitro Auto Claim | Simulated redemption using split HTTP; duplicate protection | Real server redemption responses and reconnect behavior |
+| PingJumper | Fetch recent mentions and open the correct message URL | Native chat arrows and navigation on the current Discord build |
+| Profile Status Presets | Save/apply a preset using split HTTP; command opens Next route | Server persistence, emoji rendering and expiry |
+| ReadAllNotificationsButton | `/readall` dispatches native BULK_ACK without direct REST | Real unread/thread collections and floating button placement |
+| RelationshipNotifier | Establish a baseline and detect a friend removal | Reconnect/account transitions and real notifications |
+| SaveAsSticker | Add image-menu action and render eligible server rows | Native image processing, file handling, GIF conversion and uploads |
+| Server Leaver | Keep owned servers; require confirmation before a simulated leave request | Real server updates, cancellation and rate-limit responses |
+| Stealmoji | Inject cloning action into a message menu | Picker, CDN downloads and uploads on a real guild |
+| ValidUser | Resolve a cached mention and open a native profile action | Uncached lookups, changed message layouts and real access restrictions |
+| ViewIcons | Inject avatar action and open native media | Current profile/server menus, decorations and image downloads |
+
+The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this release changes the plugin adapter only.
+
+## Fixes in beta3
+
+- Resolve menu components and action-sheet actions through Next's curated APIs when raw Metro barrels are still lazy.
+- Support both flat HTTP exports and `{ HTTP, getAPIBaseURL }`, preserving the HTTP method receiver.
+- Translate `BUNNY_CUSTOM_PAGE` into a scoped native Next settings route. Preserve the requested renderer, including Message Logger's channel history; wait for settings modules and unregister routes on stop.
+- Supply an initialized-only Metro registry view for More Alts, so its command initializes without first opening its settings. No arbitrary Metro factories are run by the scan.
+- Use the actual `ReactNavigationNative` export and map legacy row icons to Next's `icon` prop. Add the missing FormIcon fallback.
+- Render InfoCommands output as local bot messages. Interaction-style ephemeral responses never become public message sends.
+- Separate AutoText card and suggestion keys to avoid React reusing the wrong row.
+- Enforce legacy safeFetch timeouts and cancel its pending requests on plugin stop.
+- Show an accurate page for enabled plugins without settings. Classic sidebar-unavailable diagnostics are warnings; other errors remain errors.
+- Keep beta2's getter-only/frozen React Native Button regression covered.
+
+## Reproduce
+
+```sh
+python3 revenge-next/build.py --check
+npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
+node --test revenge-next/tests/*.test.cjs
+python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
+```
+
+GitHub Actions runs these checks for future port changes. Original Classic suites are separate: a broad baseline run found older toast mocks, missing locally generated QR assets, and Classic manifest/version assertions that do not match the existing bundles. Those failures are not counted as passing Next checks, and Classic files are not changed by this release.
+
+## Update and device check
+
+Refresh `https://fluttershy2008-mlp.github.io/lol/` in Revenge Next, update the plugin ports to **1.0.0-beta3**, then fully restart Discord. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
+
+If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.

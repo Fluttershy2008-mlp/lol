@@ -14,6 +14,7 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
     const intervals = new Set();
     const listeners = new Set();
     const ownedCommands = new Set();
+    const requests = new Set();
     let active = true, revision = 0, scheduled = false, writes = Promise.resolve();
     const log = (...args) => api.logger?.error?.(...args);
     const safe = fn => { try { return fn(); } catch { return undefined; } };
@@ -27,8 +28,111 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         if (active) disposers.add(remove); else remove();
         return remove;
     };
+    const rawFind = (...props) => finders.lookupModule(filters.withProps(...props), { initialize: false })[0];
+    const hasProps = (value, props) => value && props.every(key => safe(() => value[key] != null));
+    // Discord has shipped both flat REST exports and { HTTP, getAPIBaseURL }.
+    // Bind each method to its actual owner; a spread loses lazy getters/receivers.
+    let httpSource, httpFacade;
+    function legacyHTTP() {
+        const source = rawFind('HTTP');
+        if (!source?.HTTP) return rawFind('get', 'post', 'del');
+        if (source === httpSource) return httpFacade;
+        httpSource = source;
+        httpFacade = new Proxy({}, {
+            get(_target, key) {
+                const owner = source.HTTP[key] != null ? source.HTTP : source;
+                const value = owner[key];
+                return typeof value === 'function' ? value.bind(owner) : value;
+            },
+            has: (_target, key) => key in source.HTTP || key in source,
+        });
+        return httpFacade;
+    }
+    const navigationWrappers = new WeakMap();
+    let navigationSource, navigationModule;
+    const legacyRoute = metadata.id + '.legacy-page';
+    let routeRegistered = false, routeWaiting = false;
+    function LegacyPage({ route }) {
+        const Page = route?.params?.render;
+        return active && typeof Page === 'function' ? React.createElement(Page) :
+            React.createElement(RN.Text, { style: { padding: 20 } }, 'Reopen this page from the enabled plugin.');
+    }
+    function openLegacyPage(navigation, params) {
+        if (!active) return;
+        if (typeof params?.render !== 'function') throw new Error('The plugin page has no renderer.');
+        const settings = U.discord.modules?.settings;
+        if (!settings?.onSettingsModulesLoaded || !settings.registerSettingsItem)
+            throw new Error('Update Revenge Next to open this plugin page.');
+        const navigate = () => setTimeoutScoped(() => {
+            const open = () => { if (active) navigation.navigate(legacyRoute, params); };
+            if (navigation.isReady?.() === false && navigation.addListener) {
+                let remove;
+                const ready = () => { remove?.(); open(); };
+                const unsubscribe = navigation.addListener('ready', ready);
+                remove = own(typeof unsubscribe === 'function' ? unsubscribe : () => navigation.removeListener?.('ready', ready));
+            } else open();
+        }, 0);
+        if (routeRegistered) return navigate();
+        if (routeWaiting) return;
+        routeWaiting = true;
+        own(settings.onSettingsModulesLoaded(() => {
+            if (!active) return;
+            const unregister = settings.registerSettingsItem(legacyRoute, {
+                type: 'route', parent: metadata.id, unsearchable: true,
+                useTitle: () => metadata.legacyManifest.name,
+                screen: { route: legacyRoute, getComponent: () => LegacyPage },
+            });
+            routeRegistered = true;
+            own(() => { unregister(); routeRegistered = false; settings.refreshSettings(); });
+            settings.refreshSettings();
+            navigate();
+        }));
+    }
+    function wrapNavigation(navigation) {
+        if (!navigation || typeof navigation !== 'object') return navigation;
+        if (navigationWrappers.has(navigation)) return navigationWrappers.get(navigation);
+        const wrapper = new Proxy(navigation, {
+            get(target, key) {
+                if (key === 'navigate') return function (route, params, ...rest) {
+                    const name = typeof route === 'object' ? route?.name : route;
+                    if (name === 'BUNNY_CUSTOM_PAGE') return openLegacyPage(target, typeof route === 'object' ? route.params : params);
+                    return target.navigate(route, params, ...rest);
+                };
+                const value = Reflect.get(target, key, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+            },
+        });
+        navigationWrappers.set(navigation, wrapper); return wrapper;
+    }
+    function legacyNavigation() {
+        const source = rawFind('getRootNavigationRef') ?? U.discord.modules?.mainTabsV2?.RootNavigationRef;
+        if (!source) return;
+        if (source === navigationSource) return navigationModule;
+        navigationSource = source;
+        navigationModule = new Proxy(source, { get(target, key) {
+            if (key === 'getRootNavigationRef') return () => wrapNavigation(target.getRootNavigationRef());
+            const value = Reflect.get(target, key, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        } });
+        return navigationModule;
+    }
     function findByProps(...props) {
-        return finders.lookupModule(filters.withProps(...props), { initialize: false })[0];
+        if (props.includes('getRootNavigationRef')) {
+            const navigation = legacyNavigation();
+            if (hasProps(navigation, props)) return navigation;
+        }
+        const found = rawFind(...props);
+        if (found) return found;
+        if (props.some(p => ['get', 'post', 'put', 'patch', 'del', 'getAPIBaseURL'].includes(p))) {
+            const http = legacyHTTP();
+            if (hasProps(http, props)) return http;
+        }
+        // Use Next's curated modules when the corresponding Metro barrel is lazy.
+        for (const get of [() => U.discord.design.Design, () => U.discord.actions.ActionSheetActionCreators,
+            () => U.discord.actions.AlertActionCreators]) {
+            const candidate = safe(get);
+            if (hasProps(candidate, props)) return candidate;
+        }
     }
     function custom(predicate, label) {
         return filters.createFilterGenerator(
@@ -52,6 +156,23 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         findAll: predicate => [...finders.lookupModules(custom(predicate, 'all.' + sequence++),
             { cached: false, initialize: false })].map(x => x[0]),
     };
+    // More Alts deliberately inspects initialized records instead of executing
+    // arbitrary Metro factories. Supply that legacy view using Next's finders.
+    let initialized = new Map();
+    metro.modules = new Proxy({}, {
+        ownKeys() {
+            const navigation = legacyNavigation(), http = legacyHTTP();
+            initialized = new Map([...finders.lookupModules(custom(() => true, 'initialized'),
+                { cached: false, initialize: false, returnNamespace: true })].map(([value, id]) => [String(id),
+                    navigation && value === navigationSource ? navigation : navigation && safe(() => value.default === navigationSource)
+                        ? { __esModule: true, default: navigation } : value]));
+            if (navigation) initialized.set('next.navigation', navigation);
+            if (http) initialized.set('next.http', http);
+            return [...initialized.keys()];
+        },
+        get: (_target, key) => initialized.has(key) ? { isInitialized: true, publicModule: { exports: initialized.get(key) } } : undefined,
+        getOwnPropertyDescriptor: (_target, key) => initialized.has(key) ? { enumerable: true, configurable: true } : undefined,
+    });
     function patch(kind, key, parent, hook, once) {
         if (!active) return () => {};
         if (typeof parent?.[key] !== 'function') throw new Error('Unavailable Discord method: ' + key);
@@ -128,10 +249,10 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
     const common = { React, ReactNative: RN };
     const commonGetters = {
         FluxDispatcher: () => U.discord.common.flux.Dispatcher,
-        Flux: () => U.discord.common.flux,
+        Flux: () => rawFind('Store', 'connectStores') ?? U.discord.common.flux,
         constants: () => U.discord.common.constants.Constants,
         clipboard: () => U.externals.ReactNativeClipboard.Clipboard,
-        RestAPI: () => findByProps('HTTP')?.HTTP ?? findByProps('get', 'post', 'patch', 'del'),
+        RestAPI: legacyHTTP,
         commands: () => findByProps('getBuiltInCommands'),
         messageUtil: () => findByProps('sendMessage', 'receiveMessage') ?? findByProps('sendMessage'),
         i18n: () => findByProps('Messages', 'setLocale'),
@@ -140,7 +261,7 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         lodash: () => findByProps('cloneDeep', 'isEqual'),
         moment: () => findByProps('isMoment'),
         chroma: () => findByProps('valid', 'rgb'),
-        NavigationNative: () => U.externals.ReactNavigation,
+        NavigationNative: () => U.externals.ReactNavigation?.ReactNavigationNative,
     };
     for (const [key, get] of Object.entries(commonGetters)) Object.defineProperty(common, key, { get, enumerable: true });
     metro.common = common;
@@ -202,7 +323,10 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         General: Object.create(RN, {
             Button: { value: design.Button, enumerable: true, writable: true, configurable: true },
         }),
-        Forms: { FormRow: design.TableRow, FormSection: design.TableRowGroup, FormSwitchRow: design.TableSwitchRow,
+        Forms: { FormRow: ({ leading, ...props }) => h(design.TableRow, { ...props, icon: props.icon ?? leading }),
+            FormSection: design.TableRowGroup,
+            FormSwitchRow: ({ leading, ...props }) => h(design.TableSwitchRow, { ...props, icon: props.icon ?? leading }),
+            FormIcon: props => h(RN.Image, { ...props, style: [{ width: 24, height: 24 }, props.style] }),
             FormInput: design.TextInput, FormText: design.Text, FormDivider: RN.View },
         Button: design.Button,
     };
@@ -232,6 +356,7 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
                     if (active && ownedCommands.has(id) && result && typeof result === 'object') {
                         const channelId = args[1]?.channel?.id;
                         const send = common.messageUtil;
+                        if (channelId && result.type === 4 && result.data) return sendLocalMessage(channelId, result.data);
                         if (channelId && send?.sendMessage) return send.sendMessage(channelId, result);
                     }
                 }).catch(log);
@@ -244,6 +369,22 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
             return [...(result ?? []), command];
         });
         return own(() => { ownedCommands.delete(id); unpatch(); });
+    }
+    function sendLocalMessage(channelId, body, modifications) {
+        if (!active) return;
+        const actions = findByProps('receiveMessage'), factory = findByProps('createBotMessage');
+        if (actions?.receiveMessage && factory?.createBotMessage) {
+            const message = factory.createBotMessage({ ...body, channelId, channel_id: channelId });
+            const author = message.author;
+            Object.assign(message, modifications ?? {});
+            if (modifications?.author) message.author = { ...author, ...modifications.author };
+            actions.receiveMessage(channelId, message);
+            return;
+        }
+        const bot = findByProps('sendBotMessage');
+        if (bot?.sendBotMessage && typeof body.content === 'string' && !body.embeds?.length)
+            return bot.sendBotMessage(channelId, body.content);
+        throw new Error('Local message output is unavailable on this Discord build.');
     }
     const plugins = {}, themes = {};
     async function refreshRegistry() {
@@ -261,19 +402,29 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         }
     }
     const adapter = {
-        metro, patcher, logger: api.logger,
+        metro, patcher, logger: {
+            ...api.logger,
+            warn: (...args) => api.logger?.warn?.(...args),
+            log: (...args) => api.logger?.log?.(...args),
+            error(...args) {
+                if (args.length <= 2 && typeof args.at(-1) === 'string' &&
+                    /^(Blocked Users|Friends List|Server Leaver) shortcut is unavailable; the plugin settings page is still accessible\.$/.test(args.at(-1)))
+                    api.logger?.warn?.(...args);
+                else log(...args);
+            },
+        },
         plugin: { id: metadata.id, manifest: metadata.legacyManifest, storage },
         storage: { useProxy, awaitSyncWrapper: async value => {
             if (value === plugins || value === themes) await refreshRegistry();
             return value;
         } },
-        commands: { registerCommand }, plugins: { plugins }, themes: { themes },
+        commands: { registerCommand, sendLocalMessage }, plugins: { plugins }, themes: { themes },
         ui: { components, assets: { getAssetIDByName: name => U.assets.getAssetIdByName(name),
             getAssetByName: name => U.assets.getAssetByName(name) },
             toasts: { showToast }, alerts: { showConfirmationAlert, showInputAlert },
             semanticColors: safe(() => findByProps('unsafe_rawColors', 'colors')?.colors) ?? {},
         },
-        utils: { findInTree, findInReactTree, safeFetch: (...args) => host.fetch(...args),
+        utils: { findInTree, findInReactTree, safeFetch,
             unfreeze: value => ({ ...value }) },
     };
     function setTimeoutScoped(fn, delay, ...args) {
@@ -288,9 +439,31 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
     }
     function clearTimeoutScoped(id) { host.clearTimeout(id); timeouts.delete(id); }
     function clearIntervalScoped(id) { host.clearInterval(id); intervals.delete(id); }
+    async function safeFetch(url, init = {}, timeout = 10000) {
+        if (!active) throw new Error('Plugin is stopped.');
+        if (init.signal?.aborted) throw init.signal.reason ?? new Error('Request aborted.');
+        const controller = typeof host.AbortController === 'function' ? new host.AbortController() : undefined;
+        let timer, rejectPending;
+        const cancel = reason => { controller?.abort(reason); rejectPending(reason); };
+        const abort = () => cancel(init.signal.reason ?? new Error('Request aborted.'));
+        try {
+            const cancelled = new Promise((_resolve, reject) => { rejectPending = reject; });
+            requests.add(cancel);
+            init.signal?.addEventListener?.('abort', abort, { once: true });
+            if (init.signal?.aborted) abort();
+            if (Number.isFinite(timeout) && timeout > 0)
+                timer = setTimeoutScoped(() => cancel(new Error('Request timed out.')), timeout);
+            return await Promise.race([cancelled, host.fetch(url, { ...init, ...(controller ? { signal: controller.signal } : {}) })]);
+        } finally {
+            clearTimeoutScoped(timer); requests.delete(cancel);
+            init.signal?.removeEventListener?.('abort', abort);
+        }
+    }
     function dispose() {
         if (!active) return writes;
         active = false;
+        for (const cancel of requests) cancel(new Error('Plugin is stopped.'));
+        requests.clear();
         for (const id of timeouts) host.clearTimeout(id);
         for (const id of intervals) host.clearInterval(id);
         timeouts.clear(); intervals.clear(); ownedCommands.clear();
@@ -332,7 +505,9 @@ function createNextPlugin(factory, metadata, host = globalThis) {
             const React = api.unscoped.react.React;
             const Settings = running?.legacy?.settings;
             return Settings ? React.createElement(Settings) : React.createElement(api.unscoped.react.ReactNative.Text,
-                { style: { padding: 20 }, selectable: true }, 'Enable this plugin to open its settings.');
+                { style: { padding: 20 }, selectable: true }, running
+                    ? 'This plugin has no settings. Use its Discord menu items or commands.'
+                    : 'Enable this plugin to open its settings.');
         },
     };
 }
