@@ -13,6 +13,9 @@ spec.loader.exec_module(builder)
 
 
 class PackageTests(unittest.TestCase):
+    def test_pages_root_and_raw_catalogues_are_identical(self):
+        self.assertEqual((HERE.parent / "index.json").read_bytes(), (HERE / "index.json").read_bytes())
+
     def test_all_downloads_match_manifest_size_hash_and_entrypoint(self):
         index = json.loads((HERE / "index.json").read_text())
         self.assertEqual(index["format"], 1)

@@ -1,6 +1,16 @@
 # Fluttershy's Revenge Next Repository
 
-Add this **complete URL** to the **Repository URL** field in Revenge Next, then tap **Add repository**:
+The GitHub Pages repository address is:
+
+```text
+https://fluttershy2008-mlp.github.io/lol/
+```
+
+Add it to the **Repository URL** field in Revenge Next, then tap **Add repository**. The repository root serves the same `index.json` catalogue as the raw URL below. ZIP download links use the existing raw host, so both addresses use identical verified artifacts.
+
+GitHub Pages must be enabled once in [repository Pages settings](https://github.com/Fluttershy2008-mlp/lol/settings/pages): choose **Deploy from a branch**, branch **main**, folder **/(root)**, then **Save**. The Pages address becomes available when GitHub's deployment completes. The `.nojekyll` file serves the repository as plain static files.
+
+The existing raw address also works independently of Pages:
 
 ```text
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/index.json
@@ -43,7 +53,7 @@ node --test revenge-next/tests/runtime.test.cjs
 python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
 ```
 
-To publish a source or adapter change, bump `portVersion` in `repo.config.json` (or `themeVersion` for theme changes), then run `python3 revenge-next/build.py`. Commit the changed sources, configuration, `pool/`, `sources.json` and `index.json` together. Keep old ZIPs in `pool/`; they are the release history. The script preserves old versions, compares numeric version components and digit runs in labels, and creates default and beta channel pointers. Optional per-plugin channel overrides can be set under `channels` in the config.
+To publish a source or adapter change, bump `portVersion` in `repo.config.json` (or `themeVersion` for theme changes), then run `python3 revenge-next/build.py`. Commit the changed sources, configuration, `pool/`, `sources.json` and both generated `index.json` files together. Keep old ZIPs in `pool/`; they are the release history. The script preserves old versions, compares numeric version components and digit runs in labels, and creates default and beta channel pointers. Optional per-plugin channel overrides can be set under `channels` in the config.
 
 Each ZIP contains its Next manifest and compiled script. The index records the exact byte size, SHA-256, absolute HTTPS URL and required dependencies. Builds are deterministic. `.build/` holds regenerated scripts for local tests and is not published. Original plugin credits and available licence notices are included in the ZIPs. `sources.json` records the exact original source hashes and versions used for each build.
 

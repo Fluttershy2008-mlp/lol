@@ -217,6 +217,8 @@ def build(check=False):
     index = {key: config[key] for key in ("name", "description", "icon")}
     index = {"format": 1, **index, "plugins": plugins}
     write(HERE / "index.json", dump(index), check)
+    # Keep the Pages root and the existing raw repository address in sync.
+    write(ROOT / "index.json", dump(index), check)
     write(HERE / "sources.json", dump({"sourceCommit": config["sourceCommit"], "plugins": source_info}), check)
     print(f"{'Verified' if check else 'Built'} {len(entries)} packages ({len(config['themes'])} native themes); {len(plugins)} catalogue entries.")
 

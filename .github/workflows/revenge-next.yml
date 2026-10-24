@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - 'revenge-next/**'
+      - 'index.json'
+      - 'index.html'
+      - '.nojekyll'
       - '**/manifest.json'
       - '**/index.js'
       - '**/index-v*.js'
@@ -13,6 +16,9 @@ on:
   pull_request:
     paths:
       - 'revenge-next/**'
+      - 'index.json'
+      - 'index.html'
+      - '.nojekyll'
       - '**/manifest.json'
       - '**/index.js'
       - '**/index-v*.js'
