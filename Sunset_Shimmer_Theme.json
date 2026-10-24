@@ -1,6 +1,6 @@
 {
   "name": "Sunset Shimmer ☀️ Ember & Gold",
-  "description": "Sunset Shimmer with ember-orange borders and controls, warm red-brown cards and panels, cream text and golden accents. Preserves the Sunset Shimmer wallpaper.",
+  "description": "Sunset Shimmer with ember-orange borders and controls, warm red-brown cards and panels, cream text and golden accents. Transparent chat surfaces and a clearer, blur-free wallpaper for Android.",
   "authors": [
     {
       "name": "fluttershy_simper",
@@ -49,9 +49,9 @@
       "#A77D73"
     ],
     "BACKGROUND_PRIMARY": [
-      "#1B1419",
-      "#1B1419",
-      "#1B1419"
+      "#1B141900",
+      "#1B141900",
+      "#1B141900"
     ],
     "BACKGROUND_SECONDARY": [
       "#28191D",
@@ -79,9 +79,9 @@
       "#351F24"
     ],
     "BACKGROUND_MOBILE_PRIMARY": [
-      "#1B1419",
-      "#1B1419",
-      "#1B1419"
+      "#1B141900",
+      "#1B141900",
+      "#1B141900"
     ],
     "BG_BASE_TERTIARY": [
       "#231519",
@@ -174,9 +174,9 @@
       "#FFE19A"
     ],
     "CHAT_BACKGROUND": [
-      "#1B1419",
-      "#1B1419",
-      "#1B1419"
+      "#1B141900",
+      "#1B141900",
+      "#1B141900"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND": [
       "#351F24",
@@ -259,9 +259,9 @@
       "#291B22"
     ],
     "BACKGROUND_BASE_LOWEST": [
-      "#1B1419",
-      "#1B1419",
-      "#1B1419"
+      "#1B141900",
+      "#1B141900",
+      "#1B141900"
     ],
     "BACKGROUND_BASE_LOWER": [
       "#28191D",
@@ -289,9 +289,9 @@
       "#563039"
     ],
     "BG_BASE_PRIMARY": [
-      "#1B1419",
-      "#1B1419",
-      "#1B1419"
+      "#1B141900",
+      "#1B141900",
+      "#1B141900"
     ],
     "BG_BASE_SECONDARY": [
       "#28191D",
@@ -1247,7 +1247,7 @@
   },
   "background": {
     "url": "https://images2.alphacoders.com/872/872984.png",
-    "alpha": 0.24,
+    "alpha": 0.35,
     "blur": 0
   },
   "plus": {
@@ -1460,5 +1460,5 @@
     "mentionLineColor": "#FF9D3D"
   },
   "spec": 2,
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

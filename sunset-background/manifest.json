@@ -1,0 +1,16 @@
+{
+  "name": "Sunset Shimmer Chat Background",
+  "description": "Draws the Sunset Shimmer wallpaper behind chat when Revenge Classic's built-in background renderer is incompatible.",
+  "version": "1.0.0",
+  "authors": [
+    {
+      "name": "fluttershy_simper",
+      "id": "753962426407452713"
+    }
+  ],
+  "main": "index.js",
+  "vendetta": {
+    "icon": "ImageIcon"
+  },
+  "hash": "5f15a00da7620ba547fb38d4a26ae27ee77c07b3c11324629795082de94b9e10"
+}
