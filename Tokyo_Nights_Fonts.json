@@ -1,0 +1,26 @@
+{
+  "spec": 1,
+  "name": "Tokyo Nights - Kodchasan",
+  "description": "Optional Kodchasan font pack for Tokyo Nights. Font files hosted by LuckyJinx13/Public-Themes.",
+  "main": {
+    "ABCGintoNord-ExtraBold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Bold.ttf",
+    "ggsans-Bold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Bold.ttf",
+    "ggsans-BoldItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-BoldItalic.ttf",
+    "ggsans-ExtraBold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Bold.ttf",
+    "ggsans-ExtraBoldItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-BoldItalic.ttf",
+    "ggsans-Medium": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Medium.ttf",
+    "ggsans-MediumItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-MediumItalic.ttf",
+    "ggsans-Normal": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Regular.ttf",
+    "ggsans-NormalItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Italic.ttf",
+    "ggsans-Semibold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-SemiBold.ttf",
+    "ggsans-SemiboldItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-SemiBoldItalic.ttf",
+    "NotoSans-Bold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Bold.ttf",
+    "NotoSans-ExtraBold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Bold.ttf",
+    "NotoSans-Medium": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Medium.ttf",
+    "NotoSans-Normal": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Regular.ttf",
+    "NotoSans-NormalItalic": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-Italic.ttf",
+    "NotoSans-Semibold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-SemiBold.ttf",
+    "SourceCodePro-Semibold": "https://raw.githubusercontent.com/LuckyJinx13/Public-Themes/main/Kodchasan-SemiBold.ttf"
+  },
+  "source": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/Tokyo_Nights_Fonts.json"
+}
