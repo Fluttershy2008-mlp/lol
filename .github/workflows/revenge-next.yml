@@ -1,0 +1,43 @@
+name: Validate Revenge Next repository
+
+on:
+  push:
+    paths:
+      - 'revenge-next/**'
+      - '**/manifest.json'
+      - '**/index.js'
+      - '**/index-v*.js'
+      - '*Theme.json'
+      - 'Rainbow_Dash_Sonic_Rainboom.json'
+      - '.github/workflows/revenge-next.yml'
+  pull_request:
+    paths:
+      - 'revenge-next/**'
+      - '**/manifest.json'
+      - '**/index.js'
+      - '**/index-v*.js'
+      - '*Theme.json'
+      - 'Rainbow_Dash_Sonic_Rainboom.json'
+      - '.github/workflows/revenge-next.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify deterministic package output
+        run: python3 revenge-next/build.py --check
+      - name: Check Next adapter and plugin integration
+        run: node --test revenge-next/tests/runtime.test.cjs
+      - name: Check ZIP integrity and index metadata
+        run: python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'

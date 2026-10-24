@@ -1,0 +1,155 @@
+{
+  "sourceCommit": "b77722dec20ba713ae58dad00ebce671ed80a8ce",
+  "plugins": {
+    "dev.fluttershy2008.addon-list": {
+      "path": "addonList/index.js",
+      "sha256": "444fd612d40ab1a270b66d87085739a2eafa13c8008bff3212df589184b1622f",
+      "originalVersion": "2.2.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.auto-text": {
+      "path": "auto-text/index.js",
+      "sha256": "dc99e973a038940a3852efd21f341d11f0648adafecab07e105aaac5b7d3e8c1",
+      "originalVersion": "1.2.4",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.blocked-user-list": {
+      "path": "blocked-user-list/index.js",
+      "sha256": "9633205ce41528da586ef713f348f4378c81d99ffa49ad63cad738a8c5099bcc",
+      "originalVersion": "1.3.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.copy-user-id": {
+      "path": "copy-user-id/index.js",
+      "sha256": "ee3839b428ce99e8ef106fbe2bdceeeab1b521a3bb27ca249bec68ae2f3aae84",
+      "originalVersion": "1.1.3",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.custom-rpc": {
+      "path": "custom-rpc/index.js",
+      "sha256": "618b49ab2af1fd079463abc0de944baeb7d60dacbcd77ebb079abe095ea3a55c",
+      "originalVersion": "1.1.3",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.expression-cloner": {
+      "path": "expression-cloner/index.js",
+      "sha256": "12968350212194f893b78e815fd86efb6ee9668961dac4c8776662ff12293039",
+      "originalVersion": "1.1.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.friends-list": {
+      "path": "friends-list/index.js",
+      "sha256": "c87b9c78052499f47fe1853332b3cbbe6bc14f1bed22d83368a98518fe6d5fed",
+      "originalVersion": "1.0.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.hide-blocked-and-ignored-messages": {
+      "path": "hide-blocked-and-ignored-messages/index.js",
+      "sha256": "ff51901cd1ef8af2ba99b1d0faae0cda41a27b022493118d2fbceb3e290099dd",
+      "originalVersion": "1.1.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.info-commands": {
+      "path": "info-commands/index.js",
+      "sha256": "92d0bb7de077923d1d71fb3f4ee350fedb502a712fed1c2d77048c5126f1c4e1",
+      "originalVersion": "1.2.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.message-logger": {
+      "path": "message-logger/index.js",
+      "sha256": "5f4758322362d1e87f397e32c80355ab172ea748e82b8d60a772c2647b1738f8",
+      "originalVersion": "2.0.5",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.more-alts": {
+      "path": "more-alts/index.js",
+      "sha256": "c3a37d0b16bf8b26ac4c86e89dde25ecad6254d48e179df5696b256fb90825f5",
+      "originalVersion": "3.1.3",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.nitro-auto-claim": {
+      "path": "nitro-auto-claim/index.js",
+      "sha256": "dab8745668cf14dd2674916f0f8e43d72c2cb85b742e5ccb55df3f3ca1761924",
+      "originalVersion": "1.0.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.ping-jumper": {
+      "path": "ping-jumper/index.js",
+      "sha256": "a5db088dd33507c7014b8fcebf9e4102d3fac8e66869921cb6e136c98abef68f",
+      "originalVersion": "1.1.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.profile-status-presets": {
+      "path": "profile-status-presets/index.js",
+      "sha256": "c220eec65b820c288caa015b946e612066b6016fbe9c89d62fd7ece6ab1d266c",
+      "originalVersion": "1.0.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.read-all-notifications": {
+      "path": "read-all-notifications/index.js",
+      "sha256": "5015589dd16eab12ee0477859014a9c9d43c22632ea06723b9a5fd1071d94df4",
+      "originalVersion": "1.2.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.relationship-notifier": {
+      "path": "relationship-notifier/index-v1.1.6.js",
+      "sha256": "0776b38ac201c45bd1b60be526360e6d3a7e6ee54d79429dc45c0f3649702e50",
+      "originalVersion": "1.1.6",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.save-as-sticker": {
+      "path": "save-as-sticker/index.js",
+      "sha256": "954342bc9a9282b565ec9ad1da75b453032b7e29224d511e122ad78278398d78",
+      "originalVersion": "1.3.4",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.server-leaver": {
+      "path": "server-leaver/index.js",
+      "sha256": "1d4f2825d20d3583a3de7ffdcf410be34872d95128c227e803ae499524994b34",
+      "originalVersion": "1.0.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.stealmoji": {
+      "path": "stealmoji/index.js",
+      "sha256": "9ab88cc5d1c999e05c003211adce2706d8f01c4c91edef06847ab9dcfd35dff4",
+      "originalVersion": "2.1.3",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.valid-user": {
+      "path": "valid-user/index.js",
+      "sha256": "b5be82b964f5a54876280006a8f4de6e7fa74baf6528b10ce682ec4072862efc",
+      "originalVersion": "2.1.2",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.view-icons": {
+      "path": "view-icons/index.js",
+      "sha256": "760ab367dabde6abd38937e5a409d0fa76b93197338830d6f60ad7e3d29fb041",
+      "originalVersion": "1.0.4",
+      "kind": "compatibility-preview"
+    },
+    "dev.fluttershy2008.fluttershy-theme": {
+      "path": "Fluttershy_Pink_Yellow_Theme.json",
+      "sha256": "9220c2cde3f90a81669a29eca5fb7b8c8e544aa97bf6923e284a930c0e1085ae",
+      "originalVersion": "2.0.1",
+      "kind": "native-theme"
+    },
+    "dev.fluttershy2008.rainbow-dash-theme": {
+      "path": "Rainbow_Dash_Sonic_Rainboom.json",
+      "sha256": "70134b0c4c43496288e796158a969305cd08516d42898dd29aa66ca3892c1838",
+      "originalVersion": "1.4.0",
+      "kind": "native-theme"
+    },
+    "dev.fluttershy2008.sunset-shimmer-theme": {
+      "path": "Sunset_Shimmer_Theme.json",
+      "sha256": "a4e447cb9953c51afa823fb22a1e9069cfccbe07d8ee9082fe2740630f60e9b0",
+      "originalVersion": "1.3.0",
+      "kind": "native-theme"
+    },
+    "dev.fluttershy2008.tokyo-nights-theme": {
+      "path": "Tokyo_Nights_Theme.json",
+      "sha256": "d335abe5a9333e5925b89bcd1ca8912017f7e9d875e31621d06b62832b745eb9",
+      "originalVersion": "2.0.0",
+      "kind": "native-theme"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Fluttershy's Revenge Next Repository",
+  "description": "Revenge Next preview ports and native colour themes by Fluttershy2008-mlp.",
+  "icon": "GlobeEarthIcon",
+  "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next",
+  "portVersion": "1.0.0-beta1",
+  "themeVersion": "1.0.0-beta1",
+  "sourceCommit": "b77722dec20ba713ae58dad00ebce671ed80a8ce",
+  "exclude": {
+    "message-logger-v2": "Duplicate of Message Logger; install one copy.",
+    "fluttershy-background": "Replaced by the native Fluttershy theme package.",
+    "rainbow-dash-background": "Replaced by the native Rainbow Dash theme package.",
+    "sunset-background": "Replaced by the native Sunset Shimmer theme package."
+  },
+  "themes": {
+    "fluttershy-theme": "Fluttershy_Pink_Yellow_Theme.json",
+    "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
+    "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
+    "tokyo-nights-theme": "Tokyo_Nights_Theme.json"
+  }
+}
