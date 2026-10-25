@@ -59,10 +59,37 @@ class PackageTests(unittest.TestCase):
             version = index[plugin_id]["channels"]["latest"]
             package = HERE / "pool" / f"{plugin_id}@{version}.zip"
             with zipfile.ZipFile(package) as z:
-                if (directory / "LICENSE").exists():
-                    self.assertEqual(z.read("LICENSE"), (directory / "LICENSE").read_bytes())
+                for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
+                    if (directory / name).exists():
+                        self.assertEqual(z.read(name), (directory / name).read_bytes(), (plugin_id, name))
                 self.assertIn("NOTICE.txt", z.namelist())
                 self.assertIn("ADAPTER_LICENSE.txt", z.namelist())
+
+    def test_every_published_classic_install_is_ported_or_explicitly_replaced(self):
+        config = json.loads((HERE / "repo.config.json").read_text())
+        sources = json.loads((HERE / "sources.json").read_text())["plugins"]
+        ports = {str(Path(entry["path"]).parent) for entry in sources.values()
+                 if entry["kind"] == "compatibility-preview"}
+        for manifest in HERE.parent.glob("*/manifest.json"):
+            data = json.loads(manifest.read_text())
+            if not data.get("main") or "authors" not in data:
+                continue
+            folder = manifest.parent.name
+            self.assertTrue(folder in ports or config["exclude"].get(folder), folder)
+        self.assertEqual((HERE.parent / "index.js").read_bytes(), (HERE.parent / "save-as-sticker/index.js").read_bytes())
+        self.assertEqual((HERE.parent / "message-logger-v2/index.js").read_bytes(), (HERE.parent / "message-logger/index.js").read_bytes())
+
+    def test_current_ports_and_instructions_share_the_canonical_repository_url(self):
+        config = json.loads((HERE / "repo.config.json").read_text())
+        url = config["repositoryUrl"]
+        self.assertEqual(url, "https://fluttershy2008-mlp.github.io/lol/index.json")
+        for filename in (HERE / "README.md", HERE / "COMPATIBILITY.md", HERE.parent / "README.md", HERE.parent / "index.html"):
+            self.assertIn(url, filename.read_text(), filename.name)
+        sources = json.loads((HERE / "sources.json").read_text())["plugins"]
+        for plugin_id, source in sources.items():
+            if source["kind"] == "compatibility-preview":
+                with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{config['portVersion']}.zip") as package:
+                    self.assertIn('"repository": "' + url + '"', package.read("index.js").decode())
 
     def test_all_21_plugin_ports_offer_the_current_adapter_release(self):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]

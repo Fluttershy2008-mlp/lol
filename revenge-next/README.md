@@ -1,14 +1,14 @@
 # Fluttershy's Revenge Next Repository
 
-The GitHub Pages repository address is:
+The recommended Repository URL is:
 
 ```text
-https://fluttershy2008-mlp.github.io/lol/
+https://fluttershy2008-mlp.github.io/lol/index.json
 ```
 
-Add it to the **Repository URL** field in Revenge Next, then tap **Add repository**. The repository root serves the same `index.json` catalogue as the raw URL below. ZIP download links use the existing raw host, so both addresses use identical verified artifacts.
+Open **Plugins > Settings > Advanced**, paste it into **Repository URL**, then tap **Add repository**. The explicit index URL, Pages root (`https://fluttershy2008-mlp.github.io/lol/`) and raw URL below serve the same catalogue. If you already added one, refresh it instead of adding another copy. ZIP downloads use the existing raw host.
 
-GitHub Pages must be enabled once in [repository Pages settings](https://github.com/Fluttershy2008-mlp/lol/settings/pages): choose **Deploy from a branch**, branch **main**, folder **/(root)**, then **Save**. The Pages address becomes available when GitHub's deployment completes. The `.nojekyll` file serves the repository as plain static files.
+GitHub Pages is enabled for this repository. The `.nojekyll` file serves the files directly. Future updates become available after GitHub's Pages deployment completes.
 
 The existing raw address also works independently of Pages:
 
@@ -20,7 +20,9 @@ Open Browse Plugins after adding it. Enable a plugin after installing it and res
 
 This catalogue contains **21 plugin preview ports and four native theme packages**, all labelled **Next preview**. They are experimental: package validation and simulated runtime checks passed, but they have not been tested on a physical Android device. Install the plugins you use, one at a time.
 
-**Plugin release 1.0.0-beta3:** fixes Next menu lookups, split REST exports, Classic-only page routes, More Alts' command initialization, InfoCommands' local output, and missing server-picker icons. It also preserves the beta2 fix for `Cannot assign to property 'Button' which has only a getter`. All 21 ports have automated startup, React settings, teardown/restart and feature checks. See the [per-plugin compatibility audit](COMPATIBILITY.md) for exactly what was tested and what still needs an Android device. Refresh the repository in Revenge Next, install the available plugin updates, then fully restart Discord.
+**Plugin release 1.0.0-beta4:** fixes Addon List showing an empty list on current Next builds by reading the native plugin-system response envelope. Registry errors stay visible, and sideloaded plugins no longer receive this repository's URL. All ports remove hooks and timers immediately when stopped, even while asynchronous unload work is pending. Original third-party notices are included in the new ZIPs.
+
+This release retains beta3's fixes for menus, split REST exports, custom pages, More Alts commands and InfoCommands local output, plus beta2's getter-only React Native Button fix. All 21 ports have automated startup, React settings, teardown/restart and feature checks. See the [per-plugin compatibility audit](COMPATIBILITY.md). Refresh the repository, update your plugins, then fully restart Discord.
 
 ## Included plugins
 

@@ -173,7 +173,9 @@ function createWorld(options = {}) {
     };
     const U = { react: { React, ReactNative: RN }, modules: { finders, metro: {
         getInitializedModuleExports: id => modules[Number(id)], isModuleInitialized: id => modules[Number(id)] !== undefined,
-    }, native: { callNativeMethod: async name => name === 'revenge.plugins.list' ? [...loaded.values()].map(x => ({ manifest: x.manifest, source: { repo: 'https://example.test/index.json' } })) : null } },
+    }, native: { callNativeMethod: async name => name === 'revenge.plugins.list'
+        ? { result: [...loaded.values()].map(x => ({ manifest: x.manifest, source: { repo: 'https://example.test/index.json' } })) }
+        : { error: { code: 'UNKNOWN_METHOD', message: 'Unexpected native call in test: ' + name } } } },
         patcher: { instead: nextPatcher() }, discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
             flux: { Stores: stores }, design: { Design: design }, actions: { ActionSheetActionCreators: sheets, AlertActionCreators: alertActions }, modules: { settings } },
         externals: { ReactNativeClipboard: { Clipboard: { setString: value => clipboard.push(value), setImage: value => calls.push(['copyImage', value]) } },

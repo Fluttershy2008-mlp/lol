@@ -205,6 +205,81 @@ test('registry adapter reads installed metadata through Next native bridge', asy
     await bridge.dispose();
 });
 
+test('registry adapter unwraps current native results and preserves each repository URL', async () => {
+    const env = environment();
+    env.api.unscoped.modules.native.callNativeMethod = async () => ({ result: [
+        { manifest: { id: 'example', name: 'Example', author: 'Someone' }, source: { repo: 'https://example.org/index.json' } },
+        { manifest: { id: 'local', name: 'Sideloaded' }, source: { repo: null } },
+        { manifest: { id: metadata.id, name: 'Our port' } },
+        { manifest: { id: 'theme', name: 'Theme', dependencies: { 'revenge.api.themes': {} } } },
+    ] });
+    const bridge = createLegacyAdapter(env.api, metadata, env.host), V = bridge.adapter;
+    await V.storage.awaitSyncWrapper(V.plugins.plugins);
+    assert.equal(V.plugins.plugins.example.id, 'https://example.org/index.json');
+    assert.equal(V.plugins.plugins.local.id, 'local', 'sideloaded plugins must not advertise our repository');
+    assert.equal(V.plugins.plugins[metadata.id].id, metadata.repository);
+    assert.equal(V.themes.themes.theme.manifest.name, 'Theme');
+    await bridge.dispose();
+});
+
+test('native registry failures remain visible and preserve the last successful list', async () => {
+    const env = environment();
+    let response = { result: [{ manifest: { id: 'example', name: 'Example' } }] };
+    env.api.unscoped.modules.native.callNativeMethod = async () => response;
+    const bridge = createLegacyAdapter(env.api, metadata, env.host), V = bridge.adapter;
+    await V.storage.awaitSyncWrapper(V.plugins.plugins);
+    response = { error: { code: 'NOT_READY', message: 'Native registry is not ready' } };
+    await assert.rejects(V.storage.awaitSyncWrapper(V.plugins.plugins), error =>
+        error.code === 'NOT_READY' && /Native registry is not ready/.test(error.message));
+    assert.equal(V.plugins.plugins.example.manifest.name, 'Example');
+    response = { unexpected: [] };
+    await assert.rejects(V.storage.awaitSyncWrapper(V.plugins.plugins), /Invalid plugin registry response/);
+    await bridge.dispose();
+});
+
+test('a registry result arriving after stop cannot repopulate disposed registries', async () => {
+    const env = environment(); let resolve;
+    env.api.unscoped.modules.native.callNativeMethod = () => new Promise(done => resolve = done);
+    const bridge = createLegacyAdapter(env.api, metadata, env.host), V = bridge.adapter;
+    const pending = V.storage.awaitSyncWrapper(V.plugins.plugins);
+    await bridge.dispose();
+    resolve({ result: [{ manifest: { id: 'late', name: 'Late' } }] });
+    await pending;
+    assert.deepEqual(V.plugins.plugins, {});
+});
+
+test('stop disables patches and timers immediately while asynchronous unload is pending', async () => {
+    const env = environment(); let finishUnload, unloads = 0;
+    const target = { fn() { return 1; } }, original = target.fn;
+    const options = createNextPlugin((V, later) => ({
+        onLoad() { V.patcher.after('fn', target, () => 2); later(() => {}, 10); },
+        onUnload() { unloads++; return new Promise(resolve => finishUnload = resolve); },
+    }), metadata, env.host);
+    await options.start(env.api);
+    assert.equal(target.fn(), 2);
+    const stopped = options.stop();
+    assert.equal(target.fn, original, 'unpatch before awaiting the unload promise');
+    assert.equal(env.timers.size, 0);
+    assert.equal(unloads, 1);
+    const cleanup = Promise.all(env.cleanup.map(fn => fn()));
+    assert.equal(unloads, 1, 'Next cleanup does not unload twice');
+    finishUnload(); await stopped; await cleanup;
+});
+
+test('a throwing unload still disposes hooks, timers and the running settings page', async () => {
+    const env = environment(), target = { fn() {} }, original = target.fn;
+    const options = createNextPlugin((V, later) => ({
+        onLoad() { V.patcher.after('fn', target, () => 2); later(() => {}, 10); },
+        onUnload() { throw new Error('unload failed'); },
+        settings() {},
+    }), metadata, env.host);
+    await options.start(env.api);
+    await assert.rejects(options.stop(), /unload failed/);
+    assert.equal(target.fn, original);
+    assert.equal(env.timers.size, 0);
+    assert.match(options.SettingsComponent({ api: env.api }).props.children, /Enable this plugin/);
+});
+
 function load(slug, env) {
     const file = path.join(ROOT, '.build', 'plugins', slug, 'index.js');
     return vm.runInNewContext(fs.readFileSync(file, 'utf8'), { console, Promise,

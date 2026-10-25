@@ -388,14 +388,27 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
     }
     const plugins = {}, themes = {};
     async function refreshRegistry() {
-        const list = await U.modules.native.callNativeMethod('revenge.plugins.list', []);
-        if (!active || !Array.isArray(list)) return;
+        const response = await U.modules.native.callNativeMethod('revenge.plugins.list', []);
+        if (!active) return;
+        // The generic bridge unwraps its transport envelope. Plugin-system
+        // methods return a second { result } or { error } envelope inside it.
+        if (response && !Array.isArray(response) && Object.hasOwn(response, 'error')) {
+            const detail = response.error;
+            const error = new Error(detail?.message ?? 'Could not read installed plugins.');
+            error.code = detail?.code ?? 'UNKNOWN';
+            throw error;
+        }
+        const list = Array.isArray(response) ? response : response?.result;
+        if (list !== null && !Array.isArray(list)) throw new Error('Invalid plugin registry response from Revenge Next.');
         for (const registry of [plugins, themes]) for (const key of Object.keys(registry)) delete registry[key];
-        for (const item of list) {
-            const manifest = item.manifest;
+        for (const item of list ?? []) {
+            const manifest = item?.manifest;
             if (!manifest?.id) continue;
             const data = { ...manifest, authors: [manifest.author, ...(manifest.contributors ?? [])].filter(Boolean) };
-            const entry = { id: item.source?.repo ?? metadata.repository, manifest: data, data,
+            // A sideloaded or third-party plugin must not inherit our repo URL.
+            const repository = item.source?.repo ?? (item.source === undefined && manifest.id.startsWith('dev.fluttershy2008.')
+                ? metadata.repository : manifest.id);
+            const entry = { id: repository, manifest: data, data,
                 enabled: typeof item.enabled === 'boolean' ? item.enabled : undefined };
             if (manifest.dependencies?.['revenge.api.themes']) themes[manifest.id] = entry;
             else plugins[manifest.id] = entry;
@@ -483,13 +496,19 @@ function createNextPlugin(factory, metadata, host = globalThis) {
             if (!api.jsonStorage.loaded) await api.jsonStorage.get();
             if (session !== epoch) return;
             const bridge = createLegacyAdapter(api, metadata, host);
-            const state = { bridge, legacy: undefined, stopped: false };
+            const state = { bridge, legacy: undefined, stopped: false, stopping: undefined, stop };
             running = state;
-            async function stop() {
-                if (state.stopped) return;
+            function stop() {
+                if (state.stopped) return state.stopping;
                 state.stopped = true;
-                try { await state.legacy?.onUnload?.(); }
-                finally { await bridge.dispose(); if (running === state) running = undefined; }
+                if (running === state) running = undefined;
+                let unload;
+                try { unload = Promise.resolve(state.legacy?.onUnload?.()); }
+                catch (error) { unload = Promise.reject(error); }
+                // Remove hooks and cancel timers/requests before waiting for a
+                // legacy async unload. Next invokes registered cleanups again.
+                state.stopping = Promise.all([unload, bridge.dispose()]).then(() => undefined);
+                return state.stopping;
             }
             api.cleanup(stop);
             try {
@@ -500,7 +519,7 @@ function createNextPlugin(factory, metadata, host = globalThis) {
                 if (api.plugin.startedLate) api.plugin.requireReload();
             } catch (error) { await stop(); throw error; }
         },
-        stop() { epoch++; },
+        stop() { epoch++; return running?.stop(); },
         SettingsComponent({ api }) {
             const React = api.unscoped.react.React;
             const Settings = running?.legacy?.settings;

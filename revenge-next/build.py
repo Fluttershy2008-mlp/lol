@@ -140,7 +140,7 @@ def build(check=False):
         slug = "addon-list" if directory.name == "addonList" else directory.name
         manifest = manifest_for(slug, legacy, config["portVersion"])
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
-                    "repository": config["baseUrl"] + "/index.json"}
+                    "repository": config["repositoryUrl"]}
         transformed = source.rstrip().rstrip(";")
         if directory.name == "addonList":
             transformed = transformed.replace("entry.enabled ? 'Enabled' : 'Disabled'",
@@ -165,7 +165,7 @@ def build(check=False):
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + runtime + "\nreturn { default: createNextPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         files = {"manifest.json": dump(manifest), "index.js": script}
-        for name in ("LICENSE", "THIRD_PARTY_LICENSES.txt", "LICENSE.upstream"):
+        for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
             if (directory / name).exists():
                 files[name] = (directory / name).read_bytes()
         files["ADAPTER_LICENSE.txt"] = (HERE / "LICENSE").read_text()

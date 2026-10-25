@@ -1,4 +1,4 @@
-# Revenge Next compatibility audit — beta3
+# Revenge Next compatibility audit: beta4
 
 All **21 plugin ports** pass the dedicated automated Next suite. Every port is started, mounted with real React, unmounted, stopped and restarted; tests check that timers, AppState subscriptions and store/Flux listeners are released. All 21 are also started together with curated menu APIs and split HTTP exports, then stopped in a different order. This is an automated simulation, **not confirmation from a physical Android device**.
 
@@ -10,7 +10,7 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 
 | Plugin | Feature checked in the packaged Next port | Still needs a phone |
 | --- | --- | --- |
-| Addon List | Copy installed Next metadata and URLs; no public send during copy | Native registry on the installed client; public sends and long-list confirmation |
+| Addon List | Read current native response envelopes, copy installed metadata and repository URLs, surface errors; no public send during copy | Native registry on the installed client; public sends and long-list confirmation |
 | AutoText | Save a phrase, expand it in the practice editor, copy the draft | Live composer connection, native text insertion and auto-send |
 | Blocked User List | Render blocked users; confirm before a simulated unblock | Live relationship updates and local APP/webhook filtering |
 | Copy User ID | Inject a lazy message-menu row and copy the exact mention | Current Discord message/profile menu layouts |
@@ -32,7 +32,29 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 | ValidUser | Resolve a cached mention and open a native profile action | Uncached lookups, changed message layouts and real access restrictions |
 | ViewIcons | Inject avatar action and open native media | Current profile/server menus, decorations and image downloads |
 
-The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this release changes the plugin adapter only.
+The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this release changes the plugin adapter and packaging only.
+
+## Fixes and checks in beta4
+
+- Unwrap the plugin system's `{ result }` response after the generic native bridge unwraps its transport response. Accept older direct arrays too.
+- Surface native error codes and messages instead of incorrectly reporting an empty installed list. Preserve the previous successful registry after a failed refresh.
+- Preserve third-party repository links. Do not attach this repository's URL to sideloaded plugins.
+- Use `https://fluttershy2008-mlp.github.io/lol/index.json` in setup instructions and new packages. The Pages root and raw URL remain valid aliases.
+- Stop hooks, timers and pending adapter fetches immediately. Do not wait for an asynchronous legacy unload before disabling them. Next's subsequent cleanup remains idempotent.
+- Include the original `NOTICE` and `THIRD_PARTY_NOTICES.md` files where supplied.
+- Audit every published top-level Classic manifest against the Next catalogue or its explicit replacement. Keep the root SaveAsSticker and Message Logger V2 aliases mapped to one package each.
+
+The corrected registry fixture and new shutdown regressions failed before the fixes. Beta4 passes **68 Node runtime/integration tests** and **10 Python package tests**, with no skips. The deterministic build check passes for all 25 current packages.
+
+The native contract was checked against [`lib/plugins/src/_internal/native.ts`](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/plugins/src/_internal/native.ts), together with the native list and lifecycle implementations at that revision. The tests simulate that contract. They do not run an Android native bridge.
+
+## Catalogue coverage
+
+The 22 published Classic plugin directories become 21 distinct Next ports because Message Logger V2 is an alias. The root SaveAsSticker URL is also an alias. The three wallpaper companion plugins are replaced by native theme packages. Tokyo Nights adds the fourth native theme.
+
+The old source-only fork under `vendetta-plugins/plugins` is not a set of published installs from this repository. Except for Message Logger, those archived sources are outside this catalogue and are not certified for Next. Desktop Vencord plugins are separate from the Android client.
+
+No physical-device compatibility is claimed for Samsung S26 Ultra, One UI 9 or Android 17. The remaining device checks in the table still apply.
 
 ## Fixes in beta3
 
@@ -60,6 +82,6 @@ GitHub Actions runs these checks for future port changes. Original Classic suite
 
 ## Update and device check
 
-Refresh `https://fluttershy2008-mlp.github.io/lol/` in Revenge Next, update the plugin ports to **1.0.0-beta3**, then fully restart Discord. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
+Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update the plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
 
 If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.
