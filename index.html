@@ -14,8 +14,8 @@
     h1 { font-size: clamp(2rem, 6vw, 3.3rem); line-height: 1.15; margin: 12px 0 24px; }
     p { color: #cbc3d3; }
     .box { margin: 28px 0; padding: 22px; background: #292432; border: 1px solid #514252; border-radius: 16px; }
-    label { display: block; margin-bottom: 10px; font-weight: 650; }
-    input { width: 100%; border: 1px solid #756273; border-radius: 8px; background: #1a1722; color: #f8f1e3; padding: 14px; font-size: .95rem; }
+    .repository-label { margin: 0 0 10px; color: #f8f1e3; font-weight: 650; }
+    .repository-url { display: block; width: 100%; overflow-wrap: anywhere; border: 1px solid #756273; border-radius: 8px; background: #1a1722; padding: 14px; font-size: .95rem; }
     button { margin-top: 12px; padding: 12px 20px; font: inherit; font-weight: 650; background: #edbdcf; color: #241a28; border: none; border-radius: 8px; cursor: pointer; }
     button:focus-visible, a:focus-visible { outline: 3px solid #f6df9a; outline-offset: 4px; }
     a { color: #f6df9a; text-underline-offset: 4px; }
@@ -30,9 +30,9 @@
   <h1>Fluttershy's plugins<br>and themes.</h1>
   <p>21 plugin preview ports and 4 native colour themes, in one repository.</p>
   <div class="box">
-    <label for="repository">Repository URL</label>
-    <input id="repository" readonly value="https://fluttershy2008-mlp.github.io/lol/index.json" aria-describedby="instructions" onclick="this.select()">
-    <button id="copy" type="button">Copy repository URL</button>
+    <p class="repository-label">Updated repository URL</p>
+    <a id="repository" class="repository-url" href="https://fluttershy2008-mlp.github.io/lol/index.json" aria-describedby="instructions">https://fluttershy2008-mlp.github.io/lol/index.json</a>
+    <button id="copy" type="button">Copy updated repository URL</button>
     <p id="status" role="status" aria-live="polite"></p>
     <p id="instructions">In Revenge Next, open <strong>Plugins → Settings → Advanced</strong>, paste this into <strong>Repository URL</strong>, then tap <strong>Add repository</strong>.</p>
   </div>
@@ -49,11 +49,16 @@
     const field = document.getElementById('repository');
     const status = document.getElementById('status');
     try {
-      await navigator.clipboard.writeText(field.value);
+      await navigator.clipboard.writeText(field.href);
       status.textContent = 'Copied. Paste it into Revenge Next.';
     } catch {
-      field.focus(); field.select();
-      status.textContent = 'Select and copy the address above.';
+      field.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(field);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      status.textContent = 'Press and hold the address above to copy it.';
     }
   });
 </script>
