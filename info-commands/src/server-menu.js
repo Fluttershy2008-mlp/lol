@@ -1,10 +1,12 @@
 import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
 import { wrapGuildSheet } from "./guild-sheet";
+import { nextAPI, nativeSheets, nativeDesign } from "./next-api";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
 const { React, ReactNative: RN } = vendetta.metro.common;
 const ITEM_ID = "info-commands-server-info";
-let sheetKey;
+let activeSheet;
+let menuTimer;
 let sheets;
 let contexts;
 let running = false;
@@ -45,11 +47,19 @@ export function installServerMenu(open) {
     const live = () => running && generation === epoch;
     const patched = new WeakMap();
     const store = optional(() => findByStoreName("GuildStore"));
-    const next = optional(() => typeof revenge !== "undefined" ? revenge.modules?.finders : undefined);
+    const next = nextAPI()?.modules?.finders;
     const action = (id, close) => () => {
         if (!live()) return;
         optional(close);
-        open(id);
+        if (next) {
+            // The floating context-menu handler dismisses its surface after the
+            // action returns. Open on the next turn so it cannot dismiss ours.
+            clearTimeout(menuTimer);
+            menuTimer = setTimeout(() => {
+                menuTimer = undefined;
+                if (live()) open(id);
+            }, 0);
+        } else open(id);
     };
     function patch(target, key, kind, callback) {
         if (!live() || typeof target?.[key] !== "function") return false;
@@ -102,7 +112,7 @@ export function installServerMenu(open) {
             if (!id || !promise?.then) return;
             args[0] = Promise.resolve(promise).then(module => {
                 if (!live() || !module?.default) return module;
-                const Row = optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);
+                const Row = nativeDesign("ActionSheetRow") ?? optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);
                 const onPress = action(id, () => target.hideActionSheet?.(key));
                 return { ...module, default: wrapGuildSheet(module.default, live,
                     items => itemsWithInfo(items, id, onPress),
@@ -128,7 +138,7 @@ export function installServerMenu(open) {
     )()), connectBuilder);
     if (!connectContexts(optional(() => findByProps("showContextMenu"))))
         watch(optional(() => next.filters.withProps("showContextMenu")), connectContexts);
-    if (!connectSheets(optional(() => findByProps("openLazy", "hideActionSheet"))
+    if (!connectSheets(nativeSheets() ?? optional(() => findByProps("openLazy", "hideActionSheet"))
         ?? optional(() => findByProps("openLazy"))))
         watch(optional(() => next.filters.withProps("openLazy", "hideActionSheet")), connectSheets);
     if (!dynamicPatches.length) notify("InfoCommands: server menu unavailable on this Discord version");
@@ -166,47 +176,98 @@ function openOwnerProfile(ownerId, serverId, close) {
 }
 
 export function openServerInfo(id, load) {
-    if (!running) return;
+    if (!running || !guildId(id)) return;
     const key = `${ITEM_ID}-${id}`;
-    if (sheetKey === key) return;
-    if (sheetKey) optional(() => sheets?.hideActionSheet?.(sheetKey));
-    const ActionSheet = optional(() => findByProps("ActionSheet")?.ActionSheet);
+    if (activeSheet?.key === key) return;
+    activeSheet?.close();
+    // Resolve at click time too: the native module may not have been ready at startup.
+    const next = nextAPI();
+    const host = nativeSheets() ?? sheets;
+    const ActionSheet = nativeDesign("ActionSheet") ?? optional(() => findByProps("ActionSheet")?.ActionSheet);
     const epoch = generation;
-    const close = () => {
-        optional(() => sheets?.hideActionSheet?.(key));
-        if (sheetKey === key) sheetKey = undefined;
-    };
+    const attempt = { key, timer: undefined, fallback: false, presented: false, close };
+    activeSheet = attempt;
+    const live = () => running && epoch === generation && activeSheet === attempt;
+    function close(hide = true) {
+        clearTimeout(attempt.timer);
+        if (!live()) return;
+        activeSheet = undefined;
+        if (hide) optional(() => host?.hideActionSheet?.(key));
+    }
+    function presented() {
+        if (live() && !attempt.fallback) {
+            attempt.presented = true;
+            clearTimeout(attempt.timer);
+        }
+    }
+    function dismissed() {
+        if (!live() || attempt.fallback) return;
+        // A sheet that disappears before its first layout was never usable.
+        // Explicit Close already clears the attempt before the native callback.
+        if (next && !attempt.presented) fallback();
+        else close(false);
+    }
+    function fallback(error) {
+        if (!live() || attempt.fallback) return;
+        attempt.fallback = true;
+        clearTimeout(attempt.timer);
+        optional(() => host?.hideActionSheet?.(key));
+        if (error) optional(() => console.warn("[InfoCommands] Using native server info fallback", error));
+        Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then(data => {
+            if (!live()) return;
+            close(false);
+            const allowed = fn => () => { if (running && epoch === generation) fn(); };
+            const buttons = [
+                { text: "Copy Server ID", onPress: allowed(() => copy(id)) },
+                { text: "Close", style: "cancel" },
+            ];
+            if (guildId(data.ownerId)) buttons.unshift({ text: "View Owner Profile", onPress: allowed(() => openOwnerProfile(data.ownerId, id)) });
+            RN.Alert.alert(`Server Info — ${data.title}`, [data.description,
+                data.cachedOnly ? "Showing cached details." : "",
+                ...data.fields.map(f => `${f.name}: ${plainText(f.value)}`),
+            ].filter(Boolean).join("\n\n"), buttons);
+        }).catch(error => {
+            if (!live()) return;
+            close(false);
+            const message = error?.message ?? "Unable to load server info";
+            if (next) RN.Alert.alert("Server Info", message, [{ text: "Close", style: "cancel" }]);
+            else notify(message);
+        });
+    }
+    const Boundary = React.Component ? class ServerInfoBoundary extends React.Component {
+        state = { failed: false };
+        static getDerivedStateFromError() { return { failed: true }; }
+        componentDidCatch(error) { fallback(error); }
+        render() { return this.state.failed ? null : this.props.children; }
+    } : null;
     function ManagedServerInfoSheet(props) {
         React.useEffect(() => () => {
-            if (sheetKey === key) sheetKey = undefined;
+            dismissed();
         }, []);
-        return React.createElement(ServerInfoSheet, props);
+        if (!live() || attempt.fallback) return null;
+        const content = React.createElement(ServerInfoSheet, props);
+        return Boundary ? React.createElement(Boundary, null, content) : content;
     }
-    if (typeof sheets?.openLazy === "function" && ActionSheet && React?.createElement) {
-        sheetKey = key;
+    if (typeof host?.openLazy === "function" && ActionSheet && React?.createElement) {
+        // openLazy returns void in Discord: it says nothing about whether a
+        // sheet actually mounted or received a visible layout.
+        if (next) attempt.timer = setTimeout(() => fallback(), 1500);
         try {
-            Promise.resolve(sheets.openLazy(Promise.resolve({ default: ManagedServerInfoSheet }), key, { guildId: id, onClose: close })).catch(() => {
-                close(); notify("Unable to open server info");
-            });
+            const result = host.openLazy(Promise.resolve({ default: ManagedServerInfoSheet }), key,
+                { guildId: id, onClose: () => close(), onPresented: presented,
+                    onDismiss: dismissed }, next ? "stack" : undefined);
+            Promise.resolve(result).catch(fallback);
             return;
-        } catch { close(); }
+        } catch (error) { fallback(error); return; }
     }
-    // Native alert remains usable on older clients without custom action sheets.
-    Promise.resolve().then(() => load(id)).then(data => {
-        if (!running || epoch !== generation) return;
-        const buttons = [{ text: "Copy Server ID", onPress: () => copy(id) }, { text: "Close", style: "cancel" }];
-        if (guildId(data.ownerId)) buttons.unshift({ text: "View Owner Profile", onPress: () => openOwnerProfile(data.ownerId, id) });
-        RN.Alert.alert(`Server Info — ${data.title}`, [data.description,
-            data.cachedOnly ? "Showing cached details." : "",
-            ...data.fields.map(f => `${f.name}: ${plainText(f.value)}`),
-        ].filter(Boolean).join("\n\n"), buttons);
-    }).catch(error => { if (running && epoch === generation) notify(error?.message ?? "Unable to load server info"); });
+    fallback();
 }
 
 export function disposeServerMenu() {
+    activeSheet?.close();
+    clearTimeout(menuTimer);
+    menuTimer = undefined;
     running = false;
     generation++;
-    if (sheetKey) optional(() => sheets?.hideActionSheet?.(sheetKey));
-    sheetKey = undefined;
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional(() => unpatch());
 }

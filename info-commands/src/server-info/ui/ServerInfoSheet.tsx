@@ -9,6 +9,8 @@ import { useGuildInfo } from './useGuildInfo'
 export interface ServerInfoSheetProps {
 	guildId: string
 	onClose?: () => void
+	onDismiss?: () => void
+	onPresented?: () => void
 }
 
 // Lookup BottomSheetScrollView so the ActionSheet integrates with native gestures.
@@ -26,7 +28,7 @@ function getScrollContainer(): any {
 	return scrollContainerModule
 }
 
-export default function ServerInfoSheet({ guildId, onClose }: ServerInfoSheetProps) {
+export default function ServerInfoSheet({ guildId, onClose, onDismiss, onPresented }: ServerInfoSheetProps) {
 	const RN = runtime.react.ReactNative as any
 	const { View, ActivityIndicator, ScrollView } = RN
 	const Animated = RN.Animated
@@ -42,19 +44,25 @@ export default function ServerInfoSheet({ guildId, onClose }: ServerInfoSheetPro
 
 	const { guild, isLoading, ...info } = useGuildInfo(guildId)
 	const [containerWidth, setContainerWidth] = React.useState<number | undefined>(undefined)
+	const onLayout = (event: any) => {
+		const { width, height } = event?.nativeEvent?.layout ?? {}
+		if (width > 0) setContainerWidth(width)
+		if (width > 0 && height > 0) onPresented?.()
+	}
 	const scrollY = React.useRef(Animated ? new Animated.Value(0) : { current: 0 }).current
 
 	if (!guild && !isLoading) return (
-		<ActionSheet scrollable startExpanded>
-			<View style={{ padding: 24 }}><Text>{info.error ?? 'Server details are unavailable.'}</Text>
+		<ActionSheet scrollable startExpanded onDismiss={onDismiss}>
+			<View onLayout={onLayout} style={{ padding: 24 }}><Text>{info.error ?? 'Server details are unavailable.'}</Text>
 				<Text color="text-link" onPress={onClose}>Close</Text></View>
 		</ActionSheet>
 	)
 	if (!guild && isLoading) {
 		return (
-			<ActionSheet scrollable startExpanded>
+			<ActionSheet scrollable startExpanded onDismiss={onDismiss}>
 				<ScrollContainer contentContainerStyle={{ flexGrow: 1 }}>
 					<View
+						onLayout={onLayout}
 						style={{
 							flex: 1,
 							alignItems: 'center',
@@ -83,9 +91,10 @@ export default function ServerInfoSheet({ guildId, onClose }: ServerInfoSheetPro
 			scrollable
 			handleDisabled
 			startExpanded
+			onDismiss={onDismiss}
 			contentStyles={{ paddingHorizontal: 0, paddingBottom: 24 }}
 		>
-				<View style={{ width: '100%', position: 'relative', overflow: 'visible' }} onLayout={(e: any) => setContainerWidth(e.nativeEvent.layout.width)}>
+				<View style={{ width: '100%', position: 'relative', overflow: 'visible' }} onLayout={onLayout}>
 					{info.bannerUri != null && (
 						<ServerBanner uri={info.bannerUri} bleed={bleed} height={140} scrollY={scrollY} />
 					)}

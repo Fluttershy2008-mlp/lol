@@ -241,6 +241,143 @@ test('InfoCommands cancels pending menu subscriptions and keeps old actions inac
     assert.equal(w.openedSheets.length, count, 'old actions cannot reopen a sheet');
 });
 
+async function serverInfoButton(w) {
+    if (!w.guildMenu) {
+        w.guildMenu = { default: function getGuildsBarGuildMenuItems() { return []; } };
+        w.addModule(w.guildMenu);
+    }
+    return w.guildMenu.default(GUILD).find(item => item.label === 'Server Info');
+}
+
+test('InfoCommands uses native Next actions when another module exports the same sheet methods', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    let wrongPopup = 0;
+    w.addModule({ openLazy() { wrongPopup++; }, hideActionSheet() {} });
+    w.addModule({ ActionSheet: () => null });
+    await w.start('info-commands');
+    (await serverInfoButton(w)).action();
+    assert.equal(w.openedSheets.length, 0, 'let the context-menu handler finish dismissing first');
+    await w.tick(0);
+    assert.equal(wrongPopup, 0, 'ignore unrelated legacy lookups');
+    assert.equal(w.openedSheets.at(-1)?.context.guildId, GUILD);
+    const ui = await w.picker();
+    assert.ok(ui.root.findByType('ActionSheet'));
+    assert.match(text(ui.toJSON()), /Test Guild/);
+});
+
+test('InfoCommands shows cached native details when void openLazy never mounts a popup, and can retry', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    // Real Discord openLazy returns void. Successful invocation is not proof of presentation.
+    const record = w.sheets.openLazy;
+    w.sheets.openLazy = (...args) => { record(...args); };
+    await w.start('info-commands');
+    const info = await serverInfoButton(w);
+    info.action(); await w.tick(0); await w.tick(2000);
+    assert.equal(w.alerts.length, 1, 'a blank popup must not leave the user with nothing');
+    assert.match(w.alerts[0][0], /Test Guild/);
+    assert.match(w.alerts[0][1], new RegExp(GUILD));
+    assert.equal(w.calls.some(c => c[0] === 'http'), false, 'cached fallback does not wait for a guild request');
+    w.alerts[0][2].find(button => button.text === 'Copy Server ID').onPress();
+    assert.equal(w.clipboard.at(-1), GUILD);
+    const late = await w.picker();
+    assert.equal(late.toJSON(), null, 'a late resolution cannot open over the fallback');
+    info.action(); await w.tick(0); await w.tick(2000);
+    assert.equal(w.alerts.length, 2, 'failed opening must not latch the button closed');
+});
+
+test('InfoCommands cancels the fallback only after a visible sheet layout, and on Close', async t => {
+    const w = scenario(t, { curatedOnly: true }); await w.start('info-commands');
+    const info = await serverInfoButton(w);
+    info.action(); await w.tick(0);
+    const ui = await w.picker();
+    const body = ui.root.findAll(n => n.type === 'View' && typeof n.props.onLayout === 'function')[0];
+    await Renderer.act(async () => body.props.onLayout({ nativeEvent: { layout: { width: 480, height: 600 } } }));
+    await w.tick(2000);
+    assert.equal(w.alerts.length, 0, 'no duplicate alert after successful presentation');
+    await press(ui, 'Close');
+    info.action(); await w.tick(0);
+    const second = await w.picker(); await press(second, 'Close'); await w.tick(2000);
+    assert.equal(w.alerts.length, 0, 'intentional dismissal must not trigger a fallback');
+});
+
+test('InfoCommands falls back when the sheet mounts with no visible height', async t => {
+    const w = scenario(t, { curatedOnly: true }); await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0);
+    const ui = await w.picker();
+    const body = ui.root.findAll(n => n.type === 'View' && typeof n.props.onLayout === 'function')[0];
+    await Renderer.act(async () => body.props.onLayout({ nativeEvent: { layout: { width: 480, height: 0 } } }));
+    await w.tick(2000);
+    assert.equal(w.alerts.length, 1);
+});
+
+test('InfoCommands converts a sheet rendering failure into a usable native popup', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    w.U.discord.design.Design.ActionSheet = function BrokenSheet() { throw new Error('native sheet unavailable'); };
+    await w.start('info-commands'); (await serverInfoButton(w)).action(); await w.tick(0);
+    await w.picker(); await w.tick(0);
+    assert.equal(w.alerts.length, 1);
+    assert.match(w.alerts[0][0], /Test Guild/);
+    await w.tick(2000); assert.equal(w.alerts.length, 1, 'render failure and timeout share one fallback');
+});
+
+test('InfoCommands still presents the fallback after native sheet dismissal callbacks', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    const hide = w.sheets.hideActionSheet;
+    w.sheets.hideActionSheet = key => {
+        hide(key);
+        const sheet = w.openedSheets.findLast(sheet => sheet.key === key);
+        sheet?.context.onDismiss?.();
+    };
+    await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0); await w.tick(2000);
+    assert.equal(w.alerts.length, 1, 'programmatic dismissal must not cancel the replacement popup');
+    assert.match(w.alerts[0][0], /Test Guild/);
+});
+
+test('InfoCommands recovers when the native popup disappears before its first layout', async t => {
+    const w = scenario(t, { curatedOnly: true }); await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0);
+    w.openedSheets.at(-1).context.onDismiss(); await w.tick(0);
+    assert.equal(w.alerts.length, 1);
+    assert.match(w.alerts[0][0], /Test Guild/);
+    await w.tick(2000); assert.equal(w.alerts.length, 1);
+});
+
+test('InfoCommands cancels both queued opening and presentation fallback when disabled', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    let item = await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.stop(item); await w.tick(2000);
+    assert.equal(w.openedSheets.length, 0); assert.equal(w.alerts.length, 0);
+    item = await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0);
+    assert.equal(w.openedSheets.length, 1);
+    await w.stop(item); await w.tick(2000);
+    assert.equal(w.alerts.length, 0); assert.equal(w.timers.size, 0);
+});
+
+for (const failure of ['throw', 'reject']) test(`InfoCommands recovers from an opener that can ${failure}`, async t => {
+    const w = scenario(t, { curatedOnly: true });
+    w.sheets.openLazy = () => {
+        const error = new Error('Cannot present sheet');
+        if (failure === 'throw') throw error;
+        return Promise.reject(error);
+    };
+    await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0);
+    assert.equal(w.alerts.length, 1); assert.match(w.alerts[0][0], /Test Guild/);
+    await w.tick(2000); assert.equal(w.alerts.length, 1);
+});
+
+test('InfoCommands gives a visible error when a failed sheet has no cached or fetched server', async t => {
+    const w = scenario(t, { curatedOnly: true, http: async () => ({ body: null }) });
+    delete w.guilds[GUILD];
+    await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0); await w.tick(2000);
+    assert.equal(w.alerts.length, 1);
+    assert.equal(w.alerts[0][0], 'Server Info');
+    assert.match(w.alerts[0][1], /unavailable/);
+});
+
 test('Message Logger retains a deletion and opens the channel history using a native Next route', async t => {
     const w = scenario(t); await w.start('message-logger', { keepDeletedInChat: true });
     await w.dispatcher.dispatch({ type: 'MESSAGE_DELETE', id: w.messages[0].id, channelId: CHANNEL });

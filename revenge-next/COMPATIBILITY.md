@@ -1,4 +1,4 @@
-# Revenge Next compatibility audit: InfoCommands beta5 / other ports beta4
+# Revenge Next compatibility audit: InfoCommands beta6 / other ports beta4
 
 All **21 plugin ports** pass the dedicated automated Next suite. Every port is started, mounted with real React, unmounted, stopped and restarted; tests check that timers, AppState subscriptions and store/Flux listeners are released. All 21 are also started together with curated menu APIs and split HTTP exports, then stopped in a different order. This is an automated simulation, **not confirmation from a physical Android device**.
 
@@ -18,7 +18,7 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 | ExpressionCloner | Inject Clone Sticker; open server picker with working row icons | Emoji/sticker uploads and permission/slot handling on real servers |
 | Friends List | Search and open a cached user's profile | Live profile sheet and relationship-store variants |
 | HideBlockedAndIgnoredMessages | Filter blocked/ignored authors without deleting source records; restore on stop | Native message collections, pagination and reply layouts |
-| InfoCommands | Late guild-menu initialization; immutable context/lazy menus; memo, forwardRef and nested class components; correct guild per opening; no duplicate row; sheet render, native scroll, ID copy and close; stale actions/subscriptions cleaned up; local user info output | Current Discord menu layouts, native sheet presentation and real user/invite/server responses |
+| InfoCommands | Late guild-menu initialization; immutable context/lazy menus; memo, forwardRef and nested class components; correct guild per opening; no duplicate row; curated native popup selection; deferred opening; sheet render, native scroll, ID copy and close; native fallback for void/no-layout/failed presentation; stale actions/subscriptions cleaned up; local user info output | Current Discord menu layouts, native sheet presentation and real user/invite/server responses |
 | Message Logger | Retain a cached deletion; open the channel's history via a registered Next route | Native message normalization, edit history and retention limits |
 | More Alts! | Initialize command before opening settings; open Next route; verify and save a simulated current session | Real login, MFA/QR WebView, account switching and Android session persistence |
 | Nitro Auto Claim | Simulated redemption using split HTTP; duplicate protection | Real server redemption responses and reconnect behavior |
@@ -34,6 +34,18 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 
 The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this update changes InfoCommands only.
 
+## InfoCommands beta6
+
+- Prefer Next's curated `ActionSheetActionCreators` and Design components over ambiguous raw property matches. Resolve the native actions again when the button is tapped.
+- Open on the next event-loop turn after the floating menu handler finishes dismissing, with explicit native stacking behavior.
+- Track each opening until it renders a positive-size layout. Discord's `openLazy` returns void, so the old successful-call check could leave an invisible sheet marked as open indefinitely.
+- After 1.5 seconds without a visible layout, or an opening/rendering failure, hide the failed sheet and show a native Android details popup. Use the selected guild's cached data immediately when available; otherwise retain the bounded guild request and display any unavailable-data error visibly.
+- Keep Copy Server ID and View Owner Profile in the fallback. Cancel pending work on dismissal, disable or replacement; ignore late components from failed openings. Native dismissal callbacks cannot cancel the replacement popup.
+
+Four new regressions failed against beta5: an ambiguous raw sheet module, a void opener that never mounts, a zero-height sheet, and a rendering exception. A further regression covers a sheet dismissed before its first layout. The release passes **86 Next runtime/integration tests**, **21 InfoCommands Classic tests**, **10 Python package tests**, and the deterministic package check. Tests now cover presentation failure rather than treating an `openLazy` invocation as proof of a visible popup. They still simulate Discord and React Native; no on-phone verification is claimed.
+
+The shared InfoCommands source and Classic bundle are **1.2.4**, and the Next port is **1.0.0-beta6**. Other packages remain unchanged. The native call contract is checked against the [official Next action-sheet types](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/types/index.ts) and [native module resolver](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/actions.ts).
+
 ## InfoCommands beta5
 
 - Subscribe to Next's module initialization so the server-menu button works when Discord loads the menu after plugin startup.
@@ -42,7 +54,7 @@ The four native theme packages also pass registration, color/background and pack
 - Use Next's curated BottomSheetScrollView export. Cancel module subscriptions on stop and ignore stale actions after re-enabling.
 - Release InfoCommands separately at **1.0.0-beta5**; keep the other 20 plugin ports at beta4 and retain every previous ZIP.
 
-Five new menu regressions failed against beta4 before the fix. The current suite passes **75 Node runtime/integration tests**, **10 Python package tests**, and **21 InfoCommands Classic tests**. These include pressing the button, rendering cached server details, copying the ID and closing the sheet. The deterministic build check covers all 25 current packages. Physical-device testing is still required.
+Five new menu regressions failed against beta4 before the fix. The beta5 suite passed **75 Node runtime/integration tests**, **10 Python package tests**, and **21 InfoCommands Classic tests**. These include pressing the button, rendering cached server details, copying the ID and closing the sheet. The deterministic build check covers all 25 current packages. Physical-device testing is still required.
 
 The shared InfoCommands source and Classic bundle are updated to **1.2.3**. Its Classic fixture now models the existing safe Android toast adapter and checks the returned lazy module instead of expecting Discord's export to be mutated.
 
@@ -94,6 +106,6 @@ GitHub Actions runs the Next checks and the affected InfoCommands Classic suite 
 
 ## Update and device check
 
-Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update **InfoCommands to 1.0.0-beta5** and the other plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
+Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update **InfoCommands to 1.0.0-beta6** and the other plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
 
 If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.

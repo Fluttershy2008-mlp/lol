@@ -4,7 +4,7 @@ Revenge / Vendetta-compatible Discord mobile plugin with userinfo/inviteinfo com
 
 ## Install
 
-For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview)**. Version **1.0.0-beta5** fixes late-loading and frozen guild menus. After updating, fully restart Discord.
+For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview)**. Version **1.0.0-beta6** uses Next's native popup API after the server menu dismisses. If the sheet never appears, cannot render, or has no visible layout, it shows a native details popup instead. Cached server details are available immediately in that fallback, with Copy Server ID and View Owner Profile actions. After updating, fully restart Discord.
 
 For **Revenge Classic / Vendetta**:
 

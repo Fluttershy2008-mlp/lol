@@ -151,15 +151,18 @@ const userInfoCommand = common.cmdDisplays({
     }
 });
 
-async function getServerEmbed(guildId) {
-    const cached = findByStoreName("GuildStore")?.getGuild?.(guildId);
+async function getServerEmbed(guildId, { preferCache = false } = {}) {
+    const cached = findByStoreName("GuildStore")?.getGuild?.(guildId)
+        ?? findByStoreName("BasicGuildStore")?.getGuild?.(guildId);
     let timer;
     let fetched;
     try {
-        fetched = await Promise.race([
-            fetchGuild(guildId),
-            new Promise(resolve => { timer = setTimeout(() => resolve(null), 8000); }),
-        ]);
+        if (!preferCache || !cached) {
+            fetched = await Promise.race([
+                fetchGuild(guildId),
+                new Promise(resolve => { timer = setTimeout(() => resolve(null), 8000); }),
+            ]);
+        }
     } finally { clearTimeout(timer); }
     if (!fetched && !cached) throw new Error("Server details are unavailable. Try again later.");
     const guild = { ...cached, ...fetched, id: guildId };

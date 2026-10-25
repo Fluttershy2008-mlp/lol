@@ -10,7 +10,7 @@ https://fluttershy2008-mlp.github.io/lol/index.json
 
 Tap **Add repository**, then open Browse Plugins. If you already added the Pages root or raw repository, refresh that entry instead of adding a duplicate.
 
-The catalogue contains **21 plugin ports** and **four native themes**. **InfoCommands 1.0.0-beta5** fixes the Server Info button; the other plugin ports remain at **1.0.0-beta4**. Update the plugins you use, then fully restart Discord. Keep Revenge Community Plugins enabled for the Themes API dependency.
+The catalogue contains **21 plugin ports** and **four native themes**. **InfoCommands 1.0.0-beta6** fixes Server Info popup opening and adds a native fallback; the other plugin ports remain at **1.0.0-beta4**. Update the plugins you use, then fully restart Discord. Keep Revenge Community Plugins enabled for the Themes API dependency.
 
 Beta4 fixes Addon List's native response handling and repository links. All plugin ports also remove patches and timers immediately when stopped. Automated checks cover all ports and package downloads. Physical Android testing is still required, including Samsung S26 Ultra with Android 17 / One UI 9.
 

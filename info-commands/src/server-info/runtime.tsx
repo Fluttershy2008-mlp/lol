@@ -1,4 +1,5 @@
 /** Compatibility adapter for the uploaded kmmiio99o Server Info UI. */
+import { nativeDesign } from "../next-api";
 const { React, ReactNative: RN } = vendetta.metro.common;
 const optional = (fn: () => any) => { try { return fn(); } catch { return undefined; } };
 function color(name: string, fallback: string) {
@@ -37,14 +38,14 @@ function TableRowGroup({ title, children }: any) {
       backgroundColor: color("BACKGROUND_SECONDARY", light ? "#f2f3f5" : "#2b2d31") } }, children),
   );
 }
-const nativeRow = optional(() => vendetta.metro.findByProps("TableRow")?.TableRow);
-const NativeGroup = optional(() => vendetta.metro.findByProps("TableRowGroup")?.TableRowGroup);
+const nativeRow = nativeDesign("TableRow") ?? optional(() => vendetta.metro.findByProps("TableRow")?.TableRow);
+const NativeGroup = nativeDesign("TableRowGroup") ?? optional(() => vendetta.metro.findByProps("TableRowGroup")?.TableRowGroup);
 const useReRender = () => React.useReducer((value: number) => value + 1, 0)[1];
 export const runtime = {
   react: { React, ReactNative: RN },
   utils: { react: { useReRender } },
   discord: { design: { Design: {
-    get ActionSheet() { return optional(() => vendetta.metro.findByProps("ActionSheet")?.ActionSheet) ?? RN.View; },
+    get ActionSheet() { return nativeDesign("ActionSheet") ?? optional(() => vendetta.metro.findByProps("ActionSheet")?.ActionSheet) ?? RN.View; },
     Text, TableRow: nativeRow?.TrailingText ? nativeRow : TableRow,
     TableRowGroup: nativeRow?.TrailingText && NativeGroup ? NativeGroup : TableRowGroup,
     space: { PX_16: 16, PX_12: 12 },

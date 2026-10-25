@@ -5,7 +5,7 @@
   "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next",
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/index.json",
   "portVersion": "1.0.0-beta4",
-  "pluginVersions": { "info-commands": "1.0.0-beta5" },
+  "pluginVersions": { "info-commands": "1.0.0-beta6" },
   "sourceRefs": { "info-commands": "main" },
   "themeVersion": "1.0.0-beta1",
   "sourceCommit": "b77722dec20ba713ae58dad00ebce671ed80a8ce",
