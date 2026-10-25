@@ -1,4 +1,4 @@
-# Revenge Next compatibility audit: beta4
+# Revenge Next compatibility audit: InfoCommands beta5 / other ports beta4
 
 All **21 plugin ports** pass the dedicated automated Next suite. Every port is started, mounted with real React, unmounted, stopped and restarted; tests check that timers, AppState subscriptions and store/Flux listeners are released. All 21 are also started together with curated menu APIs and split HTTP exports, then stopped in a different order. This is an automated simulation, **not confirmation from a physical Android device**.
 
@@ -18,7 +18,7 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 | ExpressionCloner | Inject Clone Sticker; open server picker with working row icons | Emoji/sticker uploads and permission/slot handling on real servers |
 | Friends List | Search and open a cached user's profile | Live profile sheet and relationship-store variants |
 | HideBlockedAndIgnoredMessages | Filter blocked/ignored authors without deleting source records; restore on stop | Native message collections, pagination and reply layouts |
-| InfoCommands | User info with split HTTP; normal and ephemeral results remain local | Real user/invite responses and native server-info sheet |
+| InfoCommands | Late guild-menu initialization; immutable context/lazy menus; memo, forwardRef and nested class components; correct guild per opening; no duplicate row; sheet render, native scroll, ID copy and close; stale actions/subscriptions cleaned up; local user info output | Current Discord menu layouts, native sheet presentation and real user/invite/server responses |
 | Message Logger | Retain a cached deletion; open the channel's history via a registered Next route | Native message normalization, edit history and retention limits |
 | More Alts! | Initialize command before opening settings; open Next route; verify and save a simulated current session | Real login, MFA/QR WebView, account switching and Android session persistence |
 | Nitro Auto Claim | Simulated redemption using split HTTP; duplicate protection | Real server redemption responses and reconnect behavior |
@@ -32,7 +32,19 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 | ValidUser | Resolve a cached mention and open a native profile action | Uncached lookups, changed message layouts and real access restrictions |
 | ViewIcons | Inject avatar action and open native media | Current profile/server menus, decorations and image downloads |
 
-The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this release changes the plugin adapter and packaging only.
+The four native theme packages also pass registration, color/background and package checks. They remain at beta1 because this update changes InfoCommands only.
+
+## InfoCommands beta5
+
+- Subscribe to Next's module initialization so the server-menu button works when Discord loads the menu after plugin startup.
+- Clone context-menu items and React elements instead of mutating frozen values. Each lazy opening receives its own component wrapper and guild ID; Discord's cached exports stay unchanged.
+- Handle function, memo, forwardRef and nested class menu components, including single-row and grouped layouts. Do not add duplicate Server Info items or inject into user/channel menus.
+- Use Next's curated BottomSheetScrollView export. Cancel module subscriptions on stop and ignore stale actions after re-enabling.
+- Release InfoCommands separately at **1.0.0-beta5**; keep the other 20 plugin ports at beta4 and retain every previous ZIP.
+
+Five new menu regressions failed against beta4 before the fix. The current suite passes **75 Node runtime/integration tests**, **10 Python package tests**, and **21 InfoCommands Classic tests**. These include pressing the button, rendering cached server details, copying the ID and closing the sheet. The deterministic build check covers all 25 current packages. Physical-device testing is still required.
+
+The shared InfoCommands source and Classic bundle are updated to **1.2.3**. Its Classic fixture now models the existing safe Android toast adapter and checks the returned lazy module instead of expecting Discord's export to be mutated.
 
 ## Fixes and checks in beta4
 
@@ -78,10 +90,10 @@ node --test revenge-next/tests/*.test.cjs
 python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
 ```
 
-GitHub Actions runs these checks for future port changes. Original Classic suites are separate: a broad baseline run found older toast mocks, missing locally generated QR assets, and Classic manifest/version assertions that do not match the existing bundles. Those failures are not counted as passing Next checks, and Classic files are not changed by this release.
+GitHub Actions runs the Next checks and the affected InfoCommands Classic suite for future port changes. Other Classic suites are separate; their previously documented baseline failures are not counted as passing Next checks.
 
 ## Update and device check
 
-Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update the plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
+Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update **InfoCommands to 1.0.0-beta5** and the other plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
 
 If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.

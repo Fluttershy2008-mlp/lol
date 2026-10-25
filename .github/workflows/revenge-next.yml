@@ -51,3 +51,5 @@ jobs:
           node --test revenge-next/tests/*.test.cjs
       - name: Check ZIP integrity and index metadata
         run: python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
+      - name: Check InfoCommands Classic regression coverage
+        run: node --test info-commands/tests/runtime.test.mjs

@@ -51,9 +51,10 @@
     },
     "dev.fluttershy2008.info-commands": {
       "path": "info-commands/index.js",
-      "sha256": "92d0bb7de077923d1d71fb3f4ee350fedb502a712fed1c2d77048c5126f1c4e1",
-      "originalVersion": "1.2.2",
-      "kind": "compatibility-preview"
+      "sha256": "777044ec3288a5058cd8a07650bf2c010f277e0aeace74a2628d42fa9c0a5cdf",
+      "originalVersion": "1.2.3",
+      "kind": "compatibility-preview",
+      "sourceRef": "main"
     },
     "dev.fluttershy2008.message-logger": {
       "path": "message-logger/index.js",

@@ -1,4 +1,5 @@
 import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
+import { wrapGuildSheet } from "./guild-sheet";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
 const { React, ReactNative: RN } = vendetta.metro.common;
@@ -24,108 +25,114 @@ function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID
         || item?.label === "Server Info" || item?.props?.label === "Server Info";
 }
-function itemsWithInfo(items, id, open, close) {
+function itemsWithInfo(items, id, action) {
     if (!id || !Array.isArray(items) || items.some(isInfo)) return items;
     if (Array.isArray(items[0])) {
         if (items.some(group => Array.isArray(group) && group.some(isInfo))) return items;
-        return [itemsWithInfo(items[0], id, open, close), ...items.slice(1)];
+        return [itemsWithInfo(items[0], id, action), ...items.slice(1)];
     }
     return [...items, {
         id: ITEM_ID,
         label: "Server Info",
-        action() {
-            if (!running) return;
-            optional(() => close?.());
-            open(id);
-        },
+        action,
     }];
 }
 
 export function installServerMenu(open) {
     if (running) return () => {};
     running = true;
-    generation++;
-    const patches = [];
-    sheets = optional(() => findByProps("openLazy", "hideActionSheet"))
-        ?? optional(() => findByProps("openLazy"));
-    contexts = optional(() => findByProps("showContextMenu"));
+    const epoch = ++generation;
+    const live = () => running && generation === epoch;
+    const patched = new WeakMap();
     const store = optional(() => findByStoreName("GuildStore"));
-    const menu = optional(() => findByName?.("getGuildsBarGuildMenuItems", false))
-        ?? optional(() => find?.(m => m?.default?.name === "getGuildsBarGuildMenuItems"));
-    const holder = typeof menu?.default === "function" ? [menu, "default"]
-        : typeof menu?.getGuildsBarGuildMenuItems === "function" ? [menu, "getGuildsBarGuildMenuItems"] : null;
-    if (holder) patches.push(after(holder[1], holder[0], (args, result) =>
-        itemsWithInfo(result, guildId(args?.[0]), open, () => contexts?.hideContextMenu?.())
-    ));
-
-    if (typeof contexts?.showContextMenu === "function") {
-        patches.push(before("showContextMenu", contexts, ([menu]) => {
-            try {
-                if (!menu || !Array.isArray(menu.items)) return;
-                // A user menu can also carry a guildId. Only accept a guild target.
-                if (menu.user || menu.userId || menu.context?.user || menu.context?.userId
-                    || menu.message || menu.channel || menu.channelId || menu.context?.channelId) return;
-                const target = menu.guild ?? menu.context?.guild
-                    ?? (menu.key ? store?.getGuild?.(String(menu.key)) : null)
-                    ?? (!menu.key && menu.guildId ? store?.getGuild?.(String(menu.guildId)) : null)
-                    ?? (/guild|server/i.test(String(menu.type ?? menu.name ?? ""))
-                        ? { id: menu.guildId ?? menu.context?.guildId } : null);
-                menu.items = itemsWithInfo(menu.items, guildId(target), open, () => contexts.hideContextMenu?.());
-            } catch (error) { console.error("[InfoCommands] Context menu patch failed", error); }
-        }));
+    const next = optional(() => typeof revenge !== "undefined" ? revenge.modules?.finders : undefined);
+    const action = (id, close) => () => {
+        if (!live()) return;
+        optional(close);
+        open(id);
+    };
+    function patch(target, key, kind, callback) {
+        if (!live() || typeof target?.[key] !== "function") return false;
+        if (patched.get(target)?.has(key)) return true;
+        const unpatch = optional(() => kind(key, target, callback));
+        if (typeof unpatch !== "function") return false;
+        if (!patched.has(target)) patched.set(target, new Set());
+        patched.get(target).add(key);
+        dynamicPatches.push(unpatch);
+        return true;
     }
-
-    // Modern Discord builds lazy-load their action-sheet component.
-    const Row = optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);
-    let lazyModules = new WeakMap();
-    if (typeof sheets?.openLazy === "function") {
-        patches.push(before("openLazy", sheets, ([promise, key, props]) => {
+    function connectBuilder(menu) {
+        const key = typeof menu?.getGuildsBarGuildMenuItems === "function" ? "getGuildsBarGuildMenuItems" : "default";
+        return patch(menu, key, after, (args, result) => live()
+            ? itemsWithInfo(result, guildId(args?.[0]), action(guildId(args?.[0]), () => contexts?.hideContextMenu?.()))
+            : result);
+    }
+    function connectContexts(module) {
+        const target = module?.showContextMenu ? module : module?.default;
+        if (!target?.showContextMenu) return false;
+        contexts = target;
+        return patch(target, "showContextMenu", before, args => {
+            if (!live()) return;
+            const menu = args[0];
+            if (!menu || !Array.isArray(menu.items)) return;
+            // User and channel menus can carry a guildId too.
+            if (menu.user || menu.userId || menu.context?.user || menu.context?.userId
+                || menu.message || menu.context?.message || menu.channel || menu.channelId
+                || menu.context?.channel || menu.context?.channelId) return;
+            const guild = menu.guild ?? menu.context?.guild
+                ?? (menu.key ? store?.getGuild?.(String(menu.key)) : null)
+                ?? (!menu.key && menu.guildId ? store?.getGuild?.(String(menu.guildId)) : null)
+                ?? (/guild|server/i.test(String(menu.type ?? menu.name ?? ""))
+                    ? { id: menu.guildId ?? menu.context?.guildId } : null);
+            const id = guildId(guild);
+            const items = itemsWithInfo(menu.items, id, action(id, () => target.hideContextMenu?.()));
+            if (items !== menu.items) args[0] = { ...menu, items };
+        });
+    }
+    function connectSheets(module) {
+        const target = module?.openLazy ? module : module?.default;
+        if (!target?.openLazy) return false;
+        sheets = target;
+        return patch(target, "openLazy", before, args => {
+            if (!live()) return;
+            const [promise, key, props] = args;
             if (!/guild/i.test(String(key)) || !/menu|context|actions/i.test(String(key))) return;
+            if (props?.user || props?.userId || props?.channel || props?.channelId || props?.message) return;
             const id = guildId(props?.guild ?? props);
             if (!id || !promise?.then) return;
-            const epoch = generation;
-            Promise.resolve(promise).then(module => {
-                if (!running || generation !== epoch || !module) return;
-                const context = { id, key };
-                if (lazyModules.has(module)) { lazyModules.set(module, context); return; }
-                const holder = typeof module.default === "function" ? [module, "default"]
-                    : typeof module.default?.type === "function" ? [module.default, "type"]
-                    : typeof module.default?.render === "function" ? [module.default, "render"] : null;
-                if (!holder) return;
-                lazyModules.set(module, context);
-                dynamicPatches.push(after(holder[1], holder[0], (_, result) => {
-                    try {
-                    if (!running) return;
-                    const target = lazyModules.get(module);
-                    const tree = vendetta.utils?.findInReactTree;
-                    const node = optional(() => tree?.(result, n => Array.isArray(n?.props?.items)));
-                    if (node) {
-                        node.props.items = itemsWithInfo(node.props.items, target.id, open, () => sheets.hideActionSheet?.(target.key));
-                        return;
-                    }
-                    if (!Row) return;
-                    const rows = optional(() => tree?.(result, n => Array.isArray(n)
-                        && n.some(child => child?.type === Row || child?.type?.name === "ActionSheetRow" || child?.type?.displayName === "ActionSheetRow")));
-                    if (!Array.isArray(rows) || rows.some(isInfo)) return;
-                    rows.push(React.createElement(Row, {
-                        key: ITEM_ID, label: "Server Info",
-                        onPress() {
-                            if (!running) return;
-                            optional(() => sheets.hideActionSheet?.(target.key));
-                            open(target.id);
-                        },
-                    }));
-                    } catch (error) { console.error("[InfoCommands] Guild sheet injection failed", error); }
-                }));
-            }).catch(error => console.error("[InfoCommands] Lazy menu unavailable", error));
-        }));
+            args[0] = Promise.resolve(promise).then(module => {
+                if (!live() || !module?.default) return module;
+                const Row = optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);
+                const onPress = action(id, () => target.hideActionSheet?.(key));
+                return { ...module, default: wrapGuildSheet(module.default, live,
+                    items => itemsWithInfo(items, id, onPress),
+                    () => React.createElement(Row, { key: ITEM_ID, label: "Server Info", onPress }), Row) };
+            });
+        });
     }
-    if (!patches.length) notify("InfoCommands: server menu unavailable on this Discord version");
-    return () => {
-        disposeServerMenu();
-        lazyModules = new WeakMap();
-        for (const unpatch of patches.splice(0).reverse()) optional(() => unpatch());
-    };
+    function watch(filter, connect) {
+        if (!next?.getModules || !filter) return;
+        const unsubscribe = optional(() => next.getModules(filter, module => {
+            if (live()) connect(module);
+        }, { returnNamespace: true, initialize: false }));
+        if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
+    }
+
+    const menu = optional(() => findByName?.("getGuildsBarGuildMenuItems", false))
+        ?? optional(() => find?.(m => m?.default?.name === "getGuildsBarGuildMenuItems"));
+    if (!connectBuilder(menu)) watch(optional(() => next.filters.createFilterGenerator(
+        (_args, _id, value) => value?.name === "getGuildsBarGuildMenuItems"
+            || typeof value?.getGuildsBarGuildMenuItems === "function"
+            || value?.default?.name === "getGuildsBarGuildMenuItems",
+        () => "info-commands.guild-menu",
+    )()), connectBuilder);
+    if (!connectContexts(optional(() => findByProps("showContextMenu"))))
+        watch(optional(() => next.filters.withProps("showContextMenu")), connectContexts);
+    if (!connectSheets(optional(() => findByProps("openLazy", "hideActionSheet"))
+        ?? optional(() => findByProps("openLazy"))))
+        watch(optional(() => next.filters.withProps("openLazy", "hideActionSheet")), connectSheets);
+    if (!dynamicPatches.length) notify("InfoCommands: server menu unavailable on this Discord version");
+    return () => { if (live()) disposeServerMenu(); };
 }
 
 function plainText(value) {

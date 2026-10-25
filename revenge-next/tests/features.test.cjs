@@ -131,6 +131,116 @@ test('InfoCommands normal and ephemeral output remains local with the split HTTP
     assert.equal(w.calls.some(c => c[0] === 'sendMessage'), false);
 });
 
+test('InfoCommands attaches to a guild menu initialized after startup and opens the selected server', async t => {
+    const w = scenario(t, { curatedOnly: true, splitHTTP: true });
+    await w.start('info-commands');
+    const original = Object.freeze([{ label: 'Notifications' }]);
+    const menu = { default: function getGuildsBarGuildMenuItems() { return original; } };
+    w.addModule(menu);
+    const items = menu.default(GUILD), info = items.find(row => row.label === 'Server Info');
+    assert.ok(info, 'late guild menu contains Server Info');
+    assert.equal(original.length, 1, 'existing menu data was not mutated');
+    info.action(); await w.tick(0);
+    assert.equal(w.openedSheets.at(-1)?.context.guildId, GUILD);
+    const ui = await w.picker();
+    assert.match(text(ui.toJSON()), /Test Guild/);
+    assert.match(text(ui.toJSON()), /Test Owner/);
+    assert.ok(ui.root.findByType('BottomSheetScrollView'), 'sheet uses Next native scrolling');
+    await press(ui, 'ID'); assert.equal(w.clipboard.at(-1), GUILD);
+    await press(ui, 'Close');
+    assert.ok(w.calls.some(c => c[0] === 'hideSheet' && c[1] === 'info-commands-server-info-' + GUILD));
+});
+
+test('InfoCommands extends a frozen lazy guild-menu export and frozen React item props', async t => {
+    const w = scenario(t, { curatedOnly: true, splitHTTP: true }); await w.start('info-commands');
+    const originalItems = Object.freeze([{ label: 'Notifications' }]);
+    const module = Object.freeze({ default: function GuildMenu() { return h('ContextMenu', { items: originalItems }); } });
+    const opened = await w.sheets.openLazy(Promise.resolve(module), 'GuildContextMenu', { guildId: GUILD });
+    const ui = await w.mount(h(opened.default));
+    const items = ui.root.findByType('ContextMenu').props.items;
+    assert.equal(items.filter(row => row.label === 'Server Info').length, 1);
+    assert.equal(originalItems.length, 1);
+    items.find(row => row.label === 'Server Info').action(); await w.tick(0);
+    assert.equal(w.openedSheets.at(-1).context.guildId, GUILD);
+});
+
+test('InfoCommands keeps each lazy memo/forwardRef guild sheet bound to its own server', async t => {
+    const w = scenario(t, { curatedOnly: true }); await w.start('info-commands');
+    const Row = w.U.discord.design.Design.ActionSheetRow;
+    const Inner = React.forwardRef(function GuildRows(_props, ref) {
+        return h(w.RN.View, { ref }, h(Row, { label: 'Notifications', onPress() {} }));
+    });
+    const module = Object.freeze({ default: React.memo(Inner) });
+    const other = '400000000000000002'; w.guilds[other] = { id: other, name: 'Other Guild' };
+    const first = await w.sheets.openLazy(Promise.resolve(module), 'GuildHeaderActionSheet', { guildId: GUILD });
+    const second = await w.sheets.openLazy(Promise.resolve(module), 'GuildHeaderActionSheet', { guildId: other });
+    const firstUI = await w.mount(h(first.default)), secondUI = await w.mount(h(second.default));
+    await press(firstUI, 'Server Info'); await w.tick(0);
+    assert.equal(w.openedSheets.at(-1).context.guildId, GUILD);
+    await press(secondUI, 'Server Info'); await w.tick(0);
+    assert.equal(w.openedSheets.at(-1).context.guildId, other);
+});
+
+test('InfoCommands handles immutable native context menus and ignores user/channel targets', async t => {
+    const w = scenario(t); await w.start('info-commands');
+    const context = { showContextMenu: value => value, hideContextMenu() {} }; w.addModule(context);
+    const original = Object.freeze({ key: GUILD, items: Object.freeze([{ label: 'Notifications' }]) });
+    const menu = context.showContextMenu(original);
+    assert.equal(menu.items.filter(item => item.label === 'Server Info').length, 1);
+    assert.equal(original.items.length, 1);
+    for (const extra of [{ userId: FRIEND }, { channelId: CHANNEL }, { message: w.messages[0] }]) {
+        const target = Object.freeze({ ...original, ...extra });
+        assert.equal(context.showContextMenu(target), target);
+    }
+});
+
+test('InfoCommands finds rows rendered by a nested class component without changing existing rows', async t => {
+    const w = scenario(t, { curatedOnly: true }); await w.start('info-commands');
+    const Row = w.U.discord.design.Design.ActionSheetRow;
+    let notifications = 0;
+    class GuildRows extends React.Component {
+        render() { return h(w.RN.View, null, Object.freeze([
+            h(Row, { key: 'notifications', label: 'Notifications', onPress: () => notifications++ }),
+        ])); }
+    }
+    function GuildMenu() { return h(w.RN.View, null, h(GuildRows)); }
+    const module = Object.freeze({ default: GuildMenu });
+    const opened = await w.sheets.openLazy(Promise.resolve(module), 'GuildContextMenu', { guild: w.guilds[GUILD] });
+    const ui = await w.mount(h(opened.default));
+    await press(ui, 'Notifications'); assert.equal(notifications, 1);
+    await press(ui, 'Server Info'); await w.tick(0);
+    assert.equal(w.openedSheets.at(-1).context.guildId, GUILD);
+    assert.equal(module.default, GuildMenu);
+});
+
+test('InfoCommands adds only one action when guild builder and lazy grouped menu both apply', async t => {
+    const w = scenario(t); await w.start('info-commands');
+    const menu = { getGuildsBarGuildMenuItems: () => Object.freeze([Object.freeze([{ label: 'Notifications' }])]) };
+    w.addModule(menu);
+    const module = { default: () => h('ContextMenu', { items: menu.getGuildsBarGuildMenuItems(GUILD) }) };
+    const opened = await w.sheets.openLazy(Promise.resolve(module), 'GuildContextMenu', { guildId: GUILD });
+    const ui = await w.mount(h(opened.default));
+    const items = ui.root.findByType('ContextMenu').props.items.flat();
+    assert.equal(items.filter(item => item.label === 'Server Info').length, 1);
+    assert.equal(items.filter(item => item.label === 'Notifications').length, 1);
+});
+
+test('InfoCommands cancels pending menu subscriptions and keeps old actions inactive after restart', async t => {
+    const w = scenario(t), item = await w.start('info-commands');
+    const menu = { default: function getGuildsBarGuildMenuItems() { return []; } }; w.addModule(menu);
+    const row = menu.default(GUILD).find(item => item.label === 'Server Info'); assert.ok(row);
+    let resolve; const pending = new Promise(done => resolve = done);
+    const originalModule = { default: () => h('ContextMenu', { items: [] }) };
+    const opened = w.sheets.openLazy(pending, 'GuildContextMenu', { guildId: GUILD });
+    await w.stop(item); resolve(originalModule);
+    assert.equal(await opened, originalModule, 'no stale wrapper is installed');
+    assert.equal(w.moduleWaiters.size, 0, 'all late-module subscriptions removed');
+    await w.start('info-commands');
+    const count = w.openedSheets.length;
+    row.action(); await w.tick(0);
+    assert.equal(w.openedSheets.length, count, 'old actions cannot reopen a sheet');
+});
+
 test('Message Logger retains a deletion and opens the channel history using a native Next route', async t => {
     const w = scenario(t); await w.start('message-logger', { keepDeletedInChat: true });
     await w.dispatcher.dispatch({ type: 'MESSAGE_DELETE', id: w.messages[0].id, channelId: CHANNEL });

@@ -178,7 +178,8 @@ function createWorld(options = {}) {
         : { error: { code: 'UNKNOWN_METHOD', message: 'Unexpected native call in test: ' + name } } } },
         patcher: { instead: nextPatcher() }, discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
             flux: { Stores: stores }, design: { Design: design }, actions: { ActionSheetActionCreators: sheets, AlertActionCreators: alertActions }, modules: { settings } },
-        externals: { ReactNativeClipboard: { Clipboard: { setString: value => clipboard.push(value), setImage: value => calls.push(['copyImage', value]) } },
+        externals: { Gorhom: { BottomSheet: { BottomSheetScrollView: native('BottomSheetScrollView') } },
+            ReactNativeClipboard: { Clipboard: { setString: value => clipboard.push(value), setImage: value => calls.push(['copyImage', value]) } },
             ReactNavigation: { ReactNavigationNative: { useNavigation: () => navigation } } },
         assets: { getAssetIdByName: () => 1, getAssetByName: () => ({ id: 1 }) }, utils: {},
     };
@@ -226,7 +227,18 @@ function createWorld(options = {}) {
         stores, users, relationships, guilds, channels, messages, dispatcher, sheets, navigation, commands, registeredScreens, loaded,
         start, stop, render, advance, host, accountId: () => accountId, setAccount: id => { accountId = id; stores.UserStore.emitChange(); },
         setSettingsLoaded(value) { settingsLoaded = value; if (value) for (const fn of [...settingsSubscriptions]) fn(); },
-        addModule(module) { const id = modules.push(module) - 1; for (const entry of [...moduleWaiters]) if (entry.filter(id, module)) { moduleWaiters.delete(entry); entry.cb(module, id); } return id; },
+        moduleWaiters,
+        addModule(module) {
+            const id = modules.push(module) - 1;
+            for (const entry of [...moduleWaiters]) {
+                const value = module?.default && entry.filter(id, module.default) ? module.default : module;
+                if (entry.filter(id, value)) {
+                    moduleWaiters.delete(entry);
+                    entry.cb(entry.opts?.returnNamespace ? module : value, id);
+                }
+            }
+            return id;
+        },
     };
 }
 

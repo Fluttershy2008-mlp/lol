@@ -51,6 +51,11 @@ export const runtime = {
   } } },
   modules: { finders: {
     filters: { withProps: (...props: string[]) => props },
-    lookupModule: (props: string[]) => [optional(() => vendetta.metro.findByProps(...props))],
+    lookupModule: (props: string[]) => [
+      // Next exposes this lazy library through its curated external API.
+      (props.includes("BottomSheetScrollView") ? optional(() => typeof revenge !== "undefined"
+        ? revenge.externals?.Gorhom?.BottomSheet : undefined) : undefined)
+      ?? optional(() => vendetta.metro.findByProps(...props)),
+    ],
   } },
 };

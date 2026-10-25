@@ -138,7 +138,9 @@ def build(check=False):
             raise RuntimeError(f"Missing source bundle: {source_path}")
         source = source_path.read_text()
         slug = "addon-list" if directory.name == "addonList" else directory.name
-        manifest = manifest_for(slug, legacy, config["portVersion"])
+        version = config.get("pluginVersions", {}).get(slug, config["portVersion"])
+        source_ref = config.get("sourceRefs", {}).get(slug, config["sourceCommit"])
+        manifest = manifest_for(slug, legacy, version)
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
                     "repository": config["repositoryUrl"]}
         transformed = source.rstrip().rstrip(";")
@@ -169,13 +171,15 @@ def build(check=False):
             if (directory / name).exists():
                 files[name] = (directory / name).read_bytes()
         files["ADAPTER_LICENSE.txt"] = (HERE / "LICENSE").read_text()
-        files["NOTICE.txt"] = (f"Source: https://github.com/Fluttershy2008-mlp/lol/tree/{config['sourceCommit']}/{directory.name}\n"
-            f"Original version: {legacy['version']}\nRevenge Next adapter: {config['portVersion']}\n"
+        files["NOTICE.txt"] = (f"Source: https://github.com/Fluttershy2008-mlp/lol/tree/{source_ref}/{directory.name}\n"
+            f"Original version: {legacy['version']}\nRevenge Next adapter: {version}\n"
             "Experimental compatibility port; not tested on a physical device.\n"
             "Classic settings/accounts are not imported automatically.\n")
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
             "kind": "compatibility-preview"}
+        if source_ref != config["sourceCommit"]:
+            source_info[manifest["id"]]["sourceRef"] = source_ref
         entries.append((slug, manifest, files))
 
     for slug, filename in config["themes"].items():

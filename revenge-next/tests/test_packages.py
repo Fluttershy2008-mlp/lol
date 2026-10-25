@@ -88,16 +88,20 @@ class PackageTests(unittest.TestCase):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         for plugin_id, source in sources.items():
             if source["kind"] == "compatibility-preview":
-                with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{config['portVersion']}.zip") as package:
+                slug = plugin_id.removeprefix("dev.fluttershy2008.")
+                version = config.get("pluginVersions", {}).get(slug, config["portVersion"])
+                with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{version}.zip") as package:
                     self.assertIn('"repository": "' + url + '"', package.read("index.js").decode())
 
-    def test_all_21_plugin_ports_offer_the_current_adapter_release(self):
+    def test_all_21_plugin_ports_offer_their_current_release(self):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         index = json.loads((HERE / "index.json").read_text())["plugins"]
-        release = json.loads((HERE / "repo.config.json").read_text())["portVersion"]
+        config = json.loads((HERE / "repo.config.json").read_text())
         ports = {key: source for key, source in sources.items() if source["kind"] == "compatibility-preview"}
         self.assertEqual(len(ports), 21)
         for plugin_id in ports:
+            slug = plugin_id.removeprefix("dev.fluttershy2008.")
+            release = config.get("pluginVersions", {}).get(slug, config["portVersion"])
             plugin = index[plugin_id]
             self.assertEqual(plugin["channels"]["latest"], release, plugin_id)
             self.assertEqual(plugin["channels"]["beta"], release, plugin_id)

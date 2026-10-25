@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,6 +193,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
 var InfoCommandsBundle = (() => {
@@ -216,13 +215,13 @@ var InfoCommandsBundle = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // src/plugin.js
+  // info-commands/src/plugin.js
   var plugin_exports = {};
   __export(plugin_exports, {
     default: () => plugin_default
   });
 
-  // src/common.js
+  // info-commands/src/common.js
   function mSendMessage(vendetta2) {
     const {
       metro: {
@@ -301,7 +300,7 @@ var InfoCommandsBundle = (() => {
   }
   var AVATARS = { command: "https://cdn.discordapp.com/attachments/1099116247364407337/1112129955053187203/command.png" };
 
-  // src/embeds.js
+  // info-commands/src/embeds.js
   var { findByProps } = vendetta.metro;
   var API = findByProps("get", "post");
   var DISCORD_EPOCH = 14200704e5;
@@ -427,7 +426,7 @@ var InfoCommandsBundle = (() => {
     }
   }
 
-  // src/server-info/runtime.tsx
+  // info-commands/src/server-info/runtime.tsx
   var { React, ReactNative: RN } = vendetta.metro.common;
   var optional = (fn) => {
     try {
@@ -504,14 +503,17 @@ var InfoCommandsBundle = (() => {
     } } },
     modules: { finders: {
       filters: { withProps: (...props2) => props2 },
-      lookupModule: (props2) => [optional(() => vendetta.metro.findByProps(...props2))]
+      lookupModule: (props2) => [
+        // Next exposes this lazy library through its curated external API.
+        (props2.includes("BottomSheetScrollView") ? optional(() => typeof revenge !== "undefined" ? revenge.externals?.Gorhom?.BottomSheet : void 0) : void 0) ?? optional(() => vendetta.metro.findByProps(...props2))
+      ]
     } }
   };
 
-  // src/server-info/ui/format.ts
+  // info-commands/src/server-info/ui/format.ts
   var formatCount = (n) => n == null ? "—" : n.toLocaleString();
 
-  // src/server-info/ui/OverviewRows.tsx
+  // info-commands/src/server-info/ui/OverviewRows.tsx
   function OverviewRows({
     memberCount,
     onlineCount,
@@ -555,12 +557,12 @@ var InfoCommandsBundle = (() => {
     ));
   }
 
-  // src/server-info/ui/ServerBanner.tsx
+  // info-commands/src/server-info/ui/ServerBanner.tsx
   function ServerBanner({ uri, bleed = 28, height = 140, scrollY }) {
-    const RN3 = runtime.react.ReactNative;
-    const Animated = RN3.Animated;
-    const Image = RN3.Image;
-    const AnimatedView = Animated && Animated.View ? Animated.View : RN3.View;
+    const RN4 = runtime.react.ReactNative;
+    const Animated = RN4.Animated;
+    const Image = RN4.Image;
+    const AnimatedView = Animated && Animated.View ? Animated.View : RN4.View;
     const translate = Animated && scrollY ? Animated.multiply(scrollY, -1) : void 0;
     return /* @__PURE__ */ runtime.react.React.createElement(
       AnimatedView,
@@ -580,7 +582,7 @@ var InfoCommandsBundle = (() => {
     );
   }
 
-  // src/server-info/ui/ServerHeader.tsx
+  // info-commands/src/server-info/ui/ServerHeader.tsx
   function ServerHeader({
     name,
     description,
@@ -610,7 +612,7 @@ var InfoCommandsBundle = (() => {
     );
   }
 
-  // src/server-info/modules.ts
+  // info-commands/src/server-info/modules.ts
   var optional2 = (fn) => {
     try {
       return fn();
@@ -662,7 +664,7 @@ var InfoCommandsBundle = (() => {
     }
   }
 
-  // src/server-info/ui/ServerRows.tsx
+  // info-commands/src/server-info/ui/ServerRows.tsx
   function ServerRows({
     guildId: guildId2,
     ownerId,
@@ -725,7 +727,7 @@ var InfoCommandsBundle = (() => {
     ));
   }
 
-  // src/server-info/data.ts
+  // info-commands/src/server-info/data.ts
   function assetUrl(path, hash, size = 128) {
     return hash ? `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : void 0;
   }
@@ -772,13 +774,13 @@ var InfoCommandsBundle = (() => {
     }
   }
 
-  // src/server-info/ui/FriendsRows.tsx
+  // info-commands/src/server-info/ui/FriendsRows.tsx
   var VISIBLE_LIMIT = 5;
   function FriendsRows({ guildId: guildId2, friends, loading }) {
-    const { React: React3 } = runtime.react;
+    const { React: React4 } = runtime.react;
     const { View, Image } = runtime.react.ReactNative;
     const { TableRow: TableRow2, TableRowGroup: TableRowGroup2, Text: Text2 } = runtime.discord.design.Design;
-    const [expanded, setExpanded] = React3.useState(false);
+    const [expanded, setExpanded] = React4.useState(false);
     const visibleFriends = expanded ? friends : friends.slice(0, VISIBLE_LIMIT);
     const hasMore = friends.length > VISIBLE_LIMIT;
     return /* @__PURE__ */ runtime.react.React.createElement(TableRowGroup2, { title: "Friends in Server" }, friends.length === 0 ? /* @__PURE__ */ runtime.react.React.createElement(TableRow2, { label: loading ? "Loading friends…" : "No cached friends in this server", disabled: true }) : /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, visibleFriends.map(({ userId, displayName, avatarHash, nick }) => {
@@ -824,7 +826,7 @@ var InfoCommandsBundle = (() => {
     )));
   }
 
-  // src/server-info/ui/useGuildInfo.ts
+  // info-commands/src/server-info/ui/useGuildInfo.ts
   function cachedGuild(id) {
     return getGuildStore()?.getGuild?.(id) ?? getBasicGuildStore()?.getGuild?.(id);
   }
@@ -836,14 +838,14 @@ var InfoCommandsBundle = (() => {
     }
   }
   function useGuildInfo(guildId2) {
-    const { React: React3 } = runtime.react;
+    const { React: React4 } = runtime.react;
     const forceUpdate = runtime.utils.react.useReRender();
-    const [remoteGuild, setRemoteGuild] = React3.useState(null);
-    const [pending, setPending] = React3.useState(true);
-    const [ownerUser, setOwnerUser] = React3.useState(null);
-    const [friendsPending, setFriendsPending] = React3.useState(false);
+    const [remoteGuild, setRemoteGuild] = React4.useState(null);
+    const [pending, setPending] = React4.useState(true);
+    const [ownerUser, setOwnerUser] = React4.useState(null);
+    const [friendsPending, setFriendsPending] = React4.useState(false);
     const guild = normalizeGuild(guildId2, optional3(() => cachedGuild(guildId2)), remoteGuild);
-    React3.useEffect(() => {
+    React4.useEffect(() => {
       const stores = [
         getGuildStore(),
         getBasicGuildStore(),
@@ -861,7 +863,7 @@ var InfoCommandsBundle = (() => {
         for (const store2 of distinct) optional3(() => store2.removeChangeListener?.(forceUpdate));
       };
     }, [guildId2, forceUpdate]);
-    React3.useEffect(() => {
+    React4.useEffect(() => {
       let cancelled = false;
       let timer;
       setPending(true);
@@ -883,7 +885,7 @@ var InfoCommandsBundle = (() => {
       };
     }, [guildId2]);
     const ownerId = guild?.ownerId ?? null;
-    React3.useEffect(() => {
+    React4.useEffect(() => {
       let cancelled = false;
       setOwnerUser(null);
       if (!ownerId) return;
@@ -900,7 +902,7 @@ var InfoCommandsBundle = (() => {
         cancelled = true;
       };
     }, [ownerId]);
-    React3.useEffect(() => {
+    React4.useEffect(() => {
       const ids = getRelationshipStore()?.getFriendIDs?.() ?? [];
       const request = getRequestMembersById();
       if (!ids.length || !request) return;
@@ -946,7 +948,7 @@ var InfoCommandsBundle = (() => {
     };
   }
 
-  // src/server-info/ui/ServerInfoSheet.tsx
+  // info-commands/src/server-info/ui/ServerInfoSheet.tsx
   var scrollContainerModule;
   function getScrollContainer() {
     if (scrollContainerModule) return scrollContainerModule;
@@ -962,10 +964,10 @@ var InfoCommandsBundle = (() => {
     return scrollContainerModule;
   }
   function ServerInfoSheet({ guildId: guildId2, onClose }) {
-    const RN3 = runtime.react.ReactNative;
-    const { View, ActivityIndicator, ScrollView } = RN3;
-    const Animated = RN3.Animated;
-    const React3 = runtime.react.React;
+    const RN4 = runtime.react.ReactNative;
+    const { View, ActivityIndicator, ScrollView } = RN4;
+    const Animated = RN4.Animated;
+    const React4 = runtime.react.React;
     const Design = runtime.discord.design.Design;
     const { ActionSheet, Text: Text2 } = Design;
     const sideInset = Design?.space?.PX_16 ?? 16;
@@ -975,8 +977,8 @@ var InfoCommandsBundle = (() => {
     const bannerSpacing = Design?.space?.PX_12 ?? 12;
     const ScrollContainer = getScrollContainer() ?? ScrollView;
     const { guild, isLoading, ...info } = useGuildInfo(guildId2);
-    const [containerWidth, setContainerWidth] = React3.useState(void 0);
-    const scrollY = React3.useRef(Animated ? new Animated.Value(0) : { current: 0 }).current;
+    const [containerWidth, setContainerWidth] = React4.useState(void 0);
+    const scrollY = React4.useRef(Animated ? new Animated.Value(0) : { current: 0 }).current;
     if (!guild && !isLoading) return /* @__PURE__ */ runtime.react.React.createElement(ActionSheet, { scrollable: true, startExpanded: true }, /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24 } }, /* @__PURE__ */ runtime.react.React.createElement(Text2, null, info.error ?? "Server details are unavailable."), /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", onPress: onClose }, "Close")));
     if (!guild && isLoading) {
       return /* @__PURE__ */ runtime.react.React.createElement(ActionSheet, { scrollable: true, startExpanded: true }, /* @__PURE__ */ runtime.react.React.createElement(ScrollContainer, { contentContainerStyle: { flexGrow: 1 } }, /* @__PURE__ */ runtime.react.React.createElement(
@@ -1054,10 +1056,119 @@ var InfoCommandsBundle = (() => {
     );
   }
 
-  // src/server-menu.js
+  // info-commands/src/guild-sheet.js
+  var { React: React2, ReactNative: RN2 } = vendetta.metro.common;
+  function wrapGuildSheet(component, live, extendItems, makeRow, Row) {
+    const caches = Array.from({ length: 5 }, () => /* @__PURE__ */ new WeakMap());
+    const isInfo2 = (node) => node?.key === "info-commands-server-info" || node?.props?.label === "Server Info";
+    const isRow = (node) => node?.props && (node.type === Row || node.type?.name === "ActionSheetRow" || node.type?.displayName === "ActionSheetRow");
+    function inject(tree) {
+      let target, kind, duplicate = false, visited = 0;
+      function scan(node, depth = 0) {
+        if (!node || depth > 30 || ++visited > 1500) return;
+        if (Array.isArray(node)) {
+          if (!target && Row && node.some(isRow)) {
+            target = node;
+            kind = "rows";
+          }
+          node.forEach((child) => scan(child, depth + 1));
+        } else if (node.props) {
+          if (isInfo2(node)) duplicate = true;
+          if (!target && Array.isArray(node.props.items)) {
+            target = node;
+            kind = "items";
+          }
+          if (!target && Row && isRow(node.props.children)) {
+            target = node;
+            kind = "child";
+          }
+          scan(node.props.children, depth + 1);
+        }
+      }
+      scan(tree);
+      if (duplicate) return { tree, done: true };
+      if (!target) return { tree, done: false };
+      function replace(node, depth = 0) {
+        if (!node || depth > 30) return node;
+        if (node === target) {
+          if (kind === "items") {
+            const items = extendItems(node.props.items);
+            return items === node.props.items ? node : React2.cloneElement(node, { items });
+          }
+          if (kind === "rows") return [...node, makeRow()];
+          return React2.cloneElement(node, { children: [node.props.children, makeRow()] });
+        }
+        if (Array.isArray(node)) {
+          const children = node.map((child) => replace(child, depth + 1));
+          return children.some((child, i) => child !== node[i]) ? children : node;
+        }
+        if (node.props?.children != null) {
+          const children = replace(node.props.children, depth + 1);
+          if (children !== node.props.children) return React2.cloneElement(node, { children });
+        }
+        return node;
+      }
+      return { tree: replace(tree), done: true };
+    }
+    function transform(tree, level) {
+      if (!live()) return tree;
+      try {
+        let walk = function(node, depth = 0) {
+          if (!node || depth > 30 || ++visited > 1500) return node;
+          if (Array.isArray(node)) return node.map((child) => walk(child, depth + 1));
+          if (!node.props) return node;
+          const children = walk(node.props.children, depth + 1);
+          const native = [RN2.View, RN2.ScrollView, RN2.Text, RN2.Image, RN2.Pressable, RN2.TouchableOpacity, Row];
+          const type = level < 4 && !native.includes(node.type) ? wrap(node.type, level + 1) : node.type;
+          if (type !== node.type) return React2.createElement(type, {
+            ...node.props,
+            children,
+            key: node.key,
+            ref: node.props.ref ?? Object.getOwnPropertyDescriptor(node, "ref")?.value
+          });
+          return children !== node.props.children ? React2.cloneElement(node, { children }) : node;
+        };
+        const result = inject(tree);
+        if (result.done) return result.tree;
+        let visited = 0;
+        return walk(tree);
+      } catch (error) {
+        console.error("[InfoCommands] Guild sheet injection failed", error);
+        return tree;
+      }
+    }
+    function wrap(original, level = 0) {
+      if (!original || !["function", "object"].includes(typeof original)) return original;
+      const cache = caches[level];
+      if (cache.has(original)) return cache.get(original);
+      let wrapped = original;
+      if (typeof original === "function") {
+        if (original.prototype?.isReactComponent) {
+          wrapped = class ServerInfoMenu extends original {
+            render() {
+              return transform(super.render(), level);
+            }
+          };
+        } else {
+          wrapped = function ServerInfoMenu(...args) {
+            return transform(original.apply(this, args), level);
+          };
+        }
+      } else if (original.$$typeof === Symbol.for("react.memo")) {
+        wrapped = React2.memo(wrap(original.type, level), original.compare);
+      } else if (original.$$typeof === Symbol.for("react.forward_ref")) {
+        wrapped = React2.forwardRef((props2, ref) => transform(original.render(props2, ref), level));
+      }
+      cache.set(original, wrapped);
+      return wrapped;
+    }
+    return wrap(component);
+  }
+
+  // info-commands/src/server-menu.js
   var { find, findByName, findByProps: findByProps2, findByStoreName } = vendetta.metro;
   var { before, after } = vendetta.patcher;
-  var { React: React2, ReactNative: RN2 } = vendetta.metro.common;
+  var { React: React3, ReactNative: RN3 } = vendetta.metro.common;
   var ITEM_ID = "info-commands-server-info";
   var sheetKey;
   var sheets;
@@ -1082,102 +1193,105 @@ var InfoCommandsBundle = (() => {
   function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID || item?.label === "Server Info" || item?.props?.label === "Server Info";
   }
-  function itemsWithInfo(items, id, open, close) {
+  function itemsWithInfo(items, id, action) {
     if (!id || !Array.isArray(items) || items.some(isInfo)) return items;
     if (Array.isArray(items[0])) {
       if (items.some((group) => Array.isArray(group) && group.some(isInfo))) return items;
-      return [itemsWithInfo(items[0], id, open, close), ...items.slice(1)];
+      return [itemsWithInfo(items[0], id, action), ...items.slice(1)];
     }
     return [...items, {
       id: ITEM_ID,
       label: "Server Info",
-      action() {
-        if (!running) return;
-        optional4(() => close?.());
-        open(id);
-      }
+      action
     }];
   }
   function installServerMenu(open) {
     if (running) return () => {
     };
     running = true;
-    generation++;
-    const patches2 = [];
-    sheets = optional4(() => findByProps2("openLazy", "hideActionSheet")) ?? optional4(() => findByProps2("openLazy"));
-    contexts = optional4(() => findByProps2("showContextMenu"));
+    const epoch = ++generation;
+    const live = () => running && generation === epoch;
+    const patched = /* @__PURE__ */ new WeakMap();
     const store2 = optional4(() => findByStoreName("GuildStore"));
-    const menu = optional4(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional4(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems"));
-    const holder = typeof menu?.default === "function" ? [menu, "default"] : typeof menu?.getGuildsBarGuildMenuItems === "function" ? [menu, "getGuildsBarGuildMenuItems"] : null;
-    if (holder) patches2.push(after(
-      holder[1],
-      holder[0],
-      (args, result) => itemsWithInfo(result, guildId(args?.[0]), open, () => contexts?.hideContextMenu?.())
-    ));
-    if (typeof contexts?.showContextMenu === "function") {
-      patches2.push(before("showContextMenu", contexts, ([menu2]) => {
-        try {
-          if (!menu2 || !Array.isArray(menu2.items)) return;
-          if (menu2.user || menu2.userId || menu2.context?.user || menu2.context?.userId || menu2.message || menu2.channel || menu2.channelId || menu2.context?.channelId) return;
-          const target = menu2.guild ?? menu2.context?.guild ?? (menu2.key ? store2?.getGuild?.(String(menu2.key)) : null) ?? (!menu2.key && menu2.guildId ? store2?.getGuild?.(String(menu2.guildId)) : null) ?? (/guild|server/i.test(String(menu2.type ?? menu2.name ?? "")) ? { id: menu2.guildId ?? menu2.context?.guildId } : null);
-          menu2.items = itemsWithInfo(menu2.items, guildId(target), open, () => contexts.hideContextMenu?.());
-        } catch (error) {
-          console.error("[InfoCommands] Context menu patch failed", error);
-        }
-      }));
+    const next = optional4(() => typeof revenge !== "undefined" ? revenge.modules?.finders : void 0);
+    const action = (id, close) => () => {
+      if (!live()) return;
+      optional4(close);
+      open(id);
+    };
+    function patch(target, key, kind, callback) {
+      if (!live() || typeof target?.[key] !== "function") return false;
+      if (patched.get(target)?.has(key)) return true;
+      const unpatch = optional4(() => kind(key, target, callback));
+      if (typeof unpatch !== "function") return false;
+      if (!patched.has(target)) patched.set(target, /* @__PURE__ */ new Set());
+      patched.get(target).add(key);
+      dynamicPatches.push(unpatch);
+      return true;
     }
-    const Row = optional4(() => findByProps2("ActionSheetRow")?.ActionSheetRow);
-    let lazyModules = /* @__PURE__ */ new WeakMap();
-    if (typeof sheets?.openLazy === "function") {
-      patches2.push(before("openLazy", sheets, ([promise, key, props2]) => {
+    function connectBuilder(menu2) {
+      const key = typeof menu2?.getGuildsBarGuildMenuItems === "function" ? "getGuildsBarGuildMenuItems" : "default";
+      return patch(menu2, key, after, (args, result) => live() ? itemsWithInfo(result, guildId(args?.[0]), action(guildId(args?.[0]), () => contexts?.hideContextMenu?.())) : result);
+    }
+    function connectContexts(module) {
+      const target = module?.showContextMenu ? module : module?.default;
+      if (!target?.showContextMenu) return false;
+      contexts = target;
+      return patch(target, "showContextMenu", before, (args) => {
+        if (!live()) return;
+        const menu2 = args[0];
+        if (!menu2 || !Array.isArray(menu2.items)) return;
+        if (menu2.user || menu2.userId || menu2.context?.user || menu2.context?.userId || menu2.message || menu2.context?.message || menu2.channel || menu2.channelId || menu2.context?.channel || menu2.context?.channelId) return;
+        const guild = menu2.guild ?? menu2.context?.guild ?? (menu2.key ? store2?.getGuild?.(String(menu2.key)) : null) ?? (!menu2.key && menu2.guildId ? store2?.getGuild?.(String(menu2.guildId)) : null) ?? (/guild|server/i.test(String(menu2.type ?? menu2.name ?? "")) ? { id: menu2.guildId ?? menu2.context?.guildId } : null);
+        const id = guildId(guild);
+        const items = itemsWithInfo(menu2.items, id, action(id, () => target.hideContextMenu?.()));
+        if (items !== menu2.items) args[0] = { ...menu2, items };
+      });
+    }
+    function connectSheets(module) {
+      const target = module?.openLazy ? module : module?.default;
+      if (!target?.openLazy) return false;
+      sheets = target;
+      return patch(target, "openLazy", before, (args) => {
+        if (!live()) return;
+        const [promise, key, props2] = args;
         if (!/guild/i.test(String(key)) || !/menu|context|actions/i.test(String(key))) return;
+        if (props2?.user || props2?.userId || props2?.channel || props2?.channelId || props2?.message) return;
         const id = guildId(props2?.guild ?? props2);
         if (!id || !promise?.then) return;
-        const epoch = generation;
-        Promise.resolve(promise).then((module) => {
-          if (!running || generation !== epoch || !module) return;
-          const context = { id, key };
-          if (lazyModules.has(module)) {
-            lazyModules.set(module, context);
-            return;
-          }
-          const holder2 = typeof module.default === "function" ? [module, "default"] : typeof module.default?.type === "function" ? [module.default, "type"] : typeof module.default?.render === "function" ? [module.default, "render"] : null;
-          if (!holder2) return;
-          lazyModules.set(module, context);
-          dynamicPatches.push(after(holder2[1], holder2[0], (_, result) => {
-            try {
-              if (!running) return;
-              const target = lazyModules.get(module);
-              const tree = vendetta.utils?.findInReactTree;
-              const node = optional4(() => tree?.(result, (n) => Array.isArray(n?.props?.items)));
-              if (node) {
-                node.props.items = itemsWithInfo(node.props.items, target.id, open, () => sheets.hideActionSheet?.(target.key));
-                return;
-              }
-              if (!Row) return;
-              const rows = optional4(() => tree?.(result, (n) => Array.isArray(n) && n.some((child) => child?.type === Row || child?.type?.name === "ActionSheetRow" || child?.type?.displayName === "ActionSheetRow")));
-              if (!Array.isArray(rows) || rows.some(isInfo)) return;
-              rows.push(React2.createElement(Row, {
-                key: ITEM_ID,
-                label: "Server Info",
-                onPress() {
-                  if (!running) return;
-                  optional4(() => sheets.hideActionSheet?.(target.key));
-                  open(target.id);
-                }
-              }));
-            } catch (error) {
-              console.error("[InfoCommands] Guild sheet injection failed", error);
-            }
-          }));
-        }).catch((error) => console.error("[InfoCommands] Lazy menu unavailable", error));
-      }));
+        args[0] = Promise.resolve(promise).then((module2) => {
+          if (!live() || !module2?.default) return module2;
+          const Row = optional4(() => findByProps2("ActionSheetRow")?.ActionSheetRow);
+          const onPress = action(id, () => target.hideActionSheet?.(key));
+          return { ...module2, default: wrapGuildSheet(
+            module2.default,
+            live,
+            (items) => itemsWithInfo(items, id, onPress),
+            () => React3.createElement(Row, { key: ITEM_ID, label: "Server Info", onPress }),
+            Row
+          ) };
+        });
+      });
     }
-    if (!patches2.length) notify2("InfoCommands: server menu unavailable on this Discord version");
+    function watch(filter, connect) {
+      if (!next?.getModules || !filter) return;
+      const unsubscribe = optional4(() => next.getModules(filter, (module) => {
+        if (live()) connect(module);
+      }, { returnNamespace: true, initialize: false }));
+      if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
+    }
+    const menu = optional4(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional4(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems"));
+    if (!connectBuilder(menu)) watch(optional4(() => next.filters.createFilterGenerator(
+      (_args, _id, value) => value?.name === "getGuildsBarGuildMenuItems" || typeof value?.getGuildsBarGuildMenuItems === "function" || value?.default?.name === "getGuildsBarGuildMenuItems",
+      () => "info-commands.guild-menu"
+    )()), connectBuilder);
+    if (!connectContexts(optional4(() => findByProps2("showContextMenu"))))
+      watch(optional4(() => next.filters.withProps("showContextMenu")), connectContexts);
+    if (!connectSheets(optional4(() => findByProps2("openLazy", "hideActionSheet")) ?? optional4(() => findByProps2("openLazy"))))
+      watch(optional4(() => next.filters.withProps("openLazy", "hideActionSheet")), connectSheets);
+    if (!dynamicPatches.length) notify2("InfoCommands: server menu unavailable on this Discord version");
     return () => {
-      disposeServerMenu();
-      lazyModules = /* @__PURE__ */ new WeakMap();
-      for (const unpatch of patches2.splice(0).reverse()) optional4(() => unpatch());
+      if (live()) disposeServerMenu();
     };
   }
   function plainText(value) {
@@ -1217,12 +1331,12 @@ var InfoCommandsBundle = (() => {
       if (sheetKey === key) sheetKey = void 0;
     };
     function ManagedServerInfoSheet(props2) {
-      React2.useEffect(() => () => {
+      React3.useEffect(() => () => {
         if (sheetKey === key) sheetKey = void 0;
       }, []);
-      return React2.createElement(ServerInfoSheet, props2);
+      return React3.createElement(ServerInfoSheet, props2);
     }
-    if (typeof sheets?.openLazy === "function" && ActionSheet && React2?.createElement) {
+    if (typeof sheets?.openLazy === "function" && ActionSheet && React3?.createElement) {
       sheetKey = key;
       try {
         Promise.resolve(sheets.openLazy(Promise.resolve({ default: ManagedServerInfoSheet }), key, { guildId: id, onClose: close })).catch(() => {
@@ -1238,7 +1352,7 @@ var InfoCommandsBundle = (() => {
       if (!running || epoch !== generation) return;
       const buttons = [{ text: "Copy Server ID", onPress: () => copy(id) }, { text: "Close", style: "cancel" }];
       if (guildId(data.ownerId)) buttons.unshift({ text: "View Owner Profile", onPress: () => openOwnerProfile(data.ownerId, id) });
-      RN2.Alert.alert(`Server Info — ${data.title}`, [
+      RN3.Alert.alert(`Server Info — ${data.title}`, [
         data.description,
         data.cachedOnly ? "Showing cached details." : "",
         ...data.fields.map((f) => `${f.name}: ${plainText(f.value)}`)
@@ -1255,7 +1369,7 @@ var InfoCommandsBundle = (() => {
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional4(() => unpatch());
   }
 
-  // src/plugin.js
+  // info-commands/src/plugin.js
   var { findByStoreName: findByStoreName2, findByProps: findByProps3 } = vendetta.metro;
   var { registerCommand } = vendetta.commands;
   var { semanticColors } = vendetta.ui;

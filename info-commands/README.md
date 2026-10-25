@@ -4,6 +4,10 @@ Revenge / Vendetta-compatible Discord mobile plugin with userinfo/inviteinfo com
 
 ## Install
 
+For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview)**. Version **1.0.0-beta5** fixes late-loading and frozen guild menus. After updating, fully restart Discord.
+
+For **Revenge Classic / Vendetta**:
+
 In Revenge, open **Settings → Plugins → Add (+)** and paste:
 
 https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/info-commands/

@@ -33,6 +33,7 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
     let cursor = 0, instance;
     const React = {
         createElement(type, props, ...children) { return { type, key: props?.key, props: { ...props, children } }; },
+        cloneElement(node, props) { return { ...node, props: { ...node.props, ...props } }; },
         useState(initial) {
             const index = cursor++;
             const state = instance.values;
@@ -58,7 +59,7 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         },
         Fragment: "Fragment",
     };
-    const RN = { Text: "Text", View: "View", Image: "Image", ScrollView: "ScrollView", TouchableOpacity: "TouchableOpacity", Dimensions: { get: () => ({ height: 800 }) }, Alert: { alert(...args) { alerts.push(args); } } };
+    const RN = { Text: "Text", View: "View", Image: "Image", ScrollView: "ScrollView", TouchableOpacity: "TouchableOpacity", Dimensions: { get: () => ({ height: 800 }) }, Alert: { alert(...args) { alerts.push(args); } }, ToastAndroid: { SHORT: 0, show: value => notifications.push(value) } };
     function ActionSheet() {}
     function ActionSheetRow() {}
     function searchTree(value, predicate) {
@@ -231,27 +232,36 @@ test("lazy menu injection tracks each guild, avoids duplicates, and is removed o
     const original = () => h.React.createElement("Menu", { items: [{ label: "Notifications" }] });
     const module = { default: original };
     h.sheets.openLazy(Promise.resolve(module), "GuildContextMenu", { guildId: A }); await tick();
-    let rendered = module.default();
+    const first = await h.opens.at(-1).promise;
+    let rendered = first.default();
     assert.equal(rendered.props.items.filter(x => x.label === "Server Info").length, 1);
     h.sheets.openLazy(Promise.resolve(module), "GuildContextMenu", { guildId: B }); await tick();
-    rendered = module.default();
+    const second = await h.opens.at(-1).promise;
+    rendered = second.default();
     rendered.props.items.at(-1).action();
     assert.equal(h.opens.at(-1).key, `info-commands-server-info-${B}`);
+    first.default().props.items.at(-1).action();
+    assert.equal(h.opens.at(-1).key, `info-commands-server-info-${A}`);
+    assert.equal(module.default, original);
     h.plugin.onUnload();
     assert.equal(module.default, original);
+    assert.equal(first.default().props.items.length, 1);
 });
 
 test("lazy ActionSheetRow layout adds a usable row and frozen layouts do not crash", async () => {
     const h = harness({ modern: true }); h.plugin.onLoad();
     const module = { default: () => h.React.createElement("View", {}, h.React.createElement(h.ActionSheetRow, { label: "Notifications" })) };
     h.sheets.openLazy(Promise.resolve(module), "GuildContextMenu", { guildId: A }); await tick();
-    const rendered = module.default();
+    const opened = await h.opens.at(-1).promise;
+    const rendered = opened.default();
     const row = rendered.props.children.at(-1);
     assert.equal(row.props.label, "Server Info"); row.props.onPress();
     assert.match(h.opens.at(-1).key, new RegExp(A));
-    const frozen = { default: () => ({ props: Object.freeze({ items: [] }) }) };
+    const frozen = Object.freeze({ default: () => ({ type: "Menu", props: Object.freeze({ items: Object.freeze([]) }) }) });
     h.sheets.openLazy(Promise.resolve(frozen), "GuildContextMenu", { guildId: A }); await tick();
-    assert.doesNotThrow(() => frozen.default());
+    const frozenOpened = await h.opens.at(-1).promise;
+    assert.equal(frozenOpened.default().props.items.at(-1).label, "Server Info");
+    assert.equal(frozen.default().props.items.length, 0);
     h.plugin.onUnload();
 });
 
@@ -274,6 +284,8 @@ test("disable/re-enable cleans all hooks and stale menu actions do nothing", asy
     assert.equal(h.requests.length, 0);
     assert.equal(h.menu.default(A).length, 3);
     h.plugin.onLoad();
+    stale.action(); await tick();
+    assert.equal(h.requests.length, 0);
     assert.equal(h.menu.default(A).length, 4);
     assert.equal(h.commands.length, 2);
     h.plugin.onUnload();
