@@ -633,11 +633,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta7": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.info-commands@1.0.0-beta7.zip",
+          "sha256": "ccf76378e526bfb75e08264c1b652f40d9df5f8d41c38a55135152a4313353ac",
+          "size": 31616,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta6",
-        "beta": "1.0.0-beta6"
+        "latest": "1.0.0-beta7",
+        "beta": "1.0.0-beta7"
       },
       "name": "InfoCommands (Next preview)",
       "description": "Revenge Next preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",

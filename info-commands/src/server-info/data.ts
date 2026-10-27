@@ -12,16 +12,21 @@ export function normalizeGuild(id: string, cached?: any, fetched?: any) {
   guild.premiumSubscriptionCount ??= cached?.premiumSubscriberCount;
   return guild;
 }
-export function countChannels(value: any): number | undefined {
+/** Count unique guild channels, including categories, but not threads or list metadata. */
+export function countChannels(value: any, guildId?: string): number | undefined {
   if (value == null) return undefined;
   const ids = new Set<string>();
   const seen = new Set<any>();
+  const guildTypes = new Set([0, 2, 4, 5, 13, 14, 15, 16]);
   function walk(node: any) {
     if (!node || typeof node !== "object" || seen.has(node)) return;
     seen.add(node);
-    const channel = node.channel ?? node;
-    if (typeof channel.id === "string") { ids.add(channel.id); return; }
-    for (const child of Object.values(node)) walk(child);
+    const owner = node.guild_id ?? node.guildId;
+    if (typeof node.id === "string" && guildTypes.has(node.type)
+      && (!guildId || owner == null || owner === guildId)) ids.add(node.id);
+    // Containers can have their own ID, or a category channel plus child channels.
+    // Neither should terminate traversal of the remaining list.
+    for (const child of node instanceof Map ? node.values() : Object.values(node)) walk(child);
   }
   walk(value);
   return ids.size;

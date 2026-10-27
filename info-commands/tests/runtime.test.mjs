@@ -78,7 +78,7 @@ function harness({ modern = false, fallback = false, apiFailure = false, pending
         guilds[A].icon = "a_icon"; guilds[A].banner = "a_banner";
         const friendIds = Array.from({ length: 7 }, (_, i) => String(600000000000000000n + BigInt(i)));
         stores.GuildRoleStore = { getSortedRoles: () => [{ id: "role1" }, { id: "role2" }] };
-        const channels = [{ channel: { id: "channel1" } }, { channel: { id: "channel2" } }];
+        const channels = [{ channel: { id: "channel1", type: 0 } }, { channel: { id: "channel2", type: 2 } }];
         stores.GuildChannelStore = { getChannels: () => ({ SELECTABLE: channels, VOCAL: [channels[0]] }) };
         stores.RelationshipStore = { getFriendIDs: () => friendIds };
         stores.GuildMemberStore = { getMember: (guildId, id) => guildId === A && friendIds.includes(id) ? { nick: `Friend ${friendIds.indexOf(id) + 1}` } : undefined };

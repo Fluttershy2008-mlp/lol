@@ -84,6 +84,8 @@ export function useGuildInfo(guildId: string): GuildInfo {
       avatarHash: user?.avatar, nick: memberStore?.getMember?.(guildId, id)?.nick };
   });
   const channelStore = getGuildChannelStore();
+  const channels = optional(() => channelStore?.getMutableGuildChannelsForGuild?.(guildId));
+  const groupedChannels = optional(() => channelStore?.getChannels?.(guildId));
   const boostCount = guild?.premiumSubscriptionCount;
   return {
     guild, isLoading: !guild && pending,
@@ -97,7 +99,8 @@ export function useGuildInfo(guildId: string): GuildInfo {
     memberCount: getGuildMemberCountStore()?.getMemberCount?.(guildId) ?? guild?.memberCount,
     onlineCount: getGuildHeaderCountsStore()?.getOnlineCount?.(guildId) ?? guild?.onlineCount,
     roleCount: getGuildRoleStore()?.getSortedRoles?.(guildId)?.length ?? (guild?.roles ? Object.keys(guild.roles).length : undefined),
-    channelCount: countChannels(optional(() => channelStore?.getChannels?.(guildId))),
+    channelCount: countChannels(channels == null && groupedChannels == null
+      ? undefined : [channels, groupedChannels], guildId),
     boostLabel: boostCount != null ? `${boostCount.toLocaleString()} boost${boostCount === 1 ? "" : "s"}` : undefined,
     premiumTier: guild?.premiumTier ?? 0,
     createdLabel: guild ? creationLabel(guildId) : undefined,

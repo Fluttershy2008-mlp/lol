@@ -51,8 +51,8 @@
     },
     "dev.fluttershy2008.info-commands": {
       "path": "info-commands/index.js",
-      "sha256": "55fc8a4e4891b2706c14a372021d3a9126e59e4c57fca31578340e6e737b5c0e",
-      "originalVersion": "1.2.4",
+      "sha256": "fd232b0158c57df17e8c5716d4fe7dfb381b85ca19c7538bd79c4b19c9432672",
+      "originalVersion": "1.2.5",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

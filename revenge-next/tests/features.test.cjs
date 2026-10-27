@@ -553,3 +553,23 @@ test('an unavailable navigation module does not corrupt initialized Metro record
     assert.ok(records.some(record => record.publicModule.exports === w.stores.UserStore));
     assert.equal(bridge.adapter.metro.findByProps('getRootNavigationRef'), undefined);
 });
+
+test('InfoCommands counts all cached channels beneath grouped IDs and refreshes on store changes', async t => {
+    const w = scenario(t, { curatedOnly: true });
+    const store = w.stores.GuildChannelStore;
+    const channels = {
+        a: { id: '900000000000000001', type: 0, guild_id: GUILD },
+        b: { id: '900000000000000002', type: 2, guild_id: GUILD },
+        c: { id: '900000000000000003', type: 15, guild_id: GUILD },
+    };
+    store.getMutableGuildChannelsForGuild = () => channels;
+    store.getChannels = () => ({ id: GUILD, SELECTABLE: [{ channel: channels.a }] });
+    await w.start('info-commands');
+    (await serverInfoButton(w)).action(); await w.tick(0);
+    const ui = await w.picker();
+    const row = () => ui.root.findAll(n => n.props.label === 'Channels')[0];
+    assert.equal(row().props.trailing.props.text, '3');
+    channels.d = { id: '900000000000000004', type: 13, guild_id: GUILD };
+    await w.Renderer.act(async () => store.emitChange());
+    assert.equal(row().props.trailing.props.text, '4');
+});

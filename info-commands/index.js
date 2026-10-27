@@ -766,19 +766,17 @@ var InfoCommandsBundle = (() => {
     guild.premiumSubscriptionCount ?? (guild.premiumSubscriptionCount = cached?.premiumSubscriberCount);
     return guild;
   }
-  function countChannels(value) {
+  function countChannels(value, guildId2) {
     if (value == null) return void 0;
     const ids = /* @__PURE__ */ new Set();
     const seen = /* @__PURE__ */ new Set();
+    const guildTypes = /* @__PURE__ */ new Set([0, 2, 4, 5, 13, 14, 15, 16]);
     function walk(node) {
       if (!node || typeof node !== "object" || seen.has(node)) return;
       seen.add(node);
-      const channel = node.channel ?? node;
-      if (typeof channel.id === "string") {
-        ids.add(channel.id);
-        return;
-      }
-      for (const child of Object.values(node)) walk(child);
+      const owner = node.guild_id ?? node.guildId;
+      if (typeof node.id === "string" && guildTypes.has(node.type) && (!guildId2 || owner == null || owner === guildId2)) ids.add(node.id);
+      for (const child of node instanceof Map ? node.values() : Object.values(node)) walk(child);
     }
     walk(value);
     return ids.size;
@@ -946,6 +944,8 @@ var InfoCommandsBundle = (() => {
       };
     });
     const channelStore = getGuildChannelStore();
+    const channels = optional4(() => channelStore?.getMutableGuildChannelsForGuild?.(guildId2));
+    const groupedChannels = optional4(() => channelStore?.getChannels?.(guildId2));
     const boostCount = guild?.premiumSubscriptionCount;
     return {
       guild,
@@ -960,7 +960,7 @@ var InfoCommandsBundle = (() => {
       memberCount: getGuildMemberCountStore()?.getMemberCount?.(guildId2) ?? guild?.memberCount,
       onlineCount: getGuildHeaderCountsStore()?.getOnlineCount?.(guildId2) ?? guild?.onlineCount,
       roleCount: getGuildRoleStore()?.getSortedRoles?.(guildId2)?.length ?? (guild?.roles ? Object.keys(guild.roles).length : void 0),
-      channelCount: countChannels(optional4(() => channelStore?.getChannels?.(guildId2))),
+      channelCount: countChannels(channels == null && groupedChannels == null ? void 0 : [channels, groupedChannels], guildId2),
       boostLabel: boostCount != null ? `${boostCount.toLocaleString()} boost${boostCount === 1 ? "" : "s"}` : void 0,
       premiumTier: guild?.premiumTier ?? 0,
       createdLabel: guild ? creationLabel(guildId2) : void 0,
@@ -1182,9 +1182,9 @@ var InfoCommandsBundle = (() => {
             return transform(original.apply(this, args), level);
           };
         }
-      } else if (original.$$typeof === Symbol.for("react.memo")) {
+      } else if (original.$$typeof === /* @__PURE__ */ Symbol.for("react.memo")) {
         wrapped = React2.memo(wrap(original.type, level), original.compare);
-      } else if (original.$$typeof === Symbol.for("react.forward_ref")) {
+      } else if (original.$$typeof === /* @__PURE__ */ Symbol.for("react.forward_ref")) {
         wrapped = React2.forwardRef((props2, ref) => transform(original.render(props2, ref), level));
       }
       cache.set(original, wrapped);
