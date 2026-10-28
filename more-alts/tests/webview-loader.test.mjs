@@ -34,16 +34,33 @@ for (const mode of ['ambiguous', 'incomplete', 'noNative']) test('cold WebView d
     const { graph, loader } = fixture({ [mode]: true });
     assert.equal(loader.load(value => value), undefined);
     assert.equal(graph.requires(), 0); assert.equal(graph.unrelated(), 0); assert.equal(graph.initializedLookups(), 0);
+    assert.equal(loader.reason(), ({ ambiguous: 'AMBIGUOUS', incomplete: 'MATCH', noNative: 'NATIVE' })[mode]);
 });
+
+for (const batchedBridge of [false, true]) for (const nativeName of ['RNCWebViewModule', 'RNCWebView'])
+    test('cold WebView supports ' + nativeName + ' with ' + (batchedBridge ? 'BatchedBridge' : 'EventEmitter'), () => {
+        const { world, graph, loader } = fixture({ batchedBridge, nativeName });
+        assert.equal(loader.load(namespace => namespace.default), world.WebView);
+        assert.equal(loader.reason(), undefined);
+        assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
+    });
 
 test('a failed browser factory is attempted once per plugin session', () => {
     const { graph, loader } = fixture({ fail: true });
     assert.equal(loader.load(value => value), undefined); assert.equal(loader.load(value => value), undefined);
     assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
+    assert.equal(loader.reason(), 'LOAD');
     loader.clear(); assert.equal(loader.load(value => value), undefined); assert.equal(graph.requires(), 2);
+});
+
+for (const nativeName of ['RNCWebViewModule', 'RNCWebView']) test('cold WebView supports an unloaded BatchedBridge singleton with ' + nativeName, () => {
+    const { world, graph, loader } = fixture({ coldBatchedBridge: true, nativeName });
+    assert.equal(loader.load(namespace => namespace.default), world.WebView);
+    assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
 });
 
 test('unavailable native module metadata leaves the normal loaded lookup intact', () => {
     const loader = createColdWebViewLoader(() => ({}));
     assert.equal(loader.load(() => assert.fail('must not return a candidate')), undefined);
+    assert.equal(loader.reason(), 'API');
 });

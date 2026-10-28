@@ -151,3 +151,8 @@ More Alts beta5 shares Valenced beta4's validated WebView discovery and QR-only 
 ## More Alts unloaded browser
 
 More Alts beta6 shares Valenced beta5's on-demand browser loading. A native bridge probe and read-only dependency graph identify a unique Android SDK module before initialization. Current/older bridge imports, compiled/minified commands, loaded-component preference, opaque platform exports and initialization failure are covered. The two fully unloaded native fixtures fail against Valenced beta4 and pass against beta5. The suite now has 19 shared QR cases per host and 78 More Alts source/protocol checks, including ten new metadata-loader cases. No unrelated factory is initialized, and ambiguous/incomplete matches are skipped. Classic receives 3.1.5. The previous crash protection and all unrelated packages remain intact.
+
+
+### More Alts beta7 — Discord WebView fork
+
+Shares Valenced beta6’s support for `RNCWebView` / `RNCWebViewModule` and BatchedBridge / EventEmitter messaging imports, including an unloaded BatchedBridge wrapper. Four new native cases execute the actual pinned Discord fork and derive its dependencies from compiled package imports. They fail against Valenced beta5 and pass against beta6, covering loaded/cold messaging bridges, QR approval, navigation rejection, Close, Refresh and stale callbacks. There are now 23 QR cases per host and 84 More Alts source/protocol checks. Lookup failures include a short stage code without credentials, account data or QR contents. Classic receives 3.1.6; other packages and all previous ZIPs are preserved. [Sources and test fixture](../more-alts/README.md#discord-webview-fork-316--valenced-beta6--next-beta7). Phone verification remains pending.

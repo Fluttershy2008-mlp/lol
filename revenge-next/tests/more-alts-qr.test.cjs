@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { createWorld, React, Renderer } = require('./next-harness.cjs');
 const { installSettingsSection } = require('../../valenced/tests/settings-fixture.cjs');
 const { installColdWebViewModule } = require('../../more-alts/tests/webview-fixture.cjs');
+const { installDiscordWebViewModule } = require('../../more-alts/tests/discord-webview-fixture.cjs');
 const h = React.createElement;
 const USER = { id: '100000000000000099', username: 'fixture-qr-account' };
 const TOKEN = 'synthetic-qr-session-only-not-a-real-token';
@@ -186,4 +187,50 @@ test('More Alts QR keeps its dialog usable when the cold package fails to initia
     await act(button(ui, 'Log in with QR Code'));
     assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
     assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+});
+
+for (const coldBridge of [false, true]) test('More Alts QR loads Discord’s actual WebView fork with a ' + (coldBridge ? 'cold' : 'loaded') + ' callable bridge and handles approval', async t => {
+    const w = scenario(t), graph = installDiscordWebViewModule(w, { coldBridge });
+    w.addModule({ WebView: () => ({ locale: 'en-US', ast: [] }) });
+    const { item, ui } = await w.openManager();
+    assert.equal(graph.initializations.length, 0); assert.equal(graph.probes.length, 0);
+    await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser, 'the Discord fork loads without an EventEmitter import');
+    assert.deepEqual(graph.probes, ['RNCWebViewModule', 'RNCWebView']);
+    assert.ok(graph.initializations.includes(graph.mainId)); assert.equal(graph.unrelated(), 0);
+    assert.deepEqual(graph.navigation, []);
+    assert.equal(graph.messages.size, 1, 'the SDK registers its own messaging handler');
+    assert.equal(browser.props.onShouldStartLoadWithRequest({ nativeEvent: { url: 'https://example.invalid/', lockIdentifier: 1 } }), undefined);
+    assert.deepEqual(graph.navigation, [[false, 1]], 'the actual shared hook blocks external navigation');
+    await act(() => [...graph.messages.values()][0].onMessage(completion(browser)));
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+    assert.equal(w.calls.filter(c => c[0] === 'fetch').length, 1);
+    assert.ok(w.qrStops.some(script => script.includes('stopMoreAltsQr')));
+});
+
+test('More Alts QR closes Discord’s WebView fork and ignores a late callable-module approval', async t => {
+    const w = scenario(t), graph = installDiscordWebViewModule(w);
+    const { item, ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser);
+    const message = completion(browser), callbacks = [...graph.messages.values()][0];
+    await act(button(ui, 'Close add account'));
+    assert.equal(w.browser(ui), undefined); assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+    await act(() => callbacks.onMessage(message));
+    assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+    assert.deepEqual(Object.keys(item.api.jsonStorage.cache.accounts), []);
+    assert.equal(w.qrStops.length, 1); assert.equal(graph.unrelated(), 0);
+});
+
+test('More Alts QR refreshes Discord’s WebView fork without accepting its previous approval', async t => {
+    const w = scenario(t), graph = installDiscordWebViewModule(w);
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const old = w.browser(ui); assert.ok(old);
+    const message = completion(old), callbacks = [...graph.messages.values()][0];
+    await act(() => w.advance(3000)); await act(button(ui, 'Refresh QR code'));
+    const browser = w.browser(ui); assert.ok(browser);
+    assert.notEqual(completion(browser).nativeEvent.data, message.nativeEvent.data);
+    assert.equal(graph.messages.size, 2, 'the SDK registers a separate native callback for the new browser');
+    await act(() => callbacks.onMessage(message));
+    assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+    assert.equal(w.qrStops.length, 1); assert.equal(graph.unrelated(), 0);
 });

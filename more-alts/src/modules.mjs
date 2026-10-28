@@ -79,6 +79,7 @@ export function createModuleResolver(metro, { now = Date.now } = {}) {
         byStore: name => lookup('store', [name]),
         // Explicit QR clicks may retry a previously missing component at once.
         webView: () => lookup('webview', [], true),
+        webViewFailure: () => coldWebView.reason(),
         rejectWebView(component) {
             if (component && ['function', 'object'].includes(typeof component)) rejectedWebViews.add(component);
             entries.delete(JSON.stringify(['webview']));

@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.5
+# More Alts! for Revenge — 3.1.6
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Discord WebView fork (3.1.6 / Valenced beta6 / Next beta7)
+
+Beta5 still missed Discord’s WebView fork: it only probed `RNCWebViewModule` and required an EventEmitter import. Discord’s pinned fork instead requests `RNCWebView` and imports BatchedBridge. The loader now accepts either native-module name and both messaging layouts, including a still-unloaded BatchedBridge singleton whose MessageQueue constructor is known. The complete SDK graph must still identify one candidate before any package factory runs. Discovery does not invoke messaging registration, component rendering or native navigation methods.
+
+Refresh the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json), update **More Alts! to 1.0.0-beta6**, then fully close and reopen Discord. Next receives **1.0.0-beta7**, Classic **3.1.6**. Failure messages now include a short `MA-QR-…` lookup code so a remaining mismatch can be located from the error itself. Codes do not contain account, credential or QR data.
+
+Four new native checks execute the [actual MIT-licensed Discord fork](tests/vendor/discord-webview/README.md), with its component, shared hook and native spec retained. They derive dependencies from the package’s compiled imports and cover loaded/cold callable bridges, approval through the SDK’s native callback, blocked external navigation, Close and stale approval after Close/Refresh. All four fail against Valenced beta5 and pass against beta6. The SDK registers its own handlers and retains its own instance names. Only native host views, native commands and network responses are mocked. The QR suite now has **23 cases per host**, and all **84 More Alts source/protocol checks** pass. Six new source cases separately cover the native aliases and messaging layouts. Phone verification remains pending.
+
+Primary source: Discord’s [Android component](https://github.com/discord/react-native-webview/blob/6960a1903c3c32e1e77be11e6370f1c384ed7ee4/src/WebView.android.tsx) and [`RNCWebView` TurboModule spec](https://github.com/discord/react-native-webview/blob/6960a1903c3c32e1e77be11e6370f1c384ed7ee4/src/NativeRNCWebView.ts). The cold singleton follows React Native’s [BatchedBridge](https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/BatchedBridge/BatchedBridge.js) and [MessageQueue](https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/BatchedBridge/MessageQueue.js). Prior translation rejection, QR-local error recovery, protocol cryptography and saved-account behavior remain unchanged.
 
 ## QR browser loading (3.1.5 / Valenced beta5 / Next beta6)
 

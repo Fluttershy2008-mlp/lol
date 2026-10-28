@@ -159,7 +159,12 @@ export function createPlugin(V, host = globalThis) {
             let WebView;
             try { WebView = resolver.webView(); } catch {}
             if (!stillHere()) return;
-            if (!WebView) { setError('QR login could not load Discord’s browser on this build. You can still use email and password.'); return; }
+            if (!WebView) {
+                const reason = resolver.webViewFailure();
+                setError('QR login could not load Discord’s browser on this build. You can still use email and password.'
+                    + (reason ? ' (MA-QR-' + reason + ')' : ''));
+                return;
+            }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;

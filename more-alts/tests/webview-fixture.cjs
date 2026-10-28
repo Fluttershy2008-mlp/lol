@@ -16,10 +16,16 @@ function installColdWebViewModule(world, options = {}) {
     class EventEmitter { addListener() {} emit() {} removeAllListeners() {} listenerCount() { return 0; } }
     ids.component = add({ __esModule: true, default: codegenNativeComponent });
     ids.commands = add({ __esModule: true, default: codegenNativeCommands });
-    ids.emitter = add({ __esModule: true, default: EventEmitter });
+    ids.emitter = add({ __esModule: true, default: options.batchedBridge
+        ? { registerCallableModule() { throw new Error('Do not register messaging during discovery'); } } : EventEmitter });
     ids.registry = add({ get() {}, getEnforcing() {} });
     ids.dispatcher = add({ dispatchCommand() { throw new Error('Do not dispatch commands during discovery'); } });
     ids.main = 90000; ids.view = 90001; ids.bridge = 90002; ids.shared = 90003; ids.styles = 90004;
+    if (options.coldBatchedBridge) {
+        class MessageQueue { registerCallableModule() {} getCallableModule() {} }
+        const queue = add({ __esModule: true, default: MessageQueue });
+        ids.emitter = 90005; dependencies.set(ids.emitter, [queue]);
+    }
     dependencies.set(ids.main, [ids.react, ids.rn, ids.emitter, ids.view, ids.bridge, ids.shared, ids.styles]);
     dependencies.set(ids.view, [ids.component, ids.commands]);
     dependencies.set(ids.bridge, [options.legacyRegistry ? ids.registry : ids.rn]);
@@ -78,7 +84,8 @@ function installColdWebViewModule(world, options = {}) {
     U.modules.metro.getModuleDependencies = id => dependencies.get(id) ?? (modules[id] ? [] : undefined);
     U.modules.native.getNativeModule = name => {
         nativeProbes++;
-        if (name !== 'RNCWebViewModule') throw new Error('Unexpected native probe');
+        if (!['RNCWebViewModule', 'RNCWebView'].includes(name)) throw new Error('Unexpected native probe');
+        if (name !== (options.nativeName ?? 'RNCWebViewModule')) return null;
         return options.noNative ? null : { shouldStartLoadWithLockIdentifier() { throw new Error('Do not invoke native browser methods during discovery'); } };
     };
     return { ids, namespace, requires: () => requires, unrelated: () => unrelated,
