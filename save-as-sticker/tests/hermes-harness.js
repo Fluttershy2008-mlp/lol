@@ -53,6 +53,7 @@ async function exercise(fixture) {
     View: 'View', Text: 'Text', TextInput: 'TextInput', Pressable: 'Pressable', ScrollView: 'ScrollView', Image: 'Image',
     Appearance: { getColorScheme: function () { return 'dark'; } }, Dimensions: { get: function () { return { height: 900 }; } },
     Keyboard: { dismiss: function () {} }, Alert: { alert: function (title, message) { alerts.push(message); } },
+    ToastAndroid: { SHORT: 0, show: function (message) { toasts.push(message); } },
   };
   var V = {
     metro: { common: { React: React, ReactNative: RN, constants: {} },

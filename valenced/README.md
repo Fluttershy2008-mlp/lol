@@ -16,7 +16,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, SaveAsSticker, Stealmoji, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -26,9 +26,11 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/index.jso
 
 Use an address ending in `index.json`. A GitHub repository page or a `github.com/.../blob/...` page returns HTML and causes the JSON error shown in your screenshot.
 
+**SaveAsSticker and Stealmoji 1.0.0-beta3 fix missing upload modules.** Refresh this repository, update both plugins and fully restart Discord. Sticker uploads use a native multipart fallback and emoji uploads use image data through Discord’s signed-in HTTP client. The pickers also follow Discord’s theme when it differs from the system theme.
+
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, SaveAsSticker, Stealmoji, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -112,12 +114,15 @@ These are preview ports. Automated fixtures cannot verify the Discord UI on your
 Build and validate with Node 24 and Python 3:
 
 ```sh
+npm ci --ignore-scripts --no-audit --no-fund
 npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
+node save-as-sticker/build.mjs
+node stealmoji/build.mjs
 python3 valenced/build.py --check
 PLUGIN_TEST_TARGET=valenced node --test revenge-next/tests/plugins.test.cjs valenced/tests/*.test.cjs
 PLUGIN_TEST_TARGET=valenced node --test --test-skip-pattern=InfoCommands revenge-next/tests/features.test.cjs
 node more-alts/build.mjs
-node --test compatibility/user-profile.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+node --test compatibility/expression-upload.test.mjs save-as-sticker/tests/*.test.mjs stealmoji/tests/*.test.mjs compatibility/user-profile.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
 python3 -m unittest discover -s valenced/tests -p 'test_*.py'
 ```
 
@@ -142,3 +147,7 @@ Protect and Remove protection now update a server in place in name order. The ID
 ### More Alts beta8 — QR panel and public messaging
 
 The QR panel has a square white code, the Discord-style heading and scan instructions, and native live approval status. No uploaded QR image is reused. The bundled browser prefers RN’s public registerCallableModule API before the existing bridge-global fallbacks. Missing-browser errors include the installed plugin version. Three added native cases fail on beta7 and pass on beta8, covering public-only registration through approved-account saving, the panel/status/Back flow and version diagnostics. There are 33 QR cases per host and 92 More Alts source/protocol checks. Physical login remains unverified. Classic receives 3.1.8 and Next beta9. [Details and primary sources](../more-alts/README.md#qr-panel-and-public-rn-messaging-318--valenced-beta8--next-beta9).
+
+### SaveAsSticker and Stealmoji beta3 — upload fallbacks
+
+A shared helper resolves native actions at submission time and uses canonical authenticated HTTP when an action is missing. Stickers retain their prepared PNG/GIF local file in native multipart; emoji retain their image data in JSON. Native file APIs include the curated FileModule. No POST is retried through a second route. REST success requires a returned ID; account/session, permissions and slots are checked before creation. Both pickers respect Discord’s theme. Nineteen native cases per host cover the full menus/pickers, upload bytes, JPEG cropping, cleanup, late actions, rate limits, unconfirmed responses, account changes, permission loss, repeated taps and theme contrast. Four missing-action cases fail against beta2 and pass against beta3. Twelve helper contract checks and existing source/GIF tests also run. The Classic fixtures now expose the Android toast API used by their compatibility wrapper. Physical phone upload remains unverified; the optional Hermes test requires HERMES_BINARY. Classic receives SaveAsSticker 1.3.5 and Stealmoji 2.1.4; Next receives beta5 for both.

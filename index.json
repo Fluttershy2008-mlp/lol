@@ -1426,11 +1426,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta5.zip",
+          "sha256": "f5ca350cd2df349026b451c1f81d648a7f860f99e5cf47a07a4fabe09b7693db",
+          "size": 30654,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "SaveAsSticker (Next preview)",
       "description": "Revenge Next preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
@@ -1580,11 +1593,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.stealmoji@1.0.0-beta5.zip",
+          "sha256": "9d20704c2d8a658ca88199626f66345c41c4c9f56788c61cd4834f7016d51851",
+          "size": 35902,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "Stealmoji (Next preview)",
       "description": "Revenge Next preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",

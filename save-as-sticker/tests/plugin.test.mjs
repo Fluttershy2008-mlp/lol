@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { GifReader } from 'omggif';
 import { gifFixture } from './gif-fixture.mjs';
 
-const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+const source = readFileSync(process.env.PLUGIN_TEST_BUNDLE ?? new URL('../index.js', import.meta.url), 'utf8');
 // PNG header fixture: conversion and decoding are delegated to Discord's native cropper.
 function png(width = 320, height = 320, bytes = 32) {
   const b = Buffer.alloc(bytes);
@@ -87,6 +87,7 @@ function makeHarness(options = {}) {
     View: 'View', Text: 'Text', TextInput: 'TextInput', ScrollView: 'ScrollView', Pressable: 'Pressable', Image: 'Image',
     Appearance: { getColorScheme: () => 'dark' }, Dimensions: { get: () => ({ height: 900 }) }, Keyboard: { dismiss() {} },
     Alert: { alert: (...args) => calls.alerts.push(args) },
+    ToastAndroid: { SHORT: 0, show: message => calls.toasts.push(message) },
   };
   const V = {
     metro: { common: { React, ReactNative: RN, constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n } } },
@@ -232,7 +233,7 @@ test('upload converts JPEG, keeps edited name, uses local PNG and cleans files a
   assert.equal(post.name, 'pony.v2'); assert.equal(post.guildId, '1'); assert.equal(post.tags, 'slight_smile');
   assert.match(post.uri, /^file:\/\/\/cache\/.+-sticker.png$/); assert.equal(post.platform, 'mobile');
   assert.equal(t.calls.deletes.length, 2); assert.equal(t.calls.cleans.length, 1);
-  assert.ok(t.calls.toasts.includes('Sticker added to Pony server')); assert.deepEqual(t.calls.alerts, []);
+  assert.ok(t.calls.toasts.includes('Sticker added to Pony server'), JSON.stringify({ alerts: t.calls.alerts, toasts: t.calls.toasts, logs: t.calls.logs.map(args => args.map(String)) })); assert.deepEqual(t.calls.alerts, []);
 });
 
 test('valid 320x320 PNG skips cropping and still uploads via a local file', async () => {

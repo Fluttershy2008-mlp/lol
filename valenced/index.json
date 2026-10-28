@@ -945,11 +945,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta3.zip",
+          "sha256": "9b14416e4df2d2d185bc753fe9f3f01692d1ed87111b9f1fa8044a6b1e49b6ce",
+          "size": 30876,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "SaveAsSticker (Valenced)",
       "description": "Valenced preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
@@ -1060,11 +1073,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.stealmoji@1.0.0-beta3.zip",
+          "sha256": "f285d20f0f39c33e36d97a54db36e600bab9a8f3cdabfbb3f27bc85bfc21e0a0",
+          "size": 36122,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Stealmoji (Valenced)",
       "description": "Valenced preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",

@@ -5,6 +5,9 @@ on:
     paths:
       - 'revenge-next/**'
       - 'compatibility/user-profile*'
+      - 'compatibility/expression-upload*'
+      - 'save-as-sticker/**'
+      - 'stealmoji/**'
       - 'index.json'
       - 'index.html'
       - '.nojekyll'
@@ -18,6 +21,9 @@ on:
     paths:
       - 'revenge-next/**'
       - 'compatibility/user-profile*'
+      - 'compatibility/expression-upload*'
+      - 'save-as-sticker/**'
+      - 'stealmoji/**'
       - 'index.json'
       - 'index.html'
       - '.nojekyll'
@@ -41,12 +47,18 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: 'revenge-next/package-lock.json'
+          cache-dependency-path: |
+            package-lock.json
+            revenge-next/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install source build and regression dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify deterministic package output
         run: |
+          node save-as-sticker/build.mjs
+          node stealmoji/build.mjs
           node server-leaver/build.mjs
           node more-alts/build.mjs
           python3 revenge-next/build.py --check
@@ -57,4 +69,4 @@ jobs:
       - name: Check ZIP integrity and index metadata
         run: python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
       - name: Check profile opener and Classic regressions
-        run: node --test compatibility/user-profile.test.mjs server-leaver/tests/*.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/runtime.test.mjs valid-user/tests/*.test.mjs
+        run: node --test compatibility/expression-upload.test.mjs save-as-sticker/tests/*.test.mjs stealmoji/tests/*.test.mjs compatibility/user-profile.test.mjs server-leaver/tests/*.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/runtime.test.mjs valid-user/tests/*.test.mjs

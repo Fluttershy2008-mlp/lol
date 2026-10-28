@@ -1,4 +1,5 @@
 import { isGIF, prepareGIF } from "./gif.js";
+import { createExpressionUpload } from "../../compatibility/expression-upload.mjs";
 
 export default (() => {
   "use strict";
@@ -6,6 +7,7 @@ export default (() => {
   if (!V?.metro || !V?.patcher) throw new Error("SaveAsSticker needs Revenge's Vendetta plugin support.");
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement;
+  const uploads = createExpressionUpload(V);
   const SHEET_KEY = "SaveAsStickerPicker", ROW_KEY = "save-as-sticker-action";
   const MAX_BYTES = 512 * 1024, MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
   const LIMITS = [5, 15, 30, 60], unpatches = [];
@@ -159,14 +161,7 @@ export default (() => {
   }
 
   function nativeFiles() {
-    const found = byProps("writeFile", "readFile", "removeFile");
-    if (found) return found;
-    for (const name of ["NativeFileModule", "RTNFileManager", "DCDFileManager"]) {
-      try {
-        const module = RN.NativeModules?.[name] ?? globalThis.nativeModuleProxy?.[name];
-        if (module?.writeFile) return module;
-      } catch {}
-    }
+    return uploads.files();
   }
 
   function readBlob(blob) {
@@ -201,7 +196,7 @@ export default (() => {
     return /^(file|content):\/\//.test(path) ? path : "file://" + path;
   }
 
-  async function prepare(image, session) {
+  async function prepare(image, check) {
     const files = nativeFiles();
     if (!files?.writeFile || !files?.removeFile) throw new Error("Discord's image file module is unavailable on this build.");
     const temporary = [], picker = byProps("launchCropper", "cleanSingle") ?? byProps("launchCropper");
@@ -210,9 +205,6 @@ export default (() => {
       if (cropPath && picker?.cleanSingle) { try { await picker.cleanSingle(cropPath); } catch {} }
       for (const path of temporary) { try { await files.removeFile("cache", path); } catch {} }
     }
-    const check = () => {
-      if (!active || generation !== session) throw Object.assign(new Error("Cancelled"), { code: "E_PICKER_CANCELLED" });
-    };
     try {
       let url = image.url;
       const refresh = byProps("maybeRefreshAttachmentUrl");
@@ -277,29 +269,36 @@ export default (() => {
     if (saving || !active) return;
     saving = true;
     const session = generation;
+    const account = byStore("UserStore")?.getCurrentUser?.()?.id;
+    const check = () => {
+      if (!active || generation !== session || !account || byStore("UserStore")?.getCurrentUser?.()?.id !== account)
+        throw Object.assign(new Error("Cancelled"), { code: "E_PICKER_CANCELLED" });
+    };
     let prepared;
     try {
       if (name.length < 2 || name.length > 30) throw new Error("Use a sticker name between 2 and 30 characters.");
-      const uploader = byProps("createGuildSticker");
-      if (!uploader?.createGuildSticker) throw new Error("Discord's sticker upload module is unavailable on this build.");
+      if (!account) throw new Error("Your Discord account is still loading. Reopen the picker and try again.");
+      check();
+      const upload = uploads.resolve('sticker');
       sheetHost.hideActionSheet(SHEET_KEY);
       RN.Keyboard?.dismiss?.();
       await new Promise(resolve => setTimeout(resolve, 300));
-      if (!active || generation !== session) return;
+      check();
       toast("Preparing your sticker…");
-      prepared = await prepare(image, session);
-      if (!active || generation !== session) return;
-      const currentGuild = byStore("GuildStore")?.getGuild?.(guild.id) ?? guild;
+      prepared = await prepare(image, check);
+      check();
+      const store = byStore("GuildStore");
+      const currentGuild = store?.getGuild?.(guild.id) ?? store?.getGuilds?.()?.[guild.id];
       if (!canCreate(currentGuild)) throw new Error("You no longer have Create Expressions permission in this server.");
       const slots = stickerSlots(currentGuild);
       if (slots.used != null && slots.used >= slots.max) throw new Error("This server has no free sticker slots. Choose another server.");
       toast("Adding sticker to " + guild.name + "…");
       // Android's native multipart uploader accepts a local file:// URI.
       // Never retry a POST automatically: a timeout may follow a successful creation.
-      const result = await uploader.createGuildSticker({
+      const result = await upload({
         guildId: guild.id, name, tags: "slight_smile", description: "",
         uri: prepared.uri, mimeType: prepared.mimeType, platform: "mobile", originalMd5: null,
-      });
+      }, check);
       if (!result?.id && !result?.body?.id) throw new Error("Discord did not confirm the upload. Check the server's stickers before trying again.");
       if (active && generation === session) toast("Sticker added to " + guild.name);
     } catch (error) {
@@ -317,7 +316,7 @@ export default (() => {
     const [guild, setGuild] = React.useState(null);
     const [name, setName] = React.useState(filenameName(images[0]?.filename));
     const [, setRevision] = React.useState(0);
-    const dark = RN.Appearance?.getColorScheme?.() !== "light";
+    const dark = (byStore("ThemeStore")?.theme ?? RN.Appearance?.getColorScheme?.()) !== "light";
     const colors = { text: dark ? "#f2f3f5" : "#1e1f22", muted: dark ? "#b5bac1" : "#4e5058", input: dark ? "#1e1f22" : "#e3e5e8" };
     React.useEffect(() => {
       const stores = [byStore("GuildStore"), byStore("PermissionStore"), byStore("GuildStickersStore"), byStore("StickersStore")].filter(Boolean);

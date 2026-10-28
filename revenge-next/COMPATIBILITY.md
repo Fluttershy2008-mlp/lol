@@ -174,3 +174,7 @@ Shares Valenced beta5’s preview fix: Protect/Remove protection keep rows in na
 ### More Alts beta9 — QR panel and public messaging
 
 Shares Valenced beta8’s Discord-style square QR panel, scan instructions and native live status. Each attempt renders a fresh Discord fingerprint; the reference screenshot is not bundled. Public RN registerCallableModule is preferred before the existing global bridge paths, and missing-browser errors show the installed version. Three new native cases fail on beta8 and pass on beta9; 33 QR cases run per host and all 92 More Alts source/protocol checks pass. Phone login remains unverified. Classic receives 3.1.8.
+
+### SaveAsSticker and Stealmoji beta5 — upload fallbacks
+
+Share Valenced beta3’s native-action/REST selection and Discord-theme fix. Missing sticker actions use prepared local-file multipart, and missing emoji actions use the original image data in JSON. Curated FileModule access, account/session checks, permission/slot rechecks, cleanup and one POST without route retries are retained. REST success requires a created ID. Nineteen native cases run per host; four missing-action cases fail on beta4 and pass on beta5. Twelve helper contract checks and existing Classic/GIF tests run too; the optional Hermes test requires HERMES_BINARY. Actual phone upload remains unverified. Classic receives SaveAsSticker 1.3.5 and Stealmoji 2.1.4.

@@ -73,8 +73,8 @@ These plugin updates do not change Revenge's internal theme implementation. The 
 | Profile Status Presets | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/profile-status-presets/) |
 | ReadAllNotificationsButton | 1.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/read-all-notifications/) |
 | RelationshipNotifier | 1.1.6 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/relationship-notifier/) |
-| SaveAsSticker | 1.3.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/) |
+| SaveAsSticker | 1.3.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/) |
 | Server Leaver | 1.0.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/server-leaver/) |
-| Stealmoji | 2.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/) |
+| Stealmoji | 2.1.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/) |
 | ValidUser | 2.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valid-user/) |
 | ViewIcons | 1.0.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/view-icons/) |

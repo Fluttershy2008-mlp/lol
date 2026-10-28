@@ -8,6 +8,14 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/
 
 Disable the old Stealmoji copy before installing this one, then reload Revenge.
 
+## Upload compatibility in 2.1.4
+
+Valenced **1.0.0-beta3**, Next **1.0.0-beta5** and Classic **2.1.4** fix the missing emoji upload module error. Add emoji resolves the native action at submission time. If it is absent, the prepared image data is posted to Discord’s guild emoji endpoint using the signed-in HTTP client. PNG and animated GIF bytes and the edited name are retained; uploads do not read or expose account tokens.
+
+The plugin rechecks its session, the current account, permissions and emoji slots after downloading. One route is chosen before dispatch, and a failed or uncertain POST is never retried through a second uploader. REST creation requires a returned emoji ID before showing success. Existing native actions that dispatch success and return void remain supported. The picker follows Discord’s theme even when the system theme differs.
+
+Refresh the existing repository, update **Stealmoji**, then fully restart Discord. Native picker tests run on both Valenced and Next; physical phone uploads remain unverified. The JSON fields follow [Discord’s Create Guild Emoji endpoint](https://docs.discord.com/developers/resources/emoji#create-guild-emoji). The shared helper is [compatibility/expression-upload.mjs](../compatibility/expression-upload.mjs).
+
 ## Use
 
 - Tap a custom emoji, then choose **Stealmoji · Add / save emoji**.

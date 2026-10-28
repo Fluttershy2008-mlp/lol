@@ -6,6 +6,8 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/index.json",
   "portVersion": "1.0.0-beta4",
   "pluginVersions": {
+    "save-as-sticker": "1.0.0-beta5",
+    "stealmoji": "1.0.0-beta5",
     "server-leaver": "1.0.0-beta6",
     "more-alts": "1.0.0-beta9",
     "expression-cloner": "1.0.0-beta5",
@@ -18,6 +20,8 @@
     "auto-text": "1.0.0-beta6"
   },
   "sourceRefs": {
+    "save-as-sticker": "main",
+    "stealmoji": "main",
     "server-leaver": "main",
     "more-alts": "main",
     "expression-cloner": "main",

@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.2
+# SaveAsSticker 1.3.5
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -13,6 +13,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/
 This is a plugin directory URL. Revenge appends `manifest.json` and `index.js` itself. Do not paste a GitHub `blob`/`tree` page or the URL of an individual JS/JSON file.
 
 If already installed, open the plugin's menu, choose **Refetch**, and restart Discord. The root install URL (`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/`) is kept as an identical legacy alias. Enable only one copy.
+
+## Upload compatibility in 1.3.5
+
+Valenced **1.0.0-beta3**, Next **1.0.0-beta5** and Classic **1.3.5** fix the missing sticker upload module error. The uploader is resolved on Add sticker. If the native action is absent, the prepared PNG or animated GIF is sent as native multipart through Discord’s signed-in HTTP client. The file uses an owned local cache URI; crop/output files are cleaned on success, failure or cancellation. The curated Valenced/Next FileModule API is supported even when no file-module Metro export is available.
+
+The current account, plugin session, server membership, permissions and slots are checked again before dispatch. Repeated taps share one operation. An uncertain or failed POST is not retried through another route, and success requires a returned sticker ID. Existing GIF preparation and animation are preserved. The picker follows Discord’s theme when it differs from the system theme.
+
+Refresh the existing repository, update **SaveAsSticker**, and fully restart Discord. The legacy root install alias is kept in sync. Physical phone uploads remain unverified. The shared tests cover the real pickers on both native hosts, PNG/GIF data, static cropping, file cleanup, late native actions, REST failures, account changes, permission loss, duplicate taps and theme contrast. The optional Hermes check runs when HERMES_BINARY is provided.
+
+The multipart fields follow [Discord’s Create Guild Sticker endpoint](https://docs.discord.com/developers/resources/sticker#create-guild-sticker). Uploads use Discord’s existing authentication without reading account tokens.
 
 ## Use
 
@@ -34,7 +44,7 @@ Servers with an unknown cached sticker count are marked **Check slots on upload*
 - GIF attachments and embeds that expose an original `.gif` URL are supported. MP4-only GIFV/Tenor previews are not converted into GIFs; share the original GIF file instead. GIF links returning a still preview are rejected instead of silently flattening the animation.
 - To keep conversion bounded on mobile, GIFs must contain no more than 250 frames and have a canvas no larger than 4 megapixels; resizing is limited to 80 megapixels across all frames. The converter yields between frames and avoids storing every decoded frame in memory.
 - Animated APNG/WebP files are outside the GIF conversion path and may become still images when cropped.
-- GIF conversion runs locally using bundled libraries. Static images use Discord's own cropper. Both use local cache files and Discord's authenticated sticker upload action. The plugin does not request your token or send images to an external converter.
+- GIF conversion runs locally using bundled libraries. Static images use Discord's own cropper. Both use local cache files and Discord's authenticated sticker action or multipart HTTP fallback. The plugin does not request your token or send images to an external converter.
 - Canceling the crop or disabling the plugin before submission prevents the upload. An upload already submitted to Discord cannot be canceled by unloading the plugin.
 
 ## Changes in 1.3.2
