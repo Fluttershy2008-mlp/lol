@@ -124,6 +124,7 @@ def write(path, value, check):
 def build(check=False):
     config = json.loads((HERE / "repo.config.json").read_text())
     runtime = (HERE / "runtime.cjs").read_text().split("module.exports =")[0]
+    shortcut_runtime = (HERE / "settings-shortcut.cjs").read_text().split("module.exports =")[0]
     entries = []
     source_info = {}
     for directory in sorted(ROOT.iterdir()):
@@ -141,6 +142,9 @@ def build(check=False):
         version = config.get("pluginVersions", {}).get(slug, config["portVersion"])
         source_ref = config.get("sourceRefs", {}).get(slug, config["sourceCommit"])
         manifest = manifest_for(slug, legacy, version)
+        shortcut = config.get("settingsShortcuts", {}).get(slug)
+        if shortcut and shortcut.get("description"):
+            manifest["description"] = "Valenced preview. " + shortcut["description"]
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
@@ -167,6 +171,11 @@ def build(check=False):
                 transformed = transformed.replace(old, new)
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
+        if shortcut:
+            shortcut_meta = {"id": manifest["id"], "title": shortcut["title"], "icon": shortcut["icon"]}
+            script = ("(() => {\n" + runtime + "\n" + shortcut_runtime
+                + "\nreturn { default: withValencedSettingsShortcut(createValencedPlugin(" + factory + ", "
+                + json.dumps(metadata, ensure_ascii=False) + "), " + json.dumps(shortcut_meta, ensure_ascii=False) + ") };\n})()\n")
         files = {"manifest.json": dump(manifest), "index.js": script}
         for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
             if (directory / name).exists():
@@ -181,6 +190,12 @@ def build(check=False):
             "kind": "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
+        if shortcut:
+            source_info[manifest["id"]]["settingsShortcut"] = {
+                "path": "valenced/settings-shortcut.cjs",
+                "sha256": hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest(),
+                "section": "VALENCED", "title": shortcut["title"],
+            }
         entries.append((slug, manifest, files))
 
     for slug, filename in config["themes"].items():

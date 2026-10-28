@@ -212,11 +212,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.custom-rpc@1.0.0-beta3.zip",
+          "sha256": "57d4912bb37c2ebc925a7f0d856801c3cfd577166928fdb1df2e0d5fbeca84d6",
+          "size": 33954,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "CustomRPC (Valenced)",
       "description": "Valenced preview. Custom Rich Presence for Valenced: activity text, images, buttons, timers and party size. Adapted from Vencord CustomRPC.",
@@ -319,14 +332,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.friends-list@1.0.0-beta3.zip",
+          "sha256": "c96acd57150731a13568736a4f5cda46fa2252c099c66f7898c4594b103eefef",
+          "size": 19324,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Friends List (Valenced)",
-      "description": "Valenced preview. Shows your total Discord friend count, a searchable friends list, and profile buttons. Adds Friends List beside Blocked Users in Valenced settings.",
+      "description": "Valenced preview. Shows your total Discord friend count, a searchable friends list, and profile buttons. Opens directly from the Valenced settings section.",
       "author": "fluttershy_simper",
       "icon": "FriendsIcon"
     },
@@ -520,11 +546,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-beta3.zip",
+          "sha256": "cdbf742bfc1f981451ca1a126619db7fc261ac147685f960c04c01527898c63a",
+          "size": 59829,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "More Alts! (Valenced)",
       "description": "Valenced preview. Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Valenced settings.",
@@ -827,11 +866,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.server-leaver@1.0.0-beta3.zip",
+          "sha256": "aab60b23268212c2599e1566b5fb2dfdd89949cb9c2725e5ad002ac70e28be4a",
+          "size": 20781,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Server Leaver (Valenced)",
       "description": "Valenced preview. Leave all unprotected servers with a preview and confirmation. Protect servers by ID or tap Protect. Keeps owned servers; includes progress and Stop.",

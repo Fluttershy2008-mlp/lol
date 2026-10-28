@@ -8,7 +8,9 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**InfoCommands: 1.0.0-beta5. Copy User ID, Addon List and Valid User: 1.0.0-beta3. AutoText and the other plugin ports: 1.0.0-beta2.** Refresh the existing repository and update InfoCommands to beta5 for the Server Info Close fix. Force-close Discord and reopen it. The repository URL stays the same.
+**New settings entries: CustomRPC, Friends List, More Alts! and Server Leaver, all 1.0.0-beta3.** Refresh the repository, install or update those four plugins, enable them, then force-close Discord and reopen it. Their entries appear in the existing **Valenced section of Settings**, alongside Valenced, Plugins, Themes and Developer. Each entry opens the plugin's existing settings page.
+
+InfoCommands remains at **1.0.0-beta5**; Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the other ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -20,7 +22,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**; Copy User ID, Addon List and Valid User are at **1.0.0-beta3**; the other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. CustomRPC, Friends List, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -37,6 +39,10 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**Four native settings entries (beta3):** CustomRPC, Friends List, More Alts! and Server Leaver use Valenced's native `registerSettingsItem` and `addSettingsItemToSection` APIs. The route is registered before its row is added to `VALENCED`. Settings loading can happen after plugin startup; pending callbacks are cancelled on disable. Disabling one plugin removes only its own row and route. Cached pages stop rendering that plugin after disable. The regular settings button on the Plugins page remains available.
+
+The helper in `settings-shortcut.cjs` is bundled only into those four packages. Their Classic source bundles and the common Valenced runtime are unchanged. This release preserves all older ZIPs and all other current plugin/theme artifacts.
 
 **InfoCommands beta5** fixes Close on the themed Server Info panel. Close text, its surrounding touch target, Android Back and the backdrop now update the panel's own visibility, so it disappears even when native alert dismissal is delayed or fails. Retained host entries are removed by exact ownership without clearing other alerts. Unique keys prevent an old dismissal from closing a reopened panel. Data listeners/timers and old profile/copy actions are released or disabled on close. The beta4 layout is retained.
 
@@ -70,6 +76,10 @@ Ten Copy User ID profile regressions fail against beta2 and pass against beta3. 
 Ten Server Info panel regressions fail against InfoCommands beta3 and pass against beta4. They cover the banner/icon/rows with a stalled network request, ID copying, light/dark appearance, a short window, owner and friend profiles, Back/backdrop/reopen, unavailable-server errors, and cancellation of queued and already-open actions on stop. The imported server-menu and settings entry points are also exercised. Closing the panel removes its listeners and data timers.
 
 Five additional dismissal regressions fail against beta4 and pass against beta5. They cover retained and throwing native dismissal, direct text presses, delayed removal for Close/Back/backdrop, preserved unrelated alerts, stale Close callbacks, cleanup and reopening with distinct host keys.
+
+Eleven native-settings checks cover all four real settings pages, coexistence with core settings, independent stop/restart, delayed settings loading, queued callback cancellation, cached pages, insertion rollback, asynchronous startup cancellation and startup failure. Package checks verify that the shortcut helper appears only in the four selected plugins and that its source hash matches the recorded metadata.
+
+The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 
 These are preview ports. Automated fixtures cannot verify the Discord UI on your physical Android device. Some Discord versions can change internal menus or composer layouts. Valid User can only show accounts Discord makes available to your session; an inaccessible or nonexistent ID cannot be resolved by a plugin.
 
