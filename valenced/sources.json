@@ -19,7 +19,13 @@
       "path": "blocked-user-list/index.js",
       "sha256": "9633205ce41528da586ef713f348f4378c81d99ffa49ad63cad738a8c5099bcc",
       "originalVersion": "1.3.2",
-      "kind": "compatibility-preview"
+      "kind": "compatibility-preview",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "Blocked User List"
+      }
     },
     "dev.fluttershy2008.copy-user-id": {
       "path": "copy-user-id/index.js",

@@ -8,7 +8,7 @@ Paste this into Valenced's **Repository URL** field:
 https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 ```
 
-All **21 unique plugins**, including **InfoCommands, AutoText and Valid User**, plus four native colour themes are available as Valenced previews. **CustomRPC, Friends List, More Alts! and Server Leaver 1.0.0-beta3** now add their own entries to the **Valenced section of Settings**. Refresh the repository, install or update those four plugins, enable them, then force-close and reopen Discord. InfoCommands remains at **1.0.0-beta5**; Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText at **1.0.0-beta2**. [Valenced setup, raw fallback and validation notes](valenced/README.md).
+All **21 unique plugins**, including **InfoCommands, AutoText and Valid User**, plus four native colour themes are available as Valenced previews. **Blocked User List 1.0.0-beta3** now joins **CustomRPC, Friends List, More Alts! and Server Leaver** in the **Valenced section of Settings**. Refresh the repository, install or update Blocked User List, enable it, then force-close and reopen Discord. All five settings-entry plugins are at **1.0.0-beta3**. InfoCommands remains at **1.0.0-beta5**; Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText at **1.0.0-beta2**. [Valenced setup, raw fallback and validation notes](valenced/README.md).
 
 ## Revenge Next
 

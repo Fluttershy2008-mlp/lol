@@ -6,6 +6,7 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
   "portVersion": "1.0.0-beta2",
   "pluginVersions": {
+    "blocked-user-list": "1.0.0-beta3",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta3",
     "more-alts": "1.0.0-beta3",
@@ -23,6 +24,7 @@
     "valid-user": "main"
   },
   "settingsShortcuts": {
+    "blocked-user-list": { "title": "Blocked User List", "icon": "WrenchIcon" },
     "custom-rpc": { "title": "CustomRPC", "icon": "RichActivityIcon" },
     "friends-list": {
       "title": "Friends List", "icon": "FriendsIcon",

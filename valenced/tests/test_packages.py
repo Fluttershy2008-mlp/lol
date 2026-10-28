@@ -72,9 +72,9 @@ class ValencedPackages(unittest.TestCase):
         themes = [p for p in plugins.values() if "valenced.api.themes" in p["versions"][p["channels"]["latest"]]["dependencies"]]
         self.assertEqual(len(themes), 4)
 
-    def test_shortcut_helper_is_bundled_only_with_the_four_requested_plugins(self):
+    def test_shortcut_helper_is_bundled_only_with_the_five_requested_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())
-        wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver"}
+        wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver", "blocked-user-list"}
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]

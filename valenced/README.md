@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**New settings entries: CustomRPC, Friends List, More Alts! and Server Leaver, all 1.0.0-beta3.** Refresh the repository, install or update those four plugins, enable them, then force-close Discord and reopen it. Their entries appear in the existing **Valenced section of Settings**, alongside Valenced, Plugins, Themes and Developer. Each entry opens the plugin's existing settings page.
+**Blocked User List 1.0.0-beta3 now has a settings entry too.** Refresh the repository, install or update Blocked User List, enable it, then force-close Discord and reopen it. It joins CustomRPC, Friends List, More Alts! and Server Leaver, also at beta3, in the existing **Valenced section of Settings**, alongside Valenced, Plugins, Themes and Developer. Each entry opens the plugin's existing settings page.
 
 InfoCommands remains at **1.0.0-beta5**; Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the other ports at **1.0.0-beta2**. The repository URL stays the same.
 
@@ -22,7 +22,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. CustomRPC, Friends List, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Blocked User List, CustomRPC, Friends List, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -40,9 +40,9 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 
 ## Requested fixes
 
-**Four native settings entries (beta3):** CustomRPC, Friends List, More Alts! and Server Leaver use Valenced's native `registerSettingsItem` and `addSettingsItemToSection` APIs. The route is registered before its row is added to `VALENCED`. Settings loading can happen after plugin startup; pending callbacks are cancelled on disable. Disabling one plugin removes only its own row and route. Cached pages stop rendering that plugin after disable. The regular settings button on the Plugins page remains available.
+**Five native settings entries (beta3):** Blocked User List, CustomRPC, Friends List, More Alts! and Server Leaver use Valenced's native `registerSettingsItem` and `addSettingsItemToSection` APIs. The route is registered before its row is added to `VALENCED`. Settings loading can happen after plugin startup; pending callbacks are cancelled on disable. Disabling one plugin removes only its own row and route. Cached pages stop rendering that plugin after disable. The regular settings button on the Plugins page remains available.
 
-The helper in `settings-shortcut.cjs` is bundled only into those four packages. Their Classic source bundles and the common Valenced runtime are unchanged. This release preserves all older ZIPs and all other current plugin/theme artifacts.
+The helper in `settings-shortcut.cjs` is bundled only into those five packages. The Blocked User List update reuses the same helper without changing its Classic source bundle or the common Valenced runtime. This release preserves all older ZIPs and all other current plugin/theme artifacts.
 
 **InfoCommands beta5** fixes Close on the themed Server Info panel. Close text, its surrounding touch target, Android Back and the backdrop now update the panel's own visibility, so it disappears even when native alert dismissal is delayed or fails. Retained host entries are removed by exact ownership without clearing other alerts. Unique keys prevent an old dismissal from closing a reopened panel. Data listeners/timers and old profile/copy actions are released or disabled on close. The beta4 layout is retained.
 
@@ -77,7 +77,7 @@ Ten Server Info panel regressions fail against InfoCommands beta3 and pass again
 
 Five additional dismissal regressions fail against beta4 and pass against beta5. They cover retained and throwing native dismissal, direct text presses, delayed removal for Close/Back/backdrop, preserved unrelated alerts, stale Close callbacks, cleanup and reopening with distinct host keys.
 
-Eleven native-settings checks cover all four real settings pages, coexistence with core settings, independent stop/restart, delayed settings loading, queued callback cancellation, cached pages, insertion rollback, asynchronous startup cancellation and startup failure. Package checks verify that the shortcut helper appears only in the four selected plugins and that its source hash matches the recorded metadata.
+Twelve native-settings checks cover all five real settings pages, coexistence with core settings, independent stop/restart for every entry, delayed settings loading, queued callback cancellation, cached pages, insertion rollback, asynchronous startup cancellation and startup failure. Package checks verify that the shortcut helper appears only in the five selected plugins and that its source hash matches the recorded metadata. The new Blocked User List page and coexistence checks fail against its beta2 package and pass against beta3.
 
 The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 

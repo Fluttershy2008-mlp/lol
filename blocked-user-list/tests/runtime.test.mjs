@@ -86,6 +86,9 @@ function setup(options = {}) {
   const RN = {
     Text: 'Text', View: 'View', Image: 'Image', TextInput: 'TextInput', FlatList: 'FlatList', Pressable: 'Pressable',
     Alert: { alert: (...args) => alerts.push(args) }, useColorScheme: () => 'dark',
+    // The compatibility guard uses Android's native toast instead of Discord's
+    // legacy JS toast bridge.
+    ToastAndroid: { SHORT: 0, show: message => toasts.push(message) },
     AppState: { addEventListener: (_event, fn) => { appListeners.add(fn); return { remove: () => appListeners.delete(fn) }; } },
   };
   const V = {

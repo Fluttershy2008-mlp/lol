@@ -8,6 +8,7 @@ const h = React.createElement;
 const plugins = [
     ['custom-rpc', 'CustomRPC'], ['friends-list', 'Friends List'],
     ['more-alts', 'More Alts!'], ['server-leaver', 'Server Leaver'],
+    ['blocked-user-list', 'Blocked User List'],
 ];
 
 function scenario(t) {
@@ -54,20 +55,22 @@ for (const [slug, title] of plugins) test(title + ' opens its real settings from
     assert.ok(w.calls.some(call => call[0] === 'refreshSettings'));
 });
 
-test('all four shortcuts coexist with core settings and stop/restart independently', async t => {
+test('all five shortcuts coexist with core settings and stop/restart independently', async t => {
     const w = scenario(t), started = [];
     for (const [slug] of plugins) started.push(await w.start(slug));
-    assert.equal(w.registry.section.settings.length, w.registry.core.length + 4);
-    assert.deepEqual(w.registry.section.settings.slice(0, 4), w.registry.core);
+    assert.equal(w.registry.section.settings.length, w.registry.core.length + plugins.length);
+    assert.deepEqual(w.registry.section.settings.slice(0, w.registry.core.length), w.registry.core);
     for (const [slug] of plugins) shortcut(w, slug);
-    const old = shortcut(w, 'friends-list').item;
-    await w.stop(started[1]);
-    assert.equal(old.usePredicate(), false);
-    assert.equal(w.registry.section.settings.length, w.registry.core.length + 3);
-    for (const slug of ['custom-rpc', 'more-alts', 'server-leaver']) shortcut(w, slug);
-    await w.start('friends-list');
-    const { key } = shortcut(w, 'friends-list');
-    assert.equal(w.registry.section.settings.filter(item => item === key).length, 1);
+    for (let i = 0; i < plugins.length; i++) {
+        const [slug] = plugins[i], old = shortcut(w, slug).item;
+        await w.stop(started[i]);
+        assert.equal(old.usePredicate(), false);
+        assert.equal(w.registry.section.settings.length, w.registry.core.length + plugins.length - 1);
+        for (const [other] of plugins) if (other !== slug) shortcut(w, other);
+        await w.start(slug);
+        const { key } = shortcut(w, slug);
+        assert.equal(w.registry.section.settings.filter(item => item === key).length, 1);
+    }
 });
 
 test('native shortcut registration waits for settings modules', async t => {

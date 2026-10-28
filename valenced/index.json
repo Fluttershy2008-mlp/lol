@@ -123,11 +123,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.blocked-user-list@1.0.0-beta3.zip",
+          "sha256": "1c361fa4e0a195e75ac0ac0bcc84e69b9d502093e509b033d7448af993ed3b38",
+          "size": 23202,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Blocked User List (Valenced)",
       "description": "Valenced preview. Manage blocked users and locally hide APP, bot and Tupperbox/webhook messages by ID, with optional exact character names.",
