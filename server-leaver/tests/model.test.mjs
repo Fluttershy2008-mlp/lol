@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseIDs, guildRows, makePlan, samePlan, runQueue } from '../src/model.mjs';
+import { MAIN_PROTECTED_IDS } from '../src/main-protection.mjs';
+import { readFileSync } from 'node:fs';
+const MAIN = JSON.parse(readFileSync(new URL('./main-ids.json', import.meta.url), 'utf8'));
 const account = '322423286283632660', other = '422423286283632660';
 const A = '100000000000000001', B = '100000000000000002', C = '100000000000000003';
 const row = (id, owner = other, extras = {}) => ({ id, name: id, owner, ...extras });
@@ -74,4 +77,26 @@ test('requests never overlap', async () => {
   let running = 0, max = 0;
   await run({ leave: async () => { running++; max = Math.max(max, running); await Promise.resolve(); running--; return { status: 204 }; } });
   assert.equal(max, 1);
+});
+
+test('all 22 requested main IDs stay exact and are kept with an empty editable list', () => {
+  assert.deepEqual(MAIN_PROTECTED_IDS, MAIN);
+  const p = makePlan([...MAIN.map(id => row(id)), row(B)], account, '');
+  assert.deepEqual(p.kept.map(item => item.id), MAIN);
+  assert.ok(p.kept.every(item => item.reason === 'Main protected'));
+  assert.deepEqual(p.targets.map(item => item.id), [B]);
+});
+
+test('main IDs absent from an account do not block preview; unknown additional IDs still do', () => {
+  const p = makePlan([row(A)], account, MAIN.join('\n'));
+  assert.deepEqual(p.targets.map(item => item.id), [A]);
+  assert.throws(() => makePlan([row(A)], account, MAIN.join('\n') + '\n' + B), /not in your server list/);
+});
+
+test('the queue independently protects main IDs even if a supplied plan or saved list omits them', async () => {
+  const rows = [...MAIN.map(id => row(id)), row(B)], calls = [];
+  const result = await runQueue({ plan: { account, ids: [], targets: rows, kept: [] }, alive: () => true,
+    getRows: () => rows, getIDs: () => '', leave: async id => { calls.push(id); return { status: 204 }; },
+    wait: async () => {}, update() {} });
+  assert.deepEqual(calls, [B]); assert.deepEqual(result.skipped.map(item => item.id), MAIN);
 });

@@ -6,6 +6,7 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/index.json",
   "portVersion": "1.0.0-beta4",
   "pluginVersions": {
+    "server-leaver": "1.0.0-beta5",
     "more-alts": "1.0.0-beta8",
     "expression-cloner": "1.0.0-beta5",
     "blocked-user-list": "1.0.0-beta5",
@@ -17,6 +18,7 @@
     "auto-text": "1.0.0-beta6"
   },
   "sourceRefs": {
+    "server-leaver": "main",
     "more-alts": "main",
     "expression-cloner": "main",
     "blocked-user-list": "main",

@@ -113,9 +113,10 @@
     },
     "dev.fluttershy2008.server-leaver": {
       "path": "server-leaver/index.js",
-      "sha256": "1d4f2825d20d3583a3de7ffdcf410be34872d95128c227e803ae499524994b34",
-      "originalVersion": "1.0.2",
-      "kind": "compatibility-preview"
+      "sha256": "6b525f629b78acdf2cd67d83ba3dddae288f1073530dd2bb27cc06314d999c60",
+      "originalVersion": "1.0.3",
+      "kind": "compatibility-preview",
+      "sourceRef": "main"
     },
     "dev.fluttershy2008.stealmoji": {
       "path": "stealmoji/index.js",

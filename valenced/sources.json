@@ -137,9 +137,10 @@
     },
     "dev.fluttershy2008.server-leaver": {
       "path": "server-leaver/index.js",
-      "sha256": "1d4f2825d20d3583a3de7ffdcf410be34872d95128c227e803ae499524994b34",
-      "originalVersion": "1.0.2",
+      "sha256": "6b525f629b78acdf2cd67d83ba3dddae288f1073530dd2bb27cc06314d999c60",
+      "originalVersion": "1.0.3",
       "kind": "compatibility-preview",
+      "sourceRef": "main",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
         "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",

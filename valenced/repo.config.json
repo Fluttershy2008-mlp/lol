@@ -11,13 +11,14 @@
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
     "more-alts": "1.0.0-beta7",
-    "server-leaver": "1.0.0-beta3",
+    "server-leaver": "1.0.0-beta4",
     "copy-user-id": "1.0.0-beta3",
     "addon-list": "1.0.0-beta3",
     "info-commands": "1.0.0-beta5",
     "valid-user": "1.0.0-beta3"
   },
   "sourceRefs": {
+    "server-leaver": "main",
     "more-alts": "main",
     "expression-cloner": "main",
     "blocked-user-list": "main",

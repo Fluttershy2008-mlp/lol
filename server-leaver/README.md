@@ -1,6 +1,6 @@
 # Server Leaver for Revenge
 
-Leave your unprotected Discord servers from one settings page. Protect the servers you want to keep using their IDs or the Protect button beside each server.
+Keep your 22 main servers and leave other unprotected Discord servers from one settings page. Add more protection using server IDs or the Protect button beside each server.
 
 Author: **fluttershy_simper**
 
@@ -16,11 +16,19 @@ Enable the plugin. Open **Server Leaver** in Revenge settings, or use the plugin
 
 This package targets Revenge’s Vendetta-compatible URL plugin loader, matching the other plugins in this repository. It is not a Revenge Next repository-format plugin.
 
+## Main protected list
+
+Version **1.0.3** (Valenced **1.0.0-beta4**, Next **1.0.0-beta5**) includes the [22 requested main server IDs](src/main-protection.mjs). They remain protected when the field is cleared, plugin data is reset, or the Discord account changes. Main rows show a disabled **Main protected** button. Saving the field restores any main IDs removed from it. Existing additional IDs are preserved during the update and remain scoped to their account.
+
+Main IDs for servers an account has not joined do not block the preview. Unknown additional IDs still require correction or removal. Every leave request rechecks main protection independently of the stored list and confirmation snapshot. Enabling or updating the plugin does not leave servers.
+
+For Valenced, refresh the existing repository, update Server Leaver to **1.0.0-beta4**, and fully restart Discord. Its existing entry remains in Valenced settings.
+
 ## Use
 
-1. Paste the **server IDs you want to KEEP**. Separate them with spaces, commas, semicolons or new lines. To copy a server ID, enable Discord Developer Mode and use the server menu’s Copy Server ID action. You can also tap **Protect** beside a server.
-2. Tap **Save protected IDs**. The list is saved separately for each Discord account.
-3. Check the preview: **KEEP** servers stay; **LEAVE** servers will be left. An ID not in your current server list blocks leaving until corrected or removed.
+1. Your 22 main IDs are already protected. Paste any **additional server IDs you want to KEEP**. Separate them with spaces, commas, semicolons or new lines. To copy a server ID, enable Discord Developer Mode and use the server menu’s Copy Server ID action. You can also tap **Protect** beside a server.
+2. Tap **Save protected IDs**. Additional protections are saved separately for each Discord account.
+3. Check the preview: **KEEP** servers stay; **LEAVE** servers will be left. An additional ID not in your current server list blocks leaving until corrected or removed.
 4. Tap **Leave unprotected servers**, read the confirmation, and confirm. The plugin leaves the listed targets one at a time. Keep Discord open.
 5. Use **Stop leaving** to stop sending further requests. A request already sent may still finish.
 
@@ -38,7 +46,7 @@ npm run build
 npm test
 ```
 
-The build emits `index.js` and `manifest.json`, including the SHA-256 bundle hash used for plugin updates. Automated checks cover ID validation, account isolation, protected/owned servers, serial requests, confirmation changes, cancellation, failure handling and compatibility-loader evaluation. Tests use mocked Discord modules and send no real leave requests. On-device Revenge behavior remains untested.
+The build emits `index.js` and `manifest.json`, including the SHA-256 bundle hash used for plugin updates. The 28 source/runtime checks cover exact main IDs, preservation of existing lists, account isolation, protected/owned servers, protection independent of the saved list, serial requests, confirmation changes, cancellation, failure handling and compatibility-loader evaluation. Three native settings checks run on both Valenced and Next, covering the locked main rows, additional IDs, account switches, absent main guilds and a confirmed simulated queue that only targets an unprotected server. Tests use mocked Discord modules and send no real leave requests. On-device Revenge behavior remains untested.
 
 The plugin uses Discord’s existing HTTP client for leave requests. It does not read or store your account token.
 

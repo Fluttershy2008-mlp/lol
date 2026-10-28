@@ -27,7 +27,7 @@ All rows below pass automated checks in addition to the lifecycle/settings check
 | ReadAllNotificationsButton | `/readall` dispatches native BULK_ACK without direct REST | Real unread/thread collections and floating button placement |
 | RelationshipNotifier | Establish a baseline and detect a friend removal | Reconnect/account transitions and real notifications |
 | SaveAsSticker | Add image-menu action and render eligible server rows | Native image processing, file handling, GIF conversion and uploads |
-| Server Leaver | Keep owned servers; require confirmation before a simulated leave request | Real server updates, cancellation and rate-limit responses |
+| Server Leaver | Keep the 22 main IDs and owned servers; preserve extra IDs and require confirmation before a simulated leave request | Real server updates, cancellation and rate-limit responses |
 | Stealmoji | Inject cloning action into a message menu | Picker, CDN downloads and uploads on a real guild |
 | ValidUser | Resolve a cached mention and open a native profile action | Uncached lookups, changed message layouts and real access restrictions |
 | ViewIcons | Inject avatar action and open native media | Current profile/server menus, decorations and image downloads |
@@ -161,3 +161,8 @@ Shares Valenced beta6’s support for `RNCWebView` / `RNCWebViewModule` and Batc
 ### More Alts beta8 — bundled Android QR browser
 
 Shares Valenced beta7’s packaged Android SDK and direct React Native bindings. No Discord JS WebView package or dependency graph is needed for the Android QR path. Native view reuse, legacy/bridgeless callable messaging, numeric/string commands and callback cleanup are covered. Seven new full UI cases fail against Valenced beta6 and pass against beta7, including execution of the exact HTML through a real RSA nonce proof, QR SVG generation and a simulated approved login. There are 30 QR cases per host and 91 More Alts source/protocol checks. The native view/module must still be installed; physical verification remains pending. Classic receives 3.1.7. Other packages and previous ZIPs remain unchanged. [Sources and API references](../more-alts/README.md#bundled-android-qr-browser-317--valenced-beta7--next-beta8).
+
+
+### Server Leaver beta5 — main protected IDs
+
+Shares Valenced beta4’s fixed main list of 22 exact snowflake strings. Main protection is checked in preview and immediately before each request, independently of storage. Saving restores removed main IDs; extra saved IDs remain scoped to each account. Main IDs not joined by that account do not block preview, while unknown additional IDs still do. Twenty-eight source/runtime tests and three shared native UI cases per host cover the list, upgrades, account changes, locked rows and a confirmed simulated queue. Classic receives 1.0.3. All other packages and prior ZIPs are preserved. [Protected IDs and behavior](../server-leaver/README.md#main-protected-list).

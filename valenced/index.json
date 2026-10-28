@@ -983,14 +983,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.server-leaver@1.0.0-beta4.zip",
+          "sha256": "82b43b7c92bdd022ec230fe3cff09d98d9f164afbf0e42f7a137f6b038c624a2",
+          "size": 21353,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "Server Leaver (Valenced)",
-      "description": "Valenced preview. Leave all unprotected servers with a preview and confirmation. Protect servers by ID or tap Protect. Keeps owned servers; includes progress and Stop.",
+      "description": "Valenced preview. Keep your 22 main servers and extra protected IDs. Preview and confirm before leaving other servers. Keeps owned servers; includes progress and Stop.",
       "author": "fluttershy_simper",
       "icon": "ic_leave"
     },

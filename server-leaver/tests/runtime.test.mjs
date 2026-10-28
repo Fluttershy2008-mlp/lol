@@ -7,9 +7,10 @@ const bundle = await fs.readFile(new URL('../index.js', import.meta.url), 'utf8'
 const manifest = JSON.parse(await fs.readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 const U = '322423286283632660', V = '422423286283632660';
 const A = '100000000000000001', B = '100000000000000002', C = '100000000000000003';
-function runtime() {
+const MAIN = JSON.parse(await fs.readFile(new URL('./main-ids.json', import.meta.url), 'utf8'));
+function runtime(initial = {}) {
   let user = U, finish, accountListener, appListener;
-  const calls = [], alerts = [], storage = {}, guilds = { [A]: { id: A, name: 'A', ownerId: V }, [B]: { id: B, name: 'B', ownerId: V } };
+  const calls = [], alerts = [], storage = initial, guilds = { [A]: { id: A, name: 'A', ownerId: V }, [B]: { id: B, name: 'B', ownerId: V } };
   const React = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     useState: value => [value, () => {}], useCallback: value => value, useEffect: () => {} };
   const RN = { View: 'View', Text: 'Text', TextInput: 'Input', FlatList: 'List', Pressable: 'Button',
@@ -46,10 +47,10 @@ test('settings render and canceling confirmation sends no leave request', () => 
   assert.equal(r.alerts[0][0], 'Leave these servers?'); assert.equal(r.alerts[0][2][0].style, 'cancel');
   assert.deepEqual(r.calls, []); r.plugin.onUnload();
 });
-test('protected IDs are scoped to each account', () => {
+test('additional protected IDs are scoped to each account while main IDs remain protected', () => {
   const r = runtime(); r.plugin.onLoad(); r.plugin.controller.save(U, A); r.setUser(V);
-  assert.equal(r.plugin.controller.freshPlan(V).ids.length, 0); r.setUser(U);
-  assert.equal(r.plugin.controller.freshPlan(U).ids[0], A); r.plugin.onUnload();
+  assert.deepEqual(Array.from(r.plugin.controller.freshPlan(V).ids), MAIN); r.setUser(U);
+  assert.ok(r.plugin.controller.freshPlan(U).ids.includes(A)); r.plugin.onUnload();
 });
 test('stale confirmation is rejected if a new server appears', async () => {
   const r = runtime(); r.plugin.onLoad(); const plan = r.plugin.controller.freshPlan(U);
@@ -79,4 +80,20 @@ test('disabling/re-enabling invalidates an old confirmation', async () => {
   const r = runtime(); r.plugin.onLoad(); const p = r.plugin.controller, plan = p.freshPlan(U), epoch = p.getEpoch();
   r.plugin.onUnload(); r.plugin.onLoad(); await assert.rejects(p.execute(plan, epoch), /changed/);
   assert.deepEqual(r.calls, []); r.plugin.onUnload();
+});
+
+test('upgrading merges main protection without replacing the account’s existing saved IDs', () => {
+  const r = runtime({ accounts: { [U]: [A] } }); r.plugin.onLoad();
+  const p = r.plugin.controller.freshPlan(U);
+  assert.deepEqual(Array.from(p.ids), [...MAIN, A]); assert.deepEqual(r.storage.accounts[U], [A]);
+  assert.deepEqual(r.calls, []); r.plugin.onUnload();
+});
+
+test('saving an empty field retains all main protection and still requires leave confirmation', () => {
+  const r = runtime(); r.plugin.onLoad(); r.plugin.controller.save(U, '');
+  assert.deepEqual(Array.from(r.storage.accounts[U]), MAIN);
+  for (const id of MAIN) r.guilds[id] = { id, name: id, ownerId: V };
+  const p = r.plugin.controller.freshPlan(U);
+  assert.ok(p.kept.filter(row => MAIN.includes(row.id)).every(row => row.reason === 'Main protected'));
+  assert.equal(p.kept.length, 22); assert.deepEqual(r.calls, []); r.plugin.onUnload();
 });

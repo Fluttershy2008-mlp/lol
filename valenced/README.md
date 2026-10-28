@@ -8,13 +8,15 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
+**Server Leaver 1.0.0-beta4 includes the 22 main protected server IDs.** Refresh the repository, update Server Leaver, then fully restart Discord. The main IDs stay protected after editing the field or switching accounts, and their rows show a disabled **Main protected** button. Existing additional protected IDs are preserved and remain separate for each account. Main IDs absent from the current account do not block its preview.
+
 **More Alts! 1.0.0-beta7 bundles the Android QR browser and removes the failing Discord WebView package lookup.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
 
 **ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -26,7 +28,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta7** and InfoCommands at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta7** and InfoCommands at **1.0.0-beta5**. Friends List, Blocked User List and Server Leaver are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -130,3 +132,5 @@ Deferred command discovery follows the community library's [module subscriptions
 Four more native QR checks run Discord’s actual pinned WebView component, shared hook and native spec, deriving the graph from its compiled imports. All four fail against beta5 and pass against beta6. They cover loaded/cold callable bridges, native-message approval, external-navigation rejection, Close, Refresh and stale callbacks. The suite now has 23 QR cases per host and 84 More Alts source/protocol checks; six new source cases isolate native-name and messaging differences. Physical phone verification remains pending. [Fork sources and details](../more-alts/README.md#discord-webview-fork-316--valenced-beta6--next-beta7).
 
 Seven more native QR checks run with no Discord WebView JavaScript package or usable dependency metadata. They fail against beta6 and pass against beta7, covering legacy/bridgeless messaging, commands, Close, refresh, stop, stale callbacks and an existing native view. One runs the exact HTML through a real RSA handshake and QR SVG generation against a simulated Discord service, then verifies and saves the approved account through the native SDK callback. There are now 30 QR cases per host and 91 More Alts source/protocol checks. Phone verification remains pending. [Bundled browser details](../more-alts/README.md#bundled-android-qr-browser-317--valenced-beta7--next-beta8).
+
+Server Leaver beta4 protects the exact 22 main ID strings in both preview and the final per-request check, even if the stored list or a supplied plan omits them. Other saved protections survive the update. The field restores main IDs on save; main rows cannot be unprotected. Unknown additional IDs still block leaving until corrected. Twenty-eight source/runtime checks and three native-page cases per host cover defaults, account isolation, existing data, absent main guilds, confirmation and a simulated queue that leaves only an unprotected server. The existing Valenced settings entry is retained. Classic receives 1.0.3 and Next beta5. [Main protected list and details](../server-leaver/README.md#main-protected-list).

@@ -1,3 +1,5 @@
+import { isMainProtected, withMainProtection } from './main-protection.mjs';
+
 export const validID = value => typeof value === 'string' && /^[1-9]\d{16,19}$/.test(value);
 
 export function parseIDs(text) {
@@ -24,6 +26,7 @@ export function guildRows(store) {
 }
 
 export function keepReason(row, account, protectedIDs) {
+  if (isMainProtected(row.id)) return 'Main protected';
   if (protectedIDs.has(row.id)) return 'Protected';
   if (row.owner === account) return 'You own this server';
   if (row.unavailable) return 'Server unavailable';
@@ -33,9 +36,9 @@ export function keepReason(row, account, protectedIDs) {
 
 export function makePlan(rows, account, text) {
   if (!validID(account)) throw new Error('Your Discord account is still loading.');
-  const ids = parseIDs(text), protectedIDs = new Set(ids);
+  const entered = parseIDs(text), ids = withMainProtection(entered), protectedIDs = new Set(ids);
   const joined = new Set(rows.map(row => row.id));
-  const missing = ids.filter(id => !joined.has(id));
+  const missing = entered.filter(id => !isMainProtected(id) && !joined.has(id));
   // A mistyped but well-formed ID must never silently leave the intended server.
   if (missing.length) throw new Error(`Protected ID ${missing[0]} is not in your server list. Check the ID or remove it before continuing.`);
   const kept = [], targets = [];

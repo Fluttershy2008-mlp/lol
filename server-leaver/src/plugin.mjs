@@ -1,5 +1,6 @@
 import { validID, parseIDs, guildRows, makePlan, samePlan, runQueue } from './model.mjs';
 import { attachSettingsShortcut } from './settings-shortcut.mjs';
+import { MAIN_PROTECTED_IDS, isMainProtected, withMainProtection } from './main-protection.mjs';
 
 export function createPlugin(V, host = globalThis) {
   const { React, ReactNative: RN } = V.metro.common;
@@ -20,14 +21,14 @@ export function createPlugin(V, host = globalThis) {
   function idsFor(id) {
     if (!validID(id)) return '';
     const value = storage.accounts?.[id];
-    if (value == null) return '';
+    if (value == null) return MAIN_PROTECTED_IDS.join('\n');
     if (!Array.isArray(value) || value.some(item => !validID(item))) throw new Error('Protected IDs could not be loaded. Save them again before continuing.');
-    return value.join('\n');
+    return withMainProtection(value).join('\n');
   }
   function save(id, text) {
     if (!active || account() !== id) throw new Error('Your account changed. Reopen this page.');
     if (job) throw new Error('Stop the current leave operation before changing protected IDs.');
-    const ids = parseIDs(text);
+    const ids = withMainProtection(parseIDs(text));
     storage.accounts = { ...(storage.accounts ?? {}), [id]: ids };
     emit(); return ids.join('\n');
   }
@@ -112,6 +113,7 @@ export function createPlugin(V, host = globalThis) {
     function toggle(serverID) {
       try {
         if (busy || dirty) throw new Error('Save your ID changes first.');
+        if (isMainProtected(serverID)) return;
         const ids = new Set(parseIDs(saved));
         if (ids.has(serverID)) ids.delete(serverID); else ids.add(serverID);
         setDraft(save(id, [...ids].join('\n'))); refresh();
@@ -125,6 +127,7 @@ export function createPlugin(V, host = globalThis) {
       text('Server Leaver', { fontSize: 26, lineHeight: 34, fontWeight: '800' }),
       text('Keep the servers you choose. Leave the rest after confirming.', { color: c.muted, marginTop: 5 }),
       text('Protected server IDs', { fontWeight: '700', marginTop: 18 }),
+      text(`${MAIN_PROTECTED_IDS.length} main server IDs are always protected. Saving restores them if removed from this field.`, { color: c.muted }),
       text('Paste server IDs below, or tap Protect beside a server. Spaces, commas and new lines work.', { color: c.muted }),
       h(RN.TextInput, { accessibilityLabel: 'Protected server IDs', value: draft, onChangeText: setDraft, editable: !busy,
         multiline: true, autoCorrect: false, autoCapitalize: 'none', placeholder: 'Paste the server IDs you want to keep',
@@ -153,7 +156,8 @@ export function createPlugin(V, host = globalThis) {
       renderItem: ({ item: row }) => h(RN.View, { style: { backgroundColor: c.card, padding: 14, borderRadius: 12, marginBottom: 10 } },
         text(row.name, { fontWeight: '700' }), text(row.id, { color: c.muted, fontSize: 12 }, { selectable: true }),
         text(row.reason ? `KEEP · ${row.reason}` : 'LEAVE', { color: row.reason ? c.green : c.danger, fontWeight: '700', marginTop: 5 }),
-        button(plan.ids.includes(row.id) ? 'Remove protection' : 'Protect', () => toggle(row.id), busy || dirty)),
+        button(isMainProtected(row.id) ? 'Main protected' : plan.ids.includes(row.id) ? 'Remove protection' : 'Protect',
+          () => toggle(row.id), isMainProtected(row.id) || busy || dirty)),
     });
   }
   function open() {

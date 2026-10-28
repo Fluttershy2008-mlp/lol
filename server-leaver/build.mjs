@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 const root = new URL('./', import.meta.url);
-const files = ['model.mjs', 'settings-shortcut.mjs', 'plugin.mjs'];
+const files = ['main-protection.mjs', 'model.mjs', 'settings-shortcut.mjs', 'plugin.mjs'];
 const sources = await Promise.all(files.map(file => fs.readFile(new URL(`src/${file}`, root), 'utf8')));
 const code = sources.map(source => source.replace(/^import .*;\n/gm, '').replace(/^export /gm, '')).join('\n');
 const bundle = `(() => {\n'use strict';\n${code}\nreturn createPlugin(vendetta);\n})()\n`;
