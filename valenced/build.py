@@ -148,6 +148,14 @@ def build(check=False):
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
+        plugin_runtime = runtime
+        if directory.name == "stealmoji":
+            # Only this package opens its custom page from chat. The ordinary
+            # legacy navigation bridge is used by plugins already in Settings.
+            start = runtime.index("    function openLegacyPage(")
+            end = runtime.index("    function wrapNavigation(", start)
+            page_navigation = (HERE / "stealmoji-navigation.cjs").read_text()
+            plugin_runtime = runtime[:start] + page_navigation + "\n" + runtime[end:]
         if directory.name == "addonList":
             transformed = transformed.replace("entry.enabled ? 'Enabled' : 'Disabled'",
                 "entry.enabled === undefined ? 'Installed' : entry.enabled ? 'Enabled' : 'Disabled'")
@@ -170,10 +178,10 @@ def build(check=False):
                     raise RuntimeError("AutoText React key bridge needs updating")
                 transformed = transformed.replace(old, new)
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
-        script = "(() => {\n" + runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
+        script = "(() => {\n" + plugin_runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         if shortcut:
             shortcut_meta = {"id": manifest["id"], "title": shortcut["title"], "icon": shortcut["icon"]}
-            script = ("(() => {\n" + runtime + "\n" + shortcut_runtime
+            script = ("(() => {\n" + plugin_runtime + "\n" + shortcut_runtime
                 + "\nreturn { default: withValencedSettingsShortcut(createValencedPlugin(" + factory + ", "
                 + json.dumps(metadata, ensure_ascii=False) + "), " + json.dumps(shortcut_meta, ensure_ascii=False) + ") };\n})()\n")
         files = {"manifest.json": dump(manifest), "index.js": script}

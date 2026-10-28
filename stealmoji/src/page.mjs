@@ -25,7 +25,8 @@ export function createPickerPage(V, env = globalThis) {
     const close = (navigate = true) => {
       if (!entry.open) return;
       const owned = ownsFocus(); entry.open = false;
-      env.clearTimeout(entry.timer); env.clearTimeout(entry.mountTimer); safe(() => entry.unsubscribe?.()); entries.delete(entry);
+      env.clearTimeout(entry.timer); env.clearTimeout(entry.mountTimer);
+      safe(() => entry.cancelNavigation?.()); safe(() => entry.unsubscribe?.()); entries.delete(entry);
       safe(() => onClosed?.()); for (const listener of entry.listeners) listener();
       // A late result must never pop a different Discord screen.
       if (navigate && owned && safe(() => navigation.canGoBack?.()) !== false) safe(() => navigation.goBack());
@@ -67,7 +68,11 @@ export function createPickerPage(V, env = globalThis) {
         if (!entry.open || entry.mounted) return;
         close(false); safe(() => V.ui.toasts.showToast('Stealmoji’s page did not open. Use its plugin settings to add this emoji.'));
       }, 8000);
-      try { navigation.navigate('BUNNY_CUSTOM_PAGE', { title: 'Stealmoji', __stealmojiPage: key, render: Page }); }
+      try {
+        const cancel = navigation.navigate('BUNNY_CUSTOM_PAGE', { title: 'Stealmoji', __stealmojiPage: key,
+          __stealmojiOpen: () => entry.open, __stealmojiCancel: () => close(false), render: Page });
+        if (typeof cancel === 'function') entry.cancelNavigation = cancel;
+      }
       catch { close(false); safe(() => V.ui.toasts.showToast('Open Stealmoji’s plugin settings to add this emoji.')); }
     }, 350);
     return true;

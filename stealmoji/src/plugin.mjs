@@ -9,7 +9,7 @@ export function createPlugin(V, env = globalThis) {
   const uploads = createExpressionUpload(V, env);
   const panels = createExpressionPanel(V, 'StealmojiPicker');
   const pages = createPickerPage(V, env);
-  const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
+  const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions', LABEL = 'Stealmoji · Add / save emoji';
   let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
   const unpatches = [], dialogs = new Set(), cancellations = new Set(), viewTimers = new Set();
   const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
@@ -374,13 +374,13 @@ export function createPlugin(V, env = globalThis) {
   }
   function action(emojis, key) {
     const Row = byProps('ActionSheetRow')?.ActionSheetRow;
-    if (Row) return h(Row, { key: ROW, label: 'Stealmoji · Add / save emoji', onPress: safe(() => openPicker(emojis, key)) });
-    return h(RN.View, { key: ROW, style: { paddingHorizontal: 16, paddingBottom: 8 } },
-      button('Stealmoji · Add / save emoji', safe(() => openPicker(emojis, key))));
+    if (Row) return h(Row, { key: ROW, testID: ROW, label: LABEL, onPress: safe(() => openPicker(emojis, key)) });
+    return h(RN.View, { key: ROW, testID: ROW, style: { paddingHorizontal: 16, paddingBottom: 8 } },
+      button(LABEL, safe(() => openPicker(emojis, key))));
   }
   // Clone arrays/elements. Discord development builds freeze React elements.
   function inject(tree, emojis, key, allowContainer) {
-    let best, score = -1, duplicate = false, visited = 0;
+    let best, score = -1, containerDepth = Infinity, duplicate = false, visited = 0;
     const isAction = node => node?.props && (typeof node.props.onPress === 'function')
       && (node.props.label != null || node.props.text != null || node.props.accessibilityRole === 'button');
     function scan(node, depth = 0) {
@@ -390,9 +390,12 @@ export function createPlugin(V, env = globalThis) {
         if (count && count + 100 > score) { best = node; score = count + 100; }
         node.forEach(item => scan(item, depth + 1));
       } else if (node.props) {
-        if (node.key === ROW) duplicate = true;
-        if (allowContainer && Array.isArray(node.props.children) && (node.type === RN.View || node.type === RN.ScrollView) && depth > score) {
-          best = node.props.children; score = depth;
+        if (node.key === ROW || node.props.testID === ROW || node.props.label === LABEL) duplicate = true;
+        // With no action group, append to the outer content rather than inside
+        // the emoji preview/name header.
+        if (allowContainer && score < 100 && Array.isArray(node.props.children)
+          && (node.type === RN.View || node.type === RN.ScrollView) && depth < containerDepth) {
+          best = node.props.children; containerDepth = depth;
         }
         scan(node.props.children, depth + 1);
       }
@@ -420,12 +423,14 @@ export function createPlugin(V, env = globalThis) {
     const caches = Array.from({ length: 6 }, () => new WeakMap());
     const nativeTypes = new Set([RN.View, RN.ScrollView, RN.Text, RN.Image, RN.Pressable,
       RN.TouchableOpacity, RN.TextInput, RN.FlatList, RN.Switch]);
-    let visited = 0;
+    let visited = 0, ownerPath;
+    const PATH = '__stealmojiSheetPath';
     let openingEmoji = resolveEmoji(context), openingEmojis = messageEmojis(context);
     const live = () => active && generation === session;
-    function walk(node, props, level, depth = 0) {
+    function walk(node, props, level, path, trace, depth = 0) {
       if (!node || depth > 24 || ++visited > 1000) return node;
-      if (Array.isArray(node)) return node.map(child => walk(child, props, level, depth + 1));
+      if (Array.isArray(node)) return node.map((child, i) => walk(child, props, level,
+        path + '/' + (child?.key ?? i), trace, depth + 1));
       if (!node.props) return node;
       const next = { ...node.props };
       if (key === 'MessageReactions' && Array.isArray(next.tabs)) {
@@ -438,14 +443,20 @@ export function createPlugin(V, env = globalThis) {
             accessibilityRole: 'button', accessibilityLabel: 'Emoji ' + emoji.name }, tab);
         });
       }
-      for (const field of ['children', 'header']) if (next[field] != null) next[field] = walk(next[field], props, level, depth + 1);
+      // Header renderers are also used independently by Discord. Wrapping them
+      // used to inject a second button into the emoji title/avatar area.
+      if (next.children != null) next.children = walk(next.children, props, level, path + '/children', trace, depth + 1);
       if (level < 5 && !nativeTypes.has(node.type)) {
         const wrapped = wrap(node.type, level + 1);
-        if (wrapped !== node.type) return h(wrapped, { ...next, key: node.key, ...(node.ref != null ? { ref: node.ref } : {}) });
+        if (wrapped !== node.type) {
+          const branch = path + '/component';
+          if (trace && (ownerPath === branch || ownerPath?.startsWith(branch + '/'))) trace.found = true;
+          return h(wrapped, { ...next, [PATH]: branch, key: node.key, ...(node.ref != null ? { ref: node.ref } : {}) });
+        }
       }
       return React.cloneElement(node, next);
     }
-    function transform(props, tree, level) {
+    function transform(props, tree, level, path) {
       if (!live()) return tree;
       try {
         const direct = resolveEmoji(props, context);
@@ -455,12 +466,24 @@ export function createPlugin(V, env = globalThis) {
         const emojis = openingEmoji ? [openingEmoji] : key === 'MessageLongPressActionSheet' ? openingEmojis : [];
         // Plain text menus need no Stealmoji component wrappers or tree edits.
         if (key === 'MessageLongPressActionSheet' && !emojis.length && (props?.message || context?.message)) return tree;
+        // One renderer in this sheet owns the row. Ancestors can pass already
+        // wrapped children through several components before they render.
+        if (ownerPath !== undefined && ownerPath !== path) {
+          if (!ownerPath.startsWith(path + '/')) return tree;
+          // Keep the route to the owner wrapped during parent rerenders, and
+          // release its claim if Discord removed that keyed component.
+          const trace = { found: false }; visited = 0;
+          const result = walk(tree, props, level, path, trace);
+          if (!trace.found) ownerPath = undefined;
+          return result;
+        }
         if (emojis.length) {
           const changed = inject(tree, emojis, key, key !== 'MessageLongPressActionSheet');
-          if (changed.done) return changed.tree;
+          if (changed.done) { ownerPath = path; return changed.tree; }
         }
+        if (ownerPath === path) ownerPath = undefined;
         visited = 0;
-        return walk(tree, props, level);
+        return walk(tree, props, level, path);
       } catch { return tree; }
     }
     function wrap(original, level = 0) {
@@ -469,11 +492,18 @@ export function createPlugin(V, env = globalThis) {
       if (cache.has(original)) return cache.get(original);
       let wrapped = original;
       if (typeof original === 'function' && !original.prototype?.isReactComponent) {
-        wrapped = function StealmojiSheet(...args) { return transform(args[0], original.apply(this, args), level); };
+        wrapped = function StealmojiSheet(...args) {
+          const { [PATH]: path = '$', ...props } = args[0] ?? {};
+          if (args[0]?.[PATH] !== undefined) args[0] = props;
+          return transform(args[0], original.apply(this, args), level, path);
+        };
       } else if (original.$$typeof === Symbol.for('react.memo')) {
         wrapped = React.memo(wrap(original.type, level), original.compare);
       } else if (original.$$typeof === Symbol.for('react.forward_ref')) {
-        wrapped = React.forwardRef((props, ref) => transform(props, original.render(props, ref), level));
+        wrapped = React.forwardRef((input, ref) => {
+          const { [PATH]: path = '$', ...props } = input ?? {};
+          return transform(props, original.render(props, ref), level, path);
+        });
       }
       cache.set(original, wrapped);
       return wrapped;

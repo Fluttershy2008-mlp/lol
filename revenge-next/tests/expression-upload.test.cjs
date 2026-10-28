@@ -59,7 +59,7 @@ function scenario(t, options = {}) {
     w.native = { async createGuildSticker(input) { nativePosts.push(input); return { id: CREATED }; },
         async uploadEmoji(input) { nativePosts.push(input); return { id: CREATED }; } };
     if (options.nativeHost) w.panelHost = installServerPanelHost(w, { dismissMode: options.nativeHost });
-    if (VALENCED) w.pageHost = installNavigationHost(w);
+    if (VALENCED) w.pageHost = installNavigationHost(w, { loadSettingsOnOpen: !!options.loadSettingsOnOpen });
     w.mount = async element => { let ui; await act(() => { ui = Renderer.create(element); }); renders.push(ui); return ui; };
     w.open = async (kind, { choose = true, advance = true } = {}) => {
         w.pageMode = VALENCED && kind === 'stealmoji';
@@ -380,6 +380,8 @@ if (VALENCED) {
         assert.equal(pickerCount(ui),1); assert.equal(ui.root.findAllByType('Modal').length,0);
         assert.equal(w.alerts.length,0); assert.equal(w.openedSheets.length,1,'only the original Discord menu opens');
         assert.match(w.navigation.getCurrentRoute().name,/stealmoji\.legacy-page$/);
+        assert.equal(w.pageHost.roots.at(-1).name,'settings');
+        assert.deepEqual(w.pageHost.unhandled,[],'the custom settings route must not be sent to the root navigator');
         await act(button(ui,'Close'));
         assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.pageHost.subscribers.size,0);
         await act(button(ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
@@ -435,7 +437,7 @@ if (VALENCED) {
         const w = scenario(t); w.setSettingsLoaded(false);
         const open = await w.open('stealmoji',{ choose: false });
         await act(() => w.stop(open.item)); await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(1000));
-        assert.equal(w.pageHost.stack.length,1); assert.equal(w.registeredScreens.size,0);
+        assert.equal(pickerCount(open.ui),0); assert.equal(w.registeredScreens.size,0);
         assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
     });
 
@@ -445,10 +447,54 @@ if (VALENCED) {
         assert.ok(w.toasts.some(value => /page did not open/.test(value)));
         assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.timers.size,0);
         await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(0));
-        assert.equal(w.navigation.getCurrentRoute().name,'Chat','a stale native registration must not leave a closed page on top');
+        assert.equal(w.navigation.getCurrentRoute().name,'SettingsOverview','a stale native registration must not open a cancelled page');
         const fresh = await w.open('stealmoji',{ choose: false });
         assert.equal(pickerCount(fresh.ui),1); await act(button(fresh.ui,'Close'));
-        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.alerts.length,0);
+        assert.equal(w.navigation.getCurrentRoute().name,'SettingsOverview'); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced Stealmoji loads the Settings navigator before waiting for its cold modules', async t => {
+        const w = scenario(t,{ loadSettingsOnOpen: true }); w.setSettingsLoaded(false);
+        const open = await w.open('stealmoji',{ choose: false });
+        assert.equal(pickerCount(open.ui),1); assert.deepEqual(w.pageHost.unhandled,[]);
+        assert.equal(w.navigation.getRootState().routes.at(-1).name,'settings');
+        assert.equal(w.timers.size,0); assert.equal(w.toasts.length,0);
+        await act(button(open.ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute().name,'SettingsOverview');
+        await act(() => w.navigation.goBack()); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+    });
+
+    test('Valenced Stealmoji opens from existing Settings and returns to that page', async t => {
+        const w = scenario(t); w.navigation.navigate('settings');
+        const previous = w.navigation.getCurrentRoute();
+        const open = await w.open('stealmoji',{ choose: false });
+        assert.equal(pickerCount(open.ui),1); assert.equal(w.pageHost.roots.length,2);
+        await act(button(open.ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute(),previous); assert.deepEqual(w.pageHost.unhandled,[]);
+    });
+
+    test('Valenced Stealmoji Back during a cold Settings load cancels any later page opening', async t => {
+        const w = scenario(t); w.setSettingsLoaded(false);
+        const open = await w.open('stealmoji',{ choose: false });
+        assert.equal(w.navigation.getCurrentRoute().name,'SettingsOverview');
+        await act(() => w.navigation.goBack()); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(10000));
+        assert.equal(pickerCount(open.ui),0); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        assert.equal(w.toasts.length,0); assert.equal(w.timers.size,0); assert.equal(w.pageHost.subscribers.size,0);
+        const fresh = await w.open('stealmoji',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+        await act(button(fresh.ui,'Close')); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+    });
+
+    test('Valenced Stealmoji disable between registration and navigation cancels the queued dispatch', async t => {
+        const w = scenario(t), open = await w.open('stealmoji',{ choose: false, advance: false });
+        // Run only the source's 350ms opener, leaving the adapter's 0ms task queued.
+        const timers = [...w.timers.entries()];
+        assert.equal(timers.length,1);
+        w.timers.delete(timers[0][0]); await act(timers[0][1].fn);
+        assert.equal(w.registeredScreens.size,1); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        await act(() => w.stop(open.item)); await act(() => w.advance(10000));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.timers.size,0);
+        assert.equal(w.registeredScreens.size,0); assert.equal(pickerCount(open.ui),0);
     });
 
     test('Valenced Stealmoji can identify its page through nested native navigation state', async t => {

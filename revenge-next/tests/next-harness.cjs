@@ -185,6 +185,7 @@ function createWorld(options = {}) {
             else { const entry = { filter, cb, opts }; moduleWaiters.add(entry); return () => moduleWaiters.delete(entry); } return () => {}; },
     };
     const settings = {
+        isSettingsModulesLoaded: () => settingsLoaded,
         onSettingsModulesLoaded(fn) { if (settingsLoaded) fn(); else settingsSubscriptions.add(fn); return () => settingsSubscriptions.delete(fn); },
         registerSettingsItem(key, value) { registeredScreens.set(key, value); return () => registeredScreens.delete(key); },
         refreshSettings: () => calls.push(['refreshSettings']),
