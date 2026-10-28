@@ -45,8 +45,6 @@
     const UserStore = findByStoreName("UserStore");
 
     const EmojiActions = findByProps("uploadEmoji");
-    const StickerActions = findByProps("fetchSticker", "createGuildSticker")
-        ?? findByProps("createGuildSticker", "updateGuildSticker");
     const EmojiSlotModule = findByProps("getMaxEmojiSlots");
     const Surrogates = findByProps("convertSurrogateToName");
     const GuildIconModule = findByProps("GuildIconSizes");
@@ -63,7 +61,12 @@
     const MAX_STICKER_BYTES = 512 * 1024;
     const STICKER_LIMITS = { 0: 5, 1: 15, 2: 30, 3: 60 };
     const unpatches = [];
+    const pendingClones = new Set();
+    let temporaryFileId = 0;
     let active = false, generation = 0;
+    const sessionToken = () => ({ generation, account: UserStore?.getCurrentUser?.()?.id });
+    const isCurrent = session => active && session.generation === generation && Boolean(session.account)
+        && session.account === UserStore?.getCurrentUser?.()?.id;
     function resolveSheet(promise, callback) {
         const epoch = generation;
         return Promise.resolve(promise).then(module => {
@@ -125,24 +128,28 @@
 
     function stickerUrl(sticker, size) {
         const ext = stickerExt(sticker);
-        return `https://media.discordapp.net/stickers/${sticker.id}.${ext}?size=${size}&lossless=true`;
+        return `https://media.discordapp.net/stickers/${sticker.id}.${ext}?size=${size}&lossless=true&animated=true`;
     }
 
-    async function fetchCapped(type, item) {
+    async function fetchCapped(type, item, check = () => {}) {
         const max = type === "Sticker" ? MAX_STICKER_BYTES : MAX_EMOJI_BYTES;
         let lastError;
 
         for (let size = 4096; size >= 16; size = Math.floor(size / 2)) {
+            check();
             const url = type === "Sticker" ? stickerUrl(item, size) : emojiUrl(item, size);
             try {
-                const response = await fetch(url);
+                const response = await (vendetta.utils?.safeFetch ?? fetch)(url);
+                check();
                 if (!response.ok) {
                     lastError = new Error(`HTTP ${response.status} while fetching image`);
                     continue;
                 }
                 const blob = await response.blob();
+                check();
                 if (blob.size <= max) return blob;
             } catch (e) {
+                check();
                 lastError = e;
             }
         }
@@ -212,10 +219,11 @@
         return "Unknown error";
     }
 
-    async function cloneEmoji(guildId, emoji, customName) {
+    async function cloneEmoji(guildId, emoji, customName, check, beforeUpload) {
         if (!EmojiActions?.uploadEmoji) throw new Error("Discord's emoji upload module was not found");
-        const blob = await fetchCapped("Emoji", emoji);
+        const blob = await fetchCapped("Emoji", emoji, check);
         const image = await dataUrlFromBlob(blob);
+        beforeUpload();
         return EmojiActions.uploadEmoji({
             guildId,
             image,
@@ -224,74 +232,129 @@
         });
     }
 
-    async function cloneSticker(guildId, sticker, customName) {
+    function nativeStickerFiles() {
+        const getters = [
+            () => typeof valenced !== "undefined" ? valenced.discord?.native?.FileModule : undefined,
+            () => typeof revenge !== "undefined" ? revenge.discord?.native?.FileModule : undefined,
+            () => findByProps("writeFile", "removeFile"),
+            () => ReactNative.NativeModules?.NativeFileModule,
+        ];
+        for (const get of getters) {
+            const files = optional(get);
+            if (typeof files?.writeFile === "function" && typeof files?.removeFile === "function") return files;
+        }
+    }
+
+    async function cloneSticker(guildId, sticker, customName, check, beforeUpload) {
         if (Number(sticker.format_type ?? sticker.formatType ?? sticker.format) === 3)
             throw new Error("Lottie stickers are not supported by ExpressionCloner");
-        if (!StickerActions?.createGuildSticker)
+        // The action may load after the plugin, and no longer has to share a
+        // barrel with fetchSticker/updateGuildSticker. Resolve it on each clone.
+        const actions = findByProps("createGuildSticker");
+        const http = actions?.createGuildSticker ? undefined : vendetta.metro.common.RestAPI
+            ?? findByProps("HTTP")?.HTTP ?? findByProps("get", "post", "del");
+        if (!actions?.createGuildSticker && typeof http?.post !== "function")
             throw new Error("Discord's sticker upload module was not found");
 
-        let full = sticker;
+        let full = { ...sticker, ...optional(() => StickerStore?.getStickerById?.(sticker.id)), id: sticker.id };
         try {
-            if (StickerActions.fetchSticker) full = await StickerActions.fetchSticker(sticker.id) ?? sticker;
+            const fetcher = actions?.fetchSticker ? actions : findByProps("fetchSticker");
+            const fetched = await fetcher?.fetchSticker?.(sticker.id);
+            check();
+            const data = fetched?.body ?? fetched;
+            if (data?.id === sticker.id) full = { ...full, ...data };
         } catch { /* message sticker data is enough as a fallback */ }
+        check();
+        if (Number(full.format_type ?? full.formatType ?? full.format) === 3)
+            throw new Error("Lottie stickers are not supported by ExpressionCloner");
 
-        const blob = await fetchCapped("Sticker", full);
-        const dataUrl = await dataUrlFromBlob(blob);
-        const tags = String(full.tags ?? full.emoji_name ?? full.emojiName ?? "sticker").trim() || "sticker";
-        const description = String(full.description ?? "").slice(0, 100);
+        const blob = await fetchCapped("Sticker", full, check);
+        if (!blob.size) throw new Error("The sticker image is empty.");
+        const tags = (String(full.tags ?? full.emoji_name ?? full.emojiName ?? "slight_smile").trim() || "slight_smile").slice(0, 200);
+        const originalDescription = String(full.description ?? "").slice(0, 100);
+        const description = originalDescription.length === 1 ? "" : originalDescription;
         const mimeType = stickerMime(full);
-
-        // Discord mobile's native action creator normally uploads a local URI.
-        // A data URI works on many React Native builds. If it does not, retry the
-        // action creator through its web/FormData path, which uses the same auth.
+        const form = actions?.createGuildSticker ? undefined : new FormData();
+        const files = nativeStickerFiles();
+        let temporary, uri;
         try {
-            return await StickerActions.createGuildSticker({
-                guildId,
-                name: customName,
-                tags,
-                description,
-                uri: dataUrl,
-                mimeType,
-                platform: "mobile",
-                originalMd5: null,
-            });
-        } catch (mobileError) {
-            try {
-                const form = new FormData();
+            if (actions?.createGuildSticker || typeof form.getParts === "function") {
+                const dataUrl = await dataUrlFromBlob(blob);
+                check();
+                if (files) {
+                    const data = dataUrl.match(/^data:[^,]*;base64,([A-Za-z0-9+/=\s]+)$/)?.[1]?.replace(/\s/g, "");
+                    if (!data) throw new Error("Could not read the sticker image.");
+                    temporary = `expression-cloner-${Date.now()}-${++temporaryFileId}-${Math.random().toString(36).slice(2)}.${stickerExt(full)}`;
+                    const path = await files.writeFile("cache", temporary, data, "base64");
+                    check();
+                    if (typeof path !== "string" || !path) throw new Error("Discord did not return a local sticker path.");
+                    uri = /^(file|content):\/\//.test(path) ? path : "file://" + path;
+                } else if (actions?.createGuildSticker) {
+                    // Older compatibility clients can accept a data URI.
+                    uri = dataUrl;
+                } else throw new Error("Discord's image file module is unavailable on this build.");
+            }
+
+            beforeUpload();
+            let result;
+            // Choose one uploader before the POST. A timeout can follow a
+            // successful creation, so never retry through a second uploader.
+            if (actions?.createGuildSticker) {
+                result = await actions.createGuildSticker({ guildId, name: customName, tags, description,
+                    uri, mimeType, platform: "mobile", originalMd5: null });
+            } else {
                 form.append("name", customName);
                 form.append("tags", tags);
                 form.append("description", description);
-                form.append("file", blob, `${customName}.${stickerExt(full)}`);
-                return await StickerActions.createGuildSticker({
-                    guildId,
-                    body: form,
-                    platform: "web",
-                });
-            } catch (webError) {
-                webError.cause ??= mobileError;
-                throw webError;
+                if (typeof form.getParts === "function") form.append("file", { uri, name: `sticker.${stickerExt(full)}`, type: mimeType });
+                else form.append("file", blob, `sticker.${stickerExt(full)}`);
+                result = await http.post({ url: `/guilds/${guildId}/stickers`, body: form,
+                    oldFormErrors: true, failImmediatelyWhenRateLimited: true });
             }
+            if (result?.ok === false || Number(result?.status) >= 400) throw result;
+            const created = result?.body ?? result;
+            if (!created?.id) throw new Error("Discord did not confirm the upload. Check the server's stickers before trying again.");
+            check();
+            if (!actions?.createGuildSticker) optional(() => FluxDispatcher?.dispatch?.({ type: "GUILD_STICKERS_CREATE_SUCCESS",
+                guildId, sticker: { ...created, user: UserStore?.getCurrentUser?.() } }));
+            return created;
+        } finally {
+            if (temporary) { try { await files.removeFile("cache", temporary); } catch {} }
         }
     }
 
-    async function doClone(guild, type, item, customName) {
+    async function doClone(guild, type, item, customName, session) {
+        if (!isCurrent(session)) return;
+        const key = `${session.generation}:${session.account}:${guild.id}:${type}:${item.id}:${customName}`;
+        if (pendingClones.has(key)) return;
+        pendingClones.add(key);
+        const check = () => { if (!isCurrent(session)) throw new Error("Clone cancelled."); };
+        const beforeUpload = () => {
+            check();
+            const currentGuild = GuildStore?.getGuild?.(guild.id) ?? GuildStore?.getGuilds?.()?.[guild.id];
+            if (!currentGuild || !canCreateExpressions(currentGuild)) throw new Error("You no longer have permission to create expressions in this server.");
+            if (!(type === "Emoji" ? emojiSlotsAvailable(currentGuild, item) : stickerSlotsAvailable(currentGuild)))
+                throw new Error(`This server has no free ${type.toLowerCase()} slots.`);
+        };
         try {
-            if (type === "Emoji") await cloneEmoji(guild.id, item, customName);
-            else await cloneSticker(guild.id, item, customName);
-            showToast(`Cloned ${customName} to ${guild.name}`, iconSuccess);
+            if (type === "Emoji") await cloneEmoji(guild.id, item, customName, check, beforeUpload);
+            else await cloneSticker(guild.id, item, customName, check, beforeUpload);
+            if (isCurrent(session)) showToast(`Cloned ${customName} to ${guild.name}`, iconSuccess);
         } catch (e) {
+            if (!isCurrent(session)) return;
             logError("Clone failed", e);
             showToast(`Clone failed: ${errorMessage(e)}`, iconError);
-        }
+        } finally { pendingClones.delete(key); }
     }
 
-    function RenamePrompt({ guild, type, item, alertKey }) {
+    function RenamePrompt({ guild, type, item, alertKey, session }) {
         const initialValue = normalizeName(item.name ?? item.alt, type);
         const [value, setValue] = React.useState(initialValue);
         const [error, setError] = React.useState("");
         const dark = ReactNative.Appearance?.getColorScheme?.() !== "light";
 
         const confirm = () => {
+            if (!isCurrent(session)) return;
             const name = String(value ?? "").trim();
             if (!validateName(name, type)) {
                 setError(type === "Emoji"
@@ -301,7 +364,7 @@
             }
 
             try { AlertManager?.dismissAlert?.(alertKey); } catch {}
-            void doClone(guild, type, item, name);
+            void doClone(guild, type, item, name, session);
         };
 
         const input = React.createElement(ReactNative.View, {
@@ -357,23 +420,24 @@
         });
     }
 
-    function askNameAndClone(guild, type, item) {
+    function askNameAndClone(guild, type, item, session) {
+        if (!isCurrent(session)) return;
         const initialValue = normalizeName(item.name ?? item.alt, type);
 
         if (!AlertManager?.openAlert || !AlertModal || !AlertActionButton) {
             showToast(`Rename prompt unavailable; cloning as ${initialValue}`, iconError);
-            void doClone(guild, type, item, initialValue);
+            void doClone(guild, type, item, initialValue, session);
             return;
         }
 
         const alertKey = `expression-cloner-${type.toLowerCase()}-${guild.id}-${item.id ?? "item"}`;
         AlertManager.openAlert(
             alertKey,
-            React.createElement(RenamePrompt, { guild, type, item, alertKey })
+            React.createElement(RenamePrompt, { guild, type, item, alertKey, session })
         );
     }
 
-    function GuildRow({ guild, type, item }) {
+    function GuildRow({ guild, type, item, session }) {
         const slotsAvailable = type === "Emoji" ? emojiSlotsAvailable(guild, item) : stickerSlotsAvailable(guild);
         const leading = GuildIcon
             ? React.createElement(GuildIcon, {
@@ -391,12 +455,12 @@
             trailing: React.createElement(FormIcon, { style: { opacity: 1 }, source: iconAdd }),
             onPress: () => {
                 LazyActionSheet?.hideActionSheet?.();
-                askNameAndClone(guild, type, item);
+                askNameAndClone(guild, type, item, session);
             },
         });
     }
 
-    function ServerPicker({ type, item }) {
+    function ServerPicker({ type, item, session }) {
         const guilds = getGuilds(type, item);
         const image = type === "Emoji" ? emojiUrl(item, 128) : stickerUrl(item, 128);
 
@@ -418,7 +482,7 @@
             style: { flex: 1 },
             contentContainerStyle: { paddingBottom: 24 },
             data: guilds,
-            renderItem: ({ item: guild }) => React.createElement(GuildRow, { guild, type, item }),
+            renderItem: ({ item: guild }) => React.createElement(GuildRow, { guild, type, item, session }),
             ItemSeparatorComponent: FormDivider,
             keyExtractor: guild => guild.id,
             ListEmptyComponent: React.createElement(FormRow, {
@@ -431,13 +495,15 @@
     }
 
     function openServerPicker(type, item) {
+        if (!active) return;
+        const session = sessionToken();
         if (!LazyActionSheet?.openLazy || !ActionSheet) {
             showToast("ExpressionCloner could not open the server picker on this Discord build", iconError);
             return;
         }
         const body = ErrorBoundary
-            ? React.createElement(ErrorBoundary, null, React.createElement(ServerPicker, { type, item }))
-            : React.createElement(ServerPicker, { type, item });
+            ? React.createElement(ErrorBoundary, null, React.createElement(ServerPicker, { type, item, session }))
+            : React.createElement(ServerPicker, { type, item, session });
         const element = React.createElement(ActionSheet, { scrollable: true }, body);
         LazyActionSheet.openLazy(Promise.resolve({ default: () => element }), "ExpressionClonerServerPicker");
     }
@@ -815,6 +881,7 @@
     function onUnload() {
         active = false;
         generation++;
+        pendingClones.clear();
         hookedStickerDetailModules = new WeakSet();
         for (const unpatch of unpatches.splice(0).reverse()) {
             try { unpatch?.(); } catch (e) { logError("Failed to unpatch", e); }

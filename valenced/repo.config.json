@@ -6,6 +6,7 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
   "portVersion": "1.0.0-beta2",
   "pluginVersions": {
+    "expression-cloner": "1.0.0-beta3",
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
@@ -17,6 +18,7 @@
     "valid-user": "1.0.0-beta3"
   },
   "sourceRefs": {
+    "expression-cloner": "main",
     "blocked-user-list": "main",
     "friends-list": "main",
     "copy-user-id": "main",

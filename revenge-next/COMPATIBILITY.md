@@ -139,3 +139,7 @@ Valenced InfoCommands beta5 directly controls panel visibility, adds a press han
 ## List profile buttons
 
 Friends List and Blocked User List beta5 share the native profile resolver used by Valid User and InfoCommands. Valenced receives the same fix as beta4 for both lists, retaining their native settings entries. Fourteen Valenced cases cover anonymous cold/imported/namespace-only openers, both blocked-user controls, exact IDs, unchanged relationships, stale callbacks after stop/restart or account changes, and late failures. Six discovery cases fail against the prior Valenced beta3 packages. Classic Friends List 1.0.3 and Blocked User List 1.3.3 retain named legacy openers. All unrelated current packages and older ZIPs are preserved.
+
+## ExpressionCloner sticker uploads
+
+ExpressionCloner beta5 resolves native sticker actions at clone time without requiring unrelated exports. If absent, it uploads multipart data through the canonical signed-in REST client. Mobile payloads use owned temporary files and local URIs; browser FormData is retained. Seventeen shared full-flow tests run on both Next and Valenced (beta3), covering PNG/APNG/GIF, late/missing actions, HTTP selection, file cleanup, single-attempt failures, duplicate confirmations, stale sessions/accounts, permission loss and size/format limits. Four discovery cases fail against the previous Valenced beta2 package. The same source ships as Classic 1.1.3. All other current packages and previous ZIPs are preserved; physical Android verification remains pending.

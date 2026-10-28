@@ -448,11 +448,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.expression-cloner@1.0.0-beta5.zip",
+          "sha256": "80d8a6bb60a3926f87bbbd9bb0a9319ab3a57af4d9bbb79983241f3e7dc32d2f",
+          "size": 21052,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "ExpressionCloner (Next preview)",
       "description": "Revenge Next preview. Clone custom emojis and supported stickers from their action sheets to servers you manage.",

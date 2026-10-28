@@ -215,6 +215,7 @@ function createWorld(options = {}) {
         };
         let plugin;
         const sandbox = { ...host, console: { log() {}, warn() {}, error: (...args) => errors.push([slug, ...args]) },
+            ...(options.globals ?? {}),
             ...(HOST_ID === 'valenced' ? { HOST_API: U } : { revenge: U }), plugin: value => value, Promise, AbortController, TextEncoder, TextDecoder,
             Blob, Response, Headers, Uint8Array, URL, atob, btoa,
             Date: class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } },

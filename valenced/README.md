@@ -8,9 +8,11 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
+**ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
+
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; CustomRPC, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -22,7 +24,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -39,6 +41,8 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**ExpressionCloner beta3:** looks up `createGuildSticker` at clone time and does not require `fetchSticker` or `updateGuildSticker` on the same export. When unavailable, it posts multipart data to `/guilds/{guild.id}/stickers` through the canonical signed-in HTTP client. PNG/APNG/GIF uploads retain their format and use an owned local cache file on mobile. Cleanup runs after success, failure and cancellation. Duplicate confirmations are suppressed; a failed or unconfirmed POST never causes a second creation request. Plugin/account checks and a final permission/slot check precede creation. The same source ships as Classic 1.1.3 and Next beta5; all other packages are unchanged.
 
 **Friends List and Blocked User List beta4:** both now use the shared profile resolver already used by Valid User and InfoCommands. It resolves anonymous default exports by imported path or namespace markers, or selectively initializes the native opener on the first tap, and opens with `stack`. Profile actions preserve the exact user ID and recheck the active plugin session and signed-in account before opening. Stale callbacks and late failures after disabling or switching accounts stay inactive. Opening a profile does not block, unblock or alter a friendship.
 
@@ -82,6 +86,8 @@ Five additional dismissal regressions fail against beta4 and pass against beta5.
 Twelve native-settings checks cover all five real settings pages, coexistence with core settings, independent stop/restart for every entry, delayed settings loading, queued callback cancellation, cached pages, insertion rollback, asynchronous startup cancellation and startup failure. Package checks verify that the shortcut helper appears only in the five selected plugins and that its source hash matches the recorded metadata. The new Blocked User List page and coexistence checks fail against its beta2 package and pass against beta3.
 
 Fourteen list-profile checks open the actual pages through their Valenced settings entries and cover cold, imported and namespace-only anonymous profile openers, exact string IDs, both blocked-user controls, unchanged relationships, no startup profile loading, independent stop/restart, account switches and late request failures. The six opener-discovery cases fail against both lists' beta3 packages and pass against beta4. No unrelated Metro factory is initialized.
+
+Seventeen ExpressionCloner cases exercise the complete sticker clone flow on both Valenced and Next: late standalone upload actions, no old action module, PNG/APNG/GIF multipart uploads, canonical HTTP selection, local URI/file cleanup, failures without retries, unconfirmed responses, duplicate confirmations, cancellation, account changes, stale prompts, permission loss, oversized files, Lottie metadata and browser FormData. The four discovery cases fail against Valenced beta2 and pass against beta3. [Implementation and source references](../expression-cloner/README.md#113--valenced-beta3--next-beta5).
 
 The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 
