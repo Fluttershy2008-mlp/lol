@@ -131,3 +131,7 @@ Valenced Copy User ID beta3 resolves profile overflow menus by imported path and
 ## Valenced Server Info panel
 
 Valenced InfoCommands beta4 uses a themed React Native Modal bottom panel mounted through Valenced's React alert host. It reuses the banner/header, Overview, Server and Friends components, renders cached data immediately, fits short windows and scrolls all content. ID copying and owner/friend profile callbacks are scoped to the active panel and cancelled on stop. The shared source ships as Next InfoCommands beta11; Next retains its existing native sheet and fallback behavior. All other packages are unchanged.
+
+## Server Info Close follow-up
+
+Valenced InfoCommands beta5 directly controls panel visibility, adds a press handler to the Close text, and removes only its owned alert-store entry if native dismissal retains it. Each opening has a unique host key. Five regressions cover native retention/errors/delays, immediate disappearance, preserved unrelated alerts, cancelled listeners/timers, stale Close callbacks and reopening. The shared source ships as Next InfoCommands beta12, with Next's existing sheet retained.

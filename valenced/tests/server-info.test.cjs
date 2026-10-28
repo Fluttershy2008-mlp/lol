@@ -8,9 +8,10 @@ const { installColdProfileModule } = require('./profile-fixture.cjs');
 const h = React.createElement;
 
 async function scenario(t, options = {}) {
-    const w = createWorld(options), renders = [], host = installServerPanelHost(w);
+    const w = createWorld(options), renders = [], host = installServerPanelHost(w, options.panelHost);
     w.hostRoot = await mount(h(host.Root));
     w.panelNodes = host.nodes;
+    w.panelHost = host;
     async function mount(element) {
         let ui; await Renderer.act(async () => { ui = Renderer.create(element); });
         renders.push(ui); return ui;
@@ -152,4 +153,45 @@ test('InfoCommands keeps an unavailable-server error inside the themed panel', a
     assert.match(contents(ui), /Server details are unavailable/);
     assert.equal(nativeDialogs(w).length, 0);
     assert.ok(button(ui, 'Close server info'));
+});
+
+for (const mode of ['retain', 'throw']) test('InfoCommands Close text closes a panel when native dismissal can ' + mode, async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: mode } });
+    const ui = await w.openPanel();
+    const actions = w.U.discord.actions.AlertActionCreators;
+    const unrelated = h(w.RN.Text, null, 'Another plugin alert');
+    await Renderer.act(async () => actions.openAlert('unrelated.plugin.alert', unrelated));
+    const closeText = ui.root.findAll(node => node.type === 'Text' && node.children.includes('Close'))[0];
+    assert.equal(typeof closeText.props.onPress, 'function', 'the text itself is pressable');
+    const close = closeText.props.onPress;
+    await Renderer.act(async () => close());
+    assert.equal(ui.root.findAllByType('Modal').length, 0);
+    assert.equal(w.panelNodes.size, 1, 'only the unrelated alert remains');
+    assert.equal(w.panelNodes.get('unrelated.plugin.alert').content, unrelated);
+    assert.equal(w.timers.size, 0, 'the closed panel has no data timers');
+    assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
+    await Renderer.act(async () => w.panelHost.clear());
+    await w.openPanel();
+    await Renderer.act(async () => close());
+    assert.equal(ui.root.findAllByType('Modal').length, 1, 'the old Close callback cannot dismiss a new panel');
+    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
+    assert.equal(w.panelNodes.size, 0);
+});
+
+for (const action of ['close', 'back', 'backdrop']) test('InfoCommands ' + action + ' hides immediately before delayed native removal', async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
+    const ui = await w.openPanel();
+    const close = action === 'back' ? ui.root.findByType('Modal').props.onRequestClose
+        : button(ui, action === 'close' ? 'Close server info' : 'Dismiss server info').props.onPress;
+    await Renderer.act(async () => close());
+    assert.equal(ui.root.findAllByType('Modal').length, 0, 'the modal is gone before the host removes its entry');
+    assert.equal(w.timers.size, 0);
+    assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
+    await w.openPanel();
+    assert.equal(w.panelNodes.size, 2, 'the old and reopened panels have distinct host keys');
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    assert.equal(ui.root.findAllByType('Modal').length, 1, 'an old native dismissal cannot close the reopened panel');
+    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    assert.equal(w.panelNodes.size, 0);
 });

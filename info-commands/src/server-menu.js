@@ -10,6 +10,7 @@ const ITEM_ID = "info-commands-server-info";
 let activeSheet;
 let menuTimer;
 let profileTimer;
+let panelSequence = 0;
 let sheets;
 let contexts;
 let running = false;
@@ -190,15 +191,48 @@ export function openServerInfo(id, load) {
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional(() => findByProps("ActionSheet")?.ActionSheet);
     const epoch = generation;
-    const attempt = { key, timer: undefined, fallback: false, presented: false, panel: undefined, close };
+    const attempt = { key, timer: undefined, fallback: false, presented: false, panel: undefined,
+        panelKey: undefined, panelNode: undefined, closed: false, close };
     activeSheet = attempt;
     const live = () => running && epoch === generation && activeSheet === attempt;
+    const panelListeners = new Set();
+    const panelVisible = () => !attempt.closed;
+    const subscribePanel = listener => {
+        panelListeners.add(listener);
+        return () => panelListeners.delete(listener);
+    };
+    function hidePanel() {
+        if (attempt.closed) return;
+        attempt.closed = true;
+        for (const listener of [...panelListeners]) optional(listener);
+    }
+    function dismissPanelHost() {
+        const alerts = attempt.panel;
+        if (!alerts) return;
+        optional(() => alerts.dismissAlert(attempt.panelKey));
+        // Some builds retain the hosting alert after dismissal. Remove only this
+        // panel's entry so its dialog backdrop cannot keep blocking Discord.
+        optional(() => {
+            const store = alerts.useAlertStore;
+            if (typeof store?.getState !== "function" || typeof store?.setState !== "function") return;
+            const owns = entry => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode;
+            const entries = store.getState()?.alerts;
+            if (!Array.isArray(entries) || !entries.some(owns)) return;
+            store.setState(state => {
+                if (!Array.isArray(state.alerts)) return state;
+                const remaining = state.alerts.filter(entry => !owns(entry));
+                return remaining.length === state.alerts.length ? state : { alerts: remaining };
+            });
+        });
+    }
     function close(hide = true) {
         clearTimeout(attempt.timer);
-        if (!live()) return;
-        activeSheet = undefined;
+        const current = live();
+        if (current) activeSheet = undefined;
+        hidePanel();
+        if (!current) return;
         if (hide) {
-            if (attempt.panel) optional(() => attempt.panel.dismissAlert(key));
+            if (attempt.panel) dismissPanelHost();
             else optional(() => host?.hideActionSheet?.(key));
         }
     }
@@ -219,7 +253,8 @@ export function openServerInfo(id, load) {
         if (!live() || attempt.fallback) return;
         attempt.fallback = true;
         clearTimeout(attempt.timer);
-        if (attempt.panel) optional(() => attempt.panel.dismissAlert(key));
+        hidePanel();
+        if (attempt.panel) dismissPanelHost();
         else optional(() => host?.hideActionSheet?.(key));
         if (error) optional(() => console.warn("[InfoCommands] Using native server info fallback", error));
         Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then(data => {
@@ -253,7 +288,8 @@ export function openServerInfo(id, load) {
         const alerts = nativeAlerts();
         if (alerts && RN.Modal) {
             function ManagedServerInfoModal() {
-                if (!live() || attempt.fallback) return null;
+                const visible = React.useSyncExternalStore(subscribePanel, panelVisible, panelVisible);
+                if (!visible || !live() || attempt.fallback) return null;
                 const content = React.createElement(ServerInfoModal, {
                     guildId: id, onClose: () => close(), onPresented: presented, onDismiss: dismissed,
                     onCopyServerId: value => { if (live() && value === id) copy(id); },
@@ -273,9 +309,11 @@ export function openServerInfo(id, load) {
                 return Boundary ? React.createElement(Boundary, null, content) : content;
             }
             attempt.panel = alerts;
+            attempt.panelKey = `${key}.panel.${epoch}.${++panelSequence}`;
+            attempt.panelNode = React.createElement(ManagedServerInfoModal);
             attempt.timer = setTimeout(() => fallback(), 2500);
             try {
-                const result = alerts.openAlert(key, React.createElement(ManagedServerInfoModal), dismissed, { dismissable: true });
+                const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, dismissed, { dismissable: true });
                 Promise.resolve(result).catch(fallback);
                 return;
             } catch (error) { fallback(error); return; }

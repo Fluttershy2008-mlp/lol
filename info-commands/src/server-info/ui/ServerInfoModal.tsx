@@ -47,7 +47,7 @@ export default function ServerInfoModal({ guildId, onClose, onPresented, onDismi
                 : <Text variant="text-lg/semibold">Server Info</Text>}
               <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close server info" onPress={onClose}
                 style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, marginTop: 4 }}>
-                <Text color="text-link">Close</Text>
+                <Text color="text-link" onPress={onClose} accessibilityRole="button">Close</Text>
               </TouchableOpacity>
             </View>
             {guild ? <>

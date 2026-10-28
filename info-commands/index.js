@@ -1248,7 +1248,7 @@ var InfoCommandsBundle = (() => {
               onPress: onClose,
               style: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginTop: 4 }
             },
-            /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link" }, "Close")
+            /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", onPress: onClose, accessibilityRole: "button" }, "Close")
           )),
           guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(OverviewRows, { ...info, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(ServerRows, { guildId: guildId2, ...info, onOpenProfile, onCopyServerId, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(FriendsRows, { guildId: guildId2, friends: info.friends, loading: info.friendsPending, onOpenProfile, design: panelDesign }), info.cachedOnly && /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingHorizontal: 16 } }, "Showing cached server details.")) : /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24, alignItems: "center", gap: 12 } }, isLoading && /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { size: "large", color: "#5865f2" }), /* @__PURE__ */ runtime.react.React.createElement(Text2, null, isLoading ? "Loading server info…" : info.error ?? "Server details are unavailable."))
         )
@@ -1373,6 +1373,7 @@ var InfoCommandsBundle = (() => {
   var activeSheet;
   var menuTimer;
   var profileTimer;
+  var panelSequence = 0;
   var sheets;
   var contexts;
   var running = false;
@@ -1542,15 +1543,55 @@ var InfoCommandsBundle = (() => {
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional5(() => findByProps2("ActionSheet")?.ActionSheet);
     const epoch = generation;
-    const attempt = { key, timer: void 0, fallback: false, presented: false, panel: void 0, close };
+    const attempt = {
+      key,
+      timer: void 0,
+      fallback: false,
+      presented: false,
+      panel: void 0,
+      panelKey: void 0,
+      panelNode: void 0,
+      closed: false,
+      close
+    };
     activeSheet = attempt;
     const live = () => running && epoch === generation && activeSheet === attempt;
+    const panelListeners = /* @__PURE__ */ new Set();
+    const panelVisible = () => !attempt.closed;
+    const subscribePanel = (listener) => {
+      panelListeners.add(listener);
+      return () => panelListeners.delete(listener);
+    };
+    function hidePanel() {
+      if (attempt.closed) return;
+      attempt.closed = true;
+      for (const listener of [...panelListeners]) optional5(listener);
+    }
+    function dismissPanelHost() {
+      const alerts = attempt.panel;
+      if (!alerts) return;
+      optional5(() => alerts.dismissAlert(attempt.panelKey));
+      optional5(() => {
+        const store2 = alerts.useAlertStore;
+        if (typeof store2?.getState !== "function" || typeof store2?.setState !== "function") return;
+        const owns = (entry) => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode;
+        const entries = store2.getState()?.alerts;
+        if (!Array.isArray(entries) || !entries.some(owns)) return;
+        store2.setState((state) => {
+          if (!Array.isArray(state.alerts)) return state;
+          const remaining = state.alerts.filter((entry) => !owns(entry));
+          return remaining.length === state.alerts.length ? state : { alerts: remaining };
+        });
+      });
+    }
     function close(hide = true) {
       clearTimeout(attempt.timer);
-      if (!live()) return;
-      activeSheet = void 0;
+      const current = live();
+      if (current) activeSheet = void 0;
+      hidePanel();
+      if (!current) return;
       if (hide) {
-        if (attempt.panel) optional5(() => attempt.panel.dismissAlert(key));
+        if (attempt.panel) dismissPanelHost();
         else optional5(() => host?.hideActionSheet?.(key));
       }
     }
@@ -1569,7 +1610,8 @@ var InfoCommandsBundle = (() => {
       if (!live() || attempt.fallback) return;
       attempt.fallback = true;
       clearTimeout(attempt.timer);
-      if (attempt.panel) optional5(() => attempt.panel.dismissAlert(key));
+      hidePanel();
+      if (attempt.panel) dismissPanelHost();
       else optional5(() => host?.hideActionSheet?.(key));
       if (error) optional5(() => console.warn("[InfoCommands] Using native server info fallback", error));
       Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then((data) => {
@@ -1615,7 +1657,8 @@ var InfoCommandsBundle = (() => {
       const alerts = nativeAlerts();
       if (alerts && RN3.Modal) {
         let ManagedServerInfoModal = function() {
-          if (!live() || attempt.fallback) return null;
+          const visible = React3.useSyncExternalStore(subscribePanel, panelVisible, panelVisible);
+          if (!visible || !live() || attempt.fallback) return null;
           const content = React3.createElement(ServerInfoModal, {
             guildId: id,
             onClose: () => close(),
@@ -1641,9 +1684,11 @@ var InfoCommandsBundle = (() => {
           return Boundary ? React3.createElement(Boundary, null, content) : content;
         };
         attempt.panel = alerts;
+        attempt.panelKey = `${key}.panel.${epoch}.${++panelSequence}`;
+        attempt.panelNode = React3.createElement(ManagedServerInfoModal);
         attempt.timer = setTimeout(() => fallback(), 2500);
         try {
-          const result = alerts.openAlert(key, React3.createElement(ManagedServerInfoModal), dismissed, { dismissable: true });
+          const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, dismissed, { dismissable: true });
           Promise.resolve(result).catch(fallback);
           return;
         } catch (error) {

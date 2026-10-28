@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**InfoCommands: 1.0.0-beta4. Copy User ID, Addon List and Valid User: 1.0.0-beta3. AutoText and the other plugin ports: 1.0.0-beta2.** Refresh the existing repository and update InfoCommands to beta4 for the themed Server Info panel. Force-close Discord and reopen it. The repository URL stays the same.
+**InfoCommands: 1.0.0-beta5. Copy User ID, Addon List and Valid User: 1.0.0-beta3. AutoText and the other plugin ports: 1.0.0-beta2.** Refresh the existing repository and update InfoCommands to beta5 for the Server Info Close fix. Force-close Discord and reopen it. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -20,7 +20,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta4**; Copy User ID, Addon List and Valid User are at **1.0.0-beta3**; the other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**; Copy User ID, Addon List and Valid User are at **1.0.0-beta3**; the other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -37,6 +37,8 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**InfoCommands beta5** fixes Close on the themed Server Info panel. Close text, its surrounding touch target, Android Back and the backdrop now update the panel's own visibility, so it disappears even when native alert dismissal is delayed or fails. Retained host entries are removed by exact ownership without clearing other alerts. Unique keys prevent an old dismissal from closing a reopened panel. Data listeners/timers and old profile/copy actions are released or disabled on close. The beta4 layout is retained.
 
 **InfoCommands beta4** replaces the default white Android Server Info dialog with a themed bottom panel matching the supplied screenshots. It shows the banner, server icon/name, member/online/role/channel counts, boosts, owner/avatar, creation date, server ID and cached friends. The whole panel scrolls, including on short windows. ID copying stays local; owner/friend rows close the panel before opening the correct profile. Close, the backdrop and Android Back dismiss it. It uses Valenced's React alert host and React Native Modal, rather than the lazy sheet that previously failed to appear. An emergency OS dialog remains available if the custom panel cannot be shown. Other plugin artifacts are unchanged.
 
@@ -66,6 +68,8 @@ Six Addon List regressions fail against its beta2 package and pass against beta3
 Ten Copy User ID profile regressions fail against beta2 and pass against beta3. They cover unnamed imported exports in five component forms, loading after two minutes, upgrading the existing copy row, per-user/bot callbacks, rejecting unrelated IDs, restoring hooks on stop/restart, and cancelling queued callbacks. Shared message-menu and Classic source tests continue to run.
 
 Ten Server Info panel regressions fail against InfoCommands beta3 and pass against beta4. They cover the banner/icon/rows with a stalled network request, ID copying, light/dark appearance, a short window, owner and friend profiles, Back/backdrop/reopen, unavailable-server errors, and cancellation of queued and already-open actions on stop. The imported server-menu and settings entry points are also exercised. Closing the panel removes its listeners and data timers.
+
+Five additional dismissal regressions fail against beta4 and pass against beta5. They cover retained and throwing native dismissal, direct text presses, delayed removal for Close/Back/backdrop, preserved unrelated alerts, stale Close callbacks, cleanup and reopening with distinct host keys.
 
 These are preview ports. Automated fixtures cannot verify the Discord UI on your physical Android device. Some Discord versions can change internal menus or composer layouts. Valid User can only show accounts Discord makes available to your session; an inaccessible or nonexistent ID cannot be resolved by a plugin.
 
