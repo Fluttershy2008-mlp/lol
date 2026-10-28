@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,6 +193,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
 function createPlugin(V, env = globalThis) {
@@ -204,6 +203,7 @@ function createPlugin(V, env = globalThis) {
   let active = false, generation = 0, host, Row, clipboard, icon, contextMenus;
   let unpatch, retryTimer, resume;
   const profilePatches = new Map();
+  const profileWatches = new Map();
   const optional = fn => { try { return fn(); } catch { return undefined; } };
   const byProps = (...props) => optional(() => V.metro.findByProps(...props));
   const byStore = name => optional(() => V.metro.findByStoreName(name));
@@ -265,14 +265,17 @@ function createPlugin(V, env = globalThis) {
     const grouped = items.some(Array.isArray);
     const groups = grouped ? items.filter(Array.isArray) : [items];
     if (groups.some(group => group.some(item => item?.id === KEY || item?.key === KEY))) return items;
-    const target = groups.find(group => group.some(item => /copy username/i.test(String(item?.label ?? ''))))
+    const nativeCopy = item => /^copy user id$/i.test(String(item?.label ?? '').trim());
+    const target = groups.find(group => group.some(nativeCopy))
+      ?? groups.find(group => group.some(item => /copy username/i.test(String(item?.label ?? ''))))
       ?? groups.find(group => group.length) ?? groups[0];
     if (!target) return items;
-    const item = { id: KEY, key: KEY, label: `Copy User ID\n${id}`,
+    const nativeIndex = target.findIndex(nativeCopy);
+    const item = { ...(nativeIndex >= 0 ? target[nativeIndex] : {}), id: KEY, key: KEY, label: `Copy User ID\n${id}`,
       action: copyAction(id, session, hide), iconSource: icon };
     const index = target.findIndex(value => /copy username/i.test(String(value?.label ?? '')));
-    const position = index >= 0 ? index + 1 : target.length;
-    const added = [...target.slice(0, position), item, ...target.slice(position)];
+    const position = nativeIndex >= 0 ? nativeIndex : index >= 0 ? index + 1 : target.length;
+    const added = [...target.slice(0, position), item, ...target.slice(position + (nativeIndex >= 0 ? 1 : 0))];
     return grouped ? items.map(group => group === target ? added : group) : added;
   }
 
@@ -284,8 +287,14 @@ function createPlugin(V, env = globalThis) {
       if (!node.props) return node;
       if (Array.isArray(node.props.items)) {
         const items = addProfileItem(node.props.items, id, session, hide);
-        changed = true;
-        return items !== node.props.items ? React.cloneElement(node, { items }) : node;
+        if (items !== node.props.items) {
+          changed = true;
+          return React.cloneElement(node, { items });
+        }
+        if (items.some(group => (Array.isArray(group) ? group : [group]).some(item => item?.id === KEY || item?.key === KEY))) {
+          changed = true;
+          return node;
+        }
       }
       if (node.props.children != null) {
         const children = walk(node.props.children, depth + 1);
@@ -296,6 +305,31 @@ function createPlugin(V, env = globalThis) {
     return walk(tree);
   }
 
+  function patchProfile(name, module, session, hide) {
+    if (!active || generation !== session || profilePatches.has(name) || !module?.default) return;
+    let target = module, method = 'default', classProfile = false;
+    for (let depth = 0; depth < 8; depth++) {
+      const value = target[method];
+      if (value?.$$typeof === Symbol.for('react.memo')) {
+        target = value; method = 'type';
+      } else if (value?.$$typeof === Symbol.for('react.forward_ref')) {
+        target = value; method = 'render';
+      } else if (value?.prototype?.isReactComponent) {
+        target = value.prototype; method = 'render'; classProfile = true;
+        break;
+      } else break;
+    }
+    if (typeof target[method] !== 'function') return;
+    const cleanup = optional(() => V.patcher.after(method, target, function(args, tree) {
+      if (!active || generation !== session) return tree;
+      const id = profileID(classProfile ? this?.props : args[0]);
+      if (!id) return tree;
+      try { return injectProfile(tree, id, session, hide); }
+      catch (error) { log(error); return tree; }
+    }));
+    if (typeof cleanup === 'function') profilePatches.set(name, cleanup);
+  }
+
   function connectProfiles() {
     const session = generation;
     const hide = () => {
@@ -303,26 +337,16 @@ function createPlugin(V, env = globalThis) {
       else host?.hideActionSheet?.();
     };
     for (const name of ['UserProfileOverflowMenu', 'BotUserProfileOverflowMenu']) {
-      if (profilePatches.has(name)) continue;
-      const module = optional(() => V.metro.findByName(name, false));
-      if (!module?.default) continue;
-      let target = module, method = 'default';
-      // Memo and forward-ref exports expose their render function separately.
-      while (target[method]?.$$typeof === Symbol.for('react.memo')) {
-        target = target[method]; method = 'type';
+      const path = `modules/user_profile/native/${name}.tsx`;
+      const module = optional(() => V.metro.findByImportedPath?.(path))
+        ?? optional(() => V.metro.findByName(name, false));
+      patchProfile(name, module, session, hide);
+      if (!profilePatches.has(name) && !profileWatches.has(name) && typeof V.metro.getModuleWithImportedPath === 'function') {
+        // Names may be minified, and the first profile may load long after startup.
+        const unsubscribe = optional(() => V.metro.getModuleWithImportedPath(path,
+          module => patchProfile(name, module, session, hide)));
+        if (typeof unsubscribe === 'function') profileWatches.set(name, unsubscribe);
       }
-      if (target[method]?.$$typeof === Symbol.for('react.forward_ref')) {
-        target = target[method]; method = 'render';
-      }
-      if (typeof target[method] !== 'function' || target[method].prototype?.isReactComponent) continue;
-      const cleanup = optional(() => V.patcher.after(method, target, (args, tree) => {
-        if (!active || generation !== session) return tree;
-        const id = profileID(args[0]);
-        if (!id) return tree;
-        try { return injectProfile(tree, id, session, hide); }
-        catch (error) { log(error); return tree; }
-      }));
-      if (typeof cleanup === 'function') profilePatches.set(name, cleanup);
     }
     if (!profilePatches.has('context') && contextMenus?.showContextMenu) {
       const cleanup = optional(() => V.patcher.before('showContextMenu', contextMenus, args => {
@@ -461,14 +485,15 @@ function createPlugin(V, env = globalThis) {
     active = true; generation++;
     try { connect(); } catch (error) { log(error); }
     let tries = 0;
+    const needsRetry = () => !unpatch || (!profilePatches.has('UserProfileOverflowMenu') && !profileWatches.has('UserProfileOverflowMenu'));
     const retry = () => {
       retryTimer = undefined;
       if (!active) return;
       try { connect(); } catch (error) { log(error); }
-      if ((!unpatch || !profilePatches.has('UserProfileOverflowMenu')) && ++tries < 30) retryTimer = env.setTimeout(retry, 2000);
+      if (needsRetry() && ++tries < 30) retryTimer = env.setTimeout(retry, 2000);
       else if (!unpatch) toast('Copy User ID: menu unavailable on this Discord build');
     };
-    if (!unpatch || !profilePatches.has('UserProfileOverflowMenu')) retryTimer = env.setTimeout(retry, 2000);
+    if (needsRetry()) retryTimer = env.setTimeout(retry, 2000);
     resume = optional(() => RN.AppState?.addEventListener?.('change', state => {
       if (state === 'active') { try { connect(); } catch (error) { log(error); } }
     }));
@@ -477,6 +502,8 @@ function createPlugin(V, env = globalThis) {
     active = false; generation++;
     env.clearTimeout(retryTimer); retryTimer = undefined;
     optional(() => resume?.remove?.()); resume = undefined;
+    for (const unsubscribe of [...profileWatches.values()].reverse()) optional(unsubscribe);
+    profileWatches.clear();
     optional(() => unpatch?.()); unpatch = undefined;
     for (const cleanup of [...profilePatches.values()].reverse()) optional(cleanup);
     profilePatches.clear();

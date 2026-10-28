@@ -6,12 +6,14 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/index.json",
   "portVersion": "1.0.0-beta4",
   "pluginVersions": {
+    "copy-user-id": "1.0.0-beta5",
     "addon-list": "1.0.0-beta5",
     "info-commands": "1.0.0-beta10",
     "valid-user": "1.0.0-beta7",
     "auto-text": "1.0.0-beta6"
   },
   "sourceRefs": {
+    "copy-user-id": "main",
     "addon-list": "main",
     "info-commands": "main",
     "valid-user": "main",

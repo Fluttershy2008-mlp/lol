@@ -291,11 +291,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.copy-user-id@1.0.0-beta5.zip",
+          "sha256": "695ebcded54ee8f9818cb408e43750e3cc8c2d36330af5beb7dbb863cecb5caf",
+          "size": 15777,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "Copy User ID (Next preview)",
       "description": "Revenge Next preview. Shows user IDs in message long-press and profile menus. Tap to copy as <@ID>.",
