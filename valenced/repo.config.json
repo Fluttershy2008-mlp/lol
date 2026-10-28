@@ -1,0 +1,28 @@
+{
+  "name": "Fluttershy's Valenced Repository",
+  "description": "Valenced ports of all unique Revenge plugins and four native colour themes.",
+  "icon": "GlobeEarthIcon",
+  "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced",
+  "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
+  "portVersion": "1.0.0-beta1",
+  "pluginVersions": {},
+  "sourceRefs": {
+    "info-commands": "main",
+    "auto-text": "main",
+    "valid-user": "main"
+  },
+  "themeVersion": "1.0.0-beta1",
+  "sourceCommit": "7beaf1ac7573310e393a7ddfaa35317155b24180",
+  "exclude": {
+    "message-logger-v2": "Duplicate of Message Logger; install one copy.",
+    "fluttershy-background": "Replaced by the native Fluttershy theme package.",
+    "rainbow-dash-background": "Replaced by the native Rainbow Dash theme package.",
+    "sunset-background": "Replaced by the native Sunset Shimmer theme package."
+  },
+  "themes": {
+    "fluttershy-theme": "Fluttershy_Pink_Yellow_Theme.json",
+    "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
+    "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
+    "tokyo-nights-theme": "Tokyo_Nights_Theme.json"
+  }
+}

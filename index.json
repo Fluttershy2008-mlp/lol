@@ -124,11 +124,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.auto-text@1.0.0-beta5.zip",
+          "sha256": "8655a2d816d46ef53221dde64fa05b96083327bbbbf4d12776ce5e3fe8178a3e",
+          "size": 27995,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "AutoText (Next preview)",
       "description": "Revenge Next preview. Type a prepared message letter by letter with speed controls, Stop, bullet points and optional auto-send once the full message is finished.",
@@ -646,11 +659,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.info-commands@1.0.0-beta8.zip",
+          "sha256": "0e7ef5bb6eab1c7a7fc20d531bcec474548d4d08dd612fa02b6b7e7fe07058ed",
+          "size": 31647,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta7",
-        "beta": "1.0.0-beta7"
+        "latest": "1.0.0-beta8",
+        "beta": "1.0.0-beta8"
       },
       "name": "InfoCommands (Next preview)",
       "description": "Revenge Next preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
@@ -1458,11 +1484,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.valid-user@1.0.0-beta5.zip",
+          "sha256": "a18335c8d9c4cb52eb13236d93f97559fb664c2238e014eb7e47b977b462a313",
+          "size": 22247,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "ValidUser (Next preview)",
       "description": "Revenge Next preview. Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",

@@ -57,7 +57,7 @@ function scenario(t, options = {}) {
 test('Addon List copies native installed metadata without posting it', async t => {
     const w = scenario(t), item = await w.start('addon-list'); await w.start('view-icons');
     await command(w, 'plugin-list').execute([{ name: 'copy', value: true }, { name: 'detailed', value: true }], { channel: { id: CHANNEL } });
-    assert.match(w.clipboard[0], /ViewIcons.*Next preview/);
+    assert.match(w.clipboard[0], (process.env.PLUGIN_TEST_TARGET === 'valenced' ? /ViewIcons.*Valenced/ : /ViewIcons.*Next preview/));
     assert.match(w.clipboard[0], /Installed/);
     assert.equal(w.calls.some(c => c[0] === 'sendMessage'), false);
     assert.equal(item.writes.length, 0, 'read-only listing does not change settings');
@@ -518,7 +518,7 @@ test('safeFetch enforces its legacy timeout and cancels requests on plugin dispo
 
 test('all 21 ports coexist with curated modules and split HTTP, then stop in a different order', async t => {
     const w = scenario(t, { curatedOnly: true, splitHTTP: true });
-    const sources = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'sources.json'), 'utf8')).plugins;
+    const sources = JSON.parse(fs.readFileSync(path.join(__dirname, '../..', process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'valenced' : 'revenge-next', 'sources.json'), 'utf8')).plugins;
     const items = [];
     for (const [id, entry] of Object.entries(sources)) if (entry.kind === 'compatibility-preview')
         items.push(await w.start(id.slice('dev.fluttershy2008.'.length)));

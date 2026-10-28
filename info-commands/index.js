@@ -437,6 +437,8 @@ var InfoCommandsBundle = (() => {
     }
   };
   function nextAPI() {
+    const valencedAPI = optional(() => typeof valenced !== "undefined" && valenced.modules?.finders ? valenced : void 0);
+    if (valencedAPI) return valencedAPI;
     return optional(() => typeof revenge !== "undefined" && revenge.modules?.finders ? revenge : void 0);
   }
   function nativeSheets() {
@@ -526,7 +528,7 @@ var InfoCommandsBundle = (() => {
       filters: { withProps: (...props2) => props2 },
       lookupModule: (props2) => [
         // Next exposes this lazy library through its curated external API.
-        (props2.includes("BottomSheetScrollView") ? optional2(() => typeof revenge !== "undefined" ? revenge.externals?.Gorhom?.BottomSheet : void 0) : void 0) ?? optional2(() => vendetta.metro.findByProps(...props2))
+        (props2.includes("BottomSheetScrollView") ? optional2(() => nextAPI()?.externals?.Gorhom?.BottomSheet) : void 0) ?? optional2(() => vendetta.metro.findByProps(...props2))
       ]
     } }
   };

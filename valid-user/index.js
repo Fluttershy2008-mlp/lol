@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,6 +193,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
 "use strict";
@@ -233,7 +232,9 @@ function extractMentionIds(message) {
 }
 
 function classifyFailure(error, now = Date.now()) {
-    const body = error?.body ?? error?.response?.body ?? {};
+    let body = error?.body ?? error?.response?.body ?? {};
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+    if (!body || typeof body !== "object") body = {};
     const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
     if (status === 429) {
         const seconds = Number(body.retry_after ?? error?.headers?.["retry-after"] ?? 60);
@@ -241,7 +242,7 @@ function classifyFailure(error, now = Date.now()) {
         return { status: "rate-limited", until: now + delay };
     }
     if (status === 401 || status === 403) return { status: "unavailable", until: now + 60000 };
-    if (status === 404 || body.code === 10013) return { status: "unknown", until: now + 300000 };
+    if (status === 404 || Number(body.code) === 10013) return { status: "unknown", until: now + 300000 };
     return { status: "retry", until: now + 15000 };
 }
 
@@ -283,7 +284,10 @@ function createResolver({ getUser, request, accept, onResolved = () => {},
             const response = await timedRequest(id);
             if (!current()) return { id, status: "cancelled" };
             if (response?.status >= 400) throw response;
-            const raw = response?.body?.user ?? response?.body ?? response;
+            let body = response?.body ?? response;
+            if (typeof body === "string") { try { body = JSON.parse(body); } catch {} }
+            if (body?.code != null && !body?.id && !body?.user) throw { ...response, body };
+            const raw = body?.user ?? body;
             if (!usableUser(raw, id)) throw new Error("Invalid user response");
             await accept(raw);
             if (!current()) return { id, status: "cancelled" };

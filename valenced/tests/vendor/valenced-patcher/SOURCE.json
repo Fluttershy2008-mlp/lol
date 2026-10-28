@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/Valenced/valenced",
+  "commit": "706dae437058922a10246a1df0a614328db79a5c",
+  "files": {
+    "instead.ts": "bundle/lib/patcher/src/hooks/instead.ts",
+    "_internal.ts": "bundle/lib/patcher/src/_internal.ts",
+    "LICENSE": "LICENSE"
+  }
+}

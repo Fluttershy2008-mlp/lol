@@ -6,13 +6,15 @@ const { stripTypeScriptTypes } = require('node:module');
 const React = require('react');
 const Renderer = require('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const ROOT = path.resolve(__dirname, '..');
+const TARGET = process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'valenced' : 'revenge-next';
+const ROOT = path.resolve(__dirname, '../..', TARGET);
+const HOST_ID = TARGET === 'valenced' ? 'valenced' : 'revenge';
 const ACCOUNT = '200000000000000001', FRIEND = '100000000000000001', BLOCKED = '100000000000000002';
 const IGNORED = '100000000000000003', CHANNEL = '300000000000000001', GUILD = '400000000000000001';
 
 function nextPatcher() {
     function compile(name, internals) {
-        const source = stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, 'vendor/next-patcher', name), 'utf8'));
+        const source = stripTypeScriptTypes(fs.readFileSync(path.join(ROOT, 'tests/vendor', TARGET === 'valenced' ? 'valenced-patcher' : 'next-patcher', name), 'utf8'));
         const exports = [...source.matchAll(/export\s+(?:const|let|function)\s+(\w+)/g)].map(x => x[1]);
         const body = source.replace(/import\s*\{([^}]+)\}\s*from\s*['"]\.\.\/_internal['"]/g, 'const {$1} = internals')
             .replace(/export\s+(?=const|let|function)/g, '');
@@ -173,7 +175,7 @@ function createWorld(options = {}) {
     };
     const U = { react: { React, ReactNative: RN }, modules: { finders, metro: {
         getInitializedModuleExports: id => modules[Number(id)], isModuleInitialized: id => modules[Number(id)] !== undefined,
-    }, native: { callNativeMethod: async name => name === 'revenge.plugins.list'
+    }, native: { callNativeMethod: async name => name === HOST_ID + '.plugins.list'
         ? { result: [...loaded.values()].map(x => ({ manifest: x.manifest, source: { repo: 'https://example.test/index.json' } })) }
         : { error: { code: 'UNKNOWN_METHOD', message: 'Unexpected native call in test: ' + name } } } },
         patcher: { instead: nextPatcher() }, discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
@@ -196,11 +198,13 @@ function createWorld(options = {}) {
         };
         let plugin;
         const sandbox = { ...host, console: { log() {}, warn() {}, error: (...args) => errors.push([slug, ...args]) },
-            revenge: U, plugin: value => value, Promise, AbortController, TextEncoder, TextDecoder,
+            ...(HOST_ID === 'valenced' ? { HOST_API: U } : { revenge: U }), plugin: value => value, Promise, AbortController, TextEncoder, TextDecoder,
             Blob, Response, Headers, Uint8Array, URL, atob, btoa,
             Date: class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return now; } },
         };
-        plugin = vm.runInNewContext(fs.readFileSync(path.join(directory, 'index.js'), 'utf8'), sandbox, { filename: 'Next:' + slug }).default;
+        const script = fs.readFileSync(path.join(directory, 'index.js'), 'utf8');
+        const expression = HOST_ID === 'valenced' ? '(function(valenced, plugin) { return ' + script + '\n})(HOST_API, plugin)' : script;
+        plugin = vm.runInNewContext(expression, sandbox, { filename: TARGET + ':' + slug }).default;
         const item = { slug, manifest, options: plugin, api, cleanups, writes };
         loaded.set(slug, item);
         await plugin.start?.(api);

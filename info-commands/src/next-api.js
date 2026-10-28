@@ -1,6 +1,8 @@
 const optional = fn => { try { return fn(); } catch { return undefined; } };
 
 export function nextAPI() {
+    const valencedAPI = optional(() => typeof valenced !== "undefined" && valenced.modules?.finders ? valenced : undefined);
+    if (valencedAPI) return valencedAPI;
     return optional(() => typeof revenge !== "undefined" && revenge.modules?.finders ? revenge : undefined);
 }
 

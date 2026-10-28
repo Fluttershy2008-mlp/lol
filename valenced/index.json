@@ -1,0 +1,684 @@
+{
+  "format": 1,
+  "name": "Fluttershy's Valenced Repository",
+  "description": "Valenced ports of all unique Revenge plugins and four native colour themes.",
+  "icon": "GlobeEarthIcon",
+  "plugins": {
+    "dev.fluttershy2008.addon-list": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.addon-list@1.0.0-beta1.zip",
+          "sha256": "4962e363dd59748566c03173e9102075a8ae198e1b39eec96a10077c9b102bf2",
+          "size": 20005,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Addon List (Valenced)",
+      "description": "Valenced preview. Send, preview or copy plugin and theme lists with visible URLs and Discord/Nitro message-sized parts.",
+      "author": "Kitomanari <437154602626973697>",
+      "icon": "PuzzlePieceIcon",
+      "contributors": [
+        "fluttershy_simper"
+      ]
+    },
+    "dev.fluttershy2008.auto-text": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.auto-text@1.0.0-beta1.zip",
+          "sha256": "cf236f7edde7b0622bee9398bf178901108c3ffb9e2252d7517910b78082473c",
+          "size": 28028,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "AutoText (Valenced)",
+      "description": "Valenced preview. Type a prepared message letter by letter with speed controls, Stop, bullet points and optional auto-send once the full message is finished.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "PencilIcon"
+    },
+    "dev.fluttershy2008.blocked-user-list": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.blocked-user-list@1.0.0-beta1.zip",
+          "sha256": "db00e8dfc1d7c5be411a012e340861c527bf6cfd3125432cfce58fa574b84f98",
+          "size": 21955,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Blocked User List (Valenced)",
+      "description": "Valenced preview. Manage blocked users and locally hide APP, bot and Tupperbox/webhook messages by ID, with optional exact character names.",
+      "author": "fluttershy_simper",
+      "icon": "WrenchIcon"
+    },
+    "dev.fluttershy2008.copy-user-id": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.copy-user-id@1.0.0-beta1.zip",
+          "sha256": "042cbcd8b257ad4358c70abf06c3f523eecc0082d9c33c4bbad3b20d9b64eb27",
+          "size": 15497,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Copy User ID (Valenced)",
+      "description": "Valenced preview. Shows user IDs in message long-press and profile menus. Tap to copy as <@ID>.",
+      "author": "fluttershy_simper",
+      "icon": "ic_copy_id"
+    },
+    "dev.fluttershy2008.custom-rpc": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.custom-rpc@1.0.0-beta1.zip",
+          "sha256": "5d900fa3f6e11acc66694d12c9b452435400fe3a3fb6b5b7e21ac7459cdf91ad",
+          "size": 32688,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "CustomRPC (Valenced)",
+      "description": "Valenced preview. Custom Rich Presence for Valenced: activity text, images, buttons, timers and party size. Adapted from Vencord CustomRPC.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "RichActivityIcon",
+      "contributors": [
+        "Vencord contributors [original CustomRPC]"
+      ]
+    },
+    "dev.fluttershy2008.expression-cloner": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.expression-cloner@1.0.0-beta1.zip",
+          "sha256": "9d2ca11dc383fefd57c6de93056c28f84e52f3d6103797fbdb7f951baf46a165",
+          "size": 19837,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "ExpressionCloner (Valenced)",
+      "description": "Valenced preview. Clone custom emojis and supported stickers from their action sheets to servers you manage.",
+      "author": "Fluttershy2008-mlp",
+      "icon": "ic_emoji_24px"
+    },
+    "dev.fluttershy2008.fluttershy-theme": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.fluttershy-theme@1.0.0-beta1.zip",
+          "sha256": "c6a8fac2fcb5469f8f6c64927d593799ce14ddcae4aa4411188f0afa874864e4",
+          "size": 4163,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Fluttershy - Pink & Yellow (Valenced)",
+      "description": "Valenced preview. Fluttershy pink-and-yellow colours with transparent chat layers and a matching G4 wallpaper. The Fluttershy Chat Background companion supports newer Discord chat renderers.",
+      "author": "Fluttershy2008",
+      "icon": "PaintPaletteIcon"
+    },
+    "dev.fluttershy2008.friends-list": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.friends-list@1.0.0-beta1.zip",
+          "sha256": "1f87f2031a07f13132a03d0bf9e3e24d3f78d8d6c26ab8a71915514fd13a1811",
+          "size": 18144,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Friends List (Valenced)",
+      "description": "Valenced preview. Shows your total Discord friend count, a searchable friends list, and profile buttons. Adds Friends List beside Blocked Users in Valenced settings.",
+      "author": "fluttershy_simper",
+      "icon": "FriendsIcon"
+    },
+    "dev.fluttershy2008.hide-blocked-and-ignored-messages": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta1.zip",
+          "sha256": "d1c57be7e7361974d98b9d8f3053280a26a98a791b3eddf4e619218d9ad9dd98",
+          "size": 18966,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "HideBlockedAndIgnoredMessages (Valenced)",
+      "description": "Valenced preview. Hides blocked and ignored messages without placeholder text, including bot responses to their slash commands and optional replies.",
+      "author": "Zykrah <543614592291700748>",
+      "icon": "ic_block",
+      "contributors": [
+        "シグマ siguma <737597276339437578>",
+        "Fluttershy2008-mlp <753962426407452713>"
+      ]
+    },
+    "dev.fluttershy2008.info-commands": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.info-commands@1.0.0-beta1.zip",
+          "sha256": "4ad5e3f992c5083a15f3b0f9d477a835dc44a96610d754c0266bdb1548c6b353",
+          "size": 31677,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "InfoCommands (Valenced)",
+      "description": "Valenced preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
+      "author": "fshin <1381008677301129257>",
+      "icon": "ic_info_24px",
+      "contributors": [
+        "kmmiio99o"
+      ]
+    },
+    "dev.fluttershy2008.message-logger": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.message-logger@1.0.0-beta1.zip",
+          "sha256": "76d196c08e83bf78ec9f83557bb687993e6f9b8a0968ff5100dd2eec1d6396b9",
+          "size": 35331,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Message Logger (Valenced)",
+      "description": "Valenced preview. Vencord-style deleted messages, edit history, attachment records and ignore filters for Valenced. Open with /messagelogger.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "ic_audit_log_24px",
+      "contributors": [
+        "redstonekasi <265064055490871297>"
+      ]
+    },
+    "dev.fluttershy2008.more-alts": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-beta1.zip",
+          "sha256": "da2b1835e1b3575d6c362b563855db03819d5d2a8c7dbce69b6d89a95a7beeef",
+          "size": 58603,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "More Alts! (Valenced)",
+      "description": "Valenced preview. Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Valenced settings.",
+      "author": "Win8.1VMUser <793935599702507542>",
+      "icon": "UserIcon",
+      "contributors": [
+        "John",
+        "cocobo1",
+        "fluttershy_simper <753962426407452713>"
+      ]
+    },
+    "dev.fluttershy2008.nitro-auto-claim": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.nitro-auto-claim@1.0.0-beta1.zip",
+          "sha256": "bcb7bb8f0eeb98683815c111b4c6fc9e5ff022c79f92daf7d6abd2ef6ae9b964",
+          "size": 16806,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Nitro Auto Claim (Valenced)",
+      "description": "Valenced preview. Automatically attempts to redeem Discord gift links in new messages, with duplicate protection and result history.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "GiftIcon"
+    },
+    "dev.fluttershy2008.ping-jumper": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.ping-jumper@1.0.0-beta1.zip",
+          "sha256": "d669b5923b4e3207eadeb8e036ac89382ad65baa81bd3f6a5fbc5f093d4325ac",
+          "size": 15727,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "PingJumper (Valenced)",
+      "description": "Valenced preview. Floating up/down arrows let you jump through recent Discord pings on mobile.",
+      "author": "Fluttershy2008-mlp",
+      "icon": "ic_link_24px"
+    },
+    "dev.fluttershy2008.profile-status-presets": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.profile-status-presets@1.0.0-beta1.zip",
+          "sha256": "51d2402bd8566865e8894db5980927d50c26be4e10587e5372ed39f8ab20eb0d",
+          "size": 34065,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Profile Status Presets (Valenced)",
+      "description": "Valenced preview. Save custom statuses with emojis and expiry times, then switch in one tap. Includes a Valenced settings shortcut and /statuspresets.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "PencilIcon"
+    },
+    "dev.fluttershy2008.rainbow-dash-theme": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.rainbow-dash-theme@1.0.0-beta1.zip",
+          "sha256": "a1a628616e2db8f8de372ffceac302fead1a555abed6387ec7ddfb1fb27e38d5",
+          "size": 5425,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Rainbow Dash 🌈 Sonic Rainboom (Valenced)",
+      "description": "Valenced preview. Rainbow Dash with dark sky-blue panels, cyan and rainbow accents, and transparent chat backgrounds. Includes current Discord Android channel, card, input and NEUTRAL colour tokens checked against Decord. Static artwork source: https://wallpapersafari.com/w/1A6Dch",
+      "author": "Fluttershy_simper67 <753962426407452713>",
+      "icon": "PaintPaletteIcon"
+    },
+    "dev.fluttershy2008.read-all-notifications": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.read-all-notifications@1.0.0-beta1.zip",
+          "sha256": "326926748a4127b1de8ec84766c62caa214a03a871221d185d15641a21f78d84",
+          "size": 30779,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "ReadAllNotificationsButton (Valenced)",
+      "description": "Valenced preview. Mark unread channels, forums, media channels, loaded posts and threads, DMs and group DMs as read with one button.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "Check",
+      "contributors": [
+        "kemo [original Vencord plugin]",
+        "Vendicated and Vencord contributors"
+      ]
+    },
+    "dev.fluttershy2008.relationship-notifier": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.relationship-notifier@1.0.0-beta1.zip",
+          "sha256": "850356f23f477cc6e3775191f8f99082b2770f6024278f6a4c5e491f7d6cd780",
+          "size": 35168,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "RelationshipNotifier (Valenced)",
+      "description": "Valenced preview. Alerts when friends, incoming requests, servers or group chats disappear. Includes reconnect checks and notification history. Adapted from Vencord.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "FriendsIcon",
+      "contributors": [
+        "nick [original Vencord plugin] <347884694408265729>",
+        "Vendicated and Vencord contributors"
+      ]
+    },
+    "dev.fluttershy2008.save-as-sticker": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta1.zip",
+          "sha256": "e0d52c772f85d26aa4fa51ef479bc33a206499c92eaea4625914da55d3478ab9",
+          "size": 29973,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "SaveAsSticker (Valenced)",
+      "description": "Valenced preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
+      "author": "Fluttershy2008-mlp",
+      "icon": "ic_sticker_24px"
+    },
+    "dev.fluttershy2008.server-leaver": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.server-leaver@1.0.0-beta1.zip",
+          "sha256": "1c2fb95420d183946f82f2dcc8dc8600f61443ee1f444bb3b9e7617c3b522537",
+          "size": 19582,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Server Leaver (Valenced)",
+      "description": "Valenced preview. Leave all unprotected servers with a preview and confirmation. Protect servers by ID or tap Protect. Keeps owned servers; includes progress and Stop.",
+      "author": "fluttershy_simper",
+      "icon": "ic_leave"
+    },
+    "dev.fluttershy2008.stealmoji": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.stealmoji@1.0.0-beta1.zip",
+          "sha256": "47dc1824a3a5a8bdb7ee6efef08d0933472c83357e4b02d06bae986b7ec7f15c",
+          "size": 34712,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Stealmoji (Valenced)",
+      "description": "Valenced preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",
+      "author": "Fiery <890228870559698955>",
+      "icon": "ic_emoji_24px",
+      "contributors": [
+        "pylix <492949202121261067>",
+        "aliernfrog <459370047652102154>",
+        "fluttershy_simper <753962426407452713>"
+      ]
+    },
+    "dev.fluttershy2008.sunset-shimmer-theme": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.sunset-shimmer-theme@1.0.0-beta1.zip",
+          "sha256": "404f2939f1c714404837698c4705629616efdd549aa973726da59b0595921330",
+          "size": 5143,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Sunset Shimmer ☀️ Ember & Gold (Valenced)",
+      "description": "Valenced preview. Sunset Shimmer with ember-orange borders and controls, warm red-brown cards and panels, cream text and golden accents. Transparent chat surfaces and a clearer, blur-free wallpaper for Android.",
+      "author": "fluttershy_simper <753962426407452713>",
+      "icon": "PaintPaletteIcon"
+    },
+    "dev.fluttershy2008.tokyo-nights-theme": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.tokyo-nights-theme@1.0.0-beta1.zip",
+          "sha256": "23e897301fb3d0077e55f8fd6ba87f93ec29f9fb8f07df1d90f719be65284991",
+          "size": 8206,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Tokyo Nights (Valenced)",
+      "description": "Valenced preview. Colorful Vaporwave Inspired Theme. Now Featuring Kuromi. Updated colour coverage for modern Discord Android; legacy colours and Themes+ options retained.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "PaintPaletteIcon"
+    },
+    "dev.fluttershy2008.valid-user": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.valid-user@1.0.0-beta1.zip",
+          "sha256": "f81a951f00520e356d04e111e7ed6b49416d3f6b9c12fbf6b65c9f0bd1efedc6",
+          "size": 22275,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "ValidUser (Valenced)",
+      "description": "Valenced preview. Automatically resolve unknown mentions when Valenced starts and messages load, including embeds and forwards.",
+      "author": "fshin <1381008677301129257>",
+      "icon": "ic_mention_24px",
+      "contributors": [
+        "o.oer <306810730055729152>",
+        "kmmiio99o <879393496627306587>",
+        "fluttershy_simper <753962426407452713>"
+      ]
+    },
+    "dev.fluttershy2008.view-icons": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.view-icons@1.0.0-beta1.zip",
+          "sha256": "9c29d2de7b21313711add0b99f273f99f7e3866e33261fd65df644a829f55aa8",
+          "size": 16964,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "ViewIcons (Valenced)",
+      "description": "Valenced preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Valenced mobile.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "ic_image"
+    }
+  }
+}

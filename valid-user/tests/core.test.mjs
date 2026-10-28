@@ -96,6 +96,27 @@ test("malformed and mismatched successful responses cannot corrupt UserStore", a
         assert.equal(accepted.length, 0); resolver.stop();
     }
 });
+test("string JSON response bodies and wrapped users resolve through the same queue", async () => {
+    for (const body of [JSON.stringify(raw(A)), JSON.stringify({ user: raw(A) }), { user: raw(A) }]) {
+        const { resolver, accepted } = harness({ request: async () => ({ status: 200, body }) });
+        assert.equal((await resolver.resolve(A)).status, "resolved");
+        assert.equal(accepted[0].id, A); resolver.stop();
+    }
+});
+test("unknown-user codes in string response bodies keep their actionable error", async () => {
+    for (const response of [{ status: 404, body: '{"code":"10013"}' }, { body: '{"code":10013}' }]) {
+        const { resolver, accepted } = harness({ request: async () => response });
+        assert.equal((await resolver.resolve(A)).status, "unknown");
+        assert.equal(accepted.length, 0); resolver.stop();
+    }
+});
+test("empty or scalar error bodies cannot break the lookup queue", async () => {
+    for (const body of ["null", "false", '"offline"', "<html>offline</html>"]) {
+        const { resolver } = harness({ request: async () => ({ status: 429, body }) });
+        assert.equal((await resolver.resolve(A)).status, "rate-limited");
+        resolver.stop();
+    }
+});
 test("late HTTP completion after timeout is ignored", async () => {
     let finish;
     const { resolver, accepted } = harness({ timeout: 5, request: () => new Promise(resolve => { finish = resolve; }) });

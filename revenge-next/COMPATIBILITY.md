@@ -44,7 +44,7 @@ The four native theme packages also pass registration, color/background and pack
 
 Four new regressions failed against beta5: an ambiguous raw sheet module, a void opener that never mounts, a zero-height sheet, and a rendering exception. A further regression covers a sheet dismissed before its first layout. The release passes **86 Next runtime/integration tests**, **21 InfoCommands Classic tests**, **10 Python package tests**, and the deterministic package check. Tests now cover presentation failure rather than treating an `openLazy` invocation as proof of a visible popup. They still simulate Discord and React Native; no on-phone verification is claimed.
 
-The shared InfoCommands source and Classic bundle are **1.2.4**, and the Next port is **1.0.0-beta6**. Other packages remain unchanged. The native call contract is checked against the [official Next action-sheet types](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/types/index.ts) and [native module resolver](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/actions.ts).
+The shared InfoCommands source and Classic bundle are **1.2.4**, and the Next port is **1.0.0-beta8**. Other packages remain unchanged. The native call contract is checked against the [official Next action-sheet types](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/types/index.ts) and [native module resolver](https://github.com/revenge-mod/revenge-bundle-next/blob/fa6cb81897b3b2649e7d8600d70d2b945daf041f/lib/discord/src/actions.ts).
 
 ## InfoCommands beta5
 
@@ -109,3 +109,5 @@ GitHub Actions runs the Next checks and the affected InfoCommands Classic suite 
 Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, update **InfoCommands to 1.0.0-beta6** and the other plugin ports to **1.0.0-beta4**, then fully restart Discord. Existing Pages-root and raw repository entries receive the same releases. Open settings through each plugin's entry in the Next Plugins page. Enable the ports you use one at a time and try the feature you need before enabling the next one.
 
 If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.
+
+Valenced has a separate catalogue at https://fluttershy2008-mlp.github.io/lol/valenced/index.json. See [Valenced setup](../valenced/README.md). This change also publishes AutoText and Valid User 1.0.0-beta5 for Next, with the shared composer and response fixes.

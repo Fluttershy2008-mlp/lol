@@ -4,11 +4,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createWorld, Renderer } = require('./next-harness.cjs');
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '../..', process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'valenced' : 'revenge-next');
 const ports = Object.entries(JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8')).plugins)
     .filter(([, info]) => info.kind === 'compatibility-preview').map(([id]) => id.slice('dev.fluttershy2008.'.length));
 
-for (const slug of ports) test(slug + ': Next startup, React settings mount, stop and restart', async () => {
+for (const slug of ports) test(slug + ': ' + (process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'Valenced' : 'Next') + ' startup, React settings mount, stop and restart', async () => {
     const world = createWorld();
     let item, renderer;
     try {

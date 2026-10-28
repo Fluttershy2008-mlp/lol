@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,6 +193,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
 "use strict";
@@ -1101,10 +1100,21 @@ function createPlugin(api) {
     if (!active || rootUnpatch) return;
     attempts++;
     try {
-      let holder = tryFind('findByName', 'ChatInputGuardWrapper', false), method = 'default';
-      if (typeof holder?.default !== 'function') {
-        holder = tryFind('findByTypeName', 'ChatInputGuardWrapper'); method = 'type';
-      }
+      const named = (value, depth = 0) => depth < 6 && value != null &&
+        (value.name === 'ChatInputGuardWrapper' || value.displayName === 'ChatInputGuardWrapper'
+          || named(value.default, depth + 1) || named(value.type, depth + 1) || named(value.render, depth + 1));
+      const target = (value, depth = 0) => {
+        if (!value || depth >= 6) return;
+        for (const method of ['default', 'type', 'render']) {
+          if (typeof value[method] === 'function') return { holder: value, method };
+          const nested = target(value[method], depth + 1);
+          if (nested) return nested;
+        }
+      };
+      const found = target(tryFind('findByName', 'ChatInputGuardWrapper', false))
+        ?? target(tryFind('findByTypeName', 'ChatInputGuardWrapper'))
+        ?? target(tryFind('find', value => named(value), false));
+      const { holder, method } = found ?? {};
       if (typeof holder?.[method] === 'function') {
         rootUnpatch = api.patcher.after(method, holder, (args, result) => {
           if (!active || !result) return;

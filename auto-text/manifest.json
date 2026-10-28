@@ -1,7 +1,7 @@
 {
   "name": "AutoText",
   "description": "Type a prepared message letter by letter with speed controls, Stop, bullet points and optional auto-send once the full message is finished.",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -12,5 +12,5 @@
   "vendetta": {
     "icon": "PencilIcon"
   },
-  "hash": "dc99e973a038940a3852efd21f341d11f0648adafecab07e105aaac5b7d3e8c1"
+  "hash": "750feefa9949c0120eb297a03462140088954aa2d60a52a4c71a5660dbb705d3"
 }

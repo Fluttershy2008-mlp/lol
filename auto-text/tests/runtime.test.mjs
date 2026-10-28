@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 function runtime({ missing = false, missingSend = false, sendBehavior = 'clear', silentNative = false,
-  staleCache = false, delayFlush = false, delayInitial = false, dropInsert = false } = {}) {
+  staleCache = false, delayFlush = false, delayInitial = false, dropInsert = false, wrapper = 'plain' } = {}) {
   let hooks = null, index = 0, jobs = [], timerId = 0, clock = 0;
   const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set(), appListeners = new Set();
   const appState = { currentState: 'active', addEventListener(event, callback) {
@@ -90,6 +90,14 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
           }))))),
   };
   const original = holder.default;
+  if (wrapper === 'memo') holder.default = { $$typeof: Symbol.for('react.memo'), type: original };
+  if (wrapper === 'forward') holder.default = { $$typeof: Symbol.for('react.forward_ref'), render: original };
+  if (wrapper === 'nested') holder.default = { $$typeof: Symbol.for('react.memo'), type: { $$typeof: Symbol.for('react.forward_ref'), render: original } };
+  const renderGuard = props => {
+    let component = holder.default;
+    while (typeof component !== 'function') component = component.type ?? component.render;
+    return component(props);
+  };
   const api = {
     plugin: { storage },
     metro: {
@@ -119,7 +127,7 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
   });
   return { plugin, holder, original, patches, storage, host, timers, intervals, read: () => draft,
     open() {
-      liveTree = holder.default({ channel: { id: channel } });
+      liveTree = renderGuard({ channel: { id: channel } });
       const field = nodes(liveTree, n => n.type === 'NativeInput')[0];
       field.props.ref(nativeHandle);
       assert.equal(originalRefValue, nativeHandle, 'Discord still receives its native ref');
@@ -373,4 +381,23 @@ test('unsupported auto-send shows a clear error before any typing or send', () =
   assert.equal(r.read(), ''); assert.equal(r.sent(), 0);
   assert(nodes(host.render(), n => typeof n.props?.children === 'string' && n.props.children.includes('unavailable')).length);
   r.plugin.onUnload();
+});
+
+for (const wrapper of ['memo', 'forward', 'nested']) test('composer ' + wrapper + ' exports keep live typing and unpatch correctly', () => {
+  const r = runtime({ wrapper });
+  const descriptor = r.holder.default;
+  r.plugin.onLoad();
+  const tree = r.open();
+  const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
+  const bar = box.props.children[0].props.children;
+  r.host(bar.type, bar.props).render();
+  for (const value of [';', ';b', ';br', ';brb']) { r.type(value); r.flush(); }
+  assert.equal(r.read(), 'Be right back!');
+  assert.equal(r.holder.default, descriptor);
+  r.plugin.onUnload();
+  let component = r.holder.default;
+  while (typeof component !== 'function') component = component.type ?? component.render;
+  assert.equal(component, r.original);
+  assert.equal(r.patches.size, 0);
+  assert.equal(r.timers.size, 0);
 });

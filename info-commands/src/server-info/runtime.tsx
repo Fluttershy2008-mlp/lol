@@ -1,5 +1,5 @@
 /** Compatibility adapter for the uploaded kmmiio99o Server Info UI. */
-import { nativeDesign } from "../next-api";
+import { nativeDesign, nextAPI } from "../next-api";
 const { React, ReactNative: RN } = vendetta.metro.common;
 const optional = (fn: () => any) => { try { return fn(); } catch { return undefined; } };
 function color(name: string, fallback: string) {
@@ -54,8 +54,7 @@ export const runtime = {
     filters: { withProps: (...props: string[]) => props },
     lookupModule: (props: string[]) => [
       // Next exposes this lazy library through its curated external API.
-      (props.includes("BottomSheetScrollView") ? optional(() => typeof revenge !== "undefined"
-        ? revenge.externals?.Gorhom?.BottomSheet : undefined) : undefined)
+      (props.includes("BottomSheetScrollView") ? optional(() => nextAPI()?.externals?.Gorhom?.BottomSheet) : undefined)
       ?? optional(() => vendetta.metro.findByProps(...props)),
     ],
   } },
