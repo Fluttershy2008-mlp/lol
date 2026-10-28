@@ -8,6 +8,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/
 
 Disable the old Stealmoji copy before installing this one, then reload Revenge.
 
+## Picker cleanup in 2.1.6
+
+Valenced **1.0.0-beta5**, Next **1.0.0-beta7** and Classic **2.1.6** close the menu picker after a confirmed emoji upload, clipboard copy or save action. Closing removes Stealmoji's owned modal/alert entry and releases its listeners. This also works with a retaining or throwing native alert dismiss method, without removing unrelated alerts. The plugin settings page remains open and shows its result.
+
+**Close stays available while uploading or copying.** Closing during image preparation aborts the download and prevents a later write. A request already handed to Discord is not retried or claimed to be cancelled; the single-upload guard remains until it settles or reaches a 45-second deadline. A fresh picker shows an explicit in-progress message while that happens. Clipboard/save actions have a 15-second deadline. Late results cannot display stale success, reopen a closed picker or close a newer one.
+
+View emoji dismisses the picker before opening Discord's native viewer, avoiding stacked modal windows. Disabling Stealmoji, switching accounts or opening another picker cancels a queued viewer. A keyboard-dismiss error cannot prevent the picker from closing.
+
+Refresh the existing repository, update **Stealmoji**, then force-close and reopen Discord. Tests cover both native hosts, owned alert-store removal, copy link/image/save, Close during writes/downloads, timeouts, one write in flight, stale results and viewer ordering. All 14 new integration scenarios fail against the preceding packages and pass with this change. Two source tests also check download cancellation. Physical phone verification remains pending. [React Native Modal reference](https://reactnative.dev/docs/0.86/modal).
+
 ## Confirmation and scrolling in 2.1.5
 
 Valenced **1.0.0-beta4**, Next **1.0.0-beta6** and Classic **2.1.5** accept JSON text, nested data/body envelopes and Fetch-style upload responses. When a successful REST response has no created ID, the plugin compares the server's emoji list before and after the single POST. Exactly one new matching ID confirms the upload. An existing same-name emoji, another user's creation or ambiguous matches cannot produce a false success. Failed or uncertain writes are never retried automatically.

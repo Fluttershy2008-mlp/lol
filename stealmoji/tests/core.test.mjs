@@ -77,3 +77,19 @@ test('cancelled lifecycle prevents a download and every oversize candidate fails
   const large = environment(Array.from({ length: 3 }, () => ({ blob: { size: 300000 } })));
   await assert.rejects(createCore(large).imageData({ id }), /256 KiB/);
 });
+test('closing the picker aborts a stalled download and clears its deadline', async () => {
+  const env = environment([]), timers = new Set(), controller = new AbortController();
+  let nativeSignal;
+  env.setTimeout = () => { const token = {}; timers.add(token); return token; };
+  env.clearTimeout = token => timers.delete(token);
+  env.fetch = (_url, options) => { nativeSignal = options.signal; return new Promise(() => {}); };
+  const waiting = createCore(env).imageData({ id }, () => true, controller.signal);
+  controller.abort();
+  await assert.rejects(waiting, /cancelled/);
+  assert.equal(nativeSignal.aborted,true); assert.equal(timers.size,0);
+});
+test('an already cancelled picker does not start another image download', async () => {
+  const env = environment([]), controller = new AbortController(); controller.abort();
+  await assert.rejects(createCore(env).imageData({ id }, () => true, controller.signal), /cancelled/);
+  assert.deepEqual(env.urls,[]);
+});

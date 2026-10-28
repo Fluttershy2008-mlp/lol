@@ -9,7 +9,7 @@ export function createPlugin(V, env = globalThis) {
   const panels = createExpressionPanel(V, 'StealmojiPicker');
   const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
   let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
-  const unpatches = [], dialogs = new Set();
+  const unpatches = [], dialogs = new Set(), cancellations = new Set(), viewTimers = new Set();
   const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
   const byStore = key => { try { return V.metro.findByStoreName(key); } catch {} };
   const toast = message => { try { V.ui?.toasts?.showToast?.(message); } catch {} };
@@ -18,6 +18,29 @@ export function createPlugin(V, env = globalThis) {
   const slots = (guild, emoji) => core.slots(guild, emoji.animated, byStore('EmojiStore'), byProps('getMaxEmojiSlots'));
   const currentGuild = id => byStore('GuildStore')?.getGuild?.(id) ?? byStore('GuildStore')?.getGuilds?.()?.[id];
   const safe = fn => () => { if (active) Promise.resolve().then(fn).catch(error => toast(core.errorMessage(error))); };
+  async function timed(task, control, duration, message) {
+    let timer, done = false, rejectWaiting;
+    const stop = () => {
+      if (done) return;
+      control.cancelled = true;
+      rejectWaiting(Object.assign(new Error('Stealmoji action cancelled.'), { code: 'STEALMOJI_CANCELLED' }));
+      try { control.controller?.abort(); } catch {}
+    };
+    const deadline = new Promise((_, reject) => {
+      rejectWaiting = reject;
+      timer = env.setTimeout(() => {
+        control.expired = true;
+        reject(new Error(message));
+        try { control.controller?.abort(); } catch {}
+      }, duration);
+    });
+    control.cancel = stop; cancellations.add(stop);
+    try { return await Promise.race([Promise.resolve().then(task), deadline]); }
+    finally {
+      done = true; env.clearTimeout(timer); cancellations.delete(stop);
+      if (control.cancel === stop) control.cancel = undefined;
+    }
+  }
   function colors() {
     const dark = (byStore('ThemeStore')?.theme ?? RN.Appearance?.getColorScheme?.()) !== 'light';
     return { text: dark ? '#f2f3f5' : '#202127', muted: dark ? '#b5bac1' : '#50535c', input: dark ? '#25262c' : '#e5e7ec' };
@@ -72,33 +95,32 @@ export function createPlugin(V, env = globalThis) {
     const clipboard = V.metro.common.clipboard ?? byProps('setString', 'getString');
     if (!clipboard?.setString) throw new Error('Clipboard is unavailable on this Discord build.');
     await clipboard.setString(core.url(emoji));
-    if (active) toast('Emoji link copied.');
+    return 'Emoji link copied.';
   }
   async function saveImage(emoji) {
     const media = byProps('downloadMediaAsset');
     if (!media?.downloadMediaAsset) throw new Error('Saving is unavailable on this build. Use Copy emoji link.');
     const result = media.downloadMediaAsset(core.url(emoji, 256), emoji.animated ? 1 : 0);
-    if (result?.then) { await result; if (active) toast('Emoji saved.'); }
-    else toast('Save requested. Check Downloads or Photos.');
+    if (result?.then) { await result; return 'Emoji saved.'; }
+    return 'Save requested. Check Downloads or Photos.';
   }
   function viewImage(emoji) {
     const media = byProps('openMediaModal');
     if (!media?.openMediaModal) throw new Error('Image viewer is unavailable. Use Save image or Copy emoji link.');
     const uri = core.url(emoji, 256);
     host()?.hideActionSheet?.(KEY);
-    media.openMediaModal({ initialSources: [{ uri, sourceURI: uri, width: 256, height: 256 }], initialIndex: 0,
+    return media.openMediaModal({ initialSources: [{ uri, sourceURI: uri, width: 256, height: 256 }], initialIndex: 0,
       originLayout: { width: 100, height: 100, x: 0, y: 0, resizeMode: 'contain' } });
   }
-  async function copyImage(emoji) {
+  async function copyImage(emoji, current, control) {
     const clipboard = V.metro.common.clipboard;
     if (!clipboard?.setImage) throw new Error('Copy image is unavailable. Use Copy emoji link.');
-    const session = generation;
-    const data = await core.imageData(emoji, () => active && generation === session);
-    if (!active || generation !== session) return;
+    const data = await core.imageData(emoji, current, control.controller?.signal);
+    if (!current()) throw new Error('Image copy cancelled.');
     await clipboard.setImage(data.split(',')[1]);
-    toast('Emoji image copied.');
+    return 'Emoji image copied.';
   }
-  async function upload(emoji, guildId, name) {
+  async function upload(emoji, guildId, name, alive, control) {
     if (!active) throw new Error('Enable Stealmoji before uploading.');
     if (pending) throw new Error('An emoji upload is already in progress.');
     if (!core.validName(name)) throw new Error('Use 2–32 letters, numbers, or underscores.');
@@ -108,20 +130,26 @@ export function createPlugin(V, env = globalThis) {
     const uploadImage = uploads.resolve('emoji');
     const session = generation;
     const account = byStore('UserStore')?.getCurrentUser?.()?.id;
-    const current = () => active && generation === session && !!account && byStore('UserStore')?.getCurrentUser?.()?.id === account;
+    const current = () => active && generation === session && pending === control && !control.cancelled && !control.expired
+      && alive() && !!account && byStore('UserStore')?.getCurrentUser?.()?.id === account;
     const check = () => { if (!current()) throw new Error('Upload cancelled because the plugin or Discord account changed.'); };
-    pending = true;
+    pending = control;
     try {
-      check();
-      const data = await core.imageData(emoji, current);
-      check();
-      const latest = currentGuild(guildId);
-      if (!latest || !canCreate(latest)) throw new Error('Your permission to upload has changed.');
-      if (slots(latest, emoji).full) throw new Error('This server has no free slots for this emoji type.');
-      // Exactly one write; never retry a POST with an uncertain result.
-      await uploadImage({ guildId, name, image: data, roles: undefined }, check);
-      return `${name} added to ${latest.name}.`;
-    } finally { pending = false; }
+      return await timed(async () => {
+        check();
+        const data = await core.imageData(emoji, current, control.controller?.signal);
+        check();
+        const latest = currentGuild(guildId);
+        if (!latest || !canCreate(latest)) throw new Error('Your permission to upload has changed.');
+        if (slots(latest, emoji).full) throw new Error('This server has no free slots for this emoji type.');
+        // Once handed to the uploader, closing only detaches the UI. Keep the
+        // single-write guard until the request settles or reaches its deadline.
+        control.writing = true;
+        await uploadImage({ guildId, name, image: data, roles: undefined }, check);
+        check();
+        return `${name} added to ${latest.name}.`;
+      }, control, 45000, 'Discord’s upload response timed out. Check the server’s emoji before trying again.');
+    } finally { if (pending === control) pending = false; }
   }
   function guildIcon(guild) {
     const style = { width: 44, height: 44, borderRadius: 14 };
@@ -131,13 +159,23 @@ export function createPlugin(V, env = globalThis) {
     return h(RN.View, { style: { ...style, backgroundColor: '#5865f2', alignItems: 'center', justifyContent: 'center' } },
       text(initials, { color: '#fff', fontWeight: '600' }));
   }
-  function Picker({ emojis = [], close, settings = false, inSheet = false, inPanel = false }) {
+  function Picker({ emojis = [], close, settings = false, inSheet = false, inPanel = false, isOpen }) {
     const [emoji, setEmoji] = React.useState(emojis.length === 1 ? emojis[0] : null);
     const [source, setSource] = React.useState(''), [name, setName] = React.useState(emojis[0]?.name ?? 'emoji');
     const [guildId, setGuild] = React.useState(null), [search, setSearch] = React.useState('');
     const [error, setError] = React.useState(''), [busy, setBusy] = React.useState(false), [success, setSuccess] = React.useState('');
     const [toolsOpen, setToolsOpen] = React.useState(false);
     const [revision, refresh] = React.useState(0), mounted = React.useRef(true), lock = React.useRef(false);
+    const closed = React.useRef(false), operation = React.useRef(), session = React.useRef(generation);
+    const alive = () => mounted.current && !closed.current && active && session.current === generation && (!isOpen || isOpen());
+    const cancelPreparation = () => { if (!operation.current?.writing) operation.current?.cancel?.(); };
+    const dismiss = () => {
+      if (closed.current) return;
+      closed.current = true; cancelPreparation();
+      try { RN.Keyboard?.dismiss?.(); } catch {}
+      close?.();
+    };
+    const control = () => ({ controller: env.AbortController ? new env.AbortController() : undefined });
     React.useEffect(() => {
       mounted.current = true;
       const cleanups = [];
@@ -145,18 +183,48 @@ export function createPlugin(V, env = globalThis) {
       for (const key of ['GuildStore', 'PermissionStore', 'EmojiStore']) {
         try { const store = byStore(key); store?.addChangeListener?.(changed); cleanups.push(() => store?.removeChangeListener?.(changed)); } catch {}
       }
-      return () => { mounted.current = false; cleanups.forEach(fn => { try { fn(); } catch {} }); };
+      return () => { mounted.current = false; cancelPreparation(); cleanups.forEach(fn => { try { fn(); } catch {} }); };
     }, []);
     const choose = next => { setEmoji(next); setName(next.name); setGuild(null); setToolsOpen(false); setSearch(''); setError(''); setSuccess(''); };
     const submit = async () => {
-      if (lock.current) return;
+      if (lock.current || !alive()) return;
       lock.current = true; setBusy(true); setError(''); setSuccess('');
-      const session = generation;
+      const current = control(); operation.current = current;
       try {
-        const message = await upload(emoji, guildId, name.trim());
-        if (mounted.current && active && generation === session) { setSuccess(message); setGuild(null); toast(message); }
-      } catch (e) { if (mounted.current && active && generation === session) setError(core.errorMessage(e)); }
-      finally { lock.current = false; if (mounted.current) setBusy(false); }
+        const message = await upload(emoji, guildId, name.trim(), alive, current);
+        if (alive()) {
+          if (close) dismiss(); else { setSuccess(message); setGuild(null); }
+          toast(message);
+        }
+      } catch (e) { if (alive() && e?.code !== 'STEALMOJI_CANCELLED') setError(core.errorMessage(e)); }
+      finally { if (operation.current === current) operation.current = undefined; lock.current = false; if (alive()) setBusy(false); }
+    };
+    const tool = action => async () => {
+      if (lock.current || !alive()) return;
+      lock.current = true; setBusy(true); setError('');
+      const current = control(); operation.current = current;
+      const usable = () => alive() && !current.cancelled && !current.expired;
+      try {
+        const message = await timed(() => {
+          if (!usable()) throw Object.assign(new Error('Stealmoji action cancelled.'), { code: 'STEALMOJI_CANCELLED' });
+          return action(usable, current);
+        }, current, 15000, 'The emoji action timed out. You can close this window and try again.');
+        if (alive()) { if (close) dismiss(); else setSuccess(message); toast(message); }
+      } catch (e) { if (alive() && e?.code !== 'STEALMOJI_CANCELLED') setError(core.errorMessage(e)); }
+      finally { if (operation.current === current) operation.current = undefined; lock.current = false; if (alive()) setBusy(false); }
+    };
+    const view = () => {
+      if (lock.current || !alive()) return;
+      if (!byProps('openMediaModal')?.openMediaModal) { setError('Image viewer is unavailable. Use Save image or Copy emoji link.'); return; }
+      if (!close) { safe(() => viewImage(emoji))(); return; }
+      const openingSession = generation, account = byStore('UserStore')?.getCurrentUser?.()?.id;
+      dismiss();
+      const timer = env.setTimeout(() => {
+        viewTimers.delete(timer);
+        if (active && generation === openingSession && !pickerOpening && byStore('UserStore')?.getCurrentUser?.()?.id === account)
+          safe(() => viewImage(emoji))();
+      }, 350);
+      viewTimers.add(timer);
     };
     if (emoji && !guildId && !toolsOpen) {
       const palette = colors();
@@ -169,7 +237,8 @@ export function createPlugin(V, env = globalThis) {
       const row = guild => {
         const capacity = slots(guild, emoji), disabled = capacity.full || busy;
         const select = () => {
-          if (!active || busy || pending) return;
+          if (!active || busy) return;
+          if (pending) { setError('An emoji upload is already in progress. You can close this window while it finishes.'); return; }
           const latest = currentGuild(guild.id);
           if (!latest || !canCreate(latest)) { setError('You no longer have permission to add emoji to this server.'); return; }
           if (slots(latest, emoji).full) { setError('This server has no slots available for this emoji type.'); return; }
@@ -204,7 +273,7 @@ export function createPlugin(V, env = globalThis) {
           h(RN.Image, { source: { uri: core.url(emoji) }, resizeMode: 'contain', accessible: false, style: { width: 30, height: 30 } }),
           h(RN.Text, { numberOfLines: 1, style: { flex: 1, color: palette.text, fontSize: 20, fontWeight: '700',
             textAlign: 'center', marginHorizontal: 12 } }, `Stealing ${emoji.name}`),
-          close ? h(RN.Pressable ?? RN.TouchableOpacity, { onPress: close, accessibilityRole: 'button', accessibilityLabel: 'Close',
+          close ? h(RN.Pressable ?? RN.TouchableOpacity, { onPress: dismiss, accessibilityRole: 'button', accessibilityLabel: 'Close',
             hitSlop: 8, style: { width: 36, height: 44, justifyContent: 'center', alignItems: 'center' } },
             text('×', { fontSize: 32, lineHeight: 36 })) : h(RN.View, { style: { width: 30 } })),
         h(RN.View, { style: { paddingHorizontal: 24, paddingBottom: 10 } }, input(search, setSearch, 'Search servers'),
@@ -216,7 +285,7 @@ export function createPlugin(V, env = globalThis) {
           link('Use another emoji', () => { setEmoji(null); setSearch(''); setError(''); })));
     }
     const content = [text('Stealmoji', { fontSize: 22, fontWeight: '700' })];
-    if (close) content.push(button('Close', close, busy));
+    if (close) content.push(button('Close', dismiss));
     if (settings) content.push(text(hooked ? 'Emoji menu hook connected.' : 'Menu hook unavailable. Paste an emoji below.', { color: colors().muted, marginTop: 8 }));
     if (success) content.push(text(success, { marginTop: 12 }));
     if (!emoji) {
@@ -233,10 +302,10 @@ export function createPlugin(V, env = globalThis) {
         accessibilityLabel: 'Emoji preview', style: { height: 100, width: '100%', marginTop: 16 } }));
       content.push(text(emoji.name, { textAlign: 'center', marginTop: 6 }));
       if (!guildId) {
-        content.push(button('View emoji', safe(() => viewImage(emoji)), busy));
-        content.push(button('Copy emoji link', safe(() => copyURL(emoji)), busy));
-        content.push(button('Save ' + (emoji.animated ? 'GIF' : 'image'), safe(() => saveImage(emoji)), busy));
-        if (RN.Platform?.OS === 'ios' && !emoji.animated) content.push(button('Copy image', safe(() => copyImage(emoji)), busy));
+        content.push(button('View emoji', view, busy));
+        content.push(button('Copy emoji link', tool(() => copyURL(emoji)), busy));
+        content.push(button('Save ' + (emoji.animated ? 'GIF' : 'image'), tool(() => saveImage(emoji)), busy));
+        if (RN.Platform?.OS === 'ios' && !emoji.animated) content.push(button('Copy image', tool((current, task) => copyImage(emoji, current, task)), busy));
         content.push(h(RN.View, { key: 'animated', style: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 } },
           text('Animated emoji (GIF)'), h(RN.Switch, { value: emoji.animated, disabled: busy, accessibilityLabel: 'Animated emoji',
             onValueChange: value => setEmoji({ ...emoji, animated: value }) })));
@@ -263,9 +332,9 @@ export function createPlugin(V, env = globalThis) {
     if (!active || pickerOpening) return;
     const opening = { session: generation };
     pickerOpening = opening;
-    const release = () => { if (pickerOpening === opening) pickerOpening = undefined; };
-    const live = () => active && generation === opening.session && pickerOpening === opening;
-    const modal = panels.open(close => guarded(h(Picker, { emojis, close, inPanel: true })), 'emoji picker', release);
+    const release = () => { opening.closed = true; if (pickerOpening === opening) pickerOpening = undefined; };
+    const live = () => active && generation === opening.session && !opening.closed && pickerOpening === opening;
+    const modal = panels.open(close => guarded(h(Picker, { emojis, close, inPanel: true, isOpen: live })), 'emoji picker', release);
     if (modal) { host()?.hideActionSheet?.(fromKey); return; }
     function Content(props) {
       React.useEffect(() => release, []);
@@ -277,7 +346,7 @@ export function createPlugin(V, env = globalThis) {
       if (!Sheet) { try { Sheet = V.metro.find(m => m?.render?.name === 'ActionSheet'); } catch {} }
       if (sheetHost?.openLazy && Sheet) {
         const close = () => { if (!live()) return; try { sheetHost.hideActionSheet?.(KEY); } finally { release(); } };
-        const component = () => live() ? guarded(h(Sheet, { scrollable: true }, h(Content, { emojis, close, inSheet: true }))) : null;
+        const component = () => live() ? guarded(h(Sheet, { scrollable: true }, h(Content, { emojis, close, inSheet: true, isOpen: live }))) : null;
         sheetHost.hideActionSheet?.(fromKey);
         sheetHost.openLazy(Promise.resolve({ default: component }), KEY, {});
         return;
@@ -286,7 +355,7 @@ export function createPlugin(V, env = globalThis) {
       if (manager?.openAlert && alerts?.AlertModal) {
         const close = () => { if (!live()) return; try { manager.dismissAlert(KEY); } finally { dialogs.delete(KEY); release(); } };
         dialogs.add(KEY);
-        manager.openAlert(KEY, guarded(h(alerts.AlertModal, { title: 'Emoji tools', content: h(Content, { emojis, close }) })));
+        manager.openAlert(KEY, guarded(h(alerts.AlertModal, { title: 'Emoji tools', content: h(Content, { emojis, close, isOpen: live }) })));
         return;
       }
       release();
@@ -437,6 +506,10 @@ export function createPlugin(V, env = globalThis) {
   function onUnload() {
     active = false; generation++; hooked = false; pickerOpening = undefined;
     panels.closeAll();
+    for (const cancel of [...cancellations]) cancel();
+    pending = false;
+    for (const timer of viewTimers) env.clearTimeout(timer);
+    viewTimers.clear();
     env.clearTimeout(retryTimer);
     try { resume?.remove?.(); } catch {}
     resume = undefined;

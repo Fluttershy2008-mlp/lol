@@ -186,3 +186,9 @@ Shared source with Valenced beta4/beta4/beta6 adds bundled PNG/JPEG fitting and 
 Both deterministic package checks pass. The full regression run passes 851 Node checks and 16 Python checks, with one optional Hermes check skipped because HERMES_BINARY is not supplied. The native expression suite has 38 cases per host and Server Leaver has six per host. Real PNG/JPEG bytes are decoded from uploads without native cropper or browser text codecs. Physical Android gesture scrolling and uploads remain unverified. Other current packages and all previous ZIPs are preserved.
 
 Seven selected cropping/response/picker/editor scenarios fail against each host's preceding published packages and pass against these builds. The scroll checks verify structure and component identity; they do not simulate Android touch physics.
+
+## Stealmoji beta7 — picker cleanup after copying
+
+Shared with Valenced beta5 and Classic 2.1.6. Confirmed upload, clipboard and save actions close the menu picker and remove its owned alert entry. Close stays enabled during requests; dismissing preparation cancels its download and prevents a later POST. An already dispatched operation keeps its single-write guard until completion or the 45-second deadline; a reopened picker reports that state. Clipboard/save actions have a 15-second deadline. Late results cannot change a new picker. Image viewing is deferred until the picker closes, and stale viewer requests are cancelled.
+
+All 14 new native scenarios per host fail against the preceding packages and pass here; two new core tests cover cancellation. The complete regression run passes 881 Node checks and 16 Python checks, with one optional Hermes check skipped and both deterministic builds verified. Tests model native hosts and do not constitute on-phone verification. No other current package or old ZIP is changed.

@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, ACCOUNT, FRIEND, GUILD } = require('./next-harness.cjs');
 const { gifFixture } = require('../../save-as-sticker/tests/gif-fixture.mjs');
+const { installServerPanelHost } = require('../../valenced/tests/server-info-fixture.cjs');
 const h = React.createElement, EMOJI = '800000000000000008', CREATED = '800000000000000009';
 const png = Buffer.alloc(32); Buffer.from([137,80,78,71,13,10,26,10]).copy(png);
 png.writeUInt32BE(13, 8); png.write('IHDR', 12); png.writeUInt32BE(320, 16); png.writeUInt32BE(320, 20);
@@ -52,8 +53,10 @@ function scenario(t, options = {}) {
     w.expectedErrors = 0;
     w.native = { async createGuildSticker(input) { nativePosts.push(input); return { id: CREATED }; },
         async uploadEmoji(input) { nativePosts.push(input); return { id: CREATED }; } };
+    if (options.nativeHost) w.panelHost = installServerPanelHost(w, { dismissMode: options.nativeHost });
     w.mount = async element => { let ui; await act(() => { ui = Renderer.create(element); }); renders.push(ui); return ui; };
     w.open = async (kind, { choose = true } = {}) => {
+        if (w.panelHost && !w.panelRoot) w.panelRoot = await w.mount(h(w.panelHost.Root));
         const item = w.loaded.get(kind) ?? await w.start(kind), Row = w.U.discord.design.Design.ActionSheetRow;
         const attachment = { filename: 'image.' + (options.gif ? 'gif' : options.jpeg ? 'jpg' : 'png'), content_type: mime,
             url: 'https://cdn.discordapp.com/attachments/1/2/image.' + (options.gif ? 'gif' : 'png') + '?ex=expiry&hm=signature' };
@@ -65,7 +68,7 @@ function scenario(t, options = {}) {
         await act(button(menu, kind === 'save-as-sticker' ? 'Save as Sticker' : 'Stealmoji · Add / save emoji'));
         let ui;
         const panel = w.alerts.at(-1);
-        if (panel && /Picker\.panel\./.test(panel[0])) ui = await w.mount(panel[1]);
+        if (panel && /Picker\.panel\./.test(panel[0])) ui = w.panelRoot ?? await w.mount(panel[1]);
         else { const entry = w.openedSheets.at(-1), picker = await entry.promise; ui = await w.mount(h(picker.default, entry.context)); }
         if (!choose) return { item, ui };
         await act(button(ui, 'Test Guild'));
@@ -231,3 +234,124 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         gate.resolve({ status: 201, body: { id: CREATED } }); await act(); assert.equal(w.posts().length, 1);
     });
 }
+
+for (const mode of ['retain', 'throw']) test('Stealmoji releases its modal and owned alert after copying an emoji with ' + mode + ' dismissal', async t => {
+    const w = scenario(t,{ nativeHost: mode });
+    const { ui, submit } = await w.open('stealmoji');
+    const key = w.alerts.at(-1)[0], close = button(ui,'Close');
+    w.U.discord.actions.AlertActionCreators.openAlert('unrelated-alert',h(w.RN.Text,null,'Unrelated alert'));
+    await w.submit({ submit });
+    assert.equal(w.posts().length,1); assert.equal(ui.root.findAllByType('Modal').length,0);
+    assert.equal(w.panelHost.nodes.has(key),false,'the alert entry and its possible input-blocking host must be removed');
+    assert.equal(w.panelHost.nodes.has('unrelated-alert'),true);
+    assert.ok(w.toasts.includes('renamed added to Test Guild.'));
+    const reopened = await w.open('stealmoji',{ choose: false });
+    await act(close); assert.equal(reopened.ui.root.findAllByType('Modal').length,1,'a stale Close must not close a new picker');
+    await act(button(reopened.ui,'Close'));
+    assert.deepEqual([...w.panelHost.nodes.keys()],['unrelated-alert']);
+});
+
+for (const tool of ['Copy emoji link','Copy image','Save image']) test('Stealmoji releases the picker after ' + tool, async t => {
+    const w = scenario(t,{ nativeHost: 'retain' });
+    if (tool === 'Copy emoji link') w.RN.Keyboard.dismiss = () => { throw new Error('Stale native input'); };
+    if (tool === 'Copy image') w.RN.Platform.OS = 'ios';
+    const { ui } = await w.open('stealmoji',{ choose: false });
+    await act(button(ui,'Emoji tools')); await act(button(ui,tool));
+    assert.equal(ui.root.findAllByType('Modal').length,0); assert.equal(w.panelHost.nodes.size,0);
+    assert.equal(w.posts().length,0);
+    if (tool === 'Copy emoji link') assert.match(w.clipboard.at(-1),new RegExp('/emojis/' + EMOJI));
+    if (tool === 'Copy image') assert.equal(w.calls.filter(c => c[0] === 'copyImage').length,1);
+    if (tool === 'Save image') assert.equal(w.calls.filter(c => c[0] === 'downloadMedia').length,1);
+});
+
+test('Stealmoji can close a pending write and a late success cannot block the reopened picker', async t => {
+    const gate = deferred(), w = scenario(t,{ nativeHost: 'retain', post: () => gate.promise });
+    const open = await w.open('stealmoji'); await w.submit(open); assert.equal(w.posts().length,1);
+    await act(button(open.ui,'Close')); assert.equal(w.panelHost.nodes.size,0);
+    const fresh = await w.open('stealmoji',{ choose: false });
+    gate.resolve({ status: 201, body: { id: CREATED } }); await act();
+    assert.equal(fresh.ui.root.findAllByType('Modal').length,1);
+    assert.equal(w.posts().length,1); assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
+    assert.equal(w.timers.size,0);
+});
+
+test('Stealmoji bounds an upload that completed remotely but never returns a response', async t => {
+    const gate = deferred(), w = scenario(t,{ nativeHost: 'retain', post: () => gate.promise });
+    const open = await w.open('stealmoji'); await w.submit(open);
+    assert.ok(button(open.ui,'Close'),'Close remains available while Discord is pending');
+    await act(() => w.advance(45000));
+    assert.match(text(open.ui.toJSON()),/response timed out/); assert.equal(w.posts().length,1);
+    assert.equal(w.timers.size,0); await act(button(open.ui,'Close'));
+    assert.equal(w.panelHost.nodes.size,0);
+    gate.resolve({ status: 201, body: { id: CREATED } }); await act();
+    assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
+});
+
+test('Stealmoji cancels a download on Close and cannot upload its late image', async t => {
+    const gate = deferred(); let signal;
+    const w = scenario(t,{ nativeHost: 'retain', fetch: (_url, options) => { signal = options.signal; return gate.promise; } });
+    const open = await w.open('stealmoji'); await w.submit(open);
+    await act(button(open.ui,'Close')); assert.equal(signal.aborted,true);
+    assert.equal(w.panelHost.nodes.size,0); assert.equal(w.timers.size,0);
+    const fresh = await w.open('stealmoji',{ choose: false });
+    gate.resolve(new Response(png,{ headers: { 'content-type': 'image/png' } })); await act();
+    assert.equal(w.posts().length,0); assert.equal(fresh.ui.root.findAllByType('Modal').length,1);
+});
+
+test('Stealmoji cancels a preflight read before any write when its picker closes', async t => {
+    const gate = deferred(), w = scenario(t,{ nativeHost: 'retain', read: () => gate.promise });
+    const open = await w.open('stealmoji'); await w.submit(open);
+    await act(button(open.ui,'Close'));
+    gate.resolve({ status: 200, body: [] }); await act();
+    assert.equal(w.posts().length,0); assert.equal(w.panelHost.nodes.size,0); assert.equal(w.timers.size,0);
+});
+
+test('Stealmoji opens the native image viewer after closing its own modal', async t => {
+    const w = scenario(t,{ nativeHost: 'retain' }), { ui } = await w.open('stealmoji',{ choose: false });
+    await act(button(ui,'Emoji tools')); await act(button(ui,'View emoji'));
+    assert.equal(w.panelHost.nodes.size,0); assert.equal(w.calls.filter(c => c[0] === 'openMedia').length,0);
+    await act(() => w.advance(350)); assert.equal(w.calls.filter(c => c[0] === 'openMedia').length,1);
+    assert.equal(w.timers.size,0);
+});
+
+test('Stealmoji stops a delayed viewer and a stalled upload when disabled', async t => {
+    const w = scenario(t,{ nativeHost: 'retain' }), first = await w.open('stealmoji',{ choose: false });
+    await act(button(first.ui,'Emoji tools')); await act(button(first.ui,'View emoji'));
+    await act(() => w.stop(first.item)); await act(() => w.advance(1000));
+    assert.equal(w.calls.filter(c => c[0] === 'openMedia').length,0); assert.equal(w.timers.size,0);
+    const gate = deferred(); w.addModule({ uploadEmoji: () => gate.promise });
+    const second = await w.open('stealmoji'); await w.submit(second); await act(() => w.stop(second.item));
+    assert.equal(w.panelHost.nodes.size,0); assert.equal(w.timers.size,0);
+    gate.resolve({ id: CREATED }); await act(); assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
+});
+
+test('Stealmoji keeps one write in flight after Close while the rest of the picker remains usable', async t => {
+    const gate = deferred(), w = scenario(t,{ nativeHost: 'retain', post: () => gate.promise });
+    const first = await w.open('stealmoji'); await w.submit(first); await act(button(first.ui,'Close'));
+    const fresh = await w.open('stealmoji',{ choose: false }); await act(button(fresh.ui,'Test Guild'));
+    assert.match(text(fresh.ui.toJSON()),/already in progress/); assert.equal(w.posts().length,1);
+    assert.ok(button(fresh.ui,'Close')); gate.resolve({ status: 201, body: { id: CREATED } }); await act();
+    assert.equal(fresh.ui.root.findAllByType('Modal').length,1); assert.equal(w.timers.size,0);
+    assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
+    await act(button(fresh.ui,'Test Guild'));
+    assert.ok(fresh.ui.root.findAll(n => n.type === 'TextInput' && n.props.placeholder === 'Emoji name').length);
+    assert.equal(w.posts().length,1,'choosing a server does not repeat the previous write');
+});
+
+test('Stealmoji bounds a stalled clipboard action and can close without waiting for its late result', async t => {
+    const gate = deferred(), w = scenario(t,{ nativeHost: 'retain' });
+    w.U.externals.ReactNativeClipboard.Clipboard.setString = () => gate.promise;
+    const { ui } = await w.open('stealmoji',{ choose: false }); await act(button(ui,'Emoji tools'));
+    await act(() => { void button(ui,'Copy emoji link')(); }); assert.ok(button(ui,'Close'));
+    await act(() => w.advance(15000)); assert.match(text(ui.toJSON()),/action timed out/);
+    await act(button(ui,'Close')); assert.equal(w.panelHost.nodes.size,0); assert.equal(w.timers.size,0);
+    gate.resolve(); await act(); assert.equal(w.toasts.includes('Emoji link copied.'),false);
+});
+
+test('Stealmoji cancels a delayed image viewer when another picker has already opened', async t => {
+    const w = scenario(t,{ nativeHost: 'retain' }), first = await w.open('stealmoji',{ choose: false });
+    await act(button(first.ui,'Emoji tools')); await act(button(first.ui,'View emoji'));
+    const fresh = await w.open('stealmoji',{ choose: false }); await act(() => w.advance(350));
+    assert.equal(w.calls.filter(c => c[0] === 'openMedia').length,0);
+    assert.equal(fresh.ui.root.findAllByType('Modal').length,1); assert.equal(w.timers.size,0);
+});

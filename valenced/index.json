@@ -1125,11 +1125,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.stealmoji@1.0.0-beta5.zip",
+          "sha256": "585260ec80378d8d986ea2d30cd313ecb546f87b4667587962504e149ab8f007",
+          "size": 38807,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "Stealmoji (Valenced)",
       "description": "Valenced preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",

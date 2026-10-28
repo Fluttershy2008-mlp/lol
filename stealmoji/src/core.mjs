@@ -56,13 +56,21 @@ export function createCore(env = globalThis) {
     }
     return false;
   }
-  async function imageData(emoji, isCurrent = () => true) {
+  async function imageData(emoji, isCurrent = () => true, signal) {
     let oversized = false;
     for (const size of [128, 64, 32]) {
-      if (!isCurrent()) throw new Error('Stealmoji was disabled.');
+      if (!isCurrent() || signal?.aborted) throw new Error('Stealmoji was disabled or the action was cancelled.');
       const controller = env.AbortController ? new env.AbortController() : null;
-      let reader, timer, expired = false;
+      let reader, timer, abort, expired = false;
       try {
+        const cancelled = new Promise((_, reject) => {
+          abort = () => {
+            expired = true;
+            try { controller?.abort(); reader?.abort(); } catch {}
+            reject(new Error('Image download cancelled.'));
+          };
+          if (signal?.aborted) abort(); else signal?.addEventListener?.('abort', abort, { once: true });
+        });
         const operation = (async () => {
           const response = await env.fetch(url(emoji, size), controller ? { signal: controller.signal } : undefined);
           if (!response.ok) throw Object.assign(new Error(`Could not download emoji (HTTP ${response.status}).`), { status: response.status });
@@ -103,10 +111,10 @@ export function createCore(env = globalThis) {
             reject(new Error('Emoji download timed out. Please try again.'));
           }, 15000);
         });
-        const data = await Promise.race([operation, timeout]);
+        const data = await Promise.race([operation, timeout, cancelled]);
         if (data) return data;
         oversized = true;
-      } finally { env.clearTimeout(timer); }
+      } finally { env.clearTimeout(timer); signal?.removeEventListener?.('abort', abort); }
     }
     throw new Error(oversized ? 'This emoji is still larger than 256 KiB at the smallest size.' : 'Could not download emoji.');
   }
