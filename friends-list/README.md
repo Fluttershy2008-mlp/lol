@@ -16,6 +16,8 @@ Enable the plugin and reopen Settings. A **Friends List** shortcut appears in th
 
 You can also open the list from the plugin’s **Configure** button.
 
+For Valenced, use the separate [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update Friends List to **1.0.0-beta4**. Its entry is in the Valenced section of Settings. The profile fix supports Discord's anonymous native profile opener as well as older named actions, and cancels stale actions after disabling the plugin or switching accounts. Classic receives the shared fix in **1.0.3**.
+
 ## Features
 
 - Total friend count stays visible when you search.

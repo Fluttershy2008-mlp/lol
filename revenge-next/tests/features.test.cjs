@@ -75,6 +75,9 @@ test('AutoText saves a phrase, expands it in the practice editor and copies the 
 test('Blocked User List shows a real blocked user and confirms before unblocking', async t => {
     const w = scenario(t), item = await w.start('blocked-user-list'), ui = await w.settings(item);
     assert.match(text(ui.toJSON()), /Blocked User/);
+    await press(ui, 'Profile');
+    assert.equal(w.calls.find(c => c[0] === 'showProfileSheet')?.[1].userId, BLOCKED);
+    assert.equal(w.relationships[BLOCKED], 2);
     await press(ui, 'Unblock'); assert.equal(w.calls.some(c => c[0] === 'unblock'), false);
     await Renderer.act(async () => { w.alerts.at(-1)[2].find(b => b.text === 'Unblock').onPress(); });
     assert.equal(w.calls.find(c => c[0] === 'unblock')?.[1], BLOCKED);
@@ -107,7 +110,7 @@ test('ExpressionCloner opens and renders its sticker server picker on Next', asy
 test('Friends List opens a cached profile and supports searching', async t => {
     const w = scenario(t), item = await w.start('friends-list'), ui = await w.settings(item);
     await press(ui, 'Open Test Friend’s profile');
-    assert.equal(w.calls.find(c => c[0] === 'showProfile')?.[1].userId, FRIEND);
+    assert.equal(w.calls.find(c => c[0] === 'showProfileSheet')?.[1].userId, FRIEND);
     await change(ui, 'Search friends by name, username or user ID', 'no-such-friend');
     assert.equal(ui.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Open Test Friend’s profile').length, 0);
 });

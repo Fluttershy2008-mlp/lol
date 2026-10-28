@@ -85,7 +85,7 @@ class ValencedPackages(unittest.TestCase):
             with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{version}.zip") as package:
                 script = package.read("index.js").decode()
             if slug in wanted:
-                self.assertEqual(version, "1.0.0-beta3")
+                self.assertEqual(version, config["pluginVersions"][slug])
                 self.assertIn("withValencedSettingsShortcut(createValencedPlugin(", script)
                 self.assertEqual(sources[plugin_id]["settingsShortcut"]["sha256"], digest)
                 self.assertEqual(sources[plugin_id]["settingsShortcut"]["section"], "VALENCED")

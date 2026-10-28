@@ -58,11 +58,11 @@ These plugin updates do not change Revenge's internal theme implementation. The 
 | --- | --- | --- |
 | Addon List | 2.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/addonList/) |
 | AutoText | 1.2.4 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/auto-text/) |
-| Blocked User List | 1.3.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/blocked-user-list/) |
+| Blocked User List | 1.3.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/blocked-user-list/) |
 | Copy User ID | 1.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/copy-user-id/) |
 | CustomRPC | 1.1.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/custom-rpc/) |
 | ExpressionCloner | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/expression-cloner/) |
-| Friends List | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/friends-list/) |
+| Friends List | 1.0.3 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/friends-list/) |
 | HideBlockedAndIgnoredMessages | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/hide-blocked-and-ignored-messages/) |
 | InfoCommands | 1.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/info-commands/) |
 | Message Logger | 2.0.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/) |

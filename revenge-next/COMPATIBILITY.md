@@ -135,3 +135,7 @@ Valenced InfoCommands beta4 uses a themed React Native Modal bottom panel mounte
 ## Server Info Close follow-up
 
 Valenced InfoCommands beta5 directly controls panel visibility, adds a press handler to the Close text, and removes only its owned alert-store entry if native dismissal retains it. Each opening has a unique host key. Five regressions cover native retention/errors/delays, immediate disappearance, preserved unrelated alerts, cancelled listeners/timers, stale Close callbacks and reopening. The shared source ships as Next InfoCommands beta12, with Next's existing sheet retained.
+
+## List profile buttons
+
+Friends List and Blocked User List beta5 share the native profile resolver used by Valid User and InfoCommands. Valenced receives the same fix as beta4 for both lists, retaining their native settings entries. Fourteen Valenced cases cover anonymous cold/imported/namespace-only openers, both blocked-user controls, exact IDs, unchanged relationships, stale callbacks after stop/restart or account changes, and late failures. Six discovery cases fail against the prior Valenced beta3 packages. Classic Friends List 1.0.3 and Blocked User List 1.3.3 retain named legacy openers. All unrelated current packages and older ZIPs are preserved.

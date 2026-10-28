@@ -148,7 +148,7 @@ test('search filters the virtualized list while the total count stays unchanged'
 });
 
 test('tapping cached and uncached friends opens the native profile with the string user ID', async () => {
-  for (const profileMethod of ['showUserProfile', 'openUserProfile', 'openUserProfileModal']) {
+  for (const profileMethod of ['showUserProfileActionSheet', 'showUserProfile', 'openUserProfile', 'openUserProfileModal']) {
     const s = setup({ profileMethod });
     const tree = s.render();
     const row = tree.props.renderItem({ item: tree.props.data.find(item => item.id === B) });

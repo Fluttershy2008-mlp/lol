@@ -18,6 +18,8 @@ To update an existing installation, use **Refetch** on the plugin and reopen Set
 
 The plugin’s **Configure/settings** button on the Plugins page also opens the list.
 
+For Valenced, use the separate [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update Blocked User List to **1.0.0-beta4**. Its entry is in the Valenced section of Settings. Both the user's card and **Profile** button support Discord's anonymous native profile opener while preserving the block. Stale actions and late failures after disabling the plugin or switching accounts stay inactive. Classic receives the shared fix in **1.3.3**.
+
 ## Block APP / Tupperbox / webhook messages
 
 Use **Block APP / Webhook ID** for APP messages such as Tupperbox proxies. These are hidden locally instead of being sent to Discord's user-block API. This support is included in this plugin; no separate message-hiding plugin is required.

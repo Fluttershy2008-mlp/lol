@@ -136,11 +136,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.blocked-user-list@1.0.0-beta4.zip",
+          "sha256": "07958b7913ad29f4754dcf86e12b3e0e3926c200b103b35efc6ee62c36704cf4",
+          "size": 24060,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "Blocked User List (Valenced)",
       "description": "Valenced preview. Manage blocked users and locally hide APP, bot and Tupperbox/webhook messages by ID, with optional exact character names.",
@@ -358,11 +371,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.friends-list@1.0.0-beta4.zip",
+          "sha256": "ba51440c8d706ed921747f869d9b1a74fea338ab36fe51c35b91fe72e4c58ca2",
+          "size": 20202,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "Friends List (Valenced)",
       "description": "Valenced preview. Shows your total Discord friend count, a searchable friends list, and profile buttons. Opens directly from the Valenced settings section.",

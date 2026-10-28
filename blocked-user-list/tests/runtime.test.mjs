@@ -149,7 +149,7 @@ test('search covers case-insensitive display names, usernames and exact ID text'
 });
 
 test('profile actions use a string userId and never unblock', async () => {
-  for (const profileMethod of ['showUserProfile', 'openUserProfile', 'openUserProfileModal']) {
+  for (const profileMethod of ['showUserProfileActionSheet', 'showUserProfile', 'openUserProfile', 'openUserProfileModal']) {
     const s = setup({ profileMethod });
     await s.controller.openProfile(A, s.controller.snapshot().token);
     assert.deepEqual(s.calls, [['profile', { userId: A }]]);

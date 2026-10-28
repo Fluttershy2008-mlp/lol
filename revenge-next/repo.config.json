@@ -6,6 +6,8 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/index.json",
   "portVersion": "1.0.0-beta4",
   "pluginVersions": {
+    "blocked-user-list": "1.0.0-beta5",
+    "friends-list": "1.0.0-beta5",
     "copy-user-id": "1.0.0-beta5",
     "addon-list": "1.0.0-beta5",
     "info-commands": "1.0.0-beta12",
@@ -13,6 +15,8 @@
     "auto-text": "1.0.0-beta6"
   },
   "sourceRefs": {
+    "blocked-user-list": "main",
+    "friends-list": "main",
     "copy-user-id": "main",
     "addon-list": "main",
     "info-commands": "main",

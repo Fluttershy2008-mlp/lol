@@ -1,3 +1,5 @@
+import { openUserProfile } from '../../compatibility/user-profile.mjs';
+
 export function createPlugin(V, host = globalThis) {
   const { React, ReactNative: RN } = V.metro.common;
   const h = React.createElement;
@@ -8,7 +10,7 @@ export function createPlugin(V, host = globalThis) {
   const listeners = new Set();
   const subscriptions = new Set();
   let active = false, generation = 0;
-  let removeShortcut, userStore, relationshipStore, themeStore, profileActions;
+  let removeShortcut, userStore, relationshipStore, themeStore;
 
   function resolveStores() {
     userStore = byStore('UserStore') ?? byProps('getUser', 'getCurrentUser');
@@ -90,17 +92,12 @@ export function createPlugin(V, host = globalThis) {
   async function openProfile(id, value) {
     if (!validID(id) || !live(value)) return;
     try {
-      if (!profileActions) {
-        for (const method of ['showUserProfile', 'openUserProfile', 'openUserProfileModal']) {
-          const module = byProps(method);
-          if (typeof module?.[method] === 'function') { profileActions = { module, method }; break; }
-        }
-      }
-      if (!profileActions) throw new Error('Profile buttons are unavailable on this Discord version.');
-      await profileActions.module[profileActions.method]({ userId: id });
+      const opened = await openUserProfile(V, { userId: id }, () => live(value));
+      if (!opened && live(value)) throw new Error('Profile buttons are unavailable on this Discord version.');
     } catch (error) {
+      if (!live(value)) return;
       log(error);
-      if (live(value)) RN.Alert.alert('Could not open profile', error?.message ?? 'Please try again.');
+      RN.Alert.alert('Could not open profile', error?.message ?? 'Please try again.');
     }
   }
 
@@ -195,7 +192,7 @@ export function createPlugin(V, host = globalThis) {
       optional(() => removeShortcut?.()); removeShortcut = undefined;
       for (const dispose of [...subscriptions]) dispose();
       listeners.clear();
-      userStore = relationshipStore = themeStore = profileActions = undefined;
+      userStore = relationshipStore = themeStore = undefined;
     },
     settings: Settings,
     // Internal helpers for integration tests; Revenge uses lifecycle and settings.

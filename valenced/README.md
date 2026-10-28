@@ -8,9 +8,9 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**Blocked User List 1.0.0-beta3 now has a settings entry too.** Refresh the repository, install or update Blocked User List, enable it, then force-close Discord and reopen it. It joins CustomRPC, Friends List, More Alts! and Server Leaver, also at beta3, in the existing **Valenced section of Settings**, alongside Valenced, Plugins, Themes and Developer. Each entry opens the plugin's existing settings page.
+**Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the other ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; CustomRPC, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -22,7 +22,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Blocked User List, CustomRPC, Friends List, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -40,9 +40,11 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 
 ## Requested fixes
 
-**Five native settings entries (beta3):** Blocked User List, CustomRPC, Friends List, More Alts! and Server Leaver use Valenced's native `registerSettingsItem` and `addSettingsItemToSection` APIs. The route is registered before its row is added to `VALENCED`. Settings loading can happen after plugin startup; pending callbacks are cancelled on disable. Disabling one plugin removes only its own row and route. Cached pages stop rendering that plugin after disable. The regular settings button on the Plugins page remains available.
+**Friends List and Blocked User List beta4:** both now use the shared profile resolver already used by Valid User and InfoCommands. It resolves anonymous default exports by imported path or namespace markers, or selectively initializes the native opener on the first tap, and opens with `stack`. Profile actions preserve the exact user ID and recheck the active plugin session and signed-in account before opening. Stale callbacks and late failures after disabling or switching accounts stay inactive. Opening a profile does not block, unblock or alter a friendship.
 
-The helper in `settings-shortcut.cjs` is bundled only into those five packages. The Blocked User List update reuses the same helper without changing its Classic source bundle or the common Valenced runtime. This release preserves all older ZIPs and all other current plugin/theme artifacts.
+**Five native settings entries (since beta3):** Blocked User List, CustomRPC, Friends List, More Alts! and Server Leaver use Valenced's native `registerSettingsItem` and `addSettingsItemToSection` APIs. The route is registered before its row is added to `VALENCED`. Settings loading can happen after plugin startup; pending callbacks are cancelled on disable. Disabling one plugin removes only its own row and route. Cached pages stop rendering that plugin after disable. The regular settings button on the Plugins page remains available.
+
+The helper in `settings-shortcut.cjs` is bundled only into those five packages. The profile fix retains this helper and the common Valenced runtime. Only the two list plugins receive new packages; all older ZIPs and other current plugin/theme artifacts are preserved. The shared source also ships as Friends List 1.0.3 and Blocked User List 1.3.3 for Classic, and beta5 for both Next ports.
 
 **InfoCommands beta5** fixes Close on the themed Server Info panel. Close text, its surrounding touch target, Android Back and the backdrop now update the panel's own visibility, so it disappears even when native alert dismissal is delayed or fails. Retained host entries are removed by exact ownership without clearing other alerts. Unique keys prevent an old dismissal from closing a reopened panel. Data listeners/timers and old profile/copy actions are released or disabled on close. The beta4 layout is retained.
 
@@ -79,6 +81,8 @@ Five additional dismissal regressions fail against beta4 and pass against beta5.
 
 Twelve native-settings checks cover all five real settings pages, coexistence with core settings, independent stop/restart for every entry, delayed settings loading, queued callback cancellation, cached pages, insertion rollback, asynchronous startup cancellation and startup failure. Package checks verify that the shortcut helper appears only in the five selected plugins and that its source hash matches the recorded metadata. The new Blocked User List page and coexistence checks fail against its beta2 package and pass against beta3.
 
+Fourteen list-profile checks open the actual pages through their Valenced settings entries and cover cold, imported and namespace-only anonymous profile openers, exact string IDs, both blocked-user controls, unchanged relationships, no startup profile loading, independent stop/restart, account switches and late request failures. The six opener-discovery cases fail against both lists' beta3 packages and pass against beta4. No unrelated Metro factory is initialized.
+
 The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 
 These are preview ports. Automated fixtures cannot verify the Discord UI on your physical Android device. Some Discord versions can change internal menus or composer layouts. Valid User can only show accounts Discord makes available to your session; an inaccessible or nonexistent ID cannot be resolved by a plugin.
@@ -90,7 +94,7 @@ npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
 python3 valenced/build.py --check
 PLUGIN_TEST_TARGET=valenced node --test revenge-next/tests/plugins.test.cjs valenced/tests/*.test.cjs
 PLUGIN_TEST_TARGET=valenced node --test --test-skip-pattern=InfoCommands revenge-next/tests/features.test.cjs
-node --test compatibility/user-profile.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+node --test compatibility/user-profile.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
 python3 -m unittest discover -s valenced/tests -p 'test_*.py'
 ```
 

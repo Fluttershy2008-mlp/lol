@@ -17,9 +17,10 @@
     },
     "dev.fluttershy2008.blocked-user-list": {
       "path": "blocked-user-list/index.js",
-      "sha256": "9633205ce41528da586ef713f348f4378c81d99ffa49ad63cad738a8c5099bcc",
-      "originalVersion": "1.3.2",
+      "sha256": "70d7b93db46c53c7f4b2edd7d7f640c856ab03cdc4441ebb5e7bb545b9ebcd13",
+      "originalVersion": "1.3.3",
       "kind": "compatibility-preview",
+      "sourceRef": "main",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
         "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
@@ -54,9 +55,10 @@
     },
     "dev.fluttershy2008.friends-list": {
       "path": "friends-list/index.js",
-      "sha256": "c87b9c78052499f47fe1853332b3cbbe6bc14f1bed22d83368a98518fe6d5fed",
-      "originalVersion": "1.0.2",
+      "sha256": "92e80ebf75018cc43b68a42e840811ce162741ea42bb701aac5cfbcfb10a9b4a",
+      "originalVersion": "1.0.3",
       "kind": "compatibility-preview",
+      "sourceRef": "main",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
         "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
