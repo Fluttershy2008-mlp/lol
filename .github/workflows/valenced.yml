@@ -44,7 +44,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verify deterministic package output
-        run: python3 valenced/build.py --check
+        run: |
+          node more-alts/build.mjs
+          python3 valenced/build.py --check
       - name: Check Valenced loader and plugin integration
         env:
           PLUGIN_TEST_TARGET: valenced
@@ -55,4 +57,4 @@ jobs:
       - name: Check ZIP integrity and catalogue metadata
         run: python3 -m unittest discover -s valenced/tests -p 'test_*.py'
       - name: Check requested plugins' source regressions
-        run: node --test compatibility/user-profile.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs auto-text/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+        run: node --test compatibility/user-profile.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs auto-text/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs

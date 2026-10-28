@@ -14,7 +14,8 @@ function harness(fetcher, withWebView = false) {
     };
     const RN = Object.fromEntries(['Text', 'View', 'ScrollView', 'Modal', 'KeyboardAvoidingView', 'TextInput', 'TouchableOpacity', 'ActivityIndicator', 'Switch', 'Image'].map(name => [name, name]));
     Object.assign(RN, { Platform: { OS: 'android' }, useColorScheme: () => 'dark', Alert: { alert: (...args) => alerts.push(args) }, Linking: { openURL: async url => opened.push(url) } });
-    const V = { plugin: { storage: {} }, metro: { common: { React, ReactNative: RN }, findByProps: key => key === 'WebView' && withWebView ? { WebView: 'WebView' } : undefined, findByStoreName: () => undefined } };
+    function WebView(props) { return { type: 'WebView', props }; }
+    const V = { plugin: { storage: {} }, metro: { common: { React, ReactNative: RN }, findByProps: key => key === 'WebView' && withWebView ? { WebView, default: WebView } : undefined, findByStoreName: () => undefined } };
     const plugin = createPlugin(V, { fetch: fetcher }); plugin.onLoad();
     function expand(tree) {
         if (Array.isArray(tree)) return tree.map(expand);

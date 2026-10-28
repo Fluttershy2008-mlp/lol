@@ -4,7 +4,13 @@
 // Add Account design; the narrow, scrollable card also fits phone keyboards.
 export function createLoginDialog(React, RN) {
     const h = React.createElement;
-    return function LoginDialog({ visible, mfa = false, qrMode = false, qrContent, onQrLogin, onRefreshQr, light = false, busy = false,
+    const QrBoundary = typeof React.Component === 'function' ? class QrViewBoundary extends React.Component {
+        state = { failed: false };
+        static getDerivedStateFromError() { return { failed: true }; }
+        componentDidCatch() { this.props.onError?.(); }
+        render() { return this.state.failed ? null : this.props.children; }
+    } : ({ children }) => children;
+    return function LoginDialog({ visible, mfa = false, qrMode = false, qrContent, qrKey, onQrRenderError, onQrLogin, onRefreshQr, light = false, busy = false,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
@@ -44,7 +50,7 @@ export function createLoginDialog(React, RN) {
                                     text('×', { color: c.muted, fontSize: 32, lineHeight: 36, fontWeight: '300' }))),
                             text(subtitle, { color: c.muted, marginTop: 4, marginBottom: 28 }),
                             error ? text(error, { color: c.danger, marginBottom: 18 }, { accessibilityRole: 'alert', accessibilityLiveRegion: 'polite' }) : null,
-                            qrMode ? qrContent : mfa ? field('Verification Code', code, onCodeChange, { secureTextEntry: true, autoComplete: 'one-time-code', returnKeyType: 'done', onSubmitEditing: submit })
+                            qrMode ? h(QrBoundary, { key: qrKey, onError: onQrRenderError }, qrContent) : mfa ? field('Verification Code', code, onCodeChange, { secureTextEntry: true, autoComplete: 'one-time-code', returnKeyType: 'done', onSubmitEditing: submit })
                                 : h(RN.View, null,
                                     field('Email or Phone Number', login, onLoginChange, { autoComplete: 'username', keyboardType: 'email-address', textContentType: 'username' }),
                                     field('Password', password, onPasswordChange, { secureTextEntry: true, autoComplete: 'password', textContentType: 'password', returnKeyType: 'go', onSubmitEditing: submit }),

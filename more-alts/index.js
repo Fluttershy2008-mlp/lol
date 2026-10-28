@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,6 +193,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
 'use strict';
@@ -440,8 +439,28 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
 // Optional features must never do that during Discord's startup.
 function createModuleResolver(metro, { now = Date.now } = {}) {
     const entries = new Map();
+    let rejectedWebViews = new WeakSet();
     const modules = metro.modules;
     const loadedOnly = !!modules && typeof modules === 'object';
+    function componentType(value, depth = 0) {
+        if (typeof value === 'function') return true;
+        if (!value || typeof value !== 'object' || depth > 8) return false;
+        if (value.$$typeof === Symbol.for('react.forward_ref')) return typeof value.render === 'function';
+        return value.$$typeof === Symbol.for('react.memo') && componentType(value.type, depth + 1);
+    }
+    function webViewExport(exports, trustedPath = false) {
+        try {
+            const named = exports?.WebView, fallback = exports?.default;
+            const candidate = named ?? fallback ?? exports;
+            if (!componentType(candidate) || rejectedWebViews.has(candidate)) return;
+            // A translation catalogue can also export "WebView". The package
+            // re-exports the same component as default and WebView; Android's
+            // platform export additionally has isFileUploadSupported.
+            if (trustedPath || (named && named === fallback)
+                || typeof candidate.isFileUploadSupported === 'function'
+                || (typeof candidate.prototype?.injectJavaScript === 'function' && typeof candidate.prototype?.reload === 'function')) return candidate;
+        } catch {}
+    }
     function entry(kind, keys) {
         const id = JSON.stringify([kind, ...keys]);
         if (!entries.has(id)) entries.set(id, { kind, keys, value: undefined, checked: -Infinity });
@@ -450,6 +469,7 @@ function createModuleResolver(metro, { now = Date.now } = {}) {
     function inspect(record, exports) {
         if (record.value || !exports) return;
         try {
+            if (record.kind === 'webview') { record.value = webViewExport(exports); return; }
             if (record.kind === 'props' ? record.keys.every(key => exports[key] != null)
                 : typeof exports.getName === 'function' && exports.getName.length === 0 && exports.getName() === record.keys[0]) record.value = exports;
         } catch {}
@@ -464,15 +484,24 @@ function createModuleResolver(metro, { now = Date.now } = {}) {
             inspect(record, exports);
         }
     }
-    function lookup(kind, keys) {
+    function lookup(kind, keys, userAction = false) {
         const record = entry(kind, keys);
-        if (record.value || now() - record.checked < 5000) return record.value;
+        if (record.value || (!userAction && now() - record.checked < 5000)) return record.value;
         record.checked = now();
+        if (kind === 'webview') {
+            try { record.value = webViewExport(metro.findByImportedPath?.('react-native-webview'), true); } catch {}
+            if (record.value) return record.value;
+        }
         if (loadedOnly) {
             for (const id in modules) { try { inspectModule(modules[id], [record]); } catch {} if (record.value) break; }
         } else {
             // Older loaders without the module registry: user actions only.
-            try { record.value = kind === 'props' ? metro.findByProps(...keys) : metro.findByStoreName(keys[0]); } catch {}
+            if (kind === 'webview') {
+                for (const props of [['WebView', 'default'], ['WebView']]) {
+                    try { record.value = webViewExport(metro.findByProps(...props)); } catch {}
+                    if (record.value) break;
+                }
+            } else try { record.value = kind === 'props' ? metro.findByProps(...keys) : metro.findByStoreName(keys[0]); } catch {}
         }
         return record.value;
     }
@@ -480,7 +509,13 @@ function createModuleResolver(metro, { now = Date.now } = {}) {
         loadedOnly,
         byProps: (...keys) => lookup('props', keys),
         byStore: name => lookup('store', [name]),
-        clear() { entries.clear(); },
+        // Explicit QR clicks may retry a previously missing component at once.
+        webView: () => lookup('webview', [], true),
+        rejectWebView(component) {
+            if (component && ['function', 'object'].includes(typeof component)) rejectedWebViews.add(component);
+            entries.delete(JSON.stringify(['webview']));
+        },
+        clear() { entries.clear(); rejectedWebViews = new WeakSet(); },
         async prepare(queries, yieldFrame, isActive) {
             if (!loadedOnly) return;
             const records = queries.map(([kind, ...keys]) => entry(kind, keys));
@@ -707,7 +742,13 @@ window.stopMoreAltsQr=function(){flow.stop();};window.addEventListener('pagehide
 // Add Account design; the narrow, scrollable card also fits phone keyboards.
 function createLoginDialog(React, RN) {
     const h = React.createElement;
-    return function LoginDialog({ visible, mfa = false, qrMode = false, qrContent, onQrLogin, onRefreshQr, light = false, busy = false,
+    const QrBoundary = typeof React.Component === 'function' ? class QrViewBoundary extends React.Component {
+        state = { failed: false };
+        static getDerivedStateFromError() { return { failed: true }; }
+        componentDidCatch() { this.props.onError?.(); }
+        render() { return this.state.failed ? null : this.props.children; }
+    } : ({ children }) => children;
+    return function LoginDialog({ visible, mfa = false, qrMode = false, qrContent, qrKey, onQrRenderError, onQrLogin, onRefreshQr, light = false, busy = false,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
@@ -747,7 +788,7 @@ function createLoginDialog(React, RN) {
                                     text('×', { color: c.muted, fontSize: 32, lineHeight: 36, fontWeight: '300' }))),
                             text(subtitle, { color: c.muted, marginTop: 4, marginBottom: 28 }),
                             error ? text(error, { color: c.danger, marginBottom: 18 }, { accessibilityRole: 'alert', accessibilityLiveRegion: 'polite' }) : null,
-                            qrMode ? qrContent : mfa ? field('Verification Code', code, onCodeChange, { secureTextEntry: true, autoComplete: 'one-time-code', returnKeyType: 'done', onSubmitEditing: submit })
+                            qrMode ? h(QrBoundary, { key: qrKey, onError: onQrRenderError }, qrContent) : mfa ? field('Verification Code', code, onCodeChange, { secureTextEntry: true, autoComplete: 'one-time-code', returnKeyType: 'done', onSubmitEditing: submit })
                                 : h(RN.View, null,
                                     field('Email or Phone Number', login, onLoginChange, { autoComplete: 'username', keyboardType: 'email-address', textContentType: 'username' }),
                                     field('Password', password, onPasswordChange, { secureTextEntry: true, autoComplete: 'password', textContentType: 'password', returnKeyType: 'go', onSubmitEditing: submit }),
@@ -923,8 +964,9 @@ function createPlugin(V, host = globalThis) {
                 setError(qrErrorMessage('rate-limit', (qrBlockedUntil.current - Date.now()) / 1000)); return;
             }
             let WebView;
-            try { WebView = byProps('WebView')?.WebView; } catch {}
-            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update Revenge/Discord, or use email and password.'); return; }
+            try { WebView = resolver.webView(); } catch {}
+            if (!stillHere()) return;
+            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update your client or Discord, or use email and password.'); return; }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
@@ -1000,7 +1042,13 @@ function createPlugin(V, host = globalThis) {
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
-            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
+            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, qrKey: qr?.id,
+                onQrRenderError: () => {
+                    if (!stillHere() || qrSession.current !== qr) return;
+                    resolver.rejectWebView(qr?.WebView);
+                    stopQr(); instance.cancelLogin(); authenticating.current = false;
+                    setError('The QR login view could not be displayed. Refresh the code or use email and password.'); redraw(x => x + 1);
+                }, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa' && page !== 'qr') { cancel(); return; }

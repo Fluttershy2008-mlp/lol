@@ -157,8 +157,9 @@ export function createPlugin(V, host = globalThis) {
                 setError(qrErrorMessage('rate-limit', (qrBlockedUntil.current - Date.now()) / 1000)); return;
             }
             let WebView;
-            try { WebView = byProps('WebView')?.WebView; } catch {}
-            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update Revenge/Discord, or use email and password.'); return; }
+            try { WebView = resolver.webView(); } catch {}
+            if (!stillHere()) return;
+            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update your client or Discord, or use email and password.'); return; }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
@@ -234,7 +235,13 @@ export function createPlugin(V, host = globalThis) {
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
-            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
+            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, qrKey: qr?.id,
+                onQrRenderError: () => {
+                    if (!stillHere() || qrSession.current !== qr) return;
+                    resolver.rejectWebView(qr?.WebView);
+                    stopQr(); instance.cancelLogin(); authenticating.current = false;
+                    setError('The QR login view could not be displayed. Refresh the code or use email and password.'); redraw(x => x + 1);
+                }, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa' && page !== 'qr') { cancel(); return; }

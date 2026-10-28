@@ -8,11 +8,13 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
+**More Alts! 1.0.0-beta4 fixes the QR login rendering crash.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The browser lookup now rejects translation exports such as `{locale, ast}` and selects the actual WebView component. Saved accounts and the existing settings entry are retained; do not clear plugin data.
+
 **ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -24,7 +26,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, More Alts!, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. More Alts!, Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -41,6 +43,8 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**More Alts! beta4:** replaces the ambiguous `WebView` property search with imported-path and validated package/platform discovery. Translation exports are never used as the QR browser. Validation handles memo/forward-ref components without invoking them, and does not initialize unrelated Metro factories. Unexpected browser render failures are contained inside the QR dialog and cancel the attempt; Back, Close and Refresh remain usable. Failed exports are excluded until plugin restart, and an available replacement can be selected immediately. The QR protocol and account storage are unchanged. The same source ships as Classic 3.1.4 and Next beta5.
 
 **ExpressionCloner beta3:** looks up `createGuildSticker` at clone time and does not require `fetchSticker` or `updateGuildSticker` on the same export. When unavailable, it posts multipart data to `/guilds/{guild.id}/stickers` through the canonical signed-in HTTP client. PNG/APNG/GIF uploads retain their format and use an owned local cache file on mobile. Cleanup runs after success, failure and cancellation. Duplicate confirmations are suppressed; a failed or unconfirmed POST never causes a second creation request. Plugin/account checks and a final permission/slot check precede creation. The same source ships as Classic 1.1.3 and Next beta5; all other packages are unchanged.
 
@@ -89,6 +93,8 @@ Fourteen list-profile checks open the actual pages through their Valenced settin
 
 Seventeen ExpressionCloner cases exercise the complete sticker clone flow on both Valenced and Next: late standalone upload actions, no old action module, PNG/APNG/GIF multipart uploads, canonical HTTP selection, local URI/file cleanup, failures without retries, unconfirmed responses, duplicate confirmations, cancellation, account changes, stale prompts, permission loss, oversized files, Lottie metadata and browser FormData. The four discovery cases fail against Valenced beta2 and pass against beta3. [Implementation and source references](../expression-cloner/README.md#113--valenced-beta3--next-beta5).
 
+Twelve More Alts QR integration cases exercise the actual native dialog, browser selection, approved-account verification, refresh, cancellation and local error recovery. The translation-function fixture reproduces the exact `{locale, ast}` crash against beta3 and passes against beta4. Nine new resolver cases cover package/platform shapes, imported-path priority, initialized-only scanning, immediate discovery after a miss and failed-export invalidation. Existing credential, MFA, storage and real-crypto QR protocol tests still run. CI builds the deterministic QR asset before these source tests. [More Alts details and primary references](../more-alts/README.md#qr-rendering-fix-314--valenced-beta4--next-beta5).
+
 The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 
 These are preview ports. Automated fixtures cannot verify the Discord UI on your physical Android device. Some Discord versions can change internal menus or composer layouts. Valid User can only show accounts Discord makes available to your session; an inaccessible or nonexistent ID cannot be resolved by a plugin.
@@ -100,7 +106,8 @@ npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
 python3 valenced/build.py --check
 PLUGIN_TEST_TARGET=valenced node --test revenge-next/tests/plugins.test.cjs valenced/tests/*.test.cjs
 PLUGIN_TEST_TARGET=valenced node --test --test-skip-pattern=InfoCommands revenge-next/tests/features.test.cjs
-node --test compatibility/user-profile.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+node more-alts/build.mjs
+node --test compatibility/user-profile.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
 python3 -m unittest discover -s valenced/tests -p 'test_*.py'
 ```
 

@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.1
+# More Alts! for Revenge — 3.1.4
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## QR rendering fix (3.1.4 / Valenced beta4 / Next beta5)
+
+Fixes the QR login crash `Objects are not valid as a React child` with `{locale, ast}`. A bare `WebView` property can match Discord's translation exports. QR discovery now prefers the imported `react-native-webview` package and validates the component type and package/platform export shape before rendering it. Function, memo, forward-ref and older class exports are supported. It only inspects initialized modules and does not call a candidate component to validate it.
+
+A QR-only error boundary keeps unexpected browser rendering failures inside the Add Account dialog, cancels that attempt and leaves Back, Close and Refresh available. A failed export is skipped on refresh; a newly loaded healthy package can be discovered immediately without the general lookup cooldown. Frozen exports remain untouched. The existing QR handshake, approval verification, saved-account storage, settings entry and credential/MFA paths are retained. Do not clear plugin data to update.
+
+For Valenced, refresh the [existing repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json), update **More Alts! to 1.0.0-beta4**, then fully close and reopen Discord. Next receives **1.0.0-beta5**; Classic receives **3.1.4** through the same folder URL.
+
+Twelve shared native integration cases run through the real Add Account dialog on both Valenced and Next. They cover translation objects/functions ahead of the real browser, memo/forward-ref exports, imported/platform discovery, verified QR approval without switching accounts, late package loading, refresh, Back/Close/Android Back, disable/restart, and recovery from a rendering failure. Two discovery cases fail against Valenced beta3, including the exact reported `{locale, ast}` error, and pass against beta4. Nine additional resolver checks verify shapes, initialized-only lookup, caching and failed-export invalidation. Phone verification remains pending.
+
+The component checks follow the package's [named/default exports](https://github.com/react-native-webview/react-native-webview/blob/master/index.js) and [Android platform component](https://github.com/react-native-webview/react-native-webview/blob/master/src/WebView.android.tsx).
 
 ## Startup stability (3.1.1)
 
