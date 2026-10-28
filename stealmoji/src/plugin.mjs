@@ -1,12 +1,14 @@
 import { createCore } from './core.mjs';
 import { createExpressionUpload } from '../../compatibility/expression-upload.mjs';
 import { createExpressionPanel } from '../../compatibility/expression-panel.mjs';
+import { createPickerPage } from './page.mjs';
 
 export function createPlugin(V, env = globalThis) {
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement, core = createCore(env);
   const uploads = createExpressionUpload(V, env);
   const panels = createExpressionPanel(V, 'StealmojiPicker');
+  const pages = createPickerPage(V, env);
   const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
   let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
   const unpatches = [], dialogs = new Set(), cancellations = new Set(), viewTimers = new Set();
@@ -334,6 +336,14 @@ export function createPlugin(V, env = globalThis) {
     pickerOpening = opening;
     const release = () => { opening.closed = true; if (pickerOpening === opening) pickerOpening = undefined; };
     const live = () => active && generation === opening.session && !opening.closed && pickerOpening === opening;
+    if (V.host?.id === 'valenced') {
+      // Dismiss the native message sheet before pushing the normal page. This
+      // path never opens an alert, an RN Modal or a second action sheet.
+      try { host()?.hideActionSheet?.(fromKey); } catch {}
+      if (pages.open((close, visible) => guarded(h(Picker, { emojis, close, inPanel: true,
+        isOpen: () => live() && visible() })), release)) return;
+      release(); toast('Open Stealmoji’s plugin settings to paste and add this emoji.'); return;
+    }
     const modal = panels.open(close => guarded(h(Picker, { emojis, close, inPanel: true, isOpen: live })), 'emoji picker', release);
     if (modal) { host()?.hideActionSheet?.(fromKey); return; }
     function Content(props) {
@@ -505,6 +515,7 @@ export function createPlugin(V, env = globalThis) {
   }
   function onUnload() {
     active = false; generation++; hooked = false; pickerOpening = undefined;
+    pages.closeAll();
     panels.closeAll();
     for (const cancel of [...cancellations]) cancel();
     pending = false;

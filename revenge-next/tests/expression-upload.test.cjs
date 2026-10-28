@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, ACCOUNT, FRIEND, GUILD } = require('./next-harness.cjs');
 const { gifFixture } = require('../../save-as-sticker/tests/gif-fixture.mjs');
 const { installServerPanelHost } = require('../../valenced/tests/server-info-fixture.cjs');
+const { installNavigationHost } = require('./navigation-fixture.cjs');
+const VALENCED = process.env.PLUGIN_TEST_TARGET === 'valenced';
 const h = React.createElement, EMOJI = '800000000000000008', CREATED = '800000000000000009';
 const png = Buffer.alloc(32); Buffer.from([137,80,78,71,13,10,26,10]).copy(png);
 png.writeUInt32BE(13, 8); png.write('IHDR', 12); png.writeUInt32BE(320, 16); png.writeUInt32BE(320, 20);
@@ -25,6 +27,9 @@ function button(ui, label) {
     const n = ui.root.findAll(n => typeof n.type === 'string' && typeof n.props.onPress === 'function' &&
         [n.props.accessibilityLabel, n.props.label, n.props.text, text(n)].includes(label))[0];
     assert.ok(n, 'button exists: ' + label); assert.notEqual(n.props.disabled, true); return n.props.onPress;
+}
+function pickerCount(ui) {
+    return ui.root.findAllByType('Modal').length + ui.root.findAll(n => n.type === 'View' && n.props.testID === 'StealmojiPage').length;
 }
 function scenario(t, options = {}) {
     const bytes = options.bytes ?? (options.gif ? Buffer.from(gifFixture({ width: 320, height: 320 })) : options.jpeg ? Buffer.from([255,216,255,224,0]) : png);
@@ -54,8 +59,11 @@ function scenario(t, options = {}) {
     w.native = { async createGuildSticker(input) { nativePosts.push(input); return { id: CREATED }; },
         async uploadEmoji(input) { nativePosts.push(input); return { id: CREATED }; } };
     if (options.nativeHost) w.panelHost = installServerPanelHost(w, { dismissMode: options.nativeHost });
+    if (VALENCED) w.pageHost = installNavigationHost(w);
     w.mount = async element => { let ui; await act(() => { ui = Renderer.create(element); }); renders.push(ui); return ui; };
-    w.open = async (kind, { choose = true } = {}) => {
+    w.open = async (kind, { choose = true, advance = true } = {}) => {
+        w.pageMode = VALENCED && kind === 'stealmoji';
+        if (w.pageMode && !w.pageRoot) w.pageRoot = await w.mount(h(w.pageHost.Root));
         if (w.panelHost && !w.panelRoot) w.panelRoot = await w.mount(h(w.panelHost.Root));
         const item = w.loaded.get(kind) ?? await w.start(kind), Row = w.U.discord.design.Design.ActionSheetRow;
         const attachment = { filename: 'image.' + (options.gif ? 'gif' : options.jpeg ? 'jpg' : 'png'), content_type: mime,
@@ -66,9 +74,11 @@ function scenario(t, options = {}) {
             [h(Row, { key: 'original', label: 'Original item', onPress() {} })]) }), kind === 'save-as-sticker' ? 'MessageLongPressActionSheet' : 'MessageEmojiActionSheet', context);
         const menu = await w.mount(h(module.default, context));
         await act(button(menu, kind === 'save-as-sticker' ? 'Save as Sticker' : 'Stealmoji · Add / save emoji'));
+        if (w.pageMode && advance) await act(() => w.advance(350));
         let ui;
         const panel = w.alerts.at(-1);
-        if (panel && /Picker\.panel\./.test(panel[0])) ui = w.panelRoot ?? await w.mount(panel[1]);
+        if (w.pageMode) ui = w.pageRoot;
+        else if (panel && /Picker\.panel\./.test(panel[0])) ui = w.panelRoot ?? await w.mount(panel[1]);
         else { const entry = w.openedSheets.at(-1), picker = await entry.promise; ui = await w.mount(h(picker.default, entry.context)); }
         if (!choose) return { item, ui };
         await act(button(ui, 'Test Guild'));
@@ -77,6 +87,7 @@ function scenario(t, options = {}) {
         return { item, ui, submit: button(ui, kind === 'save-as-sticker' ? 'Add sticker' : 'Add emoji') };
     };
     w.posts = () => w.calls.filter(c => c[0] === 'http' && c[1] === 'post');
+    w.pickerKey = () => w.pageMode ? w.navigation.getCurrentRoute().params.__stealmojiPage : w.alerts.at(-1)[0];
     w.submit = async open => { await act(() => { void open.submit(); }); await act(() => w.advance(300)); };
     Object.assign(w, { bytes, writes, deletes, crops, cleans, nativePosts });
     t.after(async () => {
@@ -165,8 +176,10 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         for (let n = 0; n < 195; n++) { const id = String(500000000000000000n + BigInt(n));
             w.guilds[id] = { id, name: 'Server ' + String(n).padStart(3,'0'), ownerId: ACCOUNT }; }
         const { ui } = await w.open(kind,{ choose: false });
-        const modal = ui.root.findByType('Modal'), list = ui.root.findByType('FlatList');
-        assert.equal(modal.props.visible,true); assert.equal(ui.root.findAllByType('ScrollView').length,0);
+        const list = ui.root.findByType('FlatList');
+        if (w.pageMode) assert.equal(ui.root.findAllByType('Modal').length,0);
+        else assert.equal(ui.root.findByType('Modal').props.visible,true);
+        assert.equal(pickerCount(ui),1); assert.equal(ui.root.findAllByType('ScrollView').length,0);
         assert.equal(ui.root.findAllByType('ActionSheet').length,0);
         assert.equal(ui.root.findByType(w.RN.FlatList).props.data.length,196);
         assert.equal(list.props.removeClippedSubviews,false);
@@ -180,21 +193,23 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         assert.equal(ui.root.findAllByType('FlatList').length,1);
         assert.equal(w.posts().length,0);
     });
-    for (const closeMethod of ['Close', 'Android Back', 'Backdrop', 'Disable'])
+    for (const closeMethod of ['Close', 'Android Back', 'Backdrop', 'Disable']) {
+    if (VALENCED && kind === 'stealmoji' && closeMethod === 'Backdrop') continue; // A normal page has no backdrop.
     test(kind + ' closes and reopens its native picker using ' + closeMethod, async t => {
         const w = scenario(t);
         w.U.discord.actions.AlertActionCreators.dismissAlert = () => { throw new Error('retained alert host'); };
-        const opened = await w.open(kind,{ choose: false }), key = w.alerts.at(-1)[0];
+        const opened = await w.open(kind,{ choose: false }), key = w.pickerKey();
         if (closeMethod === 'Close') await act(button(opened.ui,'Close'));
-        if (closeMethod === 'Android Back') await act(opened.ui.root.findByType('Modal').props.onRequestClose);
+        if (closeMethod === 'Android Back') await act(w.pageMode ? () => w.navigation.goBack() : opened.ui.root.findByType('Modal').props.onRequestClose);
         if (closeMethod === 'Backdrop') await act(button(opened.ui,kind === 'save-as-sticker' ? 'Close sticker picker' : 'Close emoji picker'));
         if (closeMethod === 'Disable') await act(() => w.stop(opened.item));
-        assert.equal(opened.ui.toJSON(),null,'dismissal hides the native Modal even if its alert node remains');
+        assert.equal(pickerCount(opened.ui),0,'the picker closes even if the alert host retains nodes');
         const reopened = await w.open(kind,{ choose: false });
-        assert.equal(reopened.ui.root.findByType('Modal').props.visible,true);
-        assert.notEqual(w.alerts.at(-1)[0],key);
+        assert.equal(pickerCount(reopened.ui),1);
+        assert.notEqual(w.pickerKey(),key);
         assert.equal(w.posts().length,0);
     });
+    }
     test(kind + ' keeps dark Discord text readable when the system theme is light', async t => {
         const w = scenario(t); w.RN.Appearance.getColorScheme = () => 'light';
         const open = await w.open(kind);
@@ -235,18 +250,18 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
     });
 }
 
-for (const mode of ['retain', 'throw']) test('Stealmoji releases its modal and owned alert after copying an emoji with ' + mode + ' dismissal', async t => {
+for (const mode of ['retain', 'throw']) test('Stealmoji returns from its picker after copying an emoji with ' + mode + ' alert dismissal', async t => {
     const w = scenario(t,{ nativeHost: mode });
     const { ui, submit } = await w.open('stealmoji');
-    const key = w.alerts.at(-1)[0], close = button(ui,'Close');
+    const key = w.pickerKey(), close = button(ui,'Close');
     w.U.discord.actions.AlertActionCreators.openAlert('unrelated-alert',h(w.RN.Text,null,'Unrelated alert'));
     await w.submit({ submit });
-    assert.equal(w.posts().length,1); assert.equal(ui.root.findAllByType('Modal').length,0);
+    assert.equal(w.posts().length,1); assert.equal(pickerCount(ui),0);
     assert.equal(w.panelHost.nodes.has(key),false,'the alert entry and its possible input-blocking host must be removed');
     assert.equal(w.panelHost.nodes.has('unrelated-alert'),true);
     assert.ok(w.toasts.includes('renamed added to Test Guild.'));
     const reopened = await w.open('stealmoji',{ choose: false });
-    await act(close); assert.equal(reopened.ui.root.findAllByType('Modal').length,1,'a stale Close must not close a new picker');
+    await act(close); assert.equal(pickerCount(reopened.ui),1,'a stale Close must not close a new picker');
     await act(button(reopened.ui,'Close'));
     assert.deepEqual([...w.panelHost.nodes.keys()],['unrelated-alert']);
 });
@@ -257,7 +272,7 @@ for (const tool of ['Copy emoji link','Copy image','Save image']) test('Stealmoj
     if (tool === 'Copy image') w.RN.Platform.OS = 'ios';
     const { ui } = await w.open('stealmoji',{ choose: false });
     await act(button(ui,'Emoji tools')); await act(button(ui,tool));
-    assert.equal(ui.root.findAllByType('Modal').length,0); assert.equal(w.panelHost.nodes.size,0);
+    assert.equal(pickerCount(ui),0); assert.equal(w.panelHost.nodes.size,0);
     assert.equal(w.posts().length,0);
     if (tool === 'Copy emoji link') assert.match(w.clipboard.at(-1),new RegExp('/emojis/' + EMOJI));
     if (tool === 'Copy image') assert.equal(w.calls.filter(c => c[0] === 'copyImage').length,1);
@@ -270,7 +285,7 @@ test('Stealmoji can close a pending write and a late success cannot block the re
     await act(button(open.ui,'Close')); assert.equal(w.panelHost.nodes.size,0);
     const fresh = await w.open('stealmoji',{ choose: false });
     gate.resolve({ status: 201, body: { id: CREATED } }); await act();
-    assert.equal(fresh.ui.root.findAllByType('Modal').length,1);
+    assert.equal(pickerCount(fresh.ui),1);
     assert.equal(w.posts().length,1); assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
     assert.equal(w.timers.size,0);
 });
@@ -295,7 +310,7 @@ test('Stealmoji cancels a download on Close and cannot upload its late image', a
     assert.equal(w.panelHost.nodes.size,0); assert.equal(w.timers.size,0);
     const fresh = await w.open('stealmoji',{ choose: false });
     gate.resolve(new Response(png,{ headers: { 'content-type': 'image/png' } })); await act();
-    assert.equal(w.posts().length,0); assert.equal(fresh.ui.root.findAllByType('Modal').length,1);
+    assert.equal(w.posts().length,0); assert.equal(pickerCount(fresh.ui),1);
 });
 
 test('Stealmoji cancels a preflight read before any write when its picker closes', async t => {
@@ -331,7 +346,7 @@ test('Stealmoji keeps one write in flight after Close while the rest of the pick
     const fresh = await w.open('stealmoji',{ choose: false }); await act(button(fresh.ui,'Test Guild'));
     assert.match(text(fresh.ui.toJSON()),/already in progress/); assert.equal(w.posts().length,1);
     assert.ok(button(fresh.ui,'Close')); gate.resolve({ status: 201, body: { id: CREATED } }); await act();
-    assert.equal(fresh.ui.root.findAllByType('Modal').length,1); assert.equal(w.timers.size,0);
+    assert.equal(pickerCount(fresh.ui),1); assert.equal(w.timers.size,0);
     assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
     await act(button(fresh.ui,'Test Guild'));
     assert.ok(fresh.ui.root.findAll(n => n.type === 'TextInput' && n.props.placeholder === 'Emoji name').length);
@@ -353,5 +368,109 @@ test('Stealmoji cancels a delayed image viewer when another picker has already o
     await act(button(first.ui,'Emoji tools')); await act(button(first.ui,'View emoji'));
     const fresh = await w.open('stealmoji',{ choose: false }); await act(() => w.advance(350));
     assert.equal(w.calls.filter(c => c[0] === 'openMedia').length,0);
-    assert.equal(fresh.ui.root.findAllByType('Modal').length,1); assert.equal(w.timers.size,0);
+    assert.equal(pickerCount(fresh.ui),1); assert.equal(w.timers.size,0);
+});
+
+if (VALENCED) {
+    test('Valenced Stealmoji uses a regular page with no alert, Modal or second action sheet', async t => {
+        const w = scenario(t);
+        w.RN.Modal = () => { assert.fail('Stealmoji must not open an OS modal'); };
+        w.U.discord.actions.AlertActionCreators.openAlert = () => { assert.fail('Stealmoji must not open an alert host'); };
+        const { ui } = await w.open('stealmoji',{ choose: false });
+        assert.equal(pickerCount(ui),1); assert.equal(ui.root.findAllByType('Modal').length,0);
+        assert.equal(w.alerts.length,0); assert.equal(w.openedSheets.length,1,'only the original Discord menu opens');
+        assert.match(w.navigation.getCurrentRoute().name,/stealmoji\.legacy-page$/);
+        await act(button(ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.pageHost.subscribers.size,0);
+        await act(button(ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+    });
+
+    test('Valenced Stealmoji repeatedly uploads and returns to a responsive Discord screen', async t => {
+        const w = scenario(t), guildListeners = w.stores.GuildStore.listeners.size;
+        for (let n = 0; n < 8; n++) {
+            const open = await w.open('stealmoji'); await w.submit(open);
+            assert.equal(w.posts().length,n + 1); assert.equal(w.pageHost.stack.length,1);
+            assert.equal(pickerCount(open.ui),0); assert.equal(w.pageHost.subscribers.size,0);
+            assert.equal(w.stores.GuildStore.listeners.size,guildListeners); assert.equal(w.timers.size,0);
+            await act(button(open.ui,'Discord test control'));
+        }
+        assert.equal(w.pageHost.taps(),8); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced Stealmoji Android Back cancels preparation without leaving a window over Discord', async t => {
+        const gate = deferred(); let signal;
+        const w = scenario(t,{ fetch: (_url, options) => { signal = options.signal; return gate.promise; } });
+        const open = await w.open('stealmoji'); await w.submit(open);
+        await act(() => w.navigation.goBack());
+        assert.equal(signal.aborted,true); assert.equal(w.timers.size,0); assert.equal(pickerCount(open.ui),0);
+        await act(button(open.ui,'Discord test control'));
+        gate.resolve(new Response(png,{ headers: { 'content-type': 'image/png' } })); await act();
+        assert.equal(w.posts().length,0); assert.equal(w.pageHost.taps(),1); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced Stealmoji late success cannot pop an unrelated Discord page', async t => {
+        const gate = deferred(), w = scenario(t,{ post: () => gate.promise });
+        const open = await w.open('stealmoji'); await w.submit(open);
+        await act(() => w.navigation.navigate('UserProfile',{ userId: FRIEND }));
+        const backCalls = w.calls.filter(c => c[0] === 'goBack').length;
+        gate.resolve({ status: 201, body: { id: CREATED } }); await act();
+        assert.equal(w.navigation.getCurrentRoute().name,'UserProfile');
+        assert.equal(w.calls.filter(c => c[0] === 'goBack').length,backCalls);
+        assert.equal(w.toasts.some(value => /renamed added/.test(value)),false);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        await act(() => w.navigation.goBack());
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat','returning through an inactive picker removes only that picker');
+        assert.equal(w.pageHost.subscribers.size,0);
+    });
+
+    test('Valenced Stealmoji disable cancels a queued page opening', async t => {
+        const w = scenario(t), open = await w.open('stealmoji',{ choose: false, advance: false });
+        await act(() => w.stop(open.item)); await act(() => w.advance(1000));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.registeredScreens.size,0);
+        assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+    });
+
+    test('Valenced Stealmoji stops a page waiting for native settings registration', async t => {
+        const w = scenario(t); w.setSettingsLoaded(false);
+        const open = await w.open('stealmoji',{ choose: false });
+        await act(() => w.stop(open.item)); await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(1000));
+        assert.equal(w.pageHost.stack.length,1); assert.equal(w.registeredScreens.size,0);
+        assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced Stealmoji expires a page that never mounts and safely handles delayed registration', async t => {
+        const w = scenario(t); w.setSettingsLoaded(false);
+        const open = await w.open('stealmoji',{ choose: false }); await act(() => w.advance(8000));
+        assert.ok(w.toasts.some(value => /page did not open/.test(value)));
+        assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.timers.size,0);
+        await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(0));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat','a stale native registration must not leave a closed page on top');
+        const fresh = await w.open('stealmoji',{ choose: false });
+        assert.equal(pickerCount(fresh.ui),1); await act(button(fresh.ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced Stealmoji can identify its page through nested native navigation state', async t => {
+        const w = scenario(t); delete w.navigation.getCurrentRoute;
+        w.navigation.getRootState = () => ({ index: 0, routes: [{ name: 'Settings', state: { index: w.pageHost.stack.length - 1, routes: w.pageHost.stack } }] });
+        const open = await w.open('stealmoji'); await w.submit(open);
+        assert.equal(w.pageHost.stack.length,1); assert.equal(pickerCount(open.ui),0); assert.equal(w.alerts.length,0);
+    });
+}
+
+if (VALENCED) test('Valenced Stealmoji never falls back to a window when page navigation is unavailable', async t => {
+    const w = scenario(t);
+    for (let n = w.modules.length - 1; n >= 0; n--) if (w.modules[n]?.getRootNavigationRef) w.modules.splice(n,1);
+    w.RN.Modal = () => { assert.fail('No modal fallback on Valenced'); };
+    w.U.discord.actions.AlertActionCreators.openAlert = () => { assert.fail('No alert fallback on Valenced'); };
+    const open = await w.open('stealmoji',{ choose: false });
+    assert.equal(pickerCount(open.ui),0); assert.ok(w.toasts.some(value => /plugin settings/.test(value)));
+    assert.equal(w.alerts.length,0); assert.equal(w.openedSheets.length,1); assert.equal(w.pageHost.stack.length,1);
+    const settings = await w.mount(h(open.item.options.SettingsComponent,{ api: open.item.api }));
+    const field = settings.root.findAll(n => n.type === 'TextInput' && n.props.placeholder === '<:emoji:123456789012345678>')[0];
+    await act(() => field.props.onChangeText('<:pony:' + EMOJI + '>'));
+    await act(button(settings,'Use emoji')); await act(button(settings,'Test Guild'));
+    await act(button(settings,'Add emoji')); assert.equal(w.posts().length,1);
+    assert.equal(w.toasts.some(value => /pony added/.test(value)),true); assert.equal(w.alerts.length,0);
 });

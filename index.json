@@ -1658,11 +1658,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.stealmoji@1.0.0-beta8.zip",
+          "sha256": "c5b99eca0e1c5c1ad07a145aaa849121fb155ad738ed5c02b61fc0e57d843df3",
+          "size": 39777,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta7",
-        "beta": "1.0.0-beta7"
+        "latest": "1.0.0-beta8",
+        "beta": "1.0.0-beta8"
       },
       "name": "Stealmoji (Next preview)",
       "description": "Revenge Next preview. Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",

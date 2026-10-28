@@ -8,6 +8,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/
 
 Disable the old Stealmoji copy before installing this one, then reload Revenge.
 
+## Valenced page picker in 2.1.7
+
+Valenced **1.0.0-beta6** replaces Stealmoji's popup with a **regular Valenced navigation page**. The picker never opens an alert host, RN Modal or second action sheet on this client. Discord's original message menu is dismissed before the page opens. This removes the stacked native-window dependency that can leave input blocked even after the inner picker is hidden.
+
+The page retains server search, one virtualized list, name editing and emoji tools. Successful upload/copy/save, Close and Android Back return through normal navigation. A unique route marker prevents late results from popping another Discord screen. A closed page kept in the native stack removes only itself when focused again. Queued openings are cancelled on stop, and a page that never mounts has an eight-second deadline. If navigation is unavailable, Stealmoji directs you to its normal plugin settings; it does not fall back to another popup on Valenced.
+
+Refresh the repository and update **Stealmoji to 1.0.0-beta6**, then force-close and reopen Discord to clear a window retained by an older version. The new picker should fill a normal settings page with a native Back button. Prior upload-response parsing, single-write guards, preparation cancellation and operation deadlines remain included.
+
+Nine native page-flow cases fail against beta5 and pass here. They cover zero popup/window calls, repeated uploads and responsive underlying controls, Android Back, late results over another screen, queued/cold registration, a mount deadline, nested route state and settings fallback. A separate React test covers a cached page regaining focus. The complete run passes **890 Node checks and 16 Python checks**, with one optional unrelated Hermes test skipped and both deterministic package checks passing. Tests model the native APIs; physical phone verification remains pending. Next **1.0.0-beta8** and Classic **2.1.7** carry the shared source while retaining their existing picker presentation.
+
+The page uses the existing Valenced custom settings route and [React Navigation's container ref](https://reactnavigation.org/docs/navigation-container/) for focus ownership and Back. [Implementation](src/page.mjs).
+
 ## Picker cleanup in 2.1.6
 
 Valenced **1.0.0-beta5**, Next **1.0.0-beta7** and Classic **2.1.6** close the menu picker after a confirmed emoji upload, clipboard copy or save action. Closing removes Stealmoji's owned modal/alert entry and releases its listeners. This also works with a retaining or throwing native alert dismiss method, without removing unrelated alerts. The plugin settings page remains open and shows its result.

@@ -16,7 +16,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta5**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -26,11 +26,11 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/index.jso
 
 Use an address ending in `index.json`. A GitHub repository page or a `github.com/.../blob/...` page returns HTML and causes the JSON error shown in your screenshot.
 
-**SaveAsSticker 1.0.0-beta4 and Stealmoji 1.0.0-beta5 address cropping, scrolling, upload confirmation and picker cleanup.** SaveAsSticker can fit PNG/JPEG into a 320×320 transparent PNG without Discord's cropper. Both menu pickers use a bounded native modal with a fixed title/search and one virtualized list. Uploads accept text/nested/Fetch responses and verify an empty success response against a newly created server entry, without repeating the POST. Stealmoji now closes after successful upload/copy/save, keeps Close available while busy and bounds stalled operations. Refresh the repository, update both plugins and fully restart Discord.
+**SaveAsSticker 1.0.0-beta4 and Stealmoji 1.0.0-beta6 address cropping, scrolling, upload confirmation and picker presentation.** SaveAsSticker can fit PNG/JPEG into a 320×320 transparent PNG without Discord's cropper. SaveAsSticker uses its bounded modal; Stealmoji now opens a normal Valenced page with no alert/modal host. Both retain search and one virtualized server list. Uploads accept text/nested/Fetch responses and verify an empty success response against a newly created server entry, without repeating the POST. Stealmoji now closes after successful upload/copy/save, keeps Close available while busy and bounds stalled operations. Refresh the repository, update both plugins and fully restart Discord.
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta5**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -167,3 +167,9 @@ Seven selected cropping/response/picker/editor scenarios fail against each host'
 The picker now closes after a confirmed upload or successful clipboard/save action instead of rebuilding its server list and keeping a modal window active. Its owned alert entry is removed even when native dismissal retains it or throws; unrelated alerts remain untouched. Close stays enabled while busy. Preparation is cancelled on dismissal, but a write already handed to Discord retains the single-request guard until completion or the 45-second deadline. A pending request shows an in-progress message instead of silently ignoring a server row. Clipboard/save actions have a 15-second deadline. Late results cannot affect a reopened picker. The native image viewer opens after picker dismissal and queued presentation is cancelled on disable, account change or another picker opening.
 
 Fourteen new integration scenarios run on each host and fail against its preceding published Stealmoji package. Two additional source checks cover aborting image downloads and clearing their deadlines. The full run passes **881 Node checks and 16 Python checks**, with one optional Hermes check skipped; both deterministic catalogue checks pass. Physical phone behavior remains unverified. Only Stealmoji receives a new package: Valenced beta5, Next beta7 and Classic 2.1.6. Other current artifacts and all previous ZIPs are preserved.
+
+### Stealmoji beta6 — normal Valenced page
+
+The picker now uses Valenced's registered settings/navigation page instead of nesting an RN Modal inside Discord's alert system. It makes no picker alert/Modal/second-sheet call on Valenced, including when navigation is missing. Search, the server list, name editing, copying, saving and upload safeguards are retained. Successful actions and Close go back only when the current route carries this opening's marker. Android Back and external navigation deactivate the picker, and late responses cannot pop another screen. A cached closed page exits when focused again. Queued openings are cancelled on stop; cold registration and a page that never mounts are bounded. Plugin settings remain usable if navigation cannot open.
+
+Nine new page-flow cases fail against beta5 and pass with this release; one additional test keeps a page mounted while it loses and regains focus. Both old upload/cancellation checks and the ordinary-page checks pass. The complete suite passes 890 Node checks and 16 Python checks, with one optional unrelated Hermes test skipped; both 25-entry deterministic checks pass. Physical device input behavior remains unverified. Only Stealmoji receives new packages: Valenced beta6, Next beta8 and Classic 2.1.7. Other current artifacts and all older archives remain unchanged. [Details and source references](../stealmoji/README.md#valenced-page-picker-in-217).

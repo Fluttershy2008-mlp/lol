@@ -192,3 +192,9 @@ Seven selected cropping/response/picker/editor scenarios fail against each host'
 Shared with Valenced beta5 and Classic 2.1.6. Confirmed upload, clipboard and save actions close the menu picker and remove its owned alert entry. Close stays enabled during requests; dismissing preparation cancels its download and prevents a later POST. An already dispatched operation keeps its single-write guard until completion or the 45-second deadline; a reopened picker reports that state. Clipboard/save actions have a 15-second deadline. Late results cannot change a new picker. Image viewing is deferred until the picker closes, and stale viewer requests are cancelled.
 
 All 14 new native scenarios per host fail against the preceding packages and pass here; two new core tests cover cancellation. The complete regression run passes 881 Node checks and 16 Python checks, with one optional Hermes check skipped and both deterministic builds verified. Tests model native hosts and do not constitute on-phone verification. No other current package or old ZIP is changed.
+
+## Stealmoji beta8 — shared Valenced page path
+
+Classic 2.1.7 now uses a normal navigator page when the adapter identifies Valenced; Valenced ships it as beta6. That path opens no picker alert, RN Modal or extra action sheet. Unique route ownership, Android Back, cached page focus, stop and delayed registration are covered. Next retains its existing presentation and all previous upload, deadline, cancellation and cleanup behavior.
+
+The full regression run passes 890 Node checks and 16 Python checks, with one optional unrelated Hermes check skipped and both deterministic package checks passing. Nine new Valenced page scenarios fail against its previous beta5 package and pass here; a separate test covers a cached page receiving focus again. Physical phone behavior remains unverified. All 24 unrelated entries per catalogue and every previous ZIP are preserved.

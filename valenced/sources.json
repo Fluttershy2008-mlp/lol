@@ -151,8 +151,8 @@
     },
     "dev.fluttershy2008.stealmoji": {
       "path": "stealmoji/index.js",
-      "sha256": "6661b89c4fe6c1de7d5df83ec07cd42881cfd9901806f651813356bb6b764198",
-      "originalVersion": "2.1.6",
+      "sha256": "2ab380c4cd8a6df7f1994768aeaef8045ca2c1cada8406eb84af2a3a044d526c",
+      "originalVersion": "2.1.7",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
