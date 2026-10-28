@@ -16,7 +16,8 @@ function setup(overrides = {}) {
     storage: { awaitSyncWrapper: async () => {}, useProxy() {} },
     metro: {
       common: { clipboard, React: { createElement: (type, props, ...children) => ({ type, props, children }) },
-        ReactNative: { ScrollView: 'ScrollView', View: 'View', Text: 'Text', Switch: 'Switch', TouchableOpacity: 'TouchableOpacity', useColorScheme: () => 'dark' } },
+        ReactNative: { ScrollView: 'ScrollView', View: 'View', Text: 'Text', Switch: 'Switch', TouchableOpacity: 'TouchableOpacity', useColorScheme: () => 'dark',
+          ToastAndroid: { SHORT: 0, show: text => { toasts.push(text); } } } },
       findByProps: (...props) => { lookups++; return props.includes('sendBotMessage') ? bot : props.includes('sendMessage') ? actions : props.includes('setString') ? clipboard : undefined; }
     },
     commands: { registerCommand: command => {

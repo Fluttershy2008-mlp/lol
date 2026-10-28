@@ -3,9 +3,10 @@
   "plugins": {
     "dev.fluttershy2008.addon-list": {
       "path": "addonList/index.js",
-      "sha256": "444fd612d40ab1a270b66d87085739a2eafa13c8008bff3212df589184b1622f",
-      "originalVersion": "2.2.2",
-      "kind": "compatibility-preview"
+      "sha256": "5ba401574d2794a183d676dd2cdd98f5105e9453fbc7011babbc189f5527325c",
+      "originalVersion": "2.2.3",
+      "kind": "compatibility-preview",
+      "sourceRef": "main"
     },
     "dev.fluttershy2008.auto-text": {
       "path": "auto-text/index.js",

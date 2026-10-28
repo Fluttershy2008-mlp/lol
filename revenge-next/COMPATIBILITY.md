@@ -119,3 +119,7 @@ Valenced now uses the canonical nested HTTP client and imported-path chat-input 
 ## Profile-opening follow-up
 
 Valenced InfoCommands and Valid User beta3 resolve the default profile opener by imported path, namespace markers and Valenced's selective dependency fingerprint. Native owner-profile and result-dialog fixtures fail against beta2 and pass against beta3. The shared change ships as Next InfoCommands beta10 and Valid User beta7. AutoText is unchanged.
+
+## Addon List command-loading follow-up
+
+Valenced Addon List beta3 waits for the command module through Valenced's module subscriptions instead of rejecting startup while it is cold. Settings copy works immediately, including without command discovery. Six integration fixtures cover late loading, native registry copies, command execution, cleanup, queued callbacks and imported-path fallback. The shared source ships as Next Addon List beta5; Next's registration path and all other packages are unchanged. The Classic Addon List fixture now supplies Android's native toast API, matching the existing compatibility guard.

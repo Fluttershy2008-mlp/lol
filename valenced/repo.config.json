@@ -6,10 +6,12 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
   "portVersion": "1.0.0-beta2",
   "pluginVersions": {
+    "addon-list": "1.0.0-beta3",
     "info-commands": "1.0.0-beta3",
     "valid-user": "1.0.0-beta3"
   },
   "sourceRefs": {
+    "addon-list": "main",
     "info-commands": "main",
     "auto-text": "main",
     "valid-user": "main"

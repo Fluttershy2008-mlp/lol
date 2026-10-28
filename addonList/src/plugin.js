@@ -3,7 +3,7 @@
   function createPlugin(V) {
     const BASE_LIMIT = 2000, NITRO_LIMIT = 4000;
     const storage = V.plugin.storage;
-    let active = false, generation = 0;
+    let active = false, generation = 0, commandsRegistered = false;
     let disposers = [];
     const busy = new Map();
     const optional = fn => { try { return fn(); } catch { return undefined; } };
@@ -257,15 +257,15 @@
     function onUnload() {
       active = false;
       generation++;
+      commandsRegistered = false;
       busy.clear();
       const old = disposers;
       disposers = [];
       for (const dispose of old.reverse()) { try { dispose(); } catch (error) { log(error); } }
     }
-    function onLoad() {
-      if (active) return;
-      active = true;
-      generation++;
+    function registerCommands(session) {
+      if (!active || session !== generation || commandsRegistered) return;
+      const pending = [];
       try {
         if (typeof V.commands?.registerCommand !== 'function') throw new Error('Revenge command API is unavailable.');
         for (const kind of ['Plugin', 'Theme']) {
@@ -278,11 +278,58 @@
             execute: (args, ctx) => execute(kind, args, ctx)
           });
           if (typeof dispose !== 'function') throw new Error('Revenge did not return a command cleanup function.');
-          disposers.push(dispose);
+          pending.push(dispose);
         }
+        disposers.push(...pending);
+        commandsRegistered = true;
         // Optional on older clients; /plugin-list remains available if absent.
         try { enhanceCorePlugins(); } catch (error) { log(error); }
-      } catch (error) { onUnload(); throw error; }
+      } catch (error) {
+        for (const dispose of pending.reverse()) { try { dispose(); } catch (cleanupError) { log(cleanupError); } }
+        throw error;
+      }
+    }
+
+    function startValencedCommands(session) {
+      const ready = () => {
+        if (!active || session !== generation || commandsRegistered) return;
+        try { registerCommands(session); }
+        catch (error) {
+          optional(() => V.logger?.warn?.('Addon List commands could not be registered; settings copy remains available.', error));
+          toast('Addon List commands could not load. You can still copy lists in the plugin settings.');
+        }
+      };
+      if (typeof optional(() => V.metro.common.commands?.getBuiltInCommands) === 'function') { ready(); return; }
+      const keep = dispose => {
+        if (typeof dispose !== 'function') return;
+        if (active && session === generation) disposers.push(dispose);
+        else dispose();
+      };
+      // Valenced's command library subscribes to this module instead of requiring
+      // it to be initialized at plugin startup. Use its lexical, per-loader API.
+      const finders = optional(() => typeof valenced !== 'undefined' ? valenced.modules?.finders : undefined);
+      if (typeof finders?.getModules === 'function') {
+        try {
+          keep(finders.getModules(finders.filters.withProps('getBuiltInCommands'), ready, { initialize: false }));
+          return;
+        } catch (error) { optional(() => V.logger?.warn?.('Could not wait for Discord commands.', error)); }
+      }
+      if (typeof V.metro.getModuleWithImportedPath === 'function') {
+        try {
+          keep(V.metro.getModuleWithImportedPath('modules/application_commands/ApplicationCommandBuiltIns.tsx', ready));
+          return;
+        } catch (error) { optional(() => V.logger?.warn?.('Could not wait for the Discord command module.', error)); }
+      }
+      optional(() => V.logger?.warn?.('Discord command discovery is unavailable; Addon List settings copy remains available.'));
+    }
+
+    function onLoad() {
+      if (active) return;
+      active = true;
+      generation++;
+      if (V.host?.id === 'valenced') { startValencedCommands(generation); return; }
+      try { registerCommands(generation); }
+      catch (error) { onUnload(); throw error; }
     }
 
     function Settings() {
@@ -309,7 +356,9 @@
       }, h(RN.Text, { style: { color, fontSize: 16 } }, `Copy ${kind.toLowerCase()} list`));
       return h(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { padding: 16 } },
         h(RN.Text, { style: { color, fontSize: 22, fontWeight: 'bold', marginBottom: 8 } }, 'Addon List'),
-        h(RN.Text, { style: { color: muted, marginBottom: 12 } }, 'Use /plugins, /plugin-list or /theme-list. Revenge’s /plugins shows details and install URLs by default while Addon List is enabled. Copy splits long lists into parts with character counts: 2,000 normally, 4,000 with full Nitro. Long public lists ask before sending multiple messages.'),
+        h(RN.Text, { style: { color: muted, marginBottom: 12 } }, V.host?.id === 'valenced'
+          ? 'Use /plugin-list or /theme-list in a channel, or copy a list here and paste it into Discord. Slash commands become available when Discord loads its command picker. Copy splits long lists into parts: 2,000 characters normally, 4,000 with full Nitro. Long public lists ask before sending multiple messages.'
+          : 'Use /plugins, /plugin-list or /theme-list. Revenge’s /plugins shows details and install URLs by default while Addon List is enabled. Copy splits long lists into parts with character counts: 2,000 normally, 4,000 with full Nitro. Long public lists ask before sending multiple messages.'),
         row('pluginListAlwaysDetailed', 'Detailed plugin lists by default'),
         row('themeListAlwaysDetailed', 'Detailed theme lists by default'),
         row('privatePreview', 'Private previews by default'),

@@ -31,11 +31,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.addon-list@1.0.0-beta3.zip",
+          "sha256": "26c623c2de45fb4b8e767037ea9a96ed4d29b1e6500e66eea9baf575f281e5a7",
+          "size": 20727,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Addon List (Valenced)",
       "description": "Valenced preview. Send, preview or copy plugin and theme lists with visible URLs and Discord/Nitro message-sized parts.",

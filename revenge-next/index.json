@@ -57,11 +57,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.addon-list@1.0.0-beta5.zip",
+          "sha256": "c03b5f43a748e3aa2d338c1b329b5d213ab3d88b9c5cf0b2201acee77f38b080",
+          "size": 20509,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "Addon List (Next preview)",
       "description": "Revenge Next preview. Send, preview or copy plugin and theme lists with visible URLs and Discord/Nitro message-sized parts.",

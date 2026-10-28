@@ -54,4 +54,4 @@ jobs:
       - name: Check ZIP integrity and index metadata
         run: python3 -m unittest discover -s revenge-next/tests -p 'test_*.py'
       - name: Check profile opener and Classic regressions
-        run: node --test compatibility/user-profile.test.mjs info-commands/tests/runtime.test.mjs valid-user/tests/*.test.mjs
+        run: node --test compatibility/user-profile.test.mjs addonList/tests/*.test.mjs info-commands/tests/runtime.test.mjs valid-user/tests/*.test.mjs

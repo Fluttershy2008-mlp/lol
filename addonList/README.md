@@ -12,6 +12,8 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/addonList/
 
 Disable the old Addon List first, to avoid duplicate commands. This build uses a separate URL and does not automatically migrate the old URL's settings.
 
+For Valenced, use the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update **Addon List (Valenced) to 1.0.0-beta3**. It waits for Discord to load the command module instead of failing during startup. **Copy plugin list** and **Copy theme list** remain available in the plugin settings while commands load or when command discovery is unsupported. Open a channel's slash-command picker to use `/plugin-list` and `/theme-list` after loading. Classic command registration is unchanged.
+
 ## Commands
 
 - `/plugins`: upgrades Revenge's existing built-in command while Addon List is enabled. Shows details and visible install URLs by default, with the same splitting and copy options as `/plugin-list`. Use `detailed: false` for the compact list.
@@ -43,7 +45,7 @@ For the command shown in Revenge's composer, use `/plugins copy:true` or `/plugi
 
 ## Compatibility and warning
 
-This is a Vendetta-format plugin for Revenge's compatibility API. It lists that API's plugin registry and theme registry; it does not enumerate experimental Bunny-format plugins. It requires Revenge's command registration API. Unavailable Discord APIs produce local errors where possible.
+The Classic bundle uses Revenge's Vendetta compatibility API and its plugin/theme registries. It requires Revenge's command registration API. The Valenced package uses Valenced's native registry and subscribes to the command module as it loads. Disabling the plugin cancels pending registration; queued callbacks and old commands cannot run after stop. Unavailable Discord APIs produce local errors where possible.
 
 The built-in `/plugins` enhancement additionally requires the patcher and Discord command-list module exposed by current Revenge. If that hook is unavailable in an older client, `/plugin-list` remains available.
 
