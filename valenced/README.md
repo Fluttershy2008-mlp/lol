@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**More Alts! 1.0.0-beta6 fixes lookup of Discord’s own WebView fork for QR login.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button recognizes the fork’s native-module name and callable messaging bridge when loading the browser. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
+**More Alts! 1.0.0-beta7 bundles the Android QR browser and removes the failing Discord WebView package lookup.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
 
 **ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
 
@@ -26,7 +26,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta6** and InfoCommands at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta7** and InfoCommands at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -43,6 +43,8 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**More Alts! beta7:** ships its Android browser wrapper and binds it to React Native’s native view, command dispatcher and callable messaging APIs. The Android path no longer depends on finding Discord’s WebView JS package or matching its dependency graph. Existing native view registration is reused; plugin-owned messaging names and callback cleanup preserve other handlers. The QR HTML, secure crypto and approval verification remain unchanged. The same source ships as Classic 3.1.7 and Next beta8.
 
 **More Alts! beta6:** fixes two upstream-only assumptions in beta5: Discord’s fork requests `RNCWebView` instead of `RNCWebViewModule` and imports BatchedBridge instead of EventEmitter. Both native aliases and messaging layouts are supported, including a cold BatchedBridge wrapper. A unique full dependency match is still required. The SDK owns its component and messaging callbacks; the plugin does not replace either. A remaining lookup failure includes a short stage code without account or QR data. The same source ships as Classic 3.1.6 and Next beta7.
 
@@ -126,3 +128,5 @@ The profile lookup follows Valenced's [profile action](https://github.com/Valenc
 Deferred command discovery follows the community library's [module subscriptions](https://github.com/Valenced/valenced-community-plugins/blob/faac957ba3e982e9bca6bc9778067224c82e8b56/plugins/cocos-command-lib/js/modules.ts) and [command registration](https://github.com/Valenced/valenced-community-plugins/blob/faac957ba3e982e9bca6bc9778067224c82e8b56/plugins/cocos-command-lib/js/commands.ts).
 
 Four more native QR checks run Discord’s actual pinned WebView component, shared hook and native spec, deriving the graph from its compiled imports. All four fail against beta5 and pass against beta6. They cover loaded/cold callable bridges, native-message approval, external-navigation rejection, Close, Refresh and stale callbacks. The suite now has 23 QR cases per host and 84 More Alts source/protocol checks; six new source cases isolate native-name and messaging differences. Physical phone verification remains pending. [Fork sources and details](../more-alts/README.md#discord-webview-fork-316--valenced-beta6--next-beta7).
+
+Seven more native QR checks run with no Discord WebView JavaScript package or usable dependency metadata. They fail against beta6 and pass against beta7, covering legacy/bridgeless messaging, commands, Close, refresh, stop, stale callbacks and an existing native view. One runs the exact HTML through a real RSA handshake and QR SVG generation against a simulated Discord service, then verifies and saves the approved account through the native SDK callback. There are now 30 QR cases per host and 91 More Alts source/protocol checks. Phone verification remains pending. [Bundled browser details](../more-alts/README.md#bundled-android-qr-browser-317--valenced-beta7--next-beta8).

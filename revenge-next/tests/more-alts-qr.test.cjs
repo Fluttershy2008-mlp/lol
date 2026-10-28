@@ -1,10 +1,13 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const { webcrypto } = require('node:crypto');
 const { createWorld, React, Renderer } = require('./next-harness.cjs');
 const { installSettingsSection } = require('../../valenced/tests/settings-fixture.cjs');
 const { installColdWebViewModule } = require('../../more-alts/tests/webview-fixture.cjs');
 const { installDiscordWebViewModule } = require('../../more-alts/tests/discord-webview-fixture.cjs');
+const { installNativeWebView } = require('../../more-alts/tests/native-webview-fixture.cjs');
 const h = React.createElement;
 const USER = { id: '100000000000000099', username: 'fixture-qr-account' };
 const TOKEN = 'synthetic-qr-session-only-not-a-real-token';
@@ -48,7 +51,7 @@ function scenario(t) {
         await act(button(ui, 'Add another account'));
         return { item, ui };
     };
-    w.browser = ui => ui.root.findAll(n => n.type === 'WebView')[0];
+    w.browser = ui => ui.root.findAll(n => n.type === 'WebView' || n.type === 'RNCWebView')[0];
     t.after(async () => {
         for (const ui of renders.reverse()) await Renderer.act(async () => ui.unmount());
         for (const item of [...w.loaded.values()].reverse()) await w.stop(item);
@@ -233,4 +236,120 @@ test('More Alts QR refreshes Discord’s WebView fork without accepting its prev
     await act(() => callbacks.onMessage(message));
     assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
     assert.equal(w.qrStops.length, 1); assert.equal(graph.unrelated(), 0);
+});
+
+for (const legacyBridge of [false, true]) test('More Alts QR opens its bundled browser without Discord’s JS package using ' + (legacyBridge ? 'legacy' : 'bridgeless') + ' native messaging', async t => {
+    const w = scenario(t), native = installNativeWebView(w, { legacyBridge });
+    w.addModule({ WebView: () => { w.badCalls++; return { locale: 'en-US', ast: [] }; } });
+    const { item, ui } = await w.openManager();
+    assert.equal(native.views(), 0); assert.equal(native.lookups.length, 0);
+    await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser, 'QR opens when no WebView package is present in Metro');
+    assert.equal(native.views(), 1); assert.equal(native.dependencies(), 0); assert.equal(w.badCalls, 0);
+    assert.equal(native.owned().length, 1); assert.equal(native.messages.get('WebViewMessageHandler1'), native.existing);
+    assert.match(browser.props.source.html, /startRemoteAuth/);
+    browser.props.onShouldStartLoadWithRequest({ nativeEvent: { url: 'https://example.invalid/', lockIdentifier: 1 } });
+    assert.deepEqual(native.nativeNavigation, [[false, 1]]);
+    await act(() => native.owned()[0][1].onMessage(completion(browser)));
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+    assert.equal(w.calls.filter(c => c[0] === 'fetch').length, 1);
+    assert.equal(native.commands[0].command, 5);
+    assert.ok(w.qrStops.some(script => script.includes('stopMoreAltsQr')));
+});
+
+test('More Alts QR bundled browser supports native command names and stops after Close', async t => {
+    const w = scenario(t), native = installNativeWebView(w, { commandNames: true });
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser);
+    const event = completion(browser), callbacks = native.owned()[0][1];
+    await act(button(ui, 'Close add account'));
+    assert.equal(w.browser(ui), undefined); assert.equal(native.commands[0].command, 'injectJavaScript');
+    await act(() => callbacks.onMessage(event)); assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+    assert.equal(native.messages.get('WebViewMessageHandler1'), native.existing);
+});
+
+test('More Alts QR bundled browser refreshes with independent callbacks and ignores old approvals', async t => {
+    const w = scenario(t), native = installNativeWebView(w);
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const old = w.browser(ui); assert.ok(old);
+    const event = completion(old), callbacks = native.owned()[0][1];
+    await act(() => w.advance(3000)); await act(button(ui, 'Refresh QR code'));
+    const browser = w.browser(ui); assert.ok(browser); assert.equal(native.owned().length, 2);
+    assert.notEqual(completion(browser).nativeEvent.data, event.nativeEvent.data);
+    await act(() => callbacks.onMessage(event)); assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+    assert.equal(native.views(), 1); assert.equal(w.qrStops.length, 1);
+});
+
+test('More Alts QR bundled browser releases its messaging callbacks when stopped', async t => {
+    const w = scenario(t), native = installNativeWebView(w);
+    const { item, ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser);
+    const event = completion(browser), callbacks = native.owned()[0][1];
+    await act(() => w.stop(item)); await act(() => callbacks.onMessage(event));
+    assert.equal(w.calls.some(c => c[0] === 'fetch'), false); assert.equal(w.qrStops.length, 1);
+    assert.equal(native.messages.get('WebViewMessageHandler1'), native.existing);
+});
+
+test('More Alts QR bundled browser reuses an already registered native host view', async t => {
+    const w = scenario(t), native = installNativeWebView(w, { duplicate: true });
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser); assert.equal(browser.type, 'RNCWebView');
+    assert.match(browser.props.source.html, /startRemoteAuth/); assert.equal(native.dependencies(), 0);
+    assert.equal(native.messages.get('WebViewMessageHandler1'), native.existing);
+});
+
+test('More Alts QR bundled browser completes its exact HTML RSA handshake and saves the approved account', async t => {
+    const w = scenario(t), native = installNativeWebView(w);
+    const { item, ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser);
+    const sent = [], delivered = [], elements = new Map(), exchange = [];
+    let socket, encryptedToken;
+    const waitFor = async fn => {
+        const until = Date.now() + 6000;
+        while (!fn()) { if (Date.now() > until) throw new Error('HTML QR handshake timed out'); await new Promise(resolve => setTimeout(resolve, 2)); }
+    };
+    const document = { getElementById(id) {
+        if (!elements.has(id)) elements.set(id, { textContent: '', innerHTML: '', className: '' });
+        return elements.get(id);
+    } };
+    class Socket {
+        constructor(url) { assert.equal(url, 'wss://remote-auth-gateway.discord.gg/?v=2'); socket = this; this.readyState = 1; }
+        send(value) { sent.push(JSON.parse(value)); }
+        close() { this.readyState = 3; this.onclose?.(); }
+    }
+    const window = { crypto: webcrypto, ReactNativeWebView: { postMessage: data => delivered.push(data) }, addEventListener() {} };
+    const context = vm.createContext({ window, document, WebSocket: Socket, Uint8Array, ArrayBuffer, TextDecoder, AbortController, btoa, atob,
+        setTimeout: w.host.setTimeout, clearTimeout: w.host.clearTimeout,
+        fetch: async (url, input) => {
+            exchange.push({ url, input }); assert.equal(url, 'https://discord.com/api/v9/users/@me/remote-auth/login');
+            assert.equal(input.headers.Authorization, undefined); assert.deepEqual(JSON.parse(input.body), { ticket: 'fixture-html-ticket' });
+            return { ok: true, status: 200, json: async () => ({ encrypted_token: encryptedToken }) };
+        },
+    });
+    const script = browser.props.source.html.match(/<script nonce="[^"]+">([\s\S]*)<\/script>/)[1];
+    vm.runInContext(script, context); t.after(() => window.stopMoreAltsQr?.());
+    const receive = data => socket.onmessage({ data: JSON.stringify(data) });
+    receive({ op: 'hello', heartbeat_interval: 40000, timeout_ms: 120000 });
+    await waitFor(() => sent.some(value => value.op === 'init'));
+    const key = await webcrypto.subtle.importKey('spki', Buffer.from(sent[0].encoded_public_key, 'base64'), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const encrypt = async bytes => Buffer.from(await webcrypto.subtle.encrypt('RSA-OAEP', key, bytes)).toString('base64');
+    const nonce = Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]);
+    receive({ op: 'nonce_proof', encrypted_nonce: await encrypt(nonce) });
+    await waitFor(() => sent.some(value => value.op === 'nonce_proof'));
+    assert.equal(sent.find(value => value.op === 'nonce_proof').proof, Buffer.from(await webcrypto.subtle.digest('SHA-256', nonce)).toString('base64url'));
+    receive({ op: 'pending_remote_init', fingerprint: 'fixture_html_fingerprint_123456789' });
+    await waitFor(() => elements.get('qr')?.innerHTML.includes('<svg'));
+    assert.ok(elements.get('qr').innerHTML.length > 1000, 'the actual bundled encoder generates a QR image');
+    assert.equal(exchange.length, 0);
+    encryptedToken = await encrypt(new TextEncoder().encode(TOKEN));
+    receive({ op: 'pending_ticket', encrypted_user_payload: await encrypt(new TextEncoder().encode(USER.id + ':0:avatar:fixture-qr-account')) });
+    await waitFor(() => delivered.some(data => JSON.parse(data).status === 'scanned'));
+    assert.equal(exchange.length, 0, 'scanning alone does not exchange or save a session');
+    receive({ op: 'pending_login', ticket: 'fixture-html-ticket' });
+    await waitFor(() => delivered.some(data => JSON.parse(data).type === 'complete'));
+    const callbacks = native.owned()[0][1];
+    await act(() => { for (const data of delivered) callbacks.onMessage({ nativeEvent: { url: 'https://discord.com/', data } }); });
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+    assert.equal(socket.readyState, 3); assert.equal(exchange.length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'fetch').length, 1); assert.equal(native.dependencies(), 0);
 });

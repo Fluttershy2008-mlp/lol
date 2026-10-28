@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { AccountError, createClient, createController } from './core.mjs';
 import { createModuleResolver } from './modules.mjs';
+import { createNativeWebView } from './native-webview.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
 import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, QR_BASE_URL } from './qr-html.mjs';
@@ -10,6 +11,7 @@ export function createPlugin(V, host = globalThis) {
     const h = React.createElement, storage = V.plugin.storage;
     const LoginDialog = createLoginDialog(React, RN);
     const resolver = createModuleResolver(V.metro);
+    const nativeWebView = createNativeWebView(React, RN, host);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [], qrStops = new Set();
@@ -157,10 +159,10 @@ export function createPlugin(V, host = globalThis) {
                 setError(qrErrorMessage('rate-limit', (qrBlockedUntil.current - Date.now()) / 1000)); return;
             }
             let WebView;
-            try { WebView = resolver.webView(); } catch {}
+            try { WebView = nativeWebView.load() ?? resolver.webView(); } catch {}
             if (!stillHere()) return;
             if (!WebView) {
-                const reason = resolver.webViewFailure();
+                const reason = nativeWebView.reason() + '/' + resolver.webViewFailure();
                 setError('QR login could not load Discord’s browser on this build. You can still use email and password.'
                     + (reason ? ' (MA-QR-' + reason + ')' : ''));
                 return;
@@ -244,6 +246,7 @@ export function createPlugin(V, host = globalThis) {
                 onQrRenderError: () => {
                     if (!stillHere() || qrSession.current !== qr) return;
                     resolver.rejectWebView(qr?.WebView);
+                    nativeWebView.reject(qr?.WebView);
                     stopQr(); instance.cancelLogin(); authenticating.current = false;
                     setError('The QR login view could not be displayed. Refresh the code or use email and password.'); redraw(x => x + 1);
                 }, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
@@ -312,6 +315,7 @@ export function createPlugin(V, host = globalThis) {
     }
     function onLoad() {
         if (active) return;
+        nativeWebView.reset();
         controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
         active = true; optionalReady = false;
         const generation = ++epoch;
@@ -347,6 +351,7 @@ export function createPlugin(V, host = globalThis) {
         for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
         controller?.stop();
         for (const stop of qrStops) { try { stop(); } catch {} } qrStops.clear();
+        nativeWebView.dispose();
         for (const dispose of disposers.splice(0).reverse()) { try { dispose?.(); } catch {} }
         resolver.clear();
     }

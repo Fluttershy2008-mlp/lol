@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-function webViewRuntimeClient() {
+export function webViewRuntimeClient() {
     try { if (typeof valenced !== 'undefined' && valenced.modules?.metro) return valenced; } catch {}
     try { if (typeof revenge !== 'undefined' && revenge.modules?.metro) return revenge; } catch {}
 }

@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.6
+# More Alts! for Revenge — 3.1.7
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Bundled Android QR browser (3.1.7 / Valenced beta7 / Next beta8)
+
+The Android QR button no longer needs to locate Discord’s WebView JavaScript package. More Alts now ships the Android component, shared hook and styles from the pinned MIT-licensed Discord fork, and connects them to the installed native `RNCWebView` through React Native. This avoids both initialized-module lookup and the cold dependency fingerprint that still failed on the reported build. Native APIs are accessed only on the QR click. The existing package resolver remains available as a fallback for other hosts.
+
+The wrapper uses `requireNativeComponent`, UIManager’s legacy/Fabric command dispatcher, and the active legacy or bridgeless callable-module API. An already registered native view is reused. Each browser gets a plugin-owned messaging name; rerenders update callback references without duplicate native registration. Close, refresh and plugin stop release those references, and unrelated Discord handlers are preserved. The shipped HTML still runs the same RSA-OAEP/SHA-256 flow in Web Crypto with its pinned HTTPS origin, CSP, session checks and approved-account verification. No new server or external crypto service is involved.
+
+Refresh the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json), update **More Alts! to 1.0.0-beta7**, then fully close and reopen Discord. Next receives **1.0.0-beta8** and Classic **3.1.7**. Keep the existing saved plugin data.
+
+Seven new native integration cases run with no Discord WebView JS package or dependency metadata installed; all seven fail against Valenced beta6 and pass against beta7. They cover both native messaging architectures, numeric/string commands, Close, refresh, stale callbacks, stop and a pre-registered native view. One executes the exact delivered HTML with real Web Crypto: it generates the key, verifies a nonce proof, renders a QR SVG, handles simulated Discord approval and saves only the verified account. The shared QR suite now has **30 cases per host**. Seven native-provider source checks bring More Alts source/protocol checks to **91**. Physical phone verification remains pending; the installed app must still contain the native `RNCWebView` view and module.
+
+[Bundled source, adaptations, license and primary API references](vendor/discord-webview/README.md). The ordinary build includes the checked-in generated SDK; regenerating it uses the repository’s pinned esbuild. The native SDK never initializes unrelated Metro factories.
 
 ## Discord WebView fork (3.1.6 / Valenced beta6 / Next beta7)
 
