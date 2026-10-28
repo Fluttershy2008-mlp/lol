@@ -5,6 +5,8 @@ import { assetUrl } from '../data'
 export interface FriendsRowsProps {
 	guildId: string
 	loading?: boolean
+	onOpenProfile?: (options: Record<string, unknown>) => void
+	design?: any
 	friends: Array<{
 		userId: string
 		displayName: string
@@ -15,10 +17,10 @@ export interface FriendsRowsProps {
 
 const VISIBLE_LIMIT = 5
 
-export function FriendsRows({ guildId, friends, loading }: FriendsRowsProps) {
+export function FriendsRows({ guildId, friends, loading, onOpenProfile, design }: FriendsRowsProps) {
 	const { React } = runtime.react
 	const { View, Image } = runtime.react.ReactNative
-	const { TableRow, TableRowGroup, Text } = runtime.discord.design.Design as any
+	const { TableRow, TableRowGroup, Text } = design ?? runtime.discord.design.Design as any
 
 	const [expanded, setExpanded] = React.useState(false)
 
@@ -55,7 +57,7 @@ export function FriendsRows({ guildId, friends, loading }: FriendsRowsProps) {
 									</View>
 								}
 								onPress={() => {
-									openUserProfileSheet({
+									(onOpenProfile ?? openUserProfileSheet)({
 										userId,
 										guildId,
 										ignoreBlockedSpeedBump: false,

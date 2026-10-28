@@ -1,6 +1,7 @@
 import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
+import ServerInfoModal from "./server-info/ui/ServerInfoModal";
 import { wrapGuildSheet } from "./guild-sheet";
-import { nextAPI, nativeSheets, nativeDesign } from "./next-api";
+import { nextAPI, nativeSheets, nativeDesign, nativeAlerts } from "./next-api";
 import { openUserProfile } from "../../compatibility/user-profile.mjs";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
@@ -8,6 +9,7 @@ const { React, ReactNative: RN } = vendetta.metro.common;
 const ITEM_ID = "info-commands-server-info";
 let activeSheet;
 let menuTimer;
+let profileTimer;
 let sheets;
 let contexts;
 let running = false;
@@ -181,19 +183,24 @@ export function openServerInfo(id, load) {
     const key = `${ITEM_ID}-${id}`;
     if (activeSheet?.key === key) return;
     activeSheet?.close();
+    clearTimeout(profileTimer);
+    profileTimer = undefined;
     // Resolve at click time too: the native module may not have been ready at startup.
     const next = nextAPI();
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional(() => findByProps("ActionSheet")?.ActionSheet);
     const epoch = generation;
-    const attempt = { key, timer: undefined, fallback: false, presented: false, close };
+    const attempt = { key, timer: undefined, fallback: false, presented: false, panel: undefined, close };
     activeSheet = attempt;
     const live = () => running && epoch === generation && activeSheet === attempt;
     function close(hide = true) {
         clearTimeout(attempt.timer);
         if (!live()) return;
         activeSheet = undefined;
-        if (hide) optional(() => host?.hideActionSheet?.(key));
+        if (hide) {
+            if (attempt.panel) optional(() => attempt.panel.dismissAlert(key));
+            else optional(() => host?.hideActionSheet?.(key));
+        }
     }
     function presented() {
         if (live() && !attempt.fallback) {
@@ -212,7 +219,8 @@ export function openServerInfo(id, load) {
         if (!live() || attempt.fallback) return;
         attempt.fallback = true;
         clearTimeout(attempt.timer);
-        optional(() => host?.hideActionSheet?.(key));
+        if (attempt.panel) optional(() => attempt.panel.dismissAlert(key));
+        else optional(() => host?.hideActionSheet?.(key));
         if (error) optional(() => console.warn("[InfoCommands] Using native server info fallback", error));
         Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then(data => {
             if (!live()) return;
@@ -235,16 +243,46 @@ export function openServerInfo(id, load) {
             else notify(message);
         });
     }
-    if (vendetta.host?.id === "valenced") {
-        fallback();
-        return;
-    }
     const Boundary = React.Component ? class ServerInfoBoundary extends React.Component {
         state = { failed: false };
         static getDerivedStateFromError() { return { failed: true }; }
         componentDidCatch(error) { fallback(error); }
         render() { return this.state.failed ? null : this.props.children; }
     } : null;
+    if (vendetta.host?.id === "valenced") {
+        const alerts = nativeAlerts();
+        if (alerts && RN.Modal) {
+            function ManagedServerInfoModal() {
+                if (!live() || attempt.fallback) return null;
+                const content = React.createElement(ServerInfoModal, {
+                    guildId: id, onClose: () => close(), onPresented: presented, onDismiss: dismissed,
+                    onCopyServerId: value => { if (live() && value === id) copy(id); },
+                    onOpenProfile: options => {
+                        if (!live() || !guildId(options.userId)) return;
+                        close();
+                        const current = () => running && epoch === generation;
+                        // Let the native modal dismiss before displaying Discord's profile sheet.
+                        profileTimer = setTimeout(() => {
+                            profileTimer = undefined;
+                            openUserProfile(vendetta, options, current).then(opened => {
+                                if (!opened && current()) notify("Profiles are unavailable on this Discord version");
+                            }).catch(() => { if (current()) notify("Unable to open profile. Try again."); });
+                        }, 180);
+                    },
+                });
+                return Boundary ? React.createElement(Boundary, null, content) : content;
+            }
+            attempt.panel = alerts;
+            attempt.timer = setTimeout(() => fallback(), 2500);
+            try {
+                const result = alerts.openAlert(key, React.createElement(ManagedServerInfoModal), dismissed, { dismissable: true });
+                Promise.resolve(result).catch(fallback);
+                return;
+            } catch (error) { fallback(error); return; }
+        }
+        fallback();
+        return;
+    }
     function ManagedServerInfoSheet(props) {
         React.useEffect(() => () => {
             dismissed();
@@ -272,6 +310,8 @@ export function disposeServerMenu() {
     activeSheet?.close();
     clearTimeout(menuTimer);
     menuTimer = undefined;
+    clearTimeout(profileTimer);
+    profileTimer = undefined;
     running = false;
     generation++;
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional(() => unpatch());

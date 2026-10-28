@@ -8,6 +8,7 @@ const vm = require('node:vm');
 const { createWorld, React, Renderer, CHANNEL, FRIEND, GUILD } = require('../../revenge-next/tests/next-harness.cjs');
 const { createLegacyAdapter } = require('../runtime.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
+const { installServerPanelHost } = require('./server-info-fixture.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const h = React.createElement;
 
@@ -208,8 +209,9 @@ test('AutoText types a full prepared multiline message through the imported comp
     assert.equal(sends, 0);
 });
 
-test('InfoCommands opens native details from an unnamed late-loaded server menu', async t => {
+test('InfoCommands opens the themed panel from an unnamed late-loaded server menu', async t => {
     const w = scenario(t, { curatedOnly: true, http: () => new Promise(() => {}) });
+    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
     // A successful openLazy invocation can still leave no visible sheet on a device.
     w.sheets.openLazy = () => {};
     await w.start('info-commands');
@@ -220,25 +222,26 @@ test('InfoCommands opens native details from an unnamed late-loaded server menu'
     const info = items.find(item => item.label === 'Server Info');
     assert.ok(info);
     assert.equal(original.length, 1);
-    info.action(); await w.advance(180);
-    for (let n = 0; n < 10; n++) await Promise.resolve();
-    assert.equal(w.alerts.length, 1);
-    assert.match(w.alerts[0][0], /Server Info.*Test Guild/);
-    assert.match(w.alerts[0][1], new RegExp(GUILD));
-    assert.equal(w.calls.some(c => c[0] === 'http'), false);
-    w.alerts[0][2].find(button => button.text === 'Copy Server ID').onPress();
+    await Renderer.act(async () => { info.action(); await w.advance(180); });
+    await Renderer.act(async () => panel.root.findByType('Modal').props.onShow());
+    assert.match(JSON.stringify(panel.toJSON()), /Test Guild/);
+    assert.match(JSON.stringify(panel.toJSON()), new RegExp(GUILD));
+    assert.equal(w.alerts.some(alert => typeof alert[1] === 'string'), false);
+    await Renderer.act(async () => button(panel, 'ID').props.onPress());
     assert.equal(w.clipboard.at(-1), GUILD);
-    info.action(); await w.advance(180);
-    for (let n = 0; n < 10; n++) await Promise.resolve();
-    assert.equal(w.alerts.length, 2);
+    await Renderer.act(async () => button(panel, 'Close server info').props.onPress());
+    await Renderer.act(async () => { info.action(); await w.advance(180); });
+    assert.equal(host.nodes.size, 1);
 });
 
 test('InfoCommands settings offer a working current-server details button', async t => {
     const w = scenario(t), item = await w.start('info-commands');
+    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    assert.match(w.alerts[0]?.[0] ?? '', /Test Guild/);
-    assert.match(w.alerts[0]?.[1] ?? '', /Channels: 1/);
+    assert.match(JSON.stringify(panel.toJSON()), /Test Guild/);
+    assert.ok(button(panel, 'ID'));
+    assert.ok(button(panel, 'Close server info'));
     assert.ok(JSON.stringify(ui.toJSON()).includes(item.manifest.version));
 });
 
@@ -268,15 +271,16 @@ test('stopping InfoCommands cancels pending path subscriptions and button action
     await w.stop(restarted);
 });
 
-test('View Owner Profile loads an anonymous default profile opener on the first tap', async t => {
+test('the Owner row loads an anonymous default profile opener on the first tap', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
+    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    const owner = w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile');
+    const owner = button(panel, 'Owner');
     assert.ok(owner);
     assert.equal(cold.initializedFactories(), 0);
-    await Renderer.act(async () => owner.onPress());
+    await Renderer.act(async () => { owner.props.onPress(); await w.advance(180); });
     const opened = w.calls.filter(c => c[0] === 'profileOpened');
     assert.equal(opened.length, 1);
     assert.equal(opened[0][1].userId, w.accountId());
@@ -326,23 +330,25 @@ test('Valid User native result dialog opens a profile through the same resolver'
 
 test('a loaded default profile module opens even when its function has an unrelated name', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
+    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
     w.addModule(cold.namespace, 'modules/user_profile/native/showUserProfileActionSheet.tsx');
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    await Renderer.act(async () => w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile').onPress());
+    await Renderer.act(async () => { button(panel, 'Owner').props.onPress(); await w.advance(180); });
     assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 1);
     assert.equal(cold.initializedFactories(), 0);
 });
 
 test('an owner-profile action from a stopped plugin cannot initialize or open a profile', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
+    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    const owner = w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile');
-    await w.stop(item);
-    await Renderer.act(async () => owner.onPress());
+    const onPress = button(panel, 'Owner').props.onPress;
+    await Renderer.act(async () => w.stop(item));
+    await Renderer.act(async () => { onPress(); await w.advance(180); });
     assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 0);
     assert.equal(cold.initializedFactories(), 0);
 });

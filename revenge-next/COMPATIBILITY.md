@@ -127,3 +127,7 @@ Valenced Addon List beta3 waits for the command module through Valenced's module
 ## Copy User ID profile-menu follow-up
 
 Valenced Copy User ID beta3 resolves profile overflow menus by imported path and keeps a subscription until a late module loads. It shows the full ID and copies `<@ID>`, upgrading an existing English native copy-ID row when present. Ten Valenced regressions cover five component forms, late loading, frozen groups, native-row replacement, separate user/bot callbacks and teardown. The shared source ships as Next Copy User ID beta5. Existing name-based hooks and message long-press support are retained.
+
+## Valenced Server Info panel
+
+Valenced InfoCommands beta4 uses a themed React Native Modal bottom panel mounted through Valenced's React alert host. It reuses the banner/header, Overview, Server and Friends components, renders cached data immediately, fits short windows and scrolls all content. ID copying and owner/friend profile callbacks are scoped to the active panel and cancelled on stop. The shared source ships as Next InfoCommands beta11; Next retains its existing native sheet and fallback behavior. All other packages are unchanged.

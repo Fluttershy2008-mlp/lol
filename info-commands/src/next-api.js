@@ -17,3 +17,11 @@ export function nativeSheets() {
 export function nativeDesign(name) {
     return optional(() => nextAPI()?.discord?.design?.Design?.[name]);
 }
+
+export function nativeAlerts() {
+    const candidates = [
+        optional(() => vendetta.metro.findByImportedPath?.("design/components/AlertModal/native/useAlertStore.native.tsx")),
+        optional(() => nextAPI()?.discord?.actions?.AlertActionCreators),
+    ];
+    return candidates.find(actions => optional(() => typeof actions?.openAlert === "function" && typeof actions?.dismissAlert === "function"));
+}

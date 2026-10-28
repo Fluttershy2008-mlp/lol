@@ -8,12 +8,17 @@ function color(name: string, fallback: string) {
     theme, vendetta.ui.semanticColors?.[name],
   )) ?? fallback;
 }
+export function sheetColors() {
+  const light = optional(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
+  return { background: color("BACKGROUND_PRIMARY", light ? "#ffffff" : "#242429") };
+}
 function Text({ children, color: semantic, variant, lineClamp, style, ...props }: any) {
   const light = optional(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
   const name = semantic === "text-link" ? "TEXT_LINK" : semantic === "text-subtle" ? "TEXT_MUTED" : "TEXT_NORMAL";
   return React.createElement(RN.Text, {
     ...props, numberOfLines: lineClamp,
-    style: [{ color: color(name, name === "TEXT_LINK" ? "#8ea1ff" : light ? "#1e1f22" : "#f2f3f5"),
+    style: [{ color: color(name, name === "TEXT_LINK" ? "#8ea1ff"
+      : name === "TEXT_MUTED" ? light ? "#5c5f66" : "#b5bac1" : light ? "#1e1f22" : "#f2f3f5"),
       fontSize: variant?.includes("lg") ? 20 : variant?.includes("sm") ? 13 : 15,
       fontWeight: /semibold|medium/.test(variant ?? "") ? "600" : "400" }, style],
   }, children);
@@ -38,6 +43,14 @@ function TableRowGroup({ title, children }: any) {
       backgroundColor: color("BACKGROUND_SECONDARY", light ? "#f2f3f5" : "#2b2d31") } }, children),
   );
 }
+function PanelRow(props: any) {
+  return React.createElement(RN.View, { style: { borderBottomWidth: RN.StyleSheet?.hairlineWidth ?? 0.5,
+    borderBottomColor: color("BACKGROUND_MODIFIER_ACCENT", "rgba(127,127,127,0.12)") } }, React.createElement(TableRow, props));
+}
+PanelRow.TrailingText = TrailingText;
+// A native Modal has its own Android root. Plain RN rows keep its actions usable
+// without depending on Discord's gesture-handler root or sheet contexts.
+export const panelDesign = { Text, TableRow: PanelRow, TableRowGroup };
 const nativeRow = nativeDesign("TableRow") ?? optional(() => vendetta.metro.findByProps("TableRow")?.TableRow);
 const NativeGroup = nativeDesign("TableRowGroup") ?? optional(() => vendetta.metro.findByProps("TableRowGroup")?.TableRowGroup);
 const useReRender = () => React.useReducer((value: number) => value + 1, 0)[1];

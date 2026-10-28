@@ -8,6 +8,7 @@ export interface OverviewRowsProps {
 	channelCount: number | undefined
 	boostLabel: string | undefined
 	premiumTier: number
+	design?: any
 }
 
 export function OverviewRows({
@@ -17,8 +18,9 @@ export function OverviewRows({
 	channelCount,
 	boostLabel,
 	premiumTier,
+	design,
 }: OverviewRowsProps) {
-	const { TableRow, TableRowGroup } = runtime.discord.design.Design as any
+	const { TableRow, TableRowGroup } = design ?? runtime.discord.design.Design as any
 
 	return (
 		<TableRowGroup title="Overview">

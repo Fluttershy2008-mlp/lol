@@ -4,7 +4,9 @@ Revenge / Vendetta-compatible Discord mobile plugin with userinfo/inviteinfo com
 
 ## Install
 
-For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview)**. Version **1.0.0-beta6** uses Next's native popup API after the server menu dismisses. If the sheet never appears, cannot render, or has no visible layout, it shows a native details popup instead. Cached server details are available immediately in that fallback, with Copy Server ID and View Owner Profile actions. After updating, fully restart Discord.
+For **Valenced**, use the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update **InfoCommands to 1.0.0-beta4**. Server Info opens a themed, scrollable bottom panel matching the supplied layout: banner, icon/name, Overview, Server and Friends in Server. Cached details appear immediately while fresh data loads. Tap **ID** to copy the server ID, or **Owner** / a friend to open their profile. Close, the backdrop and Android Back dismiss the panel. After updating, force-close and reopen Discord.
+
+For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview) 1.0.0-beta11**. The shared source includes the new Valenced panel; Next retains its existing native sheet and emergency popup behavior. If that sheet never appears, cannot render, or has no visible layout, cached details appear in a native popup with copy/profile actions. After updating, fully restart Discord.
 
 For **Revenge Classic / Vendetta**:
 
@@ -24,7 +26,7 @@ The uploaded replacement originally targets Revenge Next and depends on `dev.kmm
 
 Guild requests and friend-member requests happen only when opening the screen. Guild fetches time out after eight seconds; cached guild data remains visible with a notice. Unknown counts display an em dash. Friends that have not been returned to the local member store are not presented as confirmed members. Store listeners and timers are removed when the sheet closes.
 
-The guild menu generator, native context menu, and lazy guild action sheets are supported. Clients without custom action sheets retain the earlier native-alert fallback. Actual device testing is still needed; automated tests simulate Discord modules and render the replacement components.
+The guild menu generator, native context menu, and lazy guild action sheets are supported. Valenced mounts the bottom panel through its React alert host and React Native Modal, avoiding the earlier invisible lazy-sheet path. Its height is bounded to the window, and one scroll view contains the banner and all rows. The earlier native-alert fallback is retained only if the custom panel cannot be presented. Actual device testing is still needed; automated tests simulate Discord modules and render the replacement components.
 
 ## Development
 

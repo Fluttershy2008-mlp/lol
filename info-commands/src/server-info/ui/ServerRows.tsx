@@ -7,6 +7,9 @@ export interface ServerRowsProps {
 	ownerDisplayName: string | null
 	ownerAvatarUri: string | undefined
 	createdLabel: string | undefined
+	onOpenProfile?: (options: Record<string, unknown>) => void
+	onCopyServerId?: (id: string) => void
+	design?: any
 }
 
 export function ServerRows({
@@ -15,9 +18,12 @@ export function ServerRows({
 	ownerDisplayName,
 	ownerAvatarUri,
 	createdLabel,
+	onOpenProfile,
+	onCopyServerId,
+	design,
 }: ServerRowsProps) {
 	const { View, Image } = runtime.react.ReactNative
-	const { TableRow, TableRowGroup, Text } = runtime.discord.design.Design as any
+	const { TableRow, TableRowGroup, Text } = design ?? runtime.discord.design.Design as any
 
 	return (
 		<TableRowGroup title="Server">
@@ -48,7 +54,7 @@ export function ServerRows({
 				onPress={
 					ownerId
 						? () => {
-								openUserProfileSheet({
+								(onOpenProfile ?? openUserProfileSheet)({
 									userId: ownerId,
 									guildId,
 									ignoreBlockedSpeedBump: false,
@@ -64,7 +70,7 @@ export function ServerRows({
 			<TableRow
 				label="ID"
 				trailing={<TableRow.TrailingText text={guildId} />}
-				onPress={() => copyServerId(guildId)}
+				onPress={() => (onCopyServerId ?? copyServerId)(guildId)}
 			/>
 		</TableRowGroup>
 	)
