@@ -137,8 +137,8 @@
     },
     "dev.fluttershy2008.server-leaver": {
       "path": "server-leaver/index.js",
-      "sha256": "6b525f629b78acdf2cd67d83ba3dddae288f1073530dd2bb27cc06314d999c60",
-      "originalVersion": "1.0.3",
+      "sha256": "e0dc1b4cd4d1bd5a9248015c887775e429704ab76302f6dd6dc270b3cbe8a585",
+      "originalVersion": "1.0.4",
       "kind": "compatibility-preview",
       "sourceRef": "main",
       "settingsShortcut": {

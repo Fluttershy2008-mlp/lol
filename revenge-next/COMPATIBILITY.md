@@ -166,3 +166,7 @@ Shares Valenced beta7’s packaged Android SDK and direct React Native bindings.
 ### Server Leaver beta5 — main protected IDs
 
 Shares Valenced beta4’s fixed main list of 22 exact snowflake strings. Main protection is checked in preview and immediately before each request, independently of storage. Saving restores removed main IDs; extra saved IDs remain scoped to each account. Main IDs not joined by that account do not block preview, while unknown additional IDs still do. Twenty-eight source/runtime tests and three shared native UI cases per host cover the list, upgrades, account changes, locked rows and a confirmed simulated queue. Classic receives 1.0.3. All other packages and prior ZIPs are preserved. [Protected IDs and behavior](../server-leaver/README.md#main-protected-list).
+
+### Server Leaver beta6 — stable scrolling
+
+Shares Valenced beta5’s preview fix: Protect/Remove protection keep rows in name order, the ID editor stays bounded and actions release keyboard focus, guild/theme listeners replace polling, and Android native clipping is disabled while virtualization remains enabled. Three new UI regressions fail against beta5 and pass against beta6; six native cases run per host along with 28 source/runtime checks. Existing main protections, account isolation and confirmed leave behavior are preserved. Classic receives 1.0.4. Actual native touch scrolling still needs device verification.

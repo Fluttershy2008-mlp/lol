@@ -10,6 +10,7 @@ export function createPlugin(V, host = globalThis) {
   const byStore = name => safe(() => V.metro.findByStoreName?.(name));
   const log = error => safe(() => V.logger?.error?.('Server Leaver', error));
   const listeners = new Set();
+  const removeStoreListeners = [];
   let active = false, epoch = 0, job = null, report = null, disposeShortcut, appSubscription, removeAccountListener;
   let guildStore, userStore, themeStore;
   function resolve() {
@@ -92,8 +93,7 @@ export function createPlugin(V, host = globalThis) {
     React.useEffect(() => { setBoundAccount(id); setDraft(safe(() => idsFor(id)) ?? ''); setQuery(''); }, [id]);
     React.useEffect(() => {
       listeners.add(refresh);
-      const timer = setInterval(refresh, 1200);
-      return () => { listeners.delete(refresh); clearInterval(timer); };
+      return () => { listeners.delete(refresh); };
     }, [refresh]);
     let plan, error;
     try { plan = freshPlan(id); } catch (e) { error = e.message; }
@@ -109,18 +109,24 @@ export function createPlugin(V, host = globalThis) {
       onPress: action, style: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 11,
         borderRadius: 9, borderWidth: 1, borderColor: danger ? c.danger : c.border, opacity: disabled ? 0.4 : 1, marginTop: 10 },
     }, text(label, { color: danger ? c.danger : c.accent, fontWeight: '700' }));
-    function saveDraft() { try { setDraft(save(id, draft)); refresh(); } catch (e) { showError(e); } }
+    function saveDraft() {
+      try { safe(() => RN.Keyboard?.dismiss?.()); setDraft(save(id, draft)); } catch (e) { showError(e); }
+    }
     function toggle(serverID) {
       try {
         if (busy || dirty) throw new Error('Save your ID changes first.');
         if (isMainProtected(serverID)) return;
         const ids = new Set(parseIDs(saved));
         if (ids.has(serverID)) ids.delete(serverID); else ids.add(serverID);
-        setDraft(save(id, [...ids].join('\n'))); refresh();
+        // Do not let a focused offscreen editor pull the list back to the header.
+        safe(() => RN.Keyboard?.dismiss?.());
+        setDraft(save(id, [...ids].join('\n')));
       } catch (e) { showError(e); }
     }
     const visibleReport = report?.account === id ? report : null;
     const rows = plan ? [...plan.kept, ...plan.targets.map(row => ({ ...row, reason: null }))]
+      // Changing protection updates this row in place, not its scroll position.
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
       .filter(row => `${row.name}\n${row.id}`.toLowerCase().includes(query.trim().toLowerCase())) : [];
     const inputStyle = { color: c.text, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, marginTop: 10 };
     const header = h(RN.View, { style: { paddingBottom: 14 } },
@@ -131,7 +137,8 @@ export function createPlugin(V, host = globalThis) {
       text('Paste server IDs below, or tap Protect beside a server. Spaces, commas and new lines work.', { color: c.muted }),
       h(RN.TextInput, { accessibilityLabel: 'Protected server IDs', value: draft, onChangeText: setDraft, editable: !busy,
         multiline: true, autoCorrect: false, autoCapitalize: 'none', placeholder: 'Paste the server IDs you want to keep',
-        placeholderTextColor: c.muted, style: { ...inputStyle, minHeight: 105, textAlignVertical: 'top' } }),
+        scrollEnabled: true, placeholderTextColor: c.muted,
+        style: { ...inputStyle, height: 160, textAlignVertical: 'top' } }),
       button(dirty ? 'Save protected IDs' : 'Protected IDs saved', saveDraft, busy || !validID(id) || boundAccount !== id),
       dirty ? text('Save your changes before leaving any servers.', { color: c.danger, marginTop: 8 }) : null,
       error ? text(error, { color: c.danger, marginTop: 12 }) : null,
@@ -152,6 +159,7 @@ export function createPlugin(V, host = globalThis) {
       text('Preview — green servers stay, red servers will be left.', { color: c.muted, marginTop: 12 }));
     return h(RN.FlatList, { style: { flex: 1, backgroundColor: c.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 },
       data: rows, keyExtractor: row => row.id, ListHeaderComponent: header, keyboardShouldPersistTaps: 'handled',
+      keyboardDismissMode: 'on-drag', removeClippedSubviews: false,
       initialNumToRender: 12, ListEmptyComponent: text(error ? 'Fix the issue above to see your server preview.' : 'No matching servers.', { color: c.muted }),
       renderItem: ({ item: row }) => h(RN.View, { style: { backgroundColor: c.card, padding: 14, borderRadius: 12, marginBottom: 10 } },
         text(row.name, { fontWeight: '700' }), text(row.id, { color: c.muted, fontSize: 12 }, { selectable: true }),
@@ -179,12 +187,19 @@ export function createPlugin(V, host = globalThis) {
         store.addChangeListener(changed);
         removeAccountListener = () => store.removeChangeListener(changed);
       }
+      // Refresh on real changes instead of rebuilding the list during every scroll.
+      for (const store of [guildStore, themeStore]) {
+        if (typeof store?.addChangeListener !== 'function' || typeof store?.removeChangeListener !== 'function') continue;
+        store.addChangeListener(emit);
+        removeStoreListeners.push(() => store.removeChangeListener(emit));
+      }
       try { disposeShortcut = attachSettingsShortcut({ api: host.bunny?.ui?.settings ?? host.window?.bunny?.ui?.settings,
         constants: byProps('SETTING_RENDERER_CONFIG'), Settings, open, getAsset: name => V.ui?.assets?.getAssetIDByName?.(name),
         patcher: V.patcher, tree: byProps('getAncestors', 'isBlocked'), log }); } catch (e) { log(e); }
       emit();
     },
     onUnload() { stop(); active = false; epoch++; safe(() => disposeShortcut?.()); safe(() => appSubscription?.remove());
+      for (const remove of removeStoreListeners.splice(0)) safe(remove);
       safe(() => removeAccountListener?.()); disposeShortcut = appSubscription = removeAccountListener = undefined; emit(); listeners.clear(); },
     settings: Settings,
     controller: { freshPlan, save, execute, stop, getEpoch: () => epoch, isRunning: () => !!job },

@@ -1,7 +1,7 @@
 {
   "name": "Server Leaver",
   "description": "Keep your 22 main servers and extra protected IDs. Preview and confirm before leaving other servers. Keeps owned servers; includes progress and Stop.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "authors": [
     {
       "name": "fluttershy_simper"
@@ -11,5 +11,5 @@
   "vendetta": {
     "icon": "ic_leave"
   },
-  "hash": "6b525f629b78acdf2cd67d83ba3dddae288f1073530dd2bb27cc06314d999c60"
+  "hash": "e0dc1b4cd4d1bd5a9248015c887775e429704ab76302f6dd6dc270b3cbe8a585"
 }

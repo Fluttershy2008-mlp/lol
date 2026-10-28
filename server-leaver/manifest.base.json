@@ -1,7 +1,7 @@
 {
   "name": "Server Leaver",
   "description": "Keep your 22 main servers and extra protected IDs. Preview and confirm before leaving other servers. Keeps owned servers; includes progress and Stop.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "authors": [
     {
       "name": "fluttershy_simper"

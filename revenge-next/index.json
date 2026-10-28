@@ -1490,11 +1490,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta6": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.server-leaver@1.0.0-beta6.zip",
+          "sha256": "b236a721abaa07592e99a83b7a7be16d9bf753648a2202bc348da0de87e51c91",
+          "size": 20364,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta5",
-        "beta": "1.0.0-beta5"
+        "latest": "1.0.0-beta6",
+        "beta": "1.0.0-beta6"
       },
       "name": "Server Leaver (Next preview)",
       "description": "Revenge Next preview. Keep your 22 main servers and extra protected IDs. Preview and confirm before leaving other servers. Keeps owned servers; includes progress and Stop.",

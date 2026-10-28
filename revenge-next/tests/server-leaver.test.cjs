@@ -12,6 +12,14 @@ function button(ui, label) {
     const node = ui.root.findAll(n => typeof n.type === 'string' && typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label)[0];
     assert.ok(node, label); assert.notEqual(node.props.disabled, true, label + ' is enabled'); return node.props.onPress;
 }
+function preview(w, ui) { return ui.root.findByType(w.RN.FlatList).props; }
+function protectButton(w, ui, id) {
+    const index = preview(w, ui).data.findIndex(row => row.id === id);
+    const buttons = ui.root.findAll(n => typeof n.type === 'string' &&
+        ['Protect', 'Remove protection', 'Main protected'].includes(n.props.accessibilityLabel));
+    assert.ok(index >= 0, 'server is visible in the preview');
+    assert.notEqual(buttons[index].props.disabled, true); return buttons[index].props.onPress;
+}
 function scenario(t) {
     const w = createWorld({ splitHTTP: true }), registry = installSettingsSection(w), renders = [];
     w.guilds[TARGET] = { id: TARGET, name: 'Optional target', ownerId: FRIEND };
@@ -61,4 +69,63 @@ test('Server Leaver keeps main IDs across account changes without sharing extra 
     await act(() => w.setAccount(FRIEND)); assert.deepEqual(field(ui).props.value.split('\n'), MAIN);
     await act(() => w.setAccount(ACCOUNT)); assert.deepEqual(field(ui).props.value.split('\n'), [...MAIN, EXTRA]);
     assert.equal(w.calls.some(c => c[0] === 'http' && c[1] === 'del'), false);
+});
+
+test('Server Leaver leaves rows in place when protecting and unprotecting servers in a long preview', async t => {
+    const w = scenario(t);
+    for (let i = 0; i < 195; i++) {
+        const id = String(500000000000000000n + BigInt(i));
+        w.guilds[id] = { id, name: 'Server ' + String(i).padStart(3, '0'), ownerId: FRIEND };
+    }
+    const item = await w.start('server-leaver'), ui = await w.mount(item);
+    const original = preview(w, ui).data.map(row => row.id), input = field(ui);
+    for (const index of [170, 80, 190]) {
+        const id = original[index];
+        await act(protectButton(w, ui, id));
+        assert.deepEqual(preview(w, ui).data.map(row => row.id), original, 'Protect must not move the tapped row');
+        assert.equal(preview(w, ui).data[index].reason, 'Protected');
+        assert.equal(field(ui), input, 'updating protection must not remount the ID editor');
+        await act(button(ui, 'Refresh server list'));
+        assert.deepEqual(preview(w, ui).data.map(row => row.id), original);
+        await act(protectButton(w, ui, id));
+        assert.deepEqual(preview(w, ui).data.map(row => row.id), original, 'removing protection must not move it either');
+        assert.equal(preview(w, ui).data[index].reason, null);
+    }
+    assert.equal(w.calls.some(c => c[0] === 'http' && c[1] === 'del'), false);
+});
+
+test('Server Leaver keeps the ID editor bounded as protection grows and releases keyboard focus', async t => {
+    const w = scenario(t), item = await w.start('server-leaver'), ui = await w.mount(item);
+    let dismissals = 0; w.RN.Keyboard.dismiss = () => dismissals++;
+    const height = w.RN.StyleSheet.flatten(field(ui).props.style).height;
+    assert.ok(Number.isFinite(height) && height >= 100 && height <= 240, 'the ID editor must have a bounded height');
+    await act(protectButton(w, ui, TARGET));
+    assert.equal(w.RN.StyleSheet.flatten(field(ui).props.style).height, height);
+    assert.ok(field(ui).props.value.split('\n').includes(TARGET));
+    assert.equal(dismissals, 1, 'Protect must release a focused editor before replacing its text');
+    await act(() => field(ui).props.onChangeText([...MAIN, TARGET].join('\n\n')));
+    await act(button(ui, 'Save protected IDs'));
+    assert.equal(w.RN.StyleSheet.flatten(field(ui).props.style).height, height);
+    assert.equal(dismissals, 2);
+});
+
+test('Server Leaver stays idle while scrolling, updates from stores and removes its subscriptions', async t => {
+    const w = scenario(t), OriginalList = w.RN.FlatList;
+    let renders = 0;
+    w.RN.FlatList = function ObservedList(props) { renders++; return h(OriginalList, props); };
+    const beforeGuild = w.stores.GuildStore.listeners.size, beforeTheme = w.stores.ThemeStore.listeners.size;
+    const item = await w.start('server-leaver'), ui = await w.mount(item);
+    await act(protectButton(w, ui, TARGET));
+    const afterProtect = renders;
+    await act(() => w.advance(12000));
+    assert.equal(renders, afterProtect, 'idle time must not repeatedly rebuild the scrolling preview');
+    assert.equal([...w.timers.values()].some(timer => timer.interval), false);
+    w.guilds[EXTRA] = { id: EXTRA, name: 'A new joined server', ownerId: FRIEND };
+    await act(() => w.stores.GuildStore.emitChange());
+    assert.ok(preview(w, ui).data.some(row => row.id === EXTRA), 'real server changes still update the preview');
+    await act(() => { w.stores.ThemeStore.theme = 'light'; w.stores.ThemeStore.emitChange(); });
+    assert.equal(preview(w, ui).style.backgroundColor, '#f2f3f5');
+    await act(() => w.stop(item));
+    assert.equal(w.stores.GuildStore.listeners.size, beforeGuild);
+    assert.equal(w.stores.ThemeStore.listeners.size, beforeTheme);
 });
