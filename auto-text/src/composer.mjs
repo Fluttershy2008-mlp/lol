@@ -60,7 +60,9 @@ export function decorateComposer(React, RN, root, { toolbar, onNativeEvent, nati
     const children = map(props.children);
     if (children !== props.children) patch.children = children;
     if (node === anchor && toolbarCount === 0) {
-      patch.children = [toolbar, ...(Array.isArray(children) ? children : [children])];
+      const contents = (Array.isArray(children) ? children : [children]).map((child, index) =>
+        child?.props && child.key == null ? React.cloneElement(child, { key: 'auto-text-original-' + index }) : child);
+      patch.children = [toolbar, ...contents];
       toolbarCount++;
     }
     return Object.keys(patch).length ? React.cloneElement(node, patch) : node;

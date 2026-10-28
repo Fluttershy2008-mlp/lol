@@ -9,8 +9,8 @@
     },
     "dev.fluttershy2008.auto-text": {
       "path": "auto-text/index.js",
-      "sha256": "750feefa9949c0120eb297a03462140088954aa2d60a52a4c71a5660dbb705d3",
-      "originalVersion": "1.2.5",
+      "sha256": "2a831b21dd6bfb53fd83981ab3d41f6e622fcceade7c820a1df7c700ba94603e",
+      "originalVersion": "1.2.6",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
@@ -52,8 +52,8 @@
     },
     "dev.fluttershy2008.info-commands": {
       "path": "info-commands/index.js",
-      "sha256": "6159ecc96e27ff1456c0a6dc6aa6eeb57102ca75960b466b2d220c89569cb5f8",
-      "originalVersion": "1.2.6",
+      "sha256": "02a62932b4ab14497bbedc57956a6b0e804f70db704bb318206852922a70c581",
+      "originalVersion": "1.2.7",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
@@ -119,8 +119,8 @@
     },
     "dev.fluttershy2008.valid-user": {
       "path": "valid-user/index.js",
-      "sha256": "7b885ee304bd08c57eef0ccda40b5b80472dc0e1ae3e96e18a91d63643163b80",
-      "originalVersion": "2.1.3",
+      "sha256": "e81812ab5022723a45c517d8480b891823e5b661544250c77a6c0505735ce57e",
+      "originalVersion": "2.1.4",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

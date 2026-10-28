@@ -153,16 +153,32 @@ function createWorld(options = {}) {
     function Composer(props) { return React.createElement(RN.TextInput, props); }
     modules.push({ type: ChatView }, { default: ChatView }, { default: Composer });
     const filters = {
-        withProps: (...keys) => Object.assign((_, value) => value && keys.every(key => key in value), { key: 'props.' + keys.join('.') }),
+        withProps: (...keys) => Object.assign((_, value) => value && ['object', 'function'].includes(typeof value) && keys.every(key => key in value), { key: 'props.' + keys.join('.') }),
         withName: name => Object.assign((_, value) => value?.name === name, { key: 'name.' + name }),
         createFilterGenerator: (fn, key) => (...args) => Object.assign((id, value) => fn(args, id, value, true), { key: key(args) }),
     };
     function* lookupModules(filter, opts = {}) {
         for (let id = 0; id < modules.length; id++) {
-            const ns = modules[id], value = ns?.default && filter(id, ns.default) ? ns.default : ns;
+            const ns = modules[id];
+            const value = TARGET === 'valenced'
+                ? filter(id, ns) ? ns : ns?.default
+                : ns?.default && filter(id, ns.default) ? ns.default : ns;
             if (filter(id, value)) yield [opts.returnNamespace ? ns : value, id];
         }
     }
+    const importedPaths = new Map(), pathWaiters = new Set();
+    const importedPathFinders = {
+        lookupModuleWithImportedPath(path) {
+            const id = importedPaths.get(path);
+            return id === undefined ? [] : [modules[id], id];
+        },
+        getModuleWithImportedPath(path, cb) {
+            const match = this.lookupModuleWithImportedPath(path);
+            if (match.length) { cb(...match); return () => {}; }
+            const entry = { path, cb }; pathWaiters.add(entry);
+            return () => pathWaiters.delete(entry);
+        },
+    };
     const moduleWaiters = new Set();
     const finders = { filters, lookupModules, lookupModule: (filter, opts) => [...lookupModules(filter, opts)][0] ?? [],
         getModules(filter, cb, opts) { const current = this.lookupModule(filter, opts); if (current.length) cb(...current);
@@ -179,7 +195,8 @@ function createWorld(options = {}) {
         ? { result: [...loaded.values()].map(x => ({ manifest: x.manifest, source: { repo: 'https://example.test/index.json' } })) }
         : { error: { code: 'UNKNOWN_METHOD', message: 'Unexpected native call in test: ' + name } } } },
         patcher: { instead: nextPatcher() }, discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
-            flux: { Stores: stores }, design: { Design: design }, actions: { ActionSheetActionCreators: sheets, AlertActionCreators: alertActions }, modules: { settings } },
+            flux: { Stores: stores }, design: { Design: design }, actions: { ActionSheetActionCreators: sheets, AlertActionCreators: alertActions }, modules: { settings },
+            ...(TARGET === 'valenced' ? { utils: { modules: { finders: importedPathFinders } } } : {}) },
         externals: { Gorhom: { BottomSheet: { BottomSheetScrollView: native('BottomSheetScrollView') } },
             ReactNativeClipboard: { Clipboard: { setString: value => clipboard.push(value), setImage: value => calls.push(['copyImage', value]) } },
             ReactNavigation: { ReactNavigationNative: { useNavigation: () => navigation } } },
@@ -187,7 +204,7 @@ function createWorld(options = {}) {
     };
     const loaded = new Map();
     async function start(slug, initial = {}) {
-        const directory = path.join(ROOT, '.build/plugins', slug);
+        const directory = path.join(process.env.PLUGIN_TEST_PACKAGE_ROOT ?? ROOT, '.build/plugins', slug);
         const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
         const cleanups = [], writes = [];
         const api = { unscoped: U, cleanup: fn => cleanups.push(fn),
@@ -231,9 +248,15 @@ function createWorld(options = {}) {
         stores, users, relationships, guilds, channels, messages, dispatcher, sheets, navigation, commands, registeredScreens, loaded,
         start, stop, render, advance, host, accountId: () => accountId, setAccount: id => { accountId = id; stores.UserStore.emitChange(); },
         setSettingsLoaded(value) { settingsLoaded = value; if (value) for (const fn of [...settingsSubscriptions]) fn(); },
-        moduleWaiters,
-        addModule(module) {
+        moduleWaiters, pathWaiters, importedPathFinders,
+        addModule(module, importedPath) {
             const id = modules.push(module) - 1;
+            if (importedPath) {
+                importedPaths.set(importedPath, id);
+                for (const entry of [...pathWaiters]) if (entry.path === importedPath) {
+                    pathWaiters.delete(entry); entry.cb(module, id);
+                }
+            }
             for (const entry of [...moduleWaiters]) {
                 const value = module?.default && entry.filter(id, module.default) ? module.default : module;
                 if (entry.filter(id, value)) {

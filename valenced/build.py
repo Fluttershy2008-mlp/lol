@@ -142,7 +142,7 @@ def build(check=False):
         source_ref = config.get("sourceRefs", {}).get(slug, config["sourceCommit"])
         manifest = manifest_for(slug, legacy, version)
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
-                    "repository": config["repositoryUrl"], "host": "valenced"}
+                    "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
         if directory.name == "addonList":
             transformed = transformed.replace("entry.enabled ? 'Enabled' : 'Disabled'",

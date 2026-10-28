@@ -111,3 +111,7 @@ Refresh `https://fluttershy2008-mlp.github.io/lol/index.json` in Revenge Next, u
 If a feature still fails, include the plugin name, Discord version, Revenge Next version, Android version, the action you took and the full error. A passing simulation cannot establish compatibility with every private Discord module or device build.
 
 Valenced has a separate catalogue at https://fluttershy2008-mlp.github.io/lol/valenced/index.json. See [Valenced setup](../valenced/README.md). This change also publishes AutoText and Valid User 1.0.0-beta5 for Next, with the shared composer and response fixes.
+
+## Valenced beta2 follow-up and shared source changes
+
+Valenced now uses the canonical nested HTTP client and imported-path chat-input hooks. Its Server Info action uses a native cached-details popup. Three fixtures fail against Valenced beta1 and pass against beta2. Next retains the rich sheet path and its existing regression suite. Shared source changes are released as Next InfoCommands 1.0.0-beta9, AutoText 1.0.0-beta6 and Valid User 1.0.0-beta6. Older sections above describe their original release audits.

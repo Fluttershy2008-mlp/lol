@@ -4,7 +4,7 @@
   "icon": "GlobeEarthIcon",
   "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced",
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
-  "portVersion": "1.0.0-beta1",
+  "portVersion": "1.0.0-beta2",
   "pluginVersions": {},
   "sourceRefs": {
     "info-commands": "main",

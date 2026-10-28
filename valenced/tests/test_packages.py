@@ -50,10 +50,11 @@ class ValencedPackages(unittest.TestCase):
 
     def test_sources_and_credits_are_preserved(self):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
+        index = json.loads((HERE / "index.json").read_text())["plugins"]
         for plugin_id, info in sources.items():
             source = ROOT / info["path"]
             self.assertEqual(info["sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
-            with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@1.0.0-beta1.zip") as package:
+            with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{index[plugin_id]['channels']['latest']}.zip") as package:
                 for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
                     if info["kind"] == "compatibility-preview" and (source.parent / name).exists():
                         self.assertEqual(package.read(name), (source.parent / name).read_bytes())

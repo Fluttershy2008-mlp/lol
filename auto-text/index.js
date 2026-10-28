@@ -706,7 +706,8 @@ function createNativeReader(commands, { schedule = setTimeout, cancel = clearTim
       return callback;
     },
     read(callback) {
-      if (disposed || !target || typeof commands?.flushText !== 'function') return null;
+      const source = typeof commands === 'function' ? commands() : commands;
+      if (disposed || !target || typeof source?.flushText !== 'function') return null;
       const id = prefix + (++serial);
       const release = () => {
         const request = requests.get(id);
@@ -714,7 +715,7 @@ function createNativeReader(commands, { schedule = setTimeout, cancel = clearTim
         requests.delete(id);
       };
       requests.set(id, { callback, timer: schedule(() => { release(); callback(null); }, 1000) });
-      try { commands.flushText(target, id); }
+      try { source.flushText(target, id); }
       catch { release(); return null; }
       return release;
     },
@@ -791,7 +792,9 @@ function decorateComposer(React, RN, root, { toolbar, onNativeEvent, nativeReade
     const children = map(props.children);
     if (children !== props.children) patch.children = children;
     if (node === anchor && toolbarCount === 0) {
-      patch.children = [toolbar, ...(Array.isArray(children) ? children : [children])];
+      const contents = (Array.isArray(children) ? children : [children]).map((child, index) =>
+        child?.props && child.key == null ? React.cloneElement(child, { key: 'auto-text-original-' + index }) : child);
+      patch.children = [toolbar, ...contents];
       toolbarCount++;
     }
     return Object.keys(patch).length ? React.cloneElement(node, patch) : node;
@@ -808,6 +811,8 @@ function createPlugin(api) {
   const storage = api.plugin.storage;
   const Button = RN.TouchableOpacity;
   let active = false, rootUnpatch = null, retry = null, attempts = 0, appStateSubscription = null;
+  const moduleSubscriptions = [];
+  let generation = 0;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
   const sessionsByRef = new Map(), mountedReaders = new Set();
@@ -817,8 +822,8 @@ function createPlugin(api) {
   const getPhrases = () => cleanPhrases(storage.phrases);
   const tryFind = (method, ...args) => { try { return api.metro[method]?.(...args); } catch { return null; } };
   let selectedChannel = null, userStore = null, lengthModule = null, nativeCommands = null;
-  const channelNow = () => { try { return selectedChannel?.getChannelId?.() ?? null; } catch { return null; } };
-  const accountNow = () => { try { return userStore?.getCurrentUser?.()?.id ?? null; } catch { return null; } };
+  const channelNow = () => { try { selectedChannel ??= tryFind('findByStoreName', 'SelectedChannelStore'); return selectedChannel?.getChannelId?.() ?? null; } catch { return null; } };
+  const accountNow = () => { try { userStore ??= tryFind('findByStoreName', 'UserStore'); return userStore?.getCurrentUser?.()?.id ?? null; } catch { return null; } };
   const maxLength = () => {
     try {
       const n = lengthModule?.getMaxMessageLength?.();
@@ -947,7 +952,7 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version 1.2.2'),
+        small('Version ' + (api.plugin.version ?? api.plugin.manifest?.version ?? '1.2.6')),
       ));
   }
 
@@ -1096,6 +1101,58 @@ function createPlugin(api) {
     }
     return null;
   }
+  function composerTarget(value, depth = 0) {
+    if (!value || depth >= 6) return;
+    for (const method of ['default', 'type', 'render']) {
+      if (typeof value[method] === 'function') return typeof value[method].prototype?.render === 'function'
+        ? { holder: value[method].prototype, method: 'render' } : { holder: value, method };
+      const nested = composerTarget(value[method], depth + 1);
+      if (nested) return nested;
+    }
+  }
+  function connectComposer(holder, method) {
+    if (!active || rootUnpatch || typeof holder?.[method] !== 'function') return;
+    rootUnpatch = api.patcher.after(method, holder, (args, result) => {
+      if (!active || !result) return;
+      try {
+        const inputRef = args[0]?.chatInputRef ?? findInput(result);
+        if (!inputRef) return;
+        const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
+        if (!nativeReaders.has(inputRef)) nativeReaders.set(inputRef, createNativeReader(() => nativeCommands));
+        const nativeReader = nativeReaders.get(inputRef);
+        const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId, nativeReader }));
+        const decorated = decorateComposer(React, RN, result, {
+          toolbar, nativeReader,
+          onNativeEvent: event => {
+            if (active) sessionsByRef.get(inputRef)?.observeNative(event);
+          },
+        });
+        if (!decorated.hasToolbar) connection = 'This composer layout is not supported. The practice editor in AutoText settings can prepare and copy a draft.';
+        return decorated.tree;
+      } catch { /* Keep Discord's original composer usable. */ }
+    });
+    connection = 'Composer hook ready. Reopen your chat if the AutoText bar is not visible.'; tell();
+  }
+  function connectImportedComposer() {
+    if (typeof api.metro.getModuleWithImportedPath !== 'function') return false;
+    const session = generation;
+    const watch = (path, callback) => {
+      const remove = api.metro.getModuleWithImportedPath(path, module => {
+        if (active && session === generation) callback(module);
+      });
+      if (typeof remove === 'function') moduleSubscriptions.push(remove);
+    };
+    watch('modules/chat_input/native/ChatInputNativeCommands.tsx', module => {
+      nativeCommands = module?.default ?? module;
+    });
+    watch('modules/chat_input/native/ChatInput.tsx', module => {
+      const target = composerTarget(module);
+      if (target) connectComposer(target.holder, target.method);
+    });
+    connection = rootUnpatch ? connection : 'Waiting for the chat composer. Open a chat to connect AutoText.';
+    tell();
+    return true;
+  }
   function hookComposer() {
     if (!active || rootUnpatch) return;
     attempts++;
@@ -1103,41 +1160,12 @@ function createPlugin(api) {
       const named = (value, depth = 0) => depth < 6 && value != null &&
         (value.name === 'ChatInputGuardWrapper' || value.displayName === 'ChatInputGuardWrapper'
           || named(value.default, depth + 1) || named(value.type, depth + 1) || named(value.render, depth + 1));
-      const target = (value, depth = 0) => {
-        if (!value || depth >= 6) return;
-        for (const method of ['default', 'type', 'render']) {
-          if (typeof value[method] === 'function') return { holder: value, method };
-          const nested = target(value[method], depth + 1);
-          if (nested) return nested;
-        }
-      };
-      const found = target(tryFind('findByName', 'ChatInputGuardWrapper', false))
-        ?? target(tryFind('findByTypeName', 'ChatInputGuardWrapper'))
-        ?? target(tryFind('find', value => named(value), false));
+      const found = composerTarget(tryFind('findByName', 'ChatInputGuardWrapper', false))
+        ?? composerTarget(tryFind('findByTypeName', 'ChatInputGuardWrapper'))
+        ?? composerTarget(tryFind('find', value => named(value), false));
       const { holder, method } = found ?? {};
       if (typeof holder?.[method] === 'function') {
-        rootUnpatch = api.patcher.after(method, holder, (args, result) => {
-          if (!active || !result) return;
-          try {
-            const inputRef = args[0]?.chatInputRef ?? findInput(result);
-            if (!inputRef) return;
-            const channelId = args[0]?.channel?.id ?? args[0]?.channelId ?? channelNow();
-            if (!nativeReaders.has(inputRef)) nativeReaders.set(inputRef, createNativeReader(nativeCommands));
-            const nativeReader = nativeReaders.get(inputRef);
-            const toolbar = h(BarBoundary, { key: 'auto-text-' + (channelId ?? '') }, h(AssistBar, { inputRef, channelId, nativeReader }));
-            const decorated = decorateComposer(React, RN, result, {
-              toolbar, nativeReader,
-              onNativeEvent: event => {
-                if (active) sessionsByRef.get(inputRef)?.observeNative(event);
-              },
-            });
-            if (!decorated.hasToolbar) connection = 'This composer layout is not supported. The practice editor in AutoText settings can prepare and copy a draft.';
-            // Never fall back to the old sibling layout: floating composers
-            // paint over it. Unsupported layouts retain Discord's original UI.
-            return decorated.tree;
-          } catch { /* A missing hook must never break Discord's composer. */ }
-        });
-        connection = 'Composer hook ready. Reopen your chat if the AutoText bar is not visible.'; tell(); return;
+        connectComposer(holder, method); return;
       }
     } catch {}
     if (attempts < 30) retry = setTimeout(hookComposer, 1000);
@@ -1156,10 +1184,13 @@ function createPlugin(api) {
           if (state !== 'active') for (const session of sessions) session.stopTyping('Stopped because Revenge moved to the background.');
         });
       } catch {}
-      active = true; attempts = 0; hookComposer(); tell();
+      active = true; generation++; attempts = 0;
+      if (!connectImportedComposer()) hookComposer();
+      tell();
     },
     onUnload() {
-      active = false;
+      active = false; generation++;
+      for (const remove of moduleSubscriptions.splice(0).reverse()) { try { remove(); } catch {} }
       try { appStateSubscription?.remove?.(); } catch {}
       appStateSubscription = null;
       if (retry !== null) clearTimeout(retry);

@@ -117,6 +117,16 @@ test("empty or scalar error bodies cannot break the lookup queue", async () => {
         resolver.stop();
     }
 });
+test("timeouts and malformed responses retain distinct failure reasons", async () => {
+    for (const [request, reason] of [[async () => { throw new Error("Lookup timed out"); }, "timeout"],
+        [async () => ({ body: {} }), "invalid-response"]]) {
+        const { resolver } = harness({ request });
+        const result = await resolver.resolve(A);
+        assert.equal(result.status, "retry");
+        assert.equal(result.reason, reason);
+        resolver.stop();
+    }
+});
 test("late HTTP completion after timeout is ignored", async () => {
     let finish;
     const { resolver, accepted } = harness({ timeout: 5, request: () => new Promise(resolve => { finish = resolve; }) });

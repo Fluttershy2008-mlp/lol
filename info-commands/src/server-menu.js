@@ -58,7 +58,7 @@ export function installServerMenu(open) {
             menuTimer = setTimeout(() => {
                 menuTimer = undefined;
                 if (live()) open(id);
-            }, 0);
+            }, vendetta.host?.id === "valenced" ? 180 : 0);
         } else open(id);
     };
     function patch(target, key, kind, callback) {
@@ -128,9 +128,17 @@ export function installServerMenu(open) {
         if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
     }
 
-    const menu = optional(() => findByName?.("getGuildsBarGuildMenuItems", false))
-        ?? optional(() => find?.(m => m?.default?.name === "getGuildsBarGuildMenuItems"));
-    if (!connectBuilder(menu)) watch(optional(() => next.filters.createFilterGenerator(
+    const pathWatch = vendetta.metro.getModuleWithImportedPath;
+    const usesPaths = typeof pathWatch === "function";
+    if (usesPaths) {
+        const unsubscribe = pathWatch("modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx", module => {
+            if (live()) connectBuilder(module);
+        });
+        if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
+    }
+    const menu = !usesPaths && (optional(() => findByName?.("getGuildsBarGuildMenuItems", false))
+        ?? optional(() => find?.(m => m?.default?.name === "getGuildsBarGuildMenuItems")));
+    if (!usesPaths && !connectBuilder(menu)) watch(optional(() => next.filters.createFilterGenerator(
         (_args, _id, value) => value?.name === "getGuildsBarGuildMenuItems"
             || typeof value?.getGuildsBarGuildMenuItems === "function"
             || value?.default?.name === "getGuildsBarGuildMenuItems",
@@ -160,12 +168,12 @@ function copy(value) {
 function openOwnerProfile(ownerId, serverId, close) {
     if (!running || !guildId(ownerId)) return;
     // Discord versions may export these helpers from separate modules.
-    for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
+    for (const method of ["showUserProfileActionSheet", "openUserProfileModal", "openUserProfile", "showUserProfile"]) {
         const module = optional(() => findByProps(method));
         if (typeof module?.[method] !== "function") continue;
         try {
             close?.();
-            Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }))
+            Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }, "stack"))
                 .catch(() => notify("Unable to open the owner's profile. Try again."));
             return;
         } catch (error) {
@@ -233,6 +241,10 @@ export function openServerInfo(id, load) {
             if (next) RN.Alert.alert("Server Info", message, [{ text: "Close", style: "cancel" }]);
             else notify(message);
         });
+    }
+    if (vendetta.host?.id === "valenced") {
+        fallback();
+        return;
     }
     const Boundary = React.Component ? class ServerInfoBoundary extends React.Component {
         state = { failed: false };

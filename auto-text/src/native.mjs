@@ -31,7 +31,8 @@ export function createNativeReader(commands, { schedule = setTimeout, cancel = c
       return callback;
     },
     read(callback) {
-      if (disposed || !target || typeof commands?.flushText !== 'function') return null;
+      const source = typeof commands === 'function' ? commands() : commands;
+      if (disposed || !target || typeof source?.flushText !== 'function') return null;
       const id = prefix + (++serial);
       const release = () => {
         const request = requests.get(id);
@@ -39,7 +40,7 @@ export function createNativeReader(commands, { schedule = setTimeout, cancel = c
         requests.delete(id);
       };
       requests.set(id, { callback, timer: schedule(() => { release(); callback(null); }, 1000) });
-      try { commands.flushText(target, id); }
+      try { source.flushText(target, id); }
       catch { release(); return null; }
       return release;
     },

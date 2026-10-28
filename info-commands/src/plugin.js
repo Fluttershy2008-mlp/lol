@@ -1,6 +1,7 @@
 import * as common from "./common.js";
 import { fetchUser, fetchGuild, fetchInvite, formatTimestamp, formatTimestampFromSnowflake, formatAvatarLinks, maskUrl, getGuildIconUrl, getBannerUrl, getGuildBannerUrl, getGuildSplashUrl, getGuildDiscoverySplashUrl, decodeBadges, formatDate } from "./embeds.js";
 import { installServerMenu, openServerInfo, disposeServerMenu } from "./server-menu.js";
+import { countChannels } from "./server-info/data";
 const { findByStoreName, findByProps } = vendetta.metro;
 const { registerCommand } = vendetta.commands;
 const { semanticColors } = vendetta.ui;
@@ -165,7 +166,7 @@ async function getServerEmbed(guildId, { preferCache = false } = {}) {
         }
     } finally { clearTimeout(timer); }
     if (!fetched && !cached) throw new Error("Server details are unavailable. Try again later.");
-    const guild = { ...cached, ...fetched, id: guildId };
+    const guild = { ...cached, ...fetched, id: guildId, name: fetched?.name ?? cached?.name };
     const aliases = { owner_id: "ownerId", approximate_member_count: "memberCount", approximate_presence_count: "presenceCount", premium_tier: "premiumTier", premium_subscription_count: "premiumSubscriberCount", verification_level: "verificationLevel", nsfw_level: "nsfwLevel", mfa_level: "mfaLevel", explicit_content_filter: "explicitContentFilter", afk_timeout: "afkTimeout", preferred_locale: "preferredLocale", widget_enabled: "widgetEnabled", vanity_url_code: "vanityURLCode", discovery_splash: "discoverySplash" };
     for (const [key, alias] of Object.entries(aliases)) guild[key] ??= cached?.[alias];
     guild.features = Array.from(guild.features ?? []);
@@ -203,8 +204,15 @@ async function getServerEmbed(guildId, { preferCache = false } = {}) {
                 ? formatTimestamp(Date.parse(guild.created_at)) 
                 : formatTimestampFromSnowflake(guild.id);
             
-            const memberCount = guild.approximate_member_count;
-            const presenceCount = guild.approximate_presence_count;
+            const memberCount = guild.approximate_member_count
+                ?? findByStoreName("GuildMemberCountStore")?.getMemberCount?.(guildId);
+            const presenceCount = guild.approximate_presence_count
+                ?? findByStoreName("GuildHeaderCountsStore")?.getOnlineCount?.(guildId);
+            const channelStore = findByStoreName("GuildChannelStore");
+            const fullChannels = channelStore?.getMutableGuildChannelsForGuild?.(guildId);
+            const groupedChannels = channelStore?.getChannels?.(guildId);
+            const channelCount = countChannels(fullChannels == null && groupedChannels == null
+                ? undefined : [fullChannels, groupedChannels], guildId);
             const onlinePercentage = memberCount > 0 ? Math.round((presenceCount / memberCount) * 100) : 0;
             
             const afkTimeout = guild.afk_timeout ? `${guild.afk_timeout / 60} minutes` : "Not set";
@@ -214,6 +222,7 @@ async function getServerEmbed(guildId, { preferCache = false } = {}) {
                 { name: "Owner ID", value: `\`${guild.owner_id || "Unknown"}\``, inline: true },
                 { name: "Created", value: createdDate, inline: true },
                 { name: "Members", value: `${memberCount == null ? "Unknown" : memberCount.toLocaleString()} total\n${presenceCount == null ? "Unknown" : presenceCount.toLocaleString()} online${memberCount > 0 && presenceCount != null ? ` (${onlinePercentage}%)` : ""}`, inline: true },
+                { name: "Channels", value: channelCount?.toLocaleString() ?? "Unknown", inline: true },
                 { name: "Boosts", value: `Level ${guild.premium_tier || 0}\n${guild.premium_subscription_count || 0} boosts`, inline: true },
                 { name: "Verification", value: (guild.verification_level == null ? "Unknown" : verificationMap[guild.verification_level] ?? "Unknown"), inline: true },
                 { name: "NSFW Level", value: (guild.nsfw_level == null ? "Unknown" : nsfwLevelMap[guild.nsfw_level] ?? "Unknown"), inline: true },
@@ -366,6 +375,21 @@ const inviteInfoCommand = common.cmdDisplays({
 const patches = [];
 let active = false;
 export default {
+    settings() {
+        const { React, ReactNative: RN } = vendetta.metro.common;
+        const open = () => {
+            const channelId = findByStoreName("SelectedChannelStore")?.getChannelId?.();
+            const channel = findByStoreName("ChannelStore")?.getChannel?.(channelId);
+            const id = findByStoreName("SelectedGuildStore")?.getGuildId?.()
+                ?? channel?.guildId ?? channel?.guild_id;
+            if (id) openServerInfo(id, getServerEmbed);
+            else RN.Alert.alert("Server Info", "Open a server chat first, then return here.");
+        };
+        return React.createElement(RN.View, { style: { padding: 20 } },
+            React.createElement(RN.Text, { style: { color: "#aeb5c5", marginBottom: 16 } },
+                "InfoCommands " + (vendetta.plugin.version ?? vendetta.plugin.manifest?.version ?? "")),
+            React.createElement(RN.Button, { title: "Open current server info", onPress: open }));
+    },
     onLoad() {
         if (active) return;
         active = true;

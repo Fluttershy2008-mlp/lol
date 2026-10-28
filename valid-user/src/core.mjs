@@ -44,7 +44,9 @@ export function classifyFailure(error, now = Date.now()) {
     }
     if (status === 401 || status === 403) return { status: "unavailable", until: now + 60000 };
     if (status === 404 || Number(body.code) === 10013) return { status: "unknown", until: now + 300000 };
-    return { status: "retry", until: now + 15000 };
+    return { status: "retry", until: now + 15000,
+        reason: error?.code === "INVALID_USER_RESPONSE" ? "invalid-response"
+            : /timed out/i.test(error?.message ?? "") ? "timeout" : "request-failed" };
 }
 
 export function createResolver({ getUser, request, accept, onResolved = () => {},
@@ -89,7 +91,7 @@ export function createResolver({ getUser, request, accept, onResolved = () => {}
             if (typeof body === "string") { try { body = JSON.parse(body); } catch {} }
             if (body?.code != null && !body?.id && !body?.user) throw { ...response, body };
             const raw = body?.user ?? body;
-            if (!usableUser(raw, id)) throw new Error("Invalid user response");
+            if (!usableUser(raw, id)) throw Object.assign(new Error("Invalid user response"), { code: "INVALID_USER_RESPONSE" });
             await accept(raw);
             if (!current()) return { id, status: "cancelled" };
             const result = { id, status: "resolved", user: cached(id) ?? raw };

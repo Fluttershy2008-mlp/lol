@@ -243,7 +243,9 @@ function classifyFailure(error, now = Date.now()) {
     }
     if (status === 401 || status === 403) return { status: "unavailable", until: now + 60000 };
     if (status === 404 || Number(body.code) === 10013) return { status: "unknown", until: now + 300000 };
-    return { status: "retry", until: now + 15000 };
+    return { status: "retry", until: now + 15000,
+        reason: error?.code === "INVALID_USER_RESPONSE" ? "invalid-response"
+            : /timed out/i.test(error?.message ?? "") ? "timeout" : "request-failed" };
 }
 
 function createResolver({ getUser, request, accept, onResolved = () => {},
@@ -288,7 +290,7 @@ function createResolver({ getUser, request, accept, onResolved = () => {},
             if (typeof body === "string") { try { body = JSON.parse(body); } catch {} }
             if (body?.code != null && !body?.id && !body?.user) throw { ...response, body };
             const raw = body?.user ?? body;
-            if (!usableUser(raw, id)) throw new Error("Invalid user response");
+            if (!usableUser(raw, id)) throw Object.assign(new Error("Invalid user response"), { code: "INVALID_USER_RESPONSE" });
             await accept(raw);
             if (!current()) return { id, status: "cancelled" };
             const result = { id, status: "resolved", user: cached(id) ?? raw };
@@ -434,7 +436,8 @@ function createPlugin(V) {
         resolver = createResolver({
             getUser: id => users.getUser(id),
             isCurrent: () => active && !loggedOut && validId(account) && generation === session && account === users.getCurrentUser?.()?.id,
-            request: id => rest.get({ url: `/users/${id}` }),
+            request: id => (V.metro.common.RestAPI ?? rest).get({ url: `/users/${id}`,
+                oldFormErrors: true, failImmediatelyWhenRateLimited: true }),
             accept: raw => dispatcher.dispatch({ type: "USER_UPDATE", user: raw }),
             onResolved: refresh
         });
@@ -455,7 +458,11 @@ function createPlugin(V) {
             case "busy": return "There are too many pending lookups. Try again shortly.";
             case "invalid": return "Enter a valid user ID, mention, or Discord user link.";
             case "cancelled": return "Lookup cancelled.";
-            default: return "The lookup failed or timed out. Check your connection and try again shortly.";
+            default: return result.reason === "timeout"
+                ? "Discord did not answer this lookup within 15 seconds. Try again shortly."
+                : result.reason === "invalid-response"
+                    ? "Discord returned an unreadable user response. Update Valid User and try again."
+                    : "Discord's user lookup failed. Try again shortly, or update Valid User if it keeps happening.";
         }
     }
     function displayName(result) {
@@ -473,7 +480,7 @@ function createPlugin(V) {
             }
             // Let Discord fetch the real profile. Do not invent badges, membership,
             // or a successful profile response when the server denies access.
-            await open({ userId: result.id });
+            await open({ userId: result.id }, "stack");
         } catch { toast("Discord could not open this profile. Try the mention again."); }
     }
     function showResults(results, index = 0, session = generation) {
@@ -635,7 +642,7 @@ function createPlugin(V) {
             } finally { if (mounted.current) setBusy(false); }
         }
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, paddingBottom: 40 }, keyboardShouldPersistTaps: "handled" },
-            text("ValidUser 2.1.0", { fontSize: 24, fontWeight: "700" }),
+            text("ValidUser " + (V.plugin?.version ?? V.plugin?.manifest?.version ?? "2.1.4"), { fontSize: 24, fontWeight: "700" }),
             text("Resolve unknown mentions in messages, embeds and forwarded messages."),
             h(RN.View, { style: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } },
                 text("Automatically resolve mentions"), h(RN.Switch, { value: auto, onValueChange: enabled => {
@@ -661,7 +668,8 @@ function createPlugin(V) {
         selected = byStore("SelectedChannelStore") ?? byProps("getChannelId", "getVoiceChannelId")
             ?? byProps("getGuildId", "getChannelId");
         dispatcher = V.metro.common.FluxDispatcher ?? byProps("dispatch", "subscribe");
-        rest = byProps("get", "post", "del") ?? byProps("get", "post", "patch");
+        rest = V.metro.common.RestAPI ?? byProps("HTTP")?.HTTP
+            ?? byProps("get", "post", "del") ?? byProps("get", "post", "patch");
         sheetHost = byProps("openLazy", "hideActionSheet");
         Row = byProps("ActionSheetRow")?.ActionSheetRow;
         if (!users?.getUser || !dispatcher?.dispatch || !rest?.get) {

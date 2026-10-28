@@ -1253,7 +1253,7 @@ var InfoCommandsBundle = (() => {
         menuTimer = setTimeout(() => {
           menuTimer = void 0;
           if (live()) open(id);
-        }, 0);
+        }, vendetta.host?.id === "valenced" ? 180 : 0);
       } else open(id);
     };
     function patch(target, key, kind, callback) {
@@ -1317,8 +1317,16 @@ var InfoCommandsBundle = (() => {
       }, { returnNamespace: true, initialize: false }));
       if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
     }
-    const menu = optional5(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional5(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems"));
-    if (!connectBuilder(menu)) watch(optional5(() => next.filters.createFilterGenerator(
+    const pathWatch = vendetta.metro.getModuleWithImportedPath;
+    const usesPaths = typeof pathWatch === "function";
+    if (usesPaths) {
+      const unsubscribe = pathWatch("modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx", (module) => {
+        if (live()) connectBuilder(module);
+      });
+      if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
+    }
+    const menu = !usesPaths && (optional5(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional5(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems")));
+    if (!usesPaths && !connectBuilder(menu)) watch(optional5(() => next.filters.createFilterGenerator(
       (_args, _id, value) => value?.name === "getGuildsBarGuildMenuItems" || typeof value?.getGuildsBarGuildMenuItems === "function" || value?.default?.name === "getGuildsBarGuildMenuItems",
       () => "info-commands.guild-menu"
     )()), connectBuilder);
@@ -1343,12 +1351,12 @@ var InfoCommandsBundle = (() => {
   }
   function openOwnerProfile(ownerId, serverId, close) {
     if (!running || !guildId(ownerId)) return;
-    for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
+    for (const method of ["showUserProfileActionSheet", "openUserProfileModal", "openUserProfile", "showUserProfile"]) {
       const module = optional5(() => findByProps2(method));
       if (typeof module?.[method] !== "function") continue;
       try {
         close?.();
-        Promise.resolve(module[method]({ userId: ownerId, guildId: serverId })).catch(() => notify2("Unable to open the owner's profile. Try again."));
+        Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }, "stack")).catch(() => notify2("Unable to open the owner's profile. Try again."));
         return;
       } catch (error) {
         console.error("[InfoCommands] Owner profile opener unavailable", error);
@@ -1414,6 +1422,10 @@ var InfoCommandsBundle = (() => {
         if (next) RN3.Alert.alert("Server Info", message, [{ text: "Close", style: "cancel" }]);
         else notify2(message);
       });
+    }
+    if (vendetta.host?.id === "valenced") {
+      fallback();
+      return;
     }
     const Boundary = React3.Component ? class ServerInfoBoundary extends React3.Component {
       constructor() {
@@ -1619,7 +1631,7 @@ var InfoCommandsBundle = (() => {
       clearTimeout(timer);
     }
     if (!fetched && !cached) throw new Error("Server details are unavailable. Try again later.");
-    const guild = { ...cached, ...fetched, id: guildId2 };
+    const guild = { ...cached, ...fetched, id: guildId2, name: fetched?.name ?? cached?.name };
     const aliases = { owner_id: "ownerId", approximate_member_count: "memberCount", approximate_presence_count: "presenceCount", premium_tier: "premiumTier", premium_subscription_count: "premiumSubscriberCount", verification_level: "verificationLevel", nsfw_level: "nsfwLevel", mfa_level: "mfaLevel", explicit_content_filter: "explicitContentFilter", afk_timeout: "afkTimeout", preferred_locale: "preferredLocale", widget_enabled: "widgetEnabled", vanity_url_code: "vanityURLCode", discovery_splash: "discoverySplash" };
     for (const [key, alias] of Object.entries(aliases)) guild[key] ?? (guild[key] = cached?.[alias]);
     guild.features = Array.from(guild.features ?? []);
@@ -1646,8 +1658,12 @@ var InfoCommandsBundle = (() => {
     const splashUrl = guild.splash ? getGuildSplashUrl(guild.id, guild.splash) : null;
     const discoverySplashUrl = guild.discovery_splash ? getGuildDiscoverySplashUrl(guild.id, guild.discovery_splash) : null;
     const createdDate = guild.created_at ? formatTimestamp(Date.parse(guild.created_at)) : formatTimestampFromSnowflake(guild.id);
-    const memberCount = guild.approximate_member_count;
-    const presenceCount = guild.approximate_presence_count;
+    const memberCount = guild.approximate_member_count ?? findByStoreName2("GuildMemberCountStore")?.getMemberCount?.(guildId2);
+    const presenceCount = guild.approximate_presence_count ?? findByStoreName2("GuildHeaderCountsStore")?.getOnlineCount?.(guildId2);
+    const channelStore = findByStoreName2("GuildChannelStore");
+    const fullChannels = channelStore?.getMutableGuildChannelsForGuild?.(guildId2);
+    const groupedChannels = channelStore?.getChannels?.(guildId2);
+    const channelCount = countChannels(fullChannels == null && groupedChannels == null ? void 0 : [fullChannels, groupedChannels], guildId2);
     const onlinePercentage = memberCount > 0 ? Math.round(presenceCount / memberCount * 100) : 0;
     const afkTimeout = guild.afk_timeout ? `${guild.afk_timeout / 60} minutes` : "Not set";
     const preferredLocale = guild.preferred_locale || "en-US";
@@ -1656,6 +1672,7 @@ var InfoCommandsBundle = (() => {
       { name: "Created", value: createdDate, inline: true },
       { name: "Members", value: `${memberCount == null ? "Unknown" : memberCount.toLocaleString()} total
 ${presenceCount == null ? "Unknown" : presenceCount.toLocaleString()} online${memberCount > 0 && presenceCount != null ? ` (${onlinePercentage}%)` : ""}`, inline: true },
+      { name: "Channels", value: channelCount?.toLocaleString() ?? "Unknown", inline: true },
       { name: "Boosts", value: `Level ${guild.premium_tier || 0}
 ${guild.premium_subscription_count || 0} boosts`, inline: true },
       { name: "Verification", value: guild.verification_level == null ? "Unknown" : verificationMap[guild.verification_level] ?? "Unknown", inline: true },
@@ -1792,6 +1809,26 @@ ${guild.premium_subscription_count || 0} boosts`, inline: true },
   var patches = [];
   var active = false;
   var plugin_default = {
+    settings() {
+      const { React: React4, ReactNative: RN4 } = vendetta.metro.common;
+      const open = () => {
+        const channelId = findByStoreName2("SelectedChannelStore")?.getChannelId?.();
+        const channel = findByStoreName2("ChannelStore")?.getChannel?.(channelId);
+        const id = findByStoreName2("SelectedGuildStore")?.getGuildId?.() ?? channel?.guildId ?? channel?.guild_id;
+        if (id) openServerInfo(id, getServerEmbed);
+        else RN4.Alert.alert("Server Info", "Open a server chat first, then return here.");
+      };
+      return React4.createElement(
+        RN4.View,
+        { style: { padding: 20 } },
+        React4.createElement(
+          RN4.Text,
+          { style: { color: "#aeb5c5", marginBottom: 16 } },
+          "InfoCommands " + (vendetta.plugin.version ?? vendetta.plugin.manifest?.version ?? "")
+        ),
+        React4.createElement(RN4.Button, { title: "Open current server info", onPress: open })
+      );
+    },
     onLoad() {
       if (active) return;
       active = true;

@@ -36,7 +36,9 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
     // Bind each method to its actual owner; a spread loses lazy getters/receivers.
     let httpSource, httpFacade;
     function legacyHTTP() {
-        const source = rawFind('HTTP');
+        const pathFinders = safe(() => U.discord.utils.modules.finders);
+        const source = safe(() => pathFinders.lookupModuleWithImportedPath('../discord_common/js/packages/http-utils/HTTPUtils.tsx')[0])
+            ?? rawFind('HTTP');
         if (!source?.HTTP) return rawFind('get', 'post', 'del');
         if (source === httpSource) return httpFacade;
         httpSource = source;
@@ -123,12 +125,12 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
             const navigation = legacyNavigation();
             if (hasProps(navigation, props)) return navigation;
         }
-        const found = rawFind(...props);
-        if (found) return found;
-        if (props.some(p => ['get', 'post', 'put', 'patch', 'del', 'getAPIBaseURL'].includes(p))) {
+        if (props.length && props.every(p => ['get', 'post', 'put', 'patch', 'del', 'getAPIBaseURL', 'HTTP'].includes(p))) {
             const http = legacyHTTP();
             if (hasProps(http, props)) return http;
         }
+        const found = rawFind(...props);
+        if (found) return found;
         // Use Next's curated modules when the corresponding Metro barrel is lazy.
         for (const get of [() => U.discord.design.Design, () => U.discord.actions.ActionSheetActionCreators,
             () => U.discord.actions.AlertActionCreators]) {
@@ -158,6 +160,12 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
         findAll: predicate => [...finders.lookupModules(custom(predicate, 'all.' + sequence++),
             { cached: false, initialize: false })].map(x => x[0]),
     };
+    const importedPaths = safe(() => U.discord.utils.modules.finders);
+    if (importedPaths?.getModuleWithImportedPath) {
+        metro.findByImportedPath = path => safe(() => importedPaths.lookupModuleWithImportedPath(path)[0]);
+        metro.getModuleWithImportedPath = (path, callback) => own(importedPaths.getModuleWithImportedPath(path,
+            (module, id) => { if (active) callback(module, id); }));
+    }
     // More Alts deliberately inspects initialized records instead of executing
     // arbitrary Metro factories. Supply that legacy view using Next's finders.
     let initialized = new Map();
@@ -428,7 +436,8 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
                 else log(...args);
             },
         },
-        plugin: { id: metadata.id, manifest: metadata.legacyManifest, storage },
+        host: { id: 'valenced' },
+        plugin: { id: metadata.id, manifest: metadata.legacyManifest, storage, version: metadata.version },
         storage: { useProxy, awaitSyncWrapper: async value => {
             if (value === plugins || value === themes) await refreshRegistry();
             return value;
