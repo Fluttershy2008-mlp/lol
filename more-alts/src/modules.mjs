@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+import { createColdWebViewLoader } from './webview-loader.mjs';
 
 // Vendetta's finders require uninitialized Metro factories while searching.
 // Optional features must never do that during Discord's startup.
 export function createModuleResolver(metro, { now = Date.now } = {}) {
     const entries = new Map();
     let rejectedWebViews = new WeakSet();
+    const coldWebView = createColdWebViewLoader();
     const modules = metro.modules;
     const loadedOnly = !!modules && typeof modules === 'object';
     function componentType(value, depth = 0) {
@@ -68,6 +70,7 @@ export function createModuleResolver(metro, { now = Date.now } = {}) {
                 }
             } else try { record.value = kind === 'props' ? metro.findByProps(...keys) : metro.findByStoreName(keys[0]); } catch {}
         }
+        if (kind === 'webview' && !record.value) record.value = coldWebView.load(namespace => webViewExport(namespace, true));
         return record.value;
     }
     return {
@@ -80,7 +83,7 @@ export function createModuleResolver(metro, { now = Date.now } = {}) {
             if (component && ['function', 'object'].includes(typeof component)) rejectedWebViews.add(component);
             entries.delete(JSON.stringify(['webview']));
         },
-        clear() { entries.clear(); rejectedWebViews = new WeakSet(); },
+        clear() { entries.clear(); rejectedWebViews = new WeakSet(); coldWebView.clear(); },
         async prepare(queries, yieldFrame, isActive) {
             if (!loadedOnly) return;
             const records = queries.map(([kind, ...keys]) => entry(kind, keys));

@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer } = require('./next-harness.cjs');
 const { installSettingsSection } = require('../../valenced/tests/settings-fixture.cjs');
+const { installColdWebViewModule } = require('../../more-alts/tests/webview-fixture.cjs');
 const h = React.createElement;
 const USER = { id: '100000000000000099', username: 'fixture-qr-account' };
 const TOKEN = 'synthetic-qr-session-only-not-a-real-token';
@@ -103,7 +104,7 @@ test('More Alts QR shows an inline error for translations alone and discovers a 
     const w = scenario(t); w.addModule({ WebView: { locale: 'en-US', ast: [] } });
     const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
     assert.equal(w.browser(ui), undefined);
-    assert.match(JSON.stringify(ui.toJSON()), /does not expose WebView/);
+    assert.match(JSON.stringify(ui.toJSON()), /could not load Discord’s browser/);
     w.addWebView(); await act(button(ui, 'Log in with QR Code'));
     assert.ok(w.browser(ui), 'a failed lookup does not impose the generic five-second cooldown');
 });
@@ -143,5 +144,46 @@ test('More Alts QR failures stay inside the dialog and refresh can choose a heal
     const before = w.badCalls;
     w.addWebView(); await act(() => w.advance(3000)); await act(button(ui, 'Refresh QR code'));
     assert.ok(w.browser(ui)); assert.equal(w.badCalls, before, 'the failed export is not rendered again');
+    assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
+});
+
+for (const legacyRegistry of [false, true]) test('More Alts QR initializes only its cold browser package with ' + (legacyRegistry ? 'legacy' : 'current') + ' native bridge imports', async t => {
+    const w = scenario(t), graph = installColdWebViewModule(w, { legacyRegistry });
+    w.addModule({ WebView: () => ({ locale: 'en-US', ast: [] }) });
+    const { item, ui } = await w.openManager();
+    assert.equal(graph.requires(), 0); assert.equal(graph.nativeProbes(), 0, 'opening settings does not load the browser');
+    await act(button(ui, 'Log in with QR Code'));
+    const browser = w.browser(ui); assert.ok(browser, 'the native QR browser is now available');
+    assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
+    await act(() => browser.props.onMessage(completion(browser)));
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+    assert.equal(w.calls.filter(c => c[0] === 'fetch').length, 1);
+});
+
+test('More Alts QR prefers an already loaded browser over initializing the cold package', async t => {
+    const w = scenario(t), graph = installColdWebViewModule(w); w.addWebView();
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    assert.ok(w.browser(ui)); assert.equal(graph.requires(), 0); assert.equal(graph.nativeProbes(), 0);
+});
+
+for (const mode of ['compiled', 'minifiedHelpers']) test('More Alts QR opens a cold browser with ' + mode + ' native commands', async t => {
+    const w = scenario(t), graph = installColdWebViewModule(w, { [mode]: true });
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    assert.ok(w.browser(ui)); assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
+});
+
+test('More Alts QR accepts an opaque platform component after verifying its browser dependency graph', async t => {
+    const w = scenario(t); delete w.WebView.isFileUploadSupported;
+    const graph = installColdWebViewModule(w);
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    assert.ok(w.browser(ui)); assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
+});
+
+test('More Alts QR keeps its dialog usable when the cold package fails to initialize', async t => {
+    const w = scenario(t), graph = installColdWebViewModule(w, { fail: true });
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    assert.equal(w.browser(ui), undefined); assert.ok(button(ui, 'Close add account'));
+    await act(button(ui, 'Log in with QR Code'));
+    assert.equal(graph.requires(), 1); assert.equal(graph.unrelated(), 0);
     assert.equal(w.calls.some(c => c[0] === 'fetch'), false);
 });

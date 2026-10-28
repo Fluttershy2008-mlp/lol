@@ -159,7 +159,7 @@ export function createPlugin(V, host = globalThis) {
             let WebView;
             try { WebView = resolver.webView(); } catch {}
             if (!stillHere()) return;
-            if (!WebView) { setError('QR login is unavailable because this Discord build does not expose WebView. Update your client or Discord, or use email and password.'); return; }
+            if (!WebView) { setError('QR login could not load Discord’s browser on this build. You can still use email and password.'); return; }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;

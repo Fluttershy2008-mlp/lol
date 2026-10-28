@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.4
+# More Alts! for Revenge — 3.1.5
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## QR browser loading (3.1.5 / Valenced beta5 / Next beta6)
+
+The previous rendering fix only searched components Discord had already initialized. That could leave QR login showing “WebView unavailable” when the installed browser package was still unloaded. QR login now checks the native browser bridge and inspects dependency metadata to locate the Android WebView package, then initializes only a unique matching module when the QR button is pressed. Current and older native-bridge import layouts, compiled commands and minified codegen helpers are supported, without hard-coded module IDs. Settings startup does not load the browser.
+
+The SDK graph is checked for React, React Native, EventEmitter, the generated view/commands, shared hook, native bridge and styles. Ambiguous or incomplete matches are not executed. A failed package initialization is attempted once per plugin session. Translation rejection, component validation and the QR rendering boundary remain in place. The plugin uses Discord's installed WebView implementation; no browser event handlers or native messaging modules are replaced by the plugin.
+
+For Valenced, refresh the [existing repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json), update **More Alts! to 1.0.0-beta5**, then fully close and reopen Discord. Next receives **1.0.0-beta6**; Classic receives **3.1.5**. Keep the existing plugin data when updating.
+
+Nineteen shared native QR checks pass on each host, including two new cases that fail against Valenced beta4 when the whole browser package starts unloaded. Approval verifies and saves the account without switching accounts. Ten new source checks cover the graph layouts, compiled/minified commands, initialized native view descriptors, ambiguous/incomplete graphs, missing native support and failed initialization. All 78 More Alts source/protocol checks pass. These tests simulate the SDK and native bridge; phone verification remains pending.
+
+The loading API was checked against [Valenced d3e17fe's module API](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/plugins/src/apis/modules.ts). The dependency graph follows the package's [v13 Android component](https://github.com/react-native-webview/react-native-webview/blob/v13.13.5/src/WebView.android.tsx), [current Android component](https://github.com/react-native-webview/react-native-webview/blob/master/src/WebView.android.tsx), [generated native view](https://github.com/react-native-webview/react-native-webview/blob/master/src/RNCWebViewNativeComponent.ts), and native bridge/shared/styles imports. Release command detection follows React Native’s [command helper](https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/Utilities/codegenNativeCommands.js) and [generated view config](https://github.com/facebook/react-native/blob/main/packages/react-native-codegen/src/generators/components/GenerateViewConfigJs.js).
 
 ## QR rendering fix (3.1.4 / Valenced beta4 / Next beta5)
 

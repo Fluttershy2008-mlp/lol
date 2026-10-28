@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**More Alts! 1.0.0-beta4 fixes the QR login rendering crash.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The browser lookup now rejects translation exports such as `{locale, ast}` and selects the actual WebView component. Saved accounts and the existing settings entry are retained; do not clear plugin data.
+**More Alts! 1.0.0-beta5 fixes QR login when the browser package has not loaded yet.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button can now load the installed WebView package on demand. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
 
 **ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
 
@@ -26,7 +26,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. InfoCommands is at **1.0.0-beta5**. More Alts!, Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! and InfoCommands are at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Server Leaver, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -43,6 +43,8 @@ Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes
+
+**More Alts! beta5:** handles a browser package that is still uninitialized on the first QR click. It verifies the native browser bridge and a unique SDK dependency graph using Valenced's metadata API, then initializes that module on demand. Metadata inspection does not execute factories; ambiguous or incomplete matches remain inactive. Current and older bridge import layouts, compiled commands and minified codegen helpers are covered. An already loaded component is preferred, and a failed initialization is not repeatedly executed. The previous rendering boundary, Back/Close, QR approval verification and account storage remain intact. The same source ships as Classic 3.1.5 and Next beta6.
 
 **More Alts! beta4:** replaces the ambiguous `WebView` property search with imported-path and validated package/platform discovery. Translation exports are never used as the QR browser. Validation handles memo/forward-ref components without invoking them, and does not initialize unrelated Metro factories. Unexpected browser render failures are contained inside the QR dialog and cancel the attempt; Back, Close and Refresh remain usable. Failed exports are excluded until plugin restart, and an available replacement can be selected immediately. The QR protocol and account storage are unchanged. The same source ships as Classic 3.1.4 and Next beta5.
 
@@ -94,6 +96,8 @@ Fourteen list-profile checks open the actual pages through their Valenced settin
 Seventeen ExpressionCloner cases exercise the complete sticker clone flow on both Valenced and Next: late standalone upload actions, no old action module, PNG/APNG/GIF multipart uploads, canonical HTTP selection, local URI/file cleanup, failures without retries, unconfirmed responses, duplicate confirmations, cancellation, account changes, stale prompts, permission loss, oversized files, Lottie metadata and browser FormData. The four discovery cases fail against Valenced beta2 and pass against beta3. [Implementation and source references](../expression-cloner/README.md#113--valenced-beta3--next-beta5).
 
 Twelve More Alts QR integration cases exercise the actual native dialog, browser selection, approved-account verification, refresh, cancellation and local error recovery. The translation-function fixture reproduces the exact `{locale, ast}` crash against beta3 and passes against beta4. Nine new resolver cases cover package/platform shapes, imported-path priority, initialized-only scanning, immediate discovery after a miss and failed-export invalidation. Existing credential, MFA, storage and real-crypto QR protocol tests still run. CI builds the deterministic QR asset before these source tests. [More Alts details and primary references](../more-alts/README.md#qr-rendering-fix-314--valenced-beta4--next-beta5).
+
+Seven more native QR cases bring the suite to nineteen on each host. They cover initially unloaded browser packages with both bridge layouts and compiled/minified commands, verified approval after loading, preferring an existing component, an opaque platform export and an initialization failure. The two fully unloaded cases fail against beta4 and pass against beta5, without initializing the unrelated native-component fixture. Ten source checks cover native commands, initialized view descriptors, missing support, incomplete/ambiguous graphs and bounded retry behavior. All 78 More Alts source tests pass. [Loading details and primary references](../more-alts/README.md#qr-browser-loading-315--valenced-beta5--next-beta6).
 
 The settings API and section key were checked against the build shown in the supplied screenshot, [Valenced d3e17fe](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/lib/discord/src/modules/settings/index.ts), including its [VALENCED section registration](https://github.com/Valenced/valenced/blob/d3e17fe0416c3dc5f4b4d783b465eeb4a99caec1/bundle/src/plugins/start/settings/register.tsx).
 
