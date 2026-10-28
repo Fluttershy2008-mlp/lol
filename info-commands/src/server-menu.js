@@ -1,6 +1,7 @@
 import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
 import { wrapGuildSheet } from "./guild-sheet";
 import { nextAPI, nativeSheets, nativeDesign } from "./next-api";
+import { openUserProfile } from "../../compatibility/user-profile.mjs";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
 const { React, ReactNative: RN } = vendetta.metro.common;
@@ -167,20 +168,12 @@ function copy(value) {
 
 function openOwnerProfile(ownerId, serverId, close) {
     if (!running || !guildId(ownerId)) return;
-    // Discord versions may export these helpers from separate modules.
-    for (const method of ["showUserProfileActionSheet", "openUserProfileModal", "openUserProfile", "showUserProfile"]) {
-        const module = optional(() => findByProps(method));
-        if (typeof module?.[method] !== "function") continue;
-        try {
-            close?.();
-            Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }, "stack"))
-                .catch(() => notify("Unable to open the owner's profile. Try again."));
-            return;
-        } catch (error) {
-            console.error("[InfoCommands] Owner profile opener unavailable", error);
-        }
-    }
-    notify("Owner profiles are unavailable on this Discord version");
+    const session = generation;
+    const live = () => running && generation === session;
+    close?.();
+    openUserProfile(vendetta, { userId: ownerId, guildId: serverId }, live).then(opened => {
+        if (!opened && live()) notify("Owner profiles are unavailable on this Discord version");
+    }).catch(() => { if (live()) notify("Unable to open the owner's profile. Try again."); });
 }
 
 export function openServerInfo(id, load) {

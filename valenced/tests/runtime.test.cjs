@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createWorld, React, Renderer, CHANNEL, FRIEND, GUILD } = require('../../revenge-next/tests/next-harness.cjs');
 const { createLegacyAdapter } = require('../runtime.cjs');
+const { installColdProfileModule } = require('./profile-fixture.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const h = React.createElement;
 
@@ -238,7 +239,7 @@ test('InfoCommands settings offer a working current-server details button', asyn
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
     assert.match(w.alerts[0]?.[0] ?? '', /Test Guild/);
     assert.match(w.alerts[0]?.[1] ?? '', /Channels: 1/);
-    assert.match(JSON.stringify(ui.toJSON()), /1.0.0-beta2/);
+    assert.ok(JSON.stringify(ui.toJSON()).includes(item.manifest.version));
 });
 
 test('InfoCommands local user-info output remains local on Valenced', async t => {
@@ -265,4 +266,83 @@ test('stopping InfoCommands cancels pending path subscriptions and button action
     info.action(); await w.advance(2000);
     assert.equal(w.alerts.length, 0);
     await w.stop(restarted);
+});
+
+test('View Owner Profile loads an anonymous default profile opener on the first tap', async t => {
+    const w = scenario(t), cold = installColdProfileModule(w);
+    const item = await w.start('info-commands');
+    const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
+    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    const owner = w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile');
+    assert.ok(owner);
+    assert.equal(cold.initializedFactories(), 0);
+    await Renderer.act(async () => owner.onPress());
+    const opened = w.calls.filter(c => c[0] === 'profileOpened');
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0][1].userId, w.accountId());
+    assert.equal(opened[0][1].guildId, GUILD);
+    assert.equal(opened[0][2], 'stack');
+    assert.equal(cold.initializedFactories(), 1);
+    assert.equal(cold.unrelatedFactories(), 0);
+    assert.equal(w.toasts.some(text => /unavailable/i.test(text)), false);
+});
+
+test('Valid User Open profile loads its default opener when no profile was opened before', async t => {
+    const w = scenario(t), cold = installColdProfileModule(w);
+    const item = await w.start('valid-user');
+    const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
+    const input = ui.root.findAll(n => n.type === 'TextInput')[0];
+    await Renderer.act(async () => input.props.onChangeText(FRIEND));
+    await Renderer.act(async () => button(ui, 'Resolve user').props.onPress());
+    assert.equal(cold.initializedFactories(), 0);
+    await Renderer.act(async () => button(ui, 'Open profile').props.onPress());
+    const opened = w.calls.filter(c => c[0] === 'profileOpened');
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0][1].userId, FRIEND);
+    assert.equal(opened[0][2], 'stack');
+    assert.equal(cold.initializedFactories(), 1);
+    assert.equal(cold.unrelatedFactories(), 0);
+    assert.equal(w.toasts.some(text => /unavailable/i.test(text)), false);
+});
+
+test('Valid User native result dialog opens a profile through the same resolver', async t => {
+    const w = scenario(t), cold = installColdProfileModule(w);
+    await w.start('valid-user');
+    const Row = w.U.discord.design.Design.ActionSheetRow;
+    const context = { message: { content: '<@' + FRIEND + '>', channel_id: CHANNEL } };
+    const module = await w.sheets.openLazy(Promise.resolve({ default: () => h(w.RN.View, null,
+        [h(Row, { key: 'original', label: 'Reply', onPress() {} })]) }), 'MessageLongPressActionSheet', context);
+    const ui = await w.mount(h(module.default, context));
+    const row = ui.root.findAll(n => n.type === 'ActionSheetRow' && n.props.label === 'Resolve mentions / Open profile')[0];
+    assert.ok(row);
+    await Renderer.act(async () => { row.props.onPress(); await w.advance(150); });
+    const open = w.alerts.at(-1)?.[2].find(button => button.text === 'Open profile');
+    assert.ok(open);
+    await Renderer.act(async () => open.onPress());
+    assert.equal(w.calls.filter(c => c[0] === 'profileOpened' && c[1].userId === FRIEND).length, 1);
+    assert.equal(cold.initializedFactories(), 1);
+    assert.equal(cold.unrelatedFactories(), 0);
+});
+
+test('a loaded default profile module opens even when its function has an unrelated name', async t => {
+    const w = scenario(t), cold = installColdProfileModule(w);
+    w.addModule(cold.namespace, 'modules/user_profile/native/showUserProfileActionSheet.tsx');
+    const item = await w.start('info-commands');
+    const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
+    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    await Renderer.act(async () => w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile').onPress());
+    assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 1);
+    assert.equal(cold.initializedFactories(), 0);
+});
+
+test('an owner-profile action from a stopped plugin cannot initialize or open a profile', async t => {
+    const w = scenario(t), cold = installColdProfileModule(w);
+    const item = await w.start('info-commands');
+    const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
+    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    const owner = w.alerts.at(-1)[2].find(button => button.text === 'View Owner Profile');
+    await w.stop(item);
+    await Renderer.act(async () => owner.onPress());
+    assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 0);
+    assert.equal(cold.initializedFactories(), 0);
 });

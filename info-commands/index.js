@@ -635,6 +635,76 @@ var InfoCommandsBundle = (() => {
     );
   }
 
+  // compatibility/user-profile.mjs
+  var USER_PROFILE_MODULE_PATH = "modules/user_profile/native/showUserProfileActionSheet.tsx";
+  var profileTry = (callback) => {
+    try {
+      return callback();
+    } catch {
+      return void 0;
+    }
+  };
+  function profileClientAPI() {
+    const valencedAPI = profileTry(() => typeof valenced !== "undefined" ? valenced : void 0);
+    if (valencedAPI?.modules?.finders) return valencedAPI;
+    return profileTry(() => typeof revenge !== "undefined" && revenge.modules?.finders ? revenge : void 0);
+  }
+  function profileCallable(module) {
+    if (typeof module === "function") return { owner: void 0, call: module };
+    if (typeof module?.showUserProfileActionSheet === "function")
+      return { owner: module, call: module.showUserProfileActionSheet };
+    if (typeof module?.default === "function") return { owner: module, call: module.default };
+  }
+  function findUserProfileOpener(legacy, client = profileClientAPI()) {
+    const metro = legacy?.metro;
+    const imported = profileTry(() => metro?.findByImportedPath?.(USER_PROFILE_MODULE_PATH)) ?? profileTry(() => client?.discord?.utils?.modules?.finders?.lookupModuleWithImportedPath(USER_PROFILE_MODULE_PATH)?.[0]);
+    let opener = profileCallable(imported);
+    if (opener) return opener;
+    const { finders } = client?.modules ?? {};
+    const filters = finders?.filters;
+    const namespace = profileTry(() => metro?.findByProps?.("USER_PROFILE_ACTION_SHEET_KEY_PREFIX", "getUserProfileActionSheetKey")) ?? profileTry(() => finders?.lookupModule(
+      filters.withProps("USER_PROFILE_ACTION_SHEET_KEY_PREFIX", "getUserProfileActionSheetKey"),
+      { initialize: false, returnNamespace: true }
+    )?.[0]);
+    opener = profileCallable(namespace);
+    if (opener) return opener;
+    const cold = profileTry(() => {
+      if (!filters?.withDependencies || !client.discord?.flux?.withStoreName) return;
+      const loggerId = client.discord.common?.logger?.LoggerModuleId;
+      const trackerId = client.discord.common?.importTracker?.ImportTrackerModuleId;
+      const userStoreId = finders.lookupModule(client.discord.flux.withStoreName("UserStore"), { initialize: false })[1];
+      if (![loggerId, trackerId, userStoreId].every((id) => Number.isInteger(id) && id >= 0)) return;
+      const { ordered, relative } = filters.withDependencies;
+      const named2 = filters.withName("showUserProfileActionSheet");
+      const marked = filters.withProps("USER_PROFILE_ACTION_SHEET_KEY_PREFIX", "getUserProfileActionSheetKey");
+      const identity = typeof named2.or === "function" ? named2.or(marked) : named2;
+      const fingerprint = filters.withDependencies(ordered([
+        loggerId,
+        userStoreId,
+        relative(1),
+        relative(2),
+        relative(3),
+        trackerId
+      ]));
+      return finders.lookupModule(identity.and(fingerprint), { initialize: true, returnNamespace: true })[0];
+    });
+    opener = profileCallable(cold);
+    if (opener) return opener;
+    const named = profileTry(() => metro?.findByName?.("showUserProfileActionSheet"));
+    if (typeof named === "function") return { owner: void 0, call: named };
+    for (const method of ["showUserProfileActionSheet", "openUserProfileModal", "openUserProfile", "showUserProfile"]) {
+      const module = profileTry(() => metro?.findByProps?.(method));
+      if (typeof module?.[method] === "function") return { owner: module, call: module[method] };
+    }
+  }
+  async function openUserProfile(legacy, options, isCurrent = () => true) {
+    if (!isCurrent()) return false;
+    const opener = findUserProfileOpener(legacy);
+    if (!opener || !isCurrent()) return false;
+    await Reflect.apply(opener.call, opener.owner, [options, "stack"]);
+    return true;
+  }
+
   // info-commands/src/server-info/modules.ts
   var optional3 = (fn) => {
     try {
@@ -664,17 +734,10 @@ var InfoCommandsBundle = (() => {
   }
   function openUserProfileSheet(options) {
     const actions = props("openLazy", "hideActionSheet") ?? props("hideActionSheet");
-    for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
-      const module = props(method);
-      if (typeof module?.[method] !== "function") continue;
-      try {
-        actions?.hideActionSheet?.(`info-commands-server-info-${options.guildId}`);
-        Promise.resolve(module[method](options)).catch(() => notify("Unable to open profile. Try again."));
-        return;
-      } catch {
-      }
-    }
-    notify("Profiles are unavailable on this Discord version");
+    actions?.hideActionSheet?.(`info-commands-server-info-${options.guildId}`);
+    openUserProfile(vendetta, options).then((opened) => {
+      if (!opened) notify("Profiles are unavailable on this Discord version");
+    }).catch(() => notify("Unable to open profile. Try again."));
   }
   function notify(text) {
     optional3(() => vendetta.ui.toasts.showToast(text));
@@ -1351,18 +1414,14 @@ var InfoCommandsBundle = (() => {
   }
   function openOwnerProfile(ownerId, serverId, close) {
     if (!running || !guildId(ownerId)) return;
-    for (const method of ["showUserProfileActionSheet", "openUserProfileModal", "openUserProfile", "showUserProfile"]) {
-      const module = optional5(() => findByProps2(method));
-      if (typeof module?.[method] !== "function") continue;
-      try {
-        close?.();
-        Promise.resolve(module[method]({ userId: ownerId, guildId: serverId }, "stack")).catch(() => notify2("Unable to open the owner's profile. Try again."));
-        return;
-      } catch (error) {
-        console.error("[InfoCommands] Owner profile opener unavailable", error);
-      }
-    }
-    notify2("Owner profiles are unavailable on this Discord version");
+    const session = generation;
+    const live = () => running && generation === session;
+    close?.();
+    openUserProfile(vendetta, { userId: ownerId, guildId: serverId }, live).then((opened) => {
+      if (!opened && live()) notify2("Owner profiles are unavailable on this Discord version");
+    }).catch(() => {
+      if (live()) notify2("Unable to open the owner's profile. Try again.");
+    });
   }
   function openServerInfo(id, load) {
     if (!running || !guildId(id)) return;

@@ -357,7 +357,8 @@ for (const options of [{ profileMethod: null }, { profileThrows: true }]) {
         const h = harness({ fallback: true, ...options }); h.plugin.onLoad();
         h.menu.default(A).at(-1).action(); await tick();
         assert.doesNotThrow(() => h.alerts[0][2].find(button => button.text === "View Owner Profile").onPress());
-        assert.match(h.notifications.at(-1), /profiles are unavailable/);
+        await tick();
+        assert.match(h.notifications.at(-1), options.profileThrows ? /Unable to open/ : /profiles are unavailable/);
         assert.equal(h.profiles.length, 0);
         h.plugin.onUnload();
     });

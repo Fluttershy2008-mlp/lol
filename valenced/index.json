@@ -373,11 +373,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.info-commands@1.0.0-beta3.zip",
+          "sha256": "7b40dab6d284f433c513089cbba6bde1dc169e73ddb3d99e3eb96a09dcbb8443",
+          "size": 33144,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "InfoCommands (Valenced)",
       "description": "Valenced preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
@@ -899,11 +912,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.valid-user@1.0.0-beta3.zip",
+          "sha256": "fa60d02cb63a60470a63b9a23151700ab4d8a96a4fde532c4e3c4e7301f279fb",
+          "size": 23706,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ValidUser (Valenced)",
       "description": "Valenced preview. Automatically resolve unknown mentions when Valenced starts and messages load, including embeds and forwards.",

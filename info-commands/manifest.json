@@ -10,10 +10,10 @@
       "name": "kmmiio99o"
     }
   ],
-  "version": "1.2.7",
+  "version": "1.2.8",
   "main": "index.js",
   "vendetta": {
     "icon": "ic_info_24px"
   },
-  "hash": "02a62932b4ab14497bbedc57956a6b0e804f70db704bb318206852922a70c581"
+  "hash": "d058673281b4613cfd523da06b6bf267065a18017ca6211da27d276cc091625d"
 }

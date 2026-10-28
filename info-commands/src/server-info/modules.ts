@@ -1,4 +1,5 @@
 /** Replace Revenge Next's kmmiio library dependency with the existing client API. */
+import { openUserProfile } from "../../../compatibility/user-profile.mjs";
 const optional = (fn: () => any) => { try { return fn(); } catch { return undefined; } };
 const store = (name: string) => optional(() => vendetta.metro.findByStoreName(name));
 const props = (...keys: string[]) => optional(() => vendetta.metro.findByProps(...keys));
@@ -21,16 +22,10 @@ export function getRequestMembersById() {
 }
 export function openUserProfileSheet(options: Record<string, unknown>) {
   const actions = props("openLazy", "hideActionSheet") ?? props("hideActionSheet");
-  for (const method of ["openUserProfileModal", "openUserProfile", "showUserProfile"]) {
-    const module = props(method);
-    if (typeof module?.[method] !== "function") continue;
-    try {
-      actions?.hideActionSheet?.(`info-commands-server-info-${options.guildId}`);
-      Promise.resolve(module[method](options)).catch(() => notify("Unable to open profile. Try again."));
-      return;
-    } catch {}
-  }
-  notify("Profiles are unavailable on this Discord version");
+  actions?.hideActionSheet?.(`info-commands-server-info-${options.guildId}`);
+  openUserProfile(vendetta, options).then(opened => {
+    if (!opened) notify("Profiles are unavailable on this Discord version");
+  }).catch(() => notify("Unable to open profile. Try again."));
 }
 export function notify(text: string) { optional(() => vendetta.ui.toasts.showToast(text)); }
 export function copyServerId(id: string) {

@@ -595,6 +595,19 @@
             }
           }
         },
+        "1.0.0-beta10": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.info-commands@1.0.0-beta10.zip",
+          "sha256": "d96705f1125549de898d872c2266d22643e74bd238ae95816e32d8815d17d032",
+          "size": 32934,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.info-commands@1.0.0-beta2.zip",
           "sha256": "193840da58b54eb6a6976e6bad5d1818ab1dc1fa4cdb4e7b24ee6ac2772da6b8",
@@ -701,8 +714,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.0-beta9",
-        "beta": "1.0.0-beta9"
+        "latest": "1.0.0-beta10",
+        "beta": "1.0.0-beta10"
       },
       "name": "InfoCommands (Next preview)",
       "description": "Revenge Next preview. Long-press a server and tap Server Info. Includes the original userinfo and inviteinfo commands.",
@@ -1536,11 +1549,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta7": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.valid-user@1.0.0-beta7.zip",
+          "sha256": "6448334248c236349127dccbafa4fe1f1659c0f37035bdebf2bd08503b3f030f",
+          "size": 23497,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta6",
-        "beta": "1.0.0-beta6"
+        "latest": "1.0.0-beta7",
+        "beta": "1.0.0-beta7"
       },
       "name": "ValidUser (Next preview)",
       "description": "Revenge Next preview. Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",

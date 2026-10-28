@@ -1,5 +1,6 @@
 import { validId, extractMentionIds, createResolver } from "./core.mjs";
 import { createAutoScanner } from "./auto.mjs";
+import { openUserProfile } from "../../compatibility/user-profile.mjs";
 
 export default function createPlugin(V) {
     "use strict";
@@ -83,17 +84,15 @@ export default function createPlugin(V) {
     }
     async function openProfile(result) {
         if (!active || result.status !== "resolved") return;
+        const session = generation;
+        const live = () => active && session === generation;
         try {
-            const open = byName("showUserProfileActionSheet")
-                ?? byProps("showUserProfileActionSheet")?.showUserProfileActionSheet;
-            if (typeof open !== "function") {
+            // Discord's own opener loads its sheet and fetches the profile.
+            const opened = await openUserProfile(V, { userId: result.id }, live);
+            if (!opened && live()) {
                 toast("Profile opening is unavailable on this Discord version. Try the mention again.");
-                return;
             }
-            // Let Discord fetch the real profile. Do not invent badges, membership,
-            // or a successful profile response when the server denies access.
-            await open({ userId: result.id }, "stack");
-        } catch { toast("Discord could not open this profile. Try the mention again."); }
+        } catch { if (live()) toast("Discord could not open this profile. Try the mention again."); }
     }
     function showResults(results, index = 0, session = generation) {
         if (!active || session !== generation || !results.length) return;
