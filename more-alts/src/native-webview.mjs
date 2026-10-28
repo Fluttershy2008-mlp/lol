@@ -17,7 +17,10 @@ export function createNativeWebView(React, RN, host = globalThis, getClient = we
         if (typeof manager?.dispatchViewManagerCommand !== 'function' || typeof RN.findNodeHandle !== 'function') return;
         failure = 'NATIVE-MESSAGING';
         let register;
-        if (host.RN$Bridgeless !== true && typeof host.__fbBatchedBridge?.registerCallableModule === 'function') {
+        if (typeof RN.registerCallableModule === 'function') {
+            // The public RN API selects the correct legacy or bridgeless path.
+            register = (name, value) => RN.registerCallableModule(name, value);
+        } else if (host.RN$Bridgeless !== true && typeof host.__fbBatchedBridge?.registerCallableModule === 'function') {
             register = (name, value) => host.__fbBatchedBridge.registerCallableModule(name, value);
         } else if (typeof host.RN$registerCallableModule === 'function') {
             register = (name, value) => host.RN$registerCallableModule(name, () => value);

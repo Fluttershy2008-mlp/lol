@@ -170,3 +170,7 @@ Shares Valenced beta4’s fixed main list of 22 exact snowflake strings. Main pr
 ### Server Leaver beta6 — stable scrolling
 
 Shares Valenced beta5’s preview fix: Protect/Remove protection keep rows in name order, the ID editor stays bounded and actions release keyboard focus, guild/theme listeners replace polling, and Android native clipping is disabled while virtualization remains enabled. Three new UI regressions fail against beta5 and pass against beta6; six native cases run per host along with 28 source/runtime checks. Existing main protections, account isolation and confirmed leave behavior are preserved. Classic receives 1.0.4. Actual native touch scrolling still needs device verification.
+
+### More Alts beta9 — QR panel and public messaging
+
+Shares Valenced beta8’s Discord-style square QR panel, scan instructions and native live status. Each attempt renders a fresh Discord fingerprint; the reference screenshot is not bundled. Public RN registerCallableModule is preferred before the existing global bridge paths, and missing-browser errors show the installed version. Three new native cases fail on beta8 and pass on beta9; 33 QR cases run per host and all 92 More Alts source/protocol checks pass. Phone login remains unverified. Classic receives 3.1.8.

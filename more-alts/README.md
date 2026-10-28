@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.7
+# More Alts! for Revenge — 3.1.8
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## QR panel and public RN messaging (3.1.8 / Valenced beta8 / Next beta9)
+
+The QR screen uses a Discord-style layout: a square white code above **Log in with QR Code**, mobile scan-and-approve instructions and live connection/approval status. Every attempt obtains a fresh fingerprint from Discord and renders its own QR code with the bundled encoder; no uploaded code image is included in the plugin. After approval, the verified account is saved for selection in the account manager.
+
+The bundled Android browser now prefers React Native’s public `registerCallableModule` API, which chooses the active legacy or bridgeless implementation. The previous global-bridge paths remain as fallbacks. This supports hosts that expose the public API while hiding the bridge globals. Native browser failures include the loaded version alongside the stage code: the native plugin version on Valenced, or the Classic source version exposed by Next’s compatibility adapter. Older metadata-loader releases report only `MA-QR-NATIVE`; current builds include the bundled browser path and both failure stages.
+
+Refresh the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json), update **More Alts! to 1.0.0-beta8**, then fully close and reopen Discord. Next receives **1.0.0-beta9** and Classic **3.1.8**. Keep existing saved plugin data. Open Add another account → Log in with QR Code, scan from Discord on another device already signed into the desired account, and approve there. Refresh generates a new attempt; Back and Close cancel it.
+
+Three new native cases fail on the previous package and pass on this release: public-API-only browser setup and approved-account saving, the square panel/instructions/live status with Back, and installed-version diagnostics. There are **33 native QR cases per host** and **92 More Alts source/protocol checks**. The existing exact-HTML RSA handshake, real QR SVG generation, approval verification, refresh, Close, disable, stale-session rejection and credential/MFA cases remain included. Native touch and real Discord sign-in remain unverified on a physical phone; an installed native WebView view/module and secure Web Crypto are still required.
+
+Primary references: [React Native 0.86 callable-module registration](https://github.com/facebook/react-native/blob/v0.86.0/packages/react-native/Libraries/Core/registerCallableModule.js) and [Discord’s QR login instructions](https://support.discord.com/hc/en-us/articles/360039213771-QR-Code-Login-FAQ).
 
 ## Bundled Android QR browser (3.1.7 / Valenced beta7 / Next beta8)
 

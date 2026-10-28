@@ -4,11 +4,12 @@ import { createModuleResolver } from './modules.mjs';
 import { createNativeWebView } from './native-webview.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
-import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, QR_BASE_URL } from './qr-html.mjs';
+import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, qrStatusMessage, QR_BASE_URL } from './qr-html.mjs';
 
 export function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
+    const installedVersion = V.plugin.version ?? V.plugin.manifest?.version ?? 'unknown';
     const LoginDialog = createLoginDialog(React, RN);
     const resolver = createModuleResolver(V.metro);
     const nativeWebView = createNativeWebView(React, RN, host);
@@ -85,6 +86,7 @@ export function createPlugin(V, host = globalThis) {
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
+        const [qrStatus, setQrStatus] = React.useState('connecting');
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
@@ -162,13 +164,14 @@ export function createPlugin(V, host = globalThis) {
             try { WebView = nativeWebView.load() ?? resolver.webView(); } catch {}
             if (!stillHere()) return;
             if (!WebView) {
-                const reason = nativeWebView.reason() + '/' + resolver.webViewFailure();
-                setError('QR login could not load Discord’s browser on this build. You can still use email and password.'
-                    + (reason ? ' (MA-QR-' + reason + ')' : ''));
+                const reason = [nativeWebView.reason(), resolver.webViewFailure()].filter(Boolean).join('/');
+                setError('QR login could not load Discord’s browser on this build. Update More Alts and fully restart Discord, then try again. You can still use email and password.'
+                    + ` (More Alts ${installedVersion}; MA-QR-${reason || 'BROWSER'})`);
                 return;
             }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
+            setQrStatus('connecting');
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
             qrBlockedUntil.current = Date.now() + 3000;
             qrSession.current = { id, WebView, source: { html: makeQrHtml(id), baseUrl: QR_BASE_URL }, consumed: false };
@@ -184,8 +187,9 @@ export function createPlugin(V, host = globalThis) {
                 cacheEnabled: false, allowFileAccess: false, allowFileAccessFromFileURLs: false, allowUniversalAccessFromFileURLs: false,
                 mixedContentMode: 'never', setSupportMultipleWindows: false, javaScriptCanOpenWindowsAutomatically: false,
                 scrollEnabled: false, overScrollMode: 'never', showsHorizontalScrollIndicator: false, showsVerticalScrollIndicator: false,
-                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth + 52, borderRadius: 9 },
-                containerStyle: { flex: 0, width: qrWidth, height: qrWidth + 52, borderRadius: 9, overflow: 'hidden' },
+                accessibilityLabel: 'Discord sign-in QR code',
+                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth, borderRadius: 8 },
+                containerStyle: { flex: 0, width: qrWidth, height: qrWidth, borderRadius: 8, overflow: 'hidden' },
                 onOpenWindow: () => {},
                 onError: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
                 onRenderProcessGone: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
@@ -193,8 +197,10 @@ export function createPlugin(V, host = globalThis) {
                     if (!stillHere() || qrSession.current !== qr || qr.consumed) return;
                     const data = parseQrMessage(event, qr.id);
                     if (!data) return;
+                    if (data.type === 'status') { setQrStatus(data.status); return; }
                     if (data.type === 'error') {
                         qr.consumed = true;
+                        setQrStatus('error');
                         if (data.code === 'rate-limit') qrBlockedUntil.current = Date.now() + data.retryAfter * 1000;
                         setError(qrErrorMessage(data.code, data.retryAfter)); return;
                     }
@@ -204,7 +210,10 @@ export function createPlugin(V, host = globalThis) {
                         void run(() => instance.acceptQrLogin(data.token, data.userId), handleLogin);
                     }
                 }
-            }), text('Scan with Discord on another signed-in device and approve the login there.', { color: colors.muted, textAlign: 'center', marginTop: 14, fontSize: 14 }),
+            }), text('Log in with QR Code', { fontSize: 21, lineHeight: 28, fontWeight: '700', textAlign: 'center', marginTop: 20, marginBottom: 8 }),
+            text('Scan this with the Discord mobile app on another signed-in device, then approve the login.', { color: colors.muted, textAlign: 'center', fontSize: 14 }),
+            text('Discord Settings → Scan QR Code', { color: colors.muted, textAlign: 'center', fontSize: 13 }),
+            h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: colors.text, textAlign: 'center', fontSize: 14, lineHeight: 21, marginBottom: 10 } }, qrStatusMessage(qrStatus)),
             text('Only approve the code you generated here.', { color: colors.muted, textAlign: 'center', fontSize: 12 })) : null;
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [

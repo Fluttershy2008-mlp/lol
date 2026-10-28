@@ -353,3 +353,41 @@ test('More Alts QR bundled browser completes its exact HTML RSA handshake and sa
     assert.equal(socket.readyState, 3); assert.equal(exchange.length, 1);
     assert.equal(w.calls.filter(c => c[0] === 'fetch').length, 1); assert.equal(native.dependencies(), 0);
 });
+
+test('More Alts QR opens through the public RN registration API when bridge globals are hidden', async t => {
+    const w = scenario(t), native = installNativeWebView(w, { publicRegistration: true });
+    const { item, ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const view = w.browser(ui); assert.ok(view, 'public RN API must be sufficient to open the bundled browser');
+    assert.equal(native.dependencies(), 0); assert.equal(native.owned().length, 1);
+    await act(() => native.owned()[0][1].onMessage(completion(view)));
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+});
+
+test('More Alts QR presents a square code with Discord-style instructions and live approval status', async t => {
+    const w = scenario(t); installNativeWebView(w);
+    const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
+    const view = w.browser(ui), event = completion(view); assert.ok(view);
+    const style = w.RN.StyleSheet.flatten(view.props.style);
+    assert.ok(style.width >= 200); assert.equal(style.width, style.height, 'QR panel is square');
+    const json = JSON.stringify(ui.toJSON());
+    assert.match(json, /Log in with QR Code/); assert.match(json, /Discord mobile app/); assert.match(json, /Scan QR Code/);
+    assert.equal(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Password').length, 0);
+    const { session } = JSON.parse(event.nativeEvent.data);
+    await act(() => view.props.onMessage({ nativeEvent: { ...event.nativeEvent,
+        data: JSON.stringify({ provider: 'more-alts-qr', session, type: 'status', status: 'scanned' }) } }));
+    assert.match(JSON.stringify(ui.toJSON()), /Scanned! Approve this login in Discord/);
+    assert.ok(button(ui, 'Refresh QR code')); assert.ok(button(ui, 'Close add account'));
+    await act(button(ui, 'Back'));
+    assert.ok(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Password').length);
+});
+
+test('More Alts QR browser errors identify the loaded plugin or Classic source release', async t => {
+    const w = scenario(t), { item, ui } = await w.openManager();
+    await act(button(ui, 'Log in with QR Code'));
+    // Next's compatibility adapter exposes the Classic manifest; Valenced also
+    // provides the native port version. Both identify which code actually loaded.
+    const version = isValenced ? item.manifest.version : require('../../more-alts/manifest.base.json').version;
+    assert.match(JSON.stringify(ui.toJSON()), new RegExp('More Alts ' + version.replaceAll('.', '\\.')));
+    assert.match(JSON.stringify(ui.toJSON()), /MA-QR-/);
+    assert.ok(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Password').length);
+});

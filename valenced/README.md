@@ -10,7 +10,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Server Leaver 1.0.0-beta5 fixes the jumping preview after tapping Protect.** Server rows stay in name order, the ID editor has a fixed height, and real guild/theme changes replace the repeating refresh timer. All 22 main server IDs remain protected. Refresh the repository, update Server Leaver, then fully restart Discord. The main IDs stay protected after editing the field or switching accounts, and their rows show a disabled **Main protected** button. Existing additional protected IDs are preserved and remain separate for each account. Main IDs absent from the current account do not block its preview.
 
-**More Alts! 1.0.0-beta7 bundles the Android QR browser and removes the failing Discord WebView package lookup.** Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
+**More Alts! 1.0.0-beta8 adds the Discord-style QR panel and public RN messaging support.** The supplied image is a layout reference; each attempt generates a fresh code with live scan-and-approve status. Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
 
 **ExpressionCloner 1.0.0-beta3 fixes sticker upload discovery.** Refresh the repository, update ExpressionCloner, then force-close and reopen Discord. It resolves a late-loaded native uploader when you clone and uses a multipart request through Discord's signed-in HTTP client when the old module is absent. Mobile uploads use a temporary local file, cleaned up afterward. Failed creation requests are not retried automatically.
 
@@ -28,7 +28,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta7** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -138,3 +138,7 @@ Server Leaver beta4 protects the exact 22 main ID strings in both preview and th
 ### Server Leaver beta5 — stable scrolling
 
 Protect and Remove protection now update a server in place in name order. The ID editor stays 160 points tall rather than growing the header as IDs are added, and these actions dismiss any focused keyboard. Guild/theme subscriptions replace the 1.2-second refresh timer; manual Refresh and live queue progress remain available. Native Android clipping is disabled for this FlatList. Three new regression cases fail against beta4 and pass against beta5, covering a long preview, editor size/identity/focus, idle updates and store cleanup. Together with the existing main-ID checks, six native cases pass per host and all 28 source/runtime checks still pass. Actual Android touch scrolling remains to be verified on a device. Classic receives 1.0.4 and Next beta6.
+
+### More Alts beta8 — QR panel and public messaging
+
+The QR panel has a square white code, the Discord-style heading and scan instructions, and native live approval status. No uploaded QR image is reused. The bundled browser prefers RN’s public registerCallableModule API before the existing bridge-global fallbacks. Missing-browser errors include the installed plugin version. Three added native cases fail on beta7 and pass on beta8, covering public-only registration through approved-account saving, the panel/status/Back flow and version diagnostics. There are 33 QR cases per host and 92 More Alts source/protocol checks. Physical login remains unverified. Classic receives 3.1.8 and Next beta9. [Details and primary sources](../more-alts/README.md#qr-panel-and-public-rn-messaging-318--valenced-beta8--next-beta9).

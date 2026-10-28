@@ -34,7 +34,10 @@ function installNativeWebView(world, options = {}) {
         assert.match(name, /^MoreAltsQr_/); assert.equal(messages.has(name), false);
         messages.set(name, typeof value === 'function' ? value() : value);
     };
-    if (options.legacyBridge) {
+    if (options.publicRegistration) {
+        RN.registerCallableModule = register;
+    }
+    else if (options.legacyBridge) {
         world.host.__fbBatchedBridge = { registerCallableModule: register }; world.host.RN$Bridgeless = false;
         world.host.RN$registerCallableModule = () => { throw new Error('The legacy host must use its active bridge'); };
     }

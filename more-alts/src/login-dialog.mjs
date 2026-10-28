@@ -32,7 +32,7 @@ export function createLoginDialog(React, RN) {
                 style: { minHeight: 48, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 11,
                     backgroundColor: c.field, borderWidth: 1, borderColor: c.border, color: c.text, fontSize: 16 }, ...props }));
         const title = mfa ? 'Two-Factor Authentication' : 'Add Account';
-        const subtitle = qrMode ? 'Log in with QR Code. Scan using Discord on another device where your account is already signed in.' : mfa ? 'Enter an authenticator code or an unused backup code to finish signing in.'
+        const subtitle = qrMode ? 'Welcome back! Add your account by scanning the code below.' : mfa ? 'Enter an authenticator code or an unused backup code to finish signing in.'
             : 'Logging into another account will let you easily switch between accounts on this device.';
         return h(RN.Modal, { visible: true, transparent: true, animationType: 'fade',
             presentationStyle: 'overFullScreen', onRequestClose: onClose, statusBarTranslucent: true },

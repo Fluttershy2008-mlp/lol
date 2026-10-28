@@ -2,6 +2,11 @@
 import { QR_VENDOR_SOURCE, QR_RUNTIME_SOURCE } from './qr-assets.mjs';
 
 export const QR_BASE_URL = 'https://discord.com/';
+export function qrStatusMessage(status) {
+    return { connecting: 'Creating a fresh sign-in code…', ready: 'Ready to scan',
+        scanned: 'Scanned! Approve this login in Discord.', approved: 'Approved! Saving your account…',
+        error: 'QR sign-in stopped. Refresh the code to try again.' }[status] || '';
+}
 export function allowedQrNavigation(url) { return url === 'about:blank' || url === QR_BASE_URL || url === 'https://discord.com'; }
 export function parseQrMessage(event, session) {
     const raw = event?.nativeEvent;
@@ -33,7 +38,7 @@ export function makeQrHtml(session) {
     const runtime = `${QR_VENDOR_SOURCE}\n${QR_RUNTIME_SOURCE}`.replace(/<\/script/gi, '<\\/script');
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${session}'; style-src 'unsafe-inline'; connect-src wss://remote-auth-gateway.discord.gg https://discord.com/api/v9/users/@me/remote-auth/login; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
-<style>html,body{margin:0;padding:0;background:#fff;color:#242429;font:14px system-ui,sans-serif;text-align:center}body{padding:10px}#qr{width:min(224px,calc(100vw - 20px));height:min(224px,calc(100vw - 20px));margin:0 auto;display:flex;align-items:center;justify-content:center}svg{width:100%;height:100%;image-rendering:pixelated}#status{margin:8px auto 0;line-height:20px;max-width:260px}.waiting{font-size:16px;padding:20px}</style></head>
+<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#fff;color:#242429;font:14px system-ui,sans-serif;text-align:center}#qr{box-sizing:border-box;width:100%;height:100%;display:flex;align-items:center;justify-content:center}svg{display:block;width:100%;height:100%;image-rendering:pixelated}#status{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}.waiting{font-size:16px;padding:20px}</style></head>
 <body><div id="qr" class="waiting">Connecting to Discord…</div><div id="status">Creating a fresh sign-in code</div>
 <script nonce="${session}">${runtime}
 (function(){

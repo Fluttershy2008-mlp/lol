@@ -67,7 +67,7 @@ These plugin updates do not change Revenge's internal theme implementation. The 
 | InfoCommands | 1.2.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/info-commands/) |
 | Message Logger | 2.0.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger/) |
 | Message Logger V2 | 2.0.5 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/message-logger-v2/) |
-| More Alts! | 3.1.7 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/) |
+| More Alts! | 3.1.8 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/) |
 | Nitro Auto Claim | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/nitro-auto-claim/) |
 | PingJumper | 1.1.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/ping-jumper/) |
 | Profile Status Presets | 1.0.2 | [Install URL](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/profile-status-presets/) |

@@ -1066,7 +1066,10 @@ function createNativeWebView(React, RN, host = globalThis, getClient = webViewRu
         if (typeof manager?.dispatchViewManagerCommand !== 'function' || typeof RN.findNodeHandle !== 'function') return;
         failure = 'NATIVE-MESSAGING';
         let register;
-        if (host.RN$Bridgeless !== true && typeof host.__fbBatchedBridge?.registerCallableModule === 'function') {
+        if (typeof RN.registerCallableModule === 'function') {
+            // The public RN API selects the correct legacy or bridgeless path.
+            register = (name, value) => RN.registerCallableModule(name, value);
+        } else if (host.RN$Bridgeless !== true && typeof host.__fbBatchedBridge?.registerCallableModule === 'function') {
             register = (name, value) => host.__fbBatchedBridge.registerCallableModule(name, value);
         } else if (typeof host.RN$registerCallableModule === 'function') {
             register = (name, value) => host.RN$registerCallableModule(name, () => value);
@@ -1383,6 +1386,11 @@ const QR_RUNTIME_SOURCE = "/* SPDX-License-Identifier: GPL-3.0-or-later */\n// R
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 const QR_BASE_URL = 'https://discord.com/';
+function qrStatusMessage(status) {
+    return { connecting: 'Creating a fresh sign-in code…', ready: 'Ready to scan',
+        scanned: 'Scanned! Approve this login in Discord.', approved: 'Approved! Saving your account…',
+        error: 'QR sign-in stopped. Refresh the code to try again.' }[status] || '';
+}
 function allowedQrNavigation(url) { return url === 'about:blank' || url === QR_BASE_URL || url === 'https://discord.com'; }
 function parseQrMessage(event, session) {
     const raw = event?.nativeEvent;
@@ -1414,7 +1422,7 @@ function makeQrHtml(session) {
     const runtime = `${QR_VENDOR_SOURCE}\n${QR_RUNTIME_SOURCE}`.replace(/<\/script/gi, '<\\/script');
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${session}'; style-src 'unsafe-inline'; connect-src wss://remote-auth-gateway.discord.gg https://discord.com/api/v9/users/@me/remote-auth/login; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
-<style>html,body{margin:0;padding:0;background:#fff;color:#242429;font:14px system-ui,sans-serif;text-align:center}body{padding:10px}#qr{width:min(224px,calc(100vw - 20px));height:min(224px,calc(100vw - 20px));margin:0 auto;display:flex;align-items:center;justify-content:center}svg{width:100%;height:100%;image-rendering:pixelated}#status{margin:8px auto 0;line-height:20px;max-width:260px}.waiting{font-size:16px;padding:20px}</style></head>
+<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#fff;color:#242429;font:14px system-ui,sans-serif;text-align:center}#qr{box-sizing:border-box;width:100%;height:100%;display:flex;align-items:center;justify-content:center}svg{display:block;width:100%;height:100%;image-rendering:pixelated}#status{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}.waiting{font-size:16px;padding:20px}</style></head>
 <body><div id="qr" class="waiting">Connecting to Discord…</div><div id="status">Creating a fresh sign-in code</div>
 <script nonce="${session}">${runtime}
 (function(){
@@ -1466,7 +1474,7 @@ function createLoginDialog(React, RN) {
                 style: { minHeight: 48, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 11,
                     backgroundColor: c.field, borderWidth: 1, borderColor: c.border, color: c.text, fontSize: 16 }, ...props }));
         const title = mfa ? 'Two-Factor Authentication' : 'Add Account';
-        const subtitle = qrMode ? 'Log in with QR Code. Scan using Discord on another device where your account is already signed in.' : mfa ? 'Enter an authenticator code or an unused backup code to finish signing in.'
+        const subtitle = qrMode ? 'Welcome back! Add your account by scanning the code below.' : mfa ? 'Enter an authenticator code or an unused backup code to finish signing in.'
             : 'Logging into another account will let you easily switch between accounts on this device.';
         return h(RN.Modal, { visible: true, transparent: true, animationType: 'fade',
             presentationStyle: 'overFullScreen', onRequestClose: onClose, statusBarTranslucent: true },
@@ -1511,6 +1519,7 @@ function createLoginDialog(React, RN) {
 function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
+    const installedVersion = V.plugin.version ?? V.plugin.manifest?.version ?? 'unknown';
     const LoginDialog = createLoginDialog(React, RN);
     const resolver = createModuleResolver(V.metro);
     const nativeWebView = createNativeWebView(React, RN, host);
@@ -1587,6 +1596,7 @@ function createPlugin(V, host = globalThis) {
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
+        const [qrStatus, setQrStatus] = React.useState('connecting');
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
@@ -1664,13 +1674,14 @@ function createPlugin(V, host = globalThis) {
             try { WebView = nativeWebView.load() ?? resolver.webView(); } catch {}
             if (!stillHere()) return;
             if (!WebView) {
-                const reason = nativeWebView.reason() + '/' + resolver.webViewFailure();
-                setError('QR login could not load Discord’s browser on this build. You can still use email and password.'
-                    + (reason ? ' (MA-QR-' + reason + ')' : ''));
+                const reason = [nativeWebView.reason(), resolver.webViewFailure()].filter(Boolean).join('/');
+                setError('QR login could not load Discord’s browser on this build. Update More Alts and fully restart Discord, then try again. You can still use email and password.'
+                    + ` (More Alts ${installedVersion}; MA-QR-${reason || 'BROWSER'})`);
                 return;
             }
             stopQr(); instance.cancelLogin();
             setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
+            setQrStatus('connecting');
             const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
             qrBlockedUntil.current = Date.now() + 3000;
             qrSession.current = { id, WebView, source: { html: makeQrHtml(id), baseUrl: QR_BASE_URL }, consumed: false };
@@ -1686,8 +1697,9 @@ function createPlugin(V, host = globalThis) {
                 cacheEnabled: false, allowFileAccess: false, allowFileAccessFromFileURLs: false, allowUniversalAccessFromFileURLs: false,
                 mixedContentMode: 'never', setSupportMultipleWindows: false, javaScriptCanOpenWindowsAutomatically: false,
                 scrollEnabled: false, overScrollMode: 'never', showsHorizontalScrollIndicator: false, showsVerticalScrollIndicator: false,
-                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth + 52, borderRadius: 9 },
-                containerStyle: { flex: 0, width: qrWidth, height: qrWidth + 52, borderRadius: 9, overflow: 'hidden' },
+                accessibilityLabel: 'Discord sign-in QR code',
+                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth, borderRadius: 8 },
+                containerStyle: { flex: 0, width: qrWidth, height: qrWidth, borderRadius: 8, overflow: 'hidden' },
                 onOpenWindow: () => {},
                 onError: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
                 onRenderProcessGone: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
@@ -1695,8 +1707,10 @@ function createPlugin(V, host = globalThis) {
                     if (!stillHere() || qrSession.current !== qr || qr.consumed) return;
                     const data = parseQrMessage(event, qr.id);
                     if (!data) return;
+                    if (data.type === 'status') { setQrStatus(data.status); return; }
                     if (data.type === 'error') {
                         qr.consumed = true;
+                        setQrStatus('error');
                         if (data.code === 'rate-limit') qrBlockedUntil.current = Date.now() + data.retryAfter * 1000;
                         setError(qrErrorMessage(data.code, data.retryAfter)); return;
                     }
@@ -1706,7 +1720,10 @@ function createPlugin(V, host = globalThis) {
                         void run(() => instance.acceptQrLogin(data.token, data.userId), handleLogin);
                     }
                 }
-            }), text('Scan with Discord on another signed-in device and approve the login there.', { color: colors.muted, textAlign: 'center', marginTop: 14, fontSize: 14 }),
+            }), text('Log in with QR Code', { fontSize: 21, lineHeight: 28, fontWeight: '700', textAlign: 'center', marginTop: 20, marginBottom: 8 }),
+            text('Scan this with the Discord mobile app on another signed-in device, then approve the login.', { color: colors.muted, textAlign: 'center', fontSize: 14 }),
+            text('Discord Settings → Scan QR Code', { color: colors.muted, textAlign: 'center', fontSize: 13 }),
+            h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: colors.text, textAlign: 'center', fontSize: 14, lineHeight: 21, marginBottom: 10 } }, qrStatusMessage(qrStatus)),
             text('Only approve the code you generated here.', { color: colors.muted, textAlign: 'center', fontSize: 12 })) : null;
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [

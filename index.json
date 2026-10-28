@@ -988,11 +988,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta9": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.more-alts@1.0.0-beta9.zip",
+          "sha256": "df041687df14f0f887d8d21b59bafda854ab25f733995ef6e9b92ede1c0fad30",
+          "size": 68556,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta8",
-        "beta": "1.0.0-beta8"
+        "latest": "1.0.0-beta9",
+        "beta": "1.0.0-beta9"
       },
       "name": "More Alts! (Next preview)",
       "description": "Revenge Next preview. Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Revenge settings.",

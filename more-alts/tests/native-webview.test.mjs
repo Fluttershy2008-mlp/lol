@@ -57,3 +57,9 @@ test('missing callable messaging fails before registering a native host view', (
     assert.equal(f.provider.load(), undefined); assert.equal(f.provider.reason(), 'NATIVE-MESSAGING');
     assert.equal(f.views(), 0);
 });
+
+test('bundled browser supports React Native’s public callable-module API without bridge globals', () => {
+    const f = fixture(); delete f.host.RN$registerCallableModule;
+    f.RN.registerCallableModule = () => {};
+    assert.ok(f.provider.load()); assert.equal(f.provider.reason(), undefined);
+});
