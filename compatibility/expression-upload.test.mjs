@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createExpressionUpload } from './expression-upload.mjs';
+import { createExpressionUpload, expressionResponse } from './expression-upload.mjs';
 
 class NativeFormData {
   constructor() { this.parts = []; }
@@ -73,4 +73,55 @@ test('native files require only write/remove and can resolve through the RN faca
   const f = fixture(), files = Object.freeze({ writeFile() {}, removeFile() {} });
   f.V.metro.common.ReactNative.NativeModules = { NativeFileModule: files };
   assert.equal(f.uploads.files(), files);
+});
+
+for (const [label, response] of [
+  ['JSON text', { status: 201, text: '{"id":"created"}' }],
+  ['string body', { status: 201, body: '{"id":"created"}' }],
+  ['data envelope', { status: 201, data: { id: 'created' } }],
+  ['nested body', { status: 201, data: { body: { id: 'created' } } }],
+  ['Fetch response', new Response('{"id":"created"}', { status: 201 })],
+  ['promised body', { status: 201, body: Promise.resolve({ id: 'created' }) }],
+]) test('creation accepts ' + label + ' without a second POST', async () => {
+  const f = fixture(); f.rest.post = async input => { f.calls.push(input); return response; };
+  assert.equal((await f.uploads.resolve('emoji')(emoji)).id, 'created'); assert.equal(f.calls.length, 1);
+});
+
+test('a successful empty response is verified by a new server ID, with one POST', async () => {
+  const f = fixture(), list = [{ id: 'old', name: 'pony' }], reads = [];
+  f.rest.get = async input => { reads.push(input); return { text: JSON.stringify(list) }; };
+  f.rest.post = async input => { f.calls.push(input); list.push({ id: 'created', name: 'pony' }); return { status: 201 }; };
+  assert.equal((await f.uploads.resolve('emoji')(emoji)).id, 'created');
+  assert.equal(f.calls.length, 1); assert.equal(reads.length, 2);
+});
+for (const extra of [[], [{ id: 'other1', name: 'pony' }, { id: 'other2', name: 'pony' }]])
+test('read-back does not mistake existing or ambiguous names for this upload: ' + extra.length, async () => {
+  const f = fixture(), list = [{ id: 'old', name: 'pony' }];
+  f.rest.get = async () => ({ body: [...list] });
+  f.rest.post = async input => { f.calls.push(input); list.push(...extra); return { status: 201 }; };
+  await assert.rejects(f.uploads.resolve('emoji')(emoji), /did not confirm/); assert.equal(f.calls.length, 1);
+});
+test('HTTP errors in JSON text retain their status and Discord message', async () => {
+  const f = fixture(); f.rest.post = async () => new Response('{"code":50013,"message":"Missing permissions"}', { status: 403 });
+  await assert.rejects(f.uploads.resolve('emoji')(emoji), error => error.status === 403 && error.body.code === 50013);
+});
+test('an unreadable response cannot become a created expression', async () => {
+  assert.equal(await expressionResponse({ status: 201, text: '<html>broken</html>' }), undefined);
+});
+test('an unavailable preflight read does not block an explicitly confirmed upload', async () => {
+  const f = fixture(); f.rest.get = async () => { throw new Error('read unavailable'); };
+  assert.equal((await f.uploads.resolve('emoji')(emoji)).id,'created'); assert.equal(f.calls.length,1);
+});
+test('a new expression belonging to another user cannot confirm an empty response', async () => {
+  const f = fixture(); let posted = false;
+  f.V.metro.findByStoreName = () => ({ getCurrentUser: () => ({ id: 'me' }) });
+  f.rest.get = async () => ({ body: posted ? [{ id: 'new', name: 'pony', user: { id: 'other' } }] : [] });
+  f.rest.post = async input => { f.calls.push(input); posted = true; return { status: 201 }; };
+  await assert.rejects(f.uploads.resolve('emoji')(emoji),/did not confirm/); assert.equal(f.calls.length,1);
+});
+test('account cancellation during a preflight read stops the write', async () => {
+  const f = fixture(); let current = true;
+  f.rest.get = async () => { current = false; return { body: [] }; };
+  await assert.rejects(f.uploads.resolve('emoji')(emoji,() => { if (!current) throw new Error('cancelled'); }),/cancelled/);
+  assert.equal(f.calls.length,0);
 });

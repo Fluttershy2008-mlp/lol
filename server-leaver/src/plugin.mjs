@@ -90,7 +90,8 @@ export function createPlugin(V, host = globalThis) {
     const [draft, setDraft] = React.useState(saved);
     const [boundAccount, setBoundAccount] = React.useState(id);
     const [query, setQuery] = React.useState('');
-    React.useEffect(() => { setBoundAccount(id); setDraft(safe(() => idsFor(id)) ?? ''); setQuery(''); }, [id]);
+    const [editing, setEditing] = React.useState(false);
+    React.useEffect(() => { setBoundAccount(id); setDraft(safe(() => idsFor(id)) ?? ''); setQuery(''); setEditing(false); }, [id]);
     React.useEffect(() => {
       listeners.add(refresh);
       return () => { listeners.delete(refresh); };
@@ -110,7 +111,11 @@ export function createPlugin(V, host = globalThis) {
         borderRadius: 9, borderWidth: 1, borderColor: danger ? c.danger : c.border, opacity: disabled ? 0.4 : 1, marginTop: 10 },
     }, text(label, { color: danger ? c.danger : c.accent, fontWeight: '700' }));
     function saveDraft() {
-      try { safe(() => RN.Keyboard?.dismiss?.()); setDraft(save(id, draft)); } catch (e) { showError(e); }
+      try { safe(() => RN.Keyboard?.dismiss?.()); setDraft(save(id, draft)); setEditing(false); } catch (e) { showError(e); }
+    }
+    function closeEditor() {
+      if (account() !== id) return;
+      safe(() => RN.Keyboard?.dismiss?.()); setDraft(safe(() => idsFor(id)) ?? ''); setBoundAccount(id); setEditing(false);
     }
     function toggle(serverID) {
       try {
@@ -129,17 +134,22 @@ export function createPlugin(V, host = globalThis) {
       .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
       .filter(row => `${row.name}\n${row.id}`.toLowerCase().includes(query.trim().toLowerCase())) : [];
     const inputStyle = { color: c.text, backgroundColor: c.card, borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, marginTop: 10 };
-    const header = h(RN.View, { style: { paddingBottom: 14 } },
-      text('Server Leaver', { fontSize: 26, lineHeight: 34, fontWeight: '800' }),
-      text('Keep the servers you choose. Leave the rest after confirming.', { color: c.muted, marginTop: 5 }),
-      text('Protected server IDs', { fontWeight: '700', marginTop: 18 }),
-      text(`${MAIN_PROTECTED_IDS.length} main server IDs are always protected. Saving restores them if removed from this field.`, { color: c.muted }),
-      text('Paste server IDs below, or tap Protect beside a server. Spaces, commas and new lines work.', { color: c.muted }),
+    const editor = h(RN.View, null,
+      text('Protected server IDs', { fontSize: 22, lineHeight: 30, fontWeight: '800' }),
+      text(`${MAIN_PROTECTED_IDS.length} main server IDs are always protected. Saving restores them if removed from this field.`, { color: c.muted, marginTop: 8 }),
+      text('Spaces, commas and new lines work.', { color: c.muted }),
       h(RN.TextInput, { accessibilityLabel: 'Protected server IDs', value: draft, onChangeText: setDraft, editable: !busy,
         multiline: true, autoCorrect: false, autoCapitalize: 'none', placeholder: 'Paste the server IDs you want to keep',
         scrollEnabled: true, placeholderTextColor: c.muted,
         style: { ...inputStyle, height: 160, textAlignVertical: 'top' } }),
-      button(dirty ? 'Save protected IDs' : 'Protected IDs saved', saveDraft, busy || !validID(id) || boundAccount !== id),
+      button('Save protected IDs', saveDraft, busy || !validID(id) || boundAccount !== id));
+    const header = h(RN.View, { style: { paddingBottom: 14 } },
+      text('Server Leaver', { fontSize: 26, lineHeight: 34, fontWeight: '800' }),
+      text('Keep the servers you choose. Leave the rest after confirming.', { color: c.muted, marginTop: 5 }),
+      text('Protected server IDs', { fontWeight: '700', marginTop: 18 }),
+      text('Your 22 main servers always stay. Tap Protect beside any other server you want to keep.', { color: c.muted }),
+      RN.Modal ? button('Edit protected IDs', () => { setDraft(saved); setBoundAccount(id); setEditing(true); }, busy)
+        : editor,
       dirty ? text('Save your changes before leaving any servers.', { color: c.danger, marginTop: 8 }) : null,
       error ? text(error, { color: c.danger, marginTop: 12 }) : null,
       plan ? h(RN.View, { style: { padding: 16, backgroundColor: c.card, borderRadius: 12, marginTop: 18 } },
@@ -157,7 +167,7 @@ export function createPlugin(V, host = globalThis) {
       h(RN.TextInput, { accessibilityLabel: 'Search servers', value: query, onChangeText: setQuery, autoCorrect: false,
         autoCapitalize: 'none', placeholder: 'Search server name or ID', placeholderTextColor: c.muted, style: inputStyle }),
       text('Preview — green servers stay, red servers will be left.', { color: c.muted, marginTop: 12 }));
-    return h(RN.FlatList, { style: { flex: 1, backgroundColor: c.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 },
+    const list = h(RN.FlatList, { style: { flex: 1, backgroundColor: c.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 },
       data: rows, keyExtractor: row => row.id, ListHeaderComponent: header, keyboardShouldPersistTaps: 'handled',
       keyboardDismissMode: 'on-drag', removeClippedSubviews: false,
       initialNumToRender: 12, ListEmptyComponent: text(error ? 'Fix the issue above to see your server preview.' : 'No matching servers.', { color: c.muted }),
@@ -167,6 +177,13 @@ export function createPlugin(V, host = globalThis) {
         button(isMainProtected(row.id) ? 'Main protected' : plan.ids.includes(row.id) ? 'Remove protection' : 'Protect',
           () => toggle(row.id), isMainProtected(row.id) || busy || dirty)),
     });
+    if (!RN.Modal) return list;
+    return h(RN.View, { style: { flex: 1, backgroundColor: c.bg } }, list,
+      editing ? h(RN.Modal, { visible: true, transparent: true, animationType: 'fade', onRequestClose: closeEditor },
+        h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : 'height' },
+          h(RN.View, { style: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', padding: 20 } },
+            h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', style: { flexGrow: 0, maxHeight: '90%', backgroundColor: c.bg, borderRadius: 16 },
+              contentContainerStyle: { padding: 20 } }, editor, button('Cancel editing', closeEditor))))) : null);
   }
   function open() {
     if (!active) return;

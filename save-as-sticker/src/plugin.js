@@ -1,5 +1,7 @@
 import { isGIF, prepareGIF } from "./gif.js";
 import { createExpressionUpload } from "../../compatibility/expression-upload.mjs";
+import { createExpressionPanel } from "../../compatibility/expression-panel.mjs";
+import { prepareStaticImage } from "./static-image.mjs";
 
 export default (() => {
   "use strict";
@@ -8,6 +10,7 @@ export default (() => {
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement;
   const uploads = createExpressionUpload(V);
+  const panels = createExpressionPanel(V, 'SaveAsStickerPicker');
   const SHEET_KEY = "SaveAsStickerPicker", ROW_KEY = "save-as-sticker-action";
   const MAX_BYTES = 512 * 1024, MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
   const LIMITS = [5, 15, 30, 60], unpatches = [];
@@ -74,7 +77,7 @@ export default (() => {
     if (!knownImage && kind !== "image" && !mime.startsWith("image/")
       && !/\.(png|apng|jpe?g|webp|gif|avif|bmp)(?:[?#]|$)/i.test(filename)
       && !/\.(png|apng|jpe?g|webp|gif|avif|bmp)(?:[?#]|$)/i.test(url)) return null;
-    return { url, filename, contentType: animatedGIF ? "image/gif" : mime, id: source.id ?? source.attachmentId };
+    return { url, proxyURL: source.proxy_url ?? source.proxyURL, filename, contentType: animatedGIF ? "image/gif" : mime, id: source.id ?? source.attachmentId };
   }
 
   function resolveImages(...values) {
@@ -205,6 +208,25 @@ export default (() => {
       if (cropPath && picker?.cleanSingle) { try { await picker.cleanSingle(cropPath); } catch {} }
       for (const path of temporary) { try { await files.removeFile("cache", path); } catch {} }
     }
+    async function software(data, originalURL) {
+      try { return prepareStaticImage(data, check).base64; }
+      catch (error) {
+        if (error?.code !== 'STATIC_FORMAT_UNSUPPORTED') throw error;
+        // Discord's own media proxy can turn WebP/AVIF attachments into PNG.
+        const source = image.proxyURL ?? originalURL;
+        if (!/^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|ephemeral-attachments|external)\//i.test(source))
+          throw new Error('Use a PNG or JPEG image, or an animated GIF. This image format could not be converted.');
+        const converted = new URL(source.replace(/^https:\/\/cdn\.discordapp\.com/i, 'https://media.discordapp.net'));
+        converted.searchParams.set('format', 'png'); converted.searchParams.set('width', '320'); converted.searchParams.set('height', '320');
+        check();
+        const response = await (V.utils?.safeFetch ?? fetch)(converted.toString(), {}, 20000);
+        if (!response.ok) throw new Error('Discord could not convert this image to PNG. Use the original PNG or JPEG.');
+        const blob = await response.blob();
+        if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error('Choose an image smaller than 25 MB.');
+        const encoded = await readBlob(blob); check();
+        return prepareStaticImage(encoded, check).base64;
+      }
+    }
     try {
       let url = image.url;
       const refresh = byProps("maybeRefreshAttachmentUrl");
@@ -235,22 +257,33 @@ export default (() => {
       }
       const size = pngSize(data);
       if (!size || size.width !== 320 || size.height !== 320 || base64Bytes(data) > MAX_BYTES) {
-        if (!picker?.launchCropper) throw new Error("Image cropping is unavailable. Choose a 320×320 PNG under 512 KiB.");
-        const mime = blob.type || image.contentType || "image/png";
-        const ext = /jpeg/i.test(mime) ? "jpg" : /webp/i.test(mime) ? "webp" : /gif/i.test(mime) ? "gif" : /avif/i.test(mime) ? "avif" : "png";
-        const input = prefix + "." + ext;
-        temporary.push(input);
-        const local = fileUri(await files.writeFile("cache", input, data, "base64"));
-        check();
-        const result = await picker.launchCropper({
-          uri: local, width: 320, height: 320, mimeType: "image/png", includeBase64: true, freeStyleCropEnabled: false,
-        });
-        cropPath = result?.path ?? result?.uri;
-        check();
-        data = result?.data ?? result?.base64;
-        if (!data && cropPath && files.readFile) data = await files.readFile(cropPath.replace(/^file:\/\//, ""), "base64");
-        if (typeof data !== "string" || !data) throw new Error("The cropper did not return an image.");
-        data = data.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+        if (!picker?.launchCropper) data = await software(data, url);
+        else {
+          const original = data, mime = blob.type || image.contentType || "image/png";
+          const ext = /jpeg/i.test(mime) ? "jpg" : /webp/i.test(mime) ? "webp" : /avif/i.test(mime) ? "avif" : "png";
+          const input = prefix + "." + ext;
+          temporary.push(input);
+          const local = fileUri(await files.writeFile("cache", input, data, "base64"));
+          check();
+          let result;
+          try {
+            result = await picker.launchCropper({
+              uri: local, width: 320, height: 320, mimeType: "image/png", includeBase64: true, freeStyleCropEnabled: false,
+            });
+          } catch (error) {
+            if (error?.code === 'E_PICKER_CANCELLED' || /cancel/i.test(String(error?.message ?? ''))) throw error;
+            check(); // A present but unavailable native cropper can still use the bundled decoder.
+          }
+          cropPath = result?.path ?? result?.uri;
+          check();
+          data = result?.data ?? result?.base64;
+          if (!data && cropPath && files.readFile) data = await files.readFile(cropPath.replace(/^file:\/\//, ""), "base64");
+          if (typeof data !== "string" || !data) data = original;
+          data = data.replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+          const croppedSize = pngSize(data);
+          if (!croppedSize || croppedSize.width !== 320 || croppedSize.height !== 320 || base64Bytes(data) > MAX_BYTES)
+            data = await software(data, url);
+        }
       }
       const outputSize = pngSize(data);
       if (!outputSize || outputSize.width !== 320 || outputSize.height !== 320) {
@@ -311,11 +344,12 @@ export default (() => {
     } finally { await prepared?.cleanup?.(); saving = false; }
   }
 
-  function Picker({ images }) {
+  function Picker({ images, onClose, inPanel = false }) {
     const [image, setImage] = React.useState(images.length === 1 ? images[0] : null);
     const [guild, setGuild] = React.useState(null);
     const [name, setName] = React.useState(filenameName(images[0]?.filename));
     const [, setRevision] = React.useState(0);
+    const [query, setQuery] = React.useState('');
     const dark = (byStore("ThemeStore")?.theme ?? RN.Appearance?.getColorScheme?.()) !== "light";
     const colors = { text: dark ? "#f2f3f5" : "#1e1f22", muted: dark ? "#b5bac1" : "#4e5058", input: dark ? "#1e1f22" : "#e3e5e8" };
     React.useEffect(() => {
@@ -330,19 +364,19 @@ export default (() => {
       style: { padding: 14, borderRadius: 8, backgroundColor: disabled ? "#555967" : "#5865f2", marginTop: 12 },
     }, text(label, { color: "#ffffff", fontWeight: "600", textAlign: "center" }));
     const inputStyle = { color: colors.text, backgroundColor: colors.input, borderRadius: 8, padding: 12, fontSize: 16, marginTop: 10 };
-    const close = () => sheetHost.hideActionSheet(SHEET_KEY);
+    const close = onClose ?? (() => sheetHost.hideActionSheet(SHEET_KEY));
     const headerImage = image ? h(RN.Image, {
       source: { uri: image.url }, resizeMode: "contain", accessibilityLabel: "Sticker preview",
       style: { width: 26, height: 26, marginRight: 12 },
     }) : null;
     const title = guild ? "Sticker name" : image ? "Saving " + filenameName(image.filename) : "Choose image";
-    const closeControl = CloseButton
+    const closeControl = !inPanel && CloseButton
       ? h(CloseButton, { onPress: close, accessibilityLabel: "Close" })
       : h(RN.Pressable, {
           onPress: close, accessibilityRole: "button", accessibilityLabel: "Close",
           hitSlop: 10, style: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
         }, text("×", { fontSize: 32, lineHeight: 36 }));
-    const header = TitleHeader ? h(TitleHeader, { title, leading: headerImage, trailing: closeControl })
+    const header = !inPanel && TitleHeader ? h(TitleHeader, { title, leading: headerImage, trailing: closeControl })
       : h(RN.View, { style: { flexDirection: "row", alignItems: "center", paddingHorizontal: 28, minHeight: 72 } },
           headerImage, h(RN.Text, {
             numberOfLines: 1, style: { flex: 1, color: colors.text, fontSize: 20, fontWeight: "600", textAlign: "center", paddingHorizontal: 8 },
@@ -390,19 +424,25 @@ export default (() => {
     }
 
     if (image && !guild) {
-      const data = eligibleGuilds();
+      const data = eligibleGuilds().filter(item => `${item.name}\n${item.id}`.toLowerCase().includes(query.trim().toLowerCase()));
       const empty = h(RN.View, { style: { padding: 24 } }, text(
-        "No servers available. You need Create Expressions permission to add a sticker.",
+        query.trim() ? 'No servers match your search.' : "No servers available. You need Create Expressions permission to add a sticker.",
         { color: colors.muted, fontSize: 14 },
       ));
-      const list = ServerList ? h(ServerList, {
+      const List = inPanel ? RN.FlatList : ServerList;
+      const list = List ? h(List, {
         style: { flex: 1 }, contentContainerStyle: { paddingBottom: 32 }, data,
+        keyboardShouldPersistTaps: 'handled', keyboardDismissMode: 'on-drag', nestedScrollEnabled: true,
+        removeClippedSubviews: false, initialNumToRender: 12,
         renderItem: ({ item }) => serverRow(item), keyExtractor: item => item.id,
         extraData: data.map(item => item.id + ":" + stickerSlots(item).used).join(","),
         ListEmptyComponent: empty,
       }) : h(RN.ScrollView, { style: { flex: 1 }, contentContainerStyle: { paddingBottom: 32 } },
         data.length ? data.map(serverRow) : empty);
-      return h(Sheet, { scrollable: true }, h(RN.View, { style: { height: sheetHeight } }, header, list));
+      const body = h(RN.View, { style: inPanel ? { flex: 1, minHeight: 0 } : { height: sheetHeight } }, header,
+        h(RN.TextInput, { accessibilityLabel: 'Search servers', placeholder: 'Search server name or ID', placeholderTextColor: colors.muted,
+          value: query, onChangeText: setQuery, autoCorrect: false, autoCapitalize: 'none', style: { ...inputStyle, marginHorizontal: 20, marginBottom: 12 } }), list);
+      return inPanel ? body : h(Sheet, { scrollable: false }, body);
     }
 
     let content;
@@ -418,20 +458,24 @@ export default (() => {
         h(RN.Image, { source: { uri: image.url }, style: { height: 128, width: "100%", marginBottom: 12 }, resizeMode: "contain" }),
         text("Server: " + guild.name, { fontWeight: "600" }), text("Sticker name", { marginTop: 12 }),
         h(RN.TextInput, { value: name, onChangeText: setName, maxLength: 30, placeholder: "Sticker name", placeholderTextColor: colors.muted, style: inputStyle, selectTextOnFocus: true }),
-        text(image.contentType === "image/gif" ? "GIFs keep their animation and resize automatically. Maximum 5 seconds and 512 KiB." : "Crop to 320×320 if needed. GIFs keep their animation.", { color: colors.muted, fontSize: 13, marginTop: 12 }),
-        button("Add sticker", () => { void save(guild, image, name.trim()); }, !valid),
+        text(image.contentType === "image/gif" ? "GIFs keep their animation and resize automatically. Maximum 5 seconds and 512 KiB." : "Images fit inside 320×320 with transparent padding. GIFs keep their animation.", { color: colors.muted, fontSize: 13, marginTop: 12 }),
+        button("Add sticker", () => { close(); void save(guild, image, name.trim()); }, !valid),
         button("Choose another server", () => setGuild(null))
       );
     }
-    return h(Sheet, { scrollable: true }, header, h(RN.ScrollView, {
-      keyboardShouldPersistTaps: "handled", style: { maxHeight: sheetHeight },
+    const body = h(RN.View, { style: inPanel ? { flex: 1, minHeight: 0 } : {} }, header, h(RN.ScrollView, {
+      keyboardShouldPersistTaps: "handled", keyboardDismissMode: 'on-drag', style: inPanel ? { flex: 1 } : { maxHeight: sheetHeight },
       contentContainerStyle: { padding: 20, paddingBottom: 40 },
     }, content));
+    return inPanel ? body : h(Sheet, { scrollable: false }, body);
   }
 
   function openPicker(images, fromKey) {
     if (!active) return;
     if (saving) { toast("A sticker upload is already in progress."); return; }
+    if (panels.open(close => h(Picker, { images, onClose: close, inPanel: true }), 'sticker picker')) {
+      sheetHost.hideActionSheet(fromKey); return;
+    }
     if (!Sheet) { toast("The server picker is unavailable on this Discord build."); return; }
     sheetHost.hideActionSheet(fromKey);
     const ErrorBoundary = V.ui.components?.ErrorBoundary;
@@ -520,10 +564,11 @@ export default (() => {
         return { ...module, default: wrapSheet(module.default, context, key, session) };
       });
     }));
-    toast("SaveAsSticker 1.3.2 enabled");
+    toast("SaveAsSticker enabled");
   }
   function onUnload() {
     active = false; generation++;
+    panels.closeAll();
     for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }
     try { sheetHost?.hideActionSheet?.(SHEET_KEY); } catch {}
   }

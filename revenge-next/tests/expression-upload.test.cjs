@@ -26,12 +26,13 @@ function button(ui, label) {
     assert.ok(n, 'button exists: ' + label); assert.notEqual(n.props.disabled, true); return n.props.onPress;
 }
 function scenario(t, options = {}) {
-    const bytes = options.gif ? Buffer.from(gifFixture({ width: 320, height: 320 })) : options.jpeg ? Buffer.from([255,216,255,224,0]) : png;
+    const bytes = options.bytes ?? (options.gif ? Buffer.from(gifFixture({ width: 320, height: 320 })) : options.jpeg ? Buffer.from([255,216,255,224,0]) : png);
     const mime = options.gif ? 'image/gif' : options.jpeg ? 'image/jpeg' : 'image/png';
     const w = createWorld({ splitHTTP: true, curatedOnly: true,
         globals: { FileReader: Reader, FormData: NativeFormData },
         fetch: options.fetch ?? (() => new Response(bytes, { headers: { 'content-type': mime } })),
         http: async (method, input) => {
+            if (method === 'get') return options.read ? options.read(input) : { status: 200, body: [] };
             assert.equal(method, 'post');
             assert.ok(/^\/guilds\/\d+\/(stickers|emojis)$/.test(input.url));
             return options.post ? options.post(input) : { status: 201, body: { id: CREATED, name: 'renamed' } };
@@ -44,15 +45,16 @@ function scenario(t, options = {}) {
     }, async removeFile(dir, name) { deletes.push({ dir, name }); } };
     // This API is the only file module: no Metro barrel or RN.NativeModules entry.
     w.U.discord.native = { FileModule: files };
-    w.addModule({ async launchCropper(input) {
-        crops.push(input); return { path: '/crop/result.png', data: png.toString('base64') };
+    if (!options.noCropper) w.addModule({ async launchCropper(input) {
+        crops.push(input); if (options.crop) return options.crop(input);
+        return { path: '/crop/result.png', data: png.toString('base64') };
     }, async cleanSingle(path) { cleans.push(path); } });
     w.expectedErrors = 0;
     w.native = { async createGuildSticker(input) { nativePosts.push(input); return { id: CREATED }; },
         async uploadEmoji(input) { nativePosts.push(input); return { id: CREATED }; } };
     w.mount = async element => { let ui; await act(() => { ui = Renderer.create(element); }); renders.push(ui); return ui; };
-    w.open = async kind => {
-        const item = await w.start(kind), Row = w.U.discord.design.Design.ActionSheetRow;
+    w.open = async (kind, { choose = true } = {}) => {
+        const item = w.loaded.get(kind) ?? await w.start(kind), Row = w.U.discord.design.Design.ActionSheetRow;
         const attachment = { filename: 'image.' + (options.gif ? 'gif' : options.jpeg ? 'jpg' : 'png'), content_type: mime,
             url: 'https://cdn.discordapp.com/attachments/1/2/image.' + (options.gif ? 'gif' : 'png') + '?ex=expiry&hm=signature' };
         const context = kind === 'save-as-sticker' ? { message: { attachments: [attachment] } }
@@ -61,8 +63,11 @@ function scenario(t, options = {}) {
             [h(Row, { key: 'original', label: 'Original item', onPress() {} })]) }), kind === 'save-as-sticker' ? 'MessageLongPressActionSheet' : 'MessageEmojiActionSheet', context);
         const menu = await w.mount(h(module.default, context));
         await act(button(menu, kind === 'save-as-sticker' ? 'Save as Sticker' : 'Stealmoji · Add / save emoji'));
-        const entry = w.openedSheets.at(-1), picker = await entry.promise;
-        const ui = await w.mount(h(picker.default, entry.context));
+        let ui;
+        const panel = w.alerts.at(-1);
+        if (panel && /Picker\.panel\./.test(panel[0])) ui = await w.mount(panel[1]);
+        else { const entry = w.openedSheets.at(-1), picker = await entry.promise; ui = await w.mount(h(picker.default, entry.context)); }
+        if (!choose) return { item, ui };
         await act(button(ui, 'Test Guild'));
         const field = ui.root.findAll(n => n.type === 'TextInput' && n.props.placeholder === (kind === 'save-as-sticker' ? 'Sticker name' : 'Emoji name'))[0];
         assert.ok(field); await act(() => field.props.onChangeText('renamed'));
@@ -98,6 +103,31 @@ for (const gif of [false, true]) test('SaveAsSticker uploads ' + (gif ? 'animate
     assert.ok(w.toasts.includes('Sticker added to Test Guild'));
 });
 
+for (const format of ['png', 'jpeg']) test('SaveAsSticker prepares a real ' + format + ' without any native cropper', async t => {
+    const { encode, decode } = await import('fast-png'), jpeg = require('jpeg-js');
+    const data = new Uint8Array(80 * 40 * 4); for (let p = 0; p < data.length; p += 4) data.set([255,0,0,255],p);
+    const raw = { width: 80, height: 40, data, depth: 8, channels: 4 };
+    const bytes = format === 'png' ? encode(raw) : jpeg.encode(raw,95).data;
+    const w = scenario(t, { bytes, jpeg: format === 'jpeg', noCropper: true }), open = await w.open('save-as-sticker');
+    await w.submit(open);
+    assert.equal(w.posts().length,1); assert.equal(w.crops.length,0); assert.equal(w.writes.length,1);
+    const result = decode(Buffer.from(w.writes[0].data,'base64'), { checkCrc: true });
+    assert.equal(result.width,320); assert.equal(result.height,320); assert.equal(result.channels,4);
+    assert.equal(result.data[(20 * 320 + 160) * 4 + 3],0,'padding remains transparent');
+    assert.ok(result.data[(160 * 320 + 160) * 4] > 240,'image pixels survive the conversion');
+    assert.ok(Buffer.from(w.writes[0].data,'base64').length < 512 * 1024);
+    assert.ok(w.toasts.includes('Sticker added to Test Guild'));
+});
+
+test('SaveAsSticker still prepares JPEG when the native cropper exists but rejects opening', async t => {
+    const jpeg = require('jpeg-js'), data = new Uint8Array(4 * 4 * 4).fill(255);
+    const bytes = jpeg.encode({ width: 4, height: 4, data },95).data;
+    const w = scenario(t, { bytes, jpeg: true, crop: async () => { throw new Error('Native cropper unavailable'); } });
+    const open = await w.open('save-as-sticker'); await w.submit(open);
+    assert.equal(w.crops.length,1); assert.equal(w.posts().length,1); assert.equal(w.writes.length,2);
+    assert.ok(w.toasts.includes('Sticker added to Test Guild'));
+});
+
 test('SaveAsSticker crops static media and cleans both input/output files through the REST path', async t => {
     const w = scenario(t, { jpeg: true }), open = await w.open('save-as-sticker'); await w.submit(open);
     assert.equal(w.posts().length, 1); assert.equal(w.crops.length, 1); assert.equal(w.writes.length, 2); assert.equal(w.cleans.length, 1);
@@ -114,6 +144,54 @@ for (const gif of [false, true]) test('Stealmoji uploads ' + (gif ? 'animated GI
 });
 
 for (const kind of ['save-as-sticker', 'stealmoji']) {
+    for (const shape of ['text', 'data', 'empty']) test(kind + ' confirms a ' + shape + ' response with exactly one upload', async t => {
+        const rows = [{ id: 'old', name: 'renamed' }];
+        const w = scenario(t, {
+            read: () => ({ body: JSON.stringify(rows) }),
+            post: () => { rows.push({ id: CREATED, name: 'renamed', user: { id: ACCOUNT } });
+                return shape === 'text' ? { status: 201, text: JSON.stringify(rows.at(-1)) }
+                    : shape === 'data' ? { status: 201, data: rows.at(-1) } : { status: 201 }; },
+        });
+        const open = await w.open(kind); await w.submit(open);
+        assert.equal(w.posts().length,1);
+        assert.ok(w.toasts.some(value => /^(Sticker added|renamed added)/.test(value)));
+        assert.equal(w.calls.filter(c => c[0] === 'http' && c[1] === 'get').length,shape === 'empty' ? 2 : 1);
+    });
+    test(kind + ' gives a long server list its own bounded scroll area with fixed header and search', async t => {
+        const w = scenario(t);
+        for (let n = 0; n < 195; n++) { const id = String(500000000000000000n + BigInt(n));
+            w.guilds[id] = { id, name: 'Server ' + String(n).padStart(3,'0'), ownerId: ACCOUNT }; }
+        const { ui } = await w.open(kind,{ choose: false });
+        const modal = ui.root.findByType('Modal'), list = ui.root.findByType('FlatList');
+        assert.equal(modal.props.visible,true); assert.equal(ui.root.findAllByType('ScrollView').length,0);
+        assert.equal(ui.root.findAllByType('ActionSheet').length,0);
+        assert.equal(ui.root.findByType(w.RN.FlatList).props.data.length,196);
+        assert.equal(list.props.removeClippedSubviews,false);
+        const field = ui.root.findAll(n => n.type === 'TextInput' && /Search server/.test(n.props.placeholder))[0];
+        assert.ok(field); await act(() => field.props.onChangeText('Server 170'));
+        assert.equal(ui.root.findByType('FlatList'),list,'search does not remount the scrolling list');
+        assert.equal(ui.root.findByType(w.RN.FlatList).props.data.length,1);
+        await act(button(ui,'Server 170'));
+        assert.equal(ui.root.findAllByType('FlatList').length,0);
+        await act(button(ui,'Choose another server'));
+        assert.equal(ui.root.findAllByType('FlatList').length,1);
+        assert.equal(w.posts().length,0);
+    });
+    for (const closeMethod of ['Close', 'Android Back', 'Backdrop', 'Disable'])
+    test(kind + ' closes and reopens its native picker using ' + closeMethod, async t => {
+        const w = scenario(t);
+        w.U.discord.actions.AlertActionCreators.dismissAlert = () => { throw new Error('retained alert host'); };
+        const opened = await w.open(kind,{ choose: false }), key = w.alerts.at(-1)[0];
+        if (closeMethod === 'Close') await act(button(opened.ui,'Close'));
+        if (closeMethod === 'Android Back') await act(opened.ui.root.findByType('Modal').props.onRequestClose);
+        if (closeMethod === 'Backdrop') await act(button(opened.ui,kind === 'save-as-sticker' ? 'Close sticker picker' : 'Close emoji picker'));
+        if (closeMethod === 'Disable') await act(() => w.stop(opened.item));
+        assert.equal(opened.ui.toJSON(),null,'dismissal hides the native Modal even if its alert node remains');
+        const reopened = await w.open(kind,{ choose: false });
+        assert.equal(reopened.ui.root.findByType('Modal').props.visible,true);
+        assert.notEqual(w.alerts.at(-1)[0],key);
+        assert.equal(w.posts().length,0);
+    });
     test(kind + ' keeps dark Discord text readable when the system theme is light', async t => {
         const w = scenario(t); w.RN.Appearance.getColorScheme = () => 'light';
         const open = await w.open(kind);

@@ -6,14 +6,14 @@
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
   "portVersion": "1.0.0-beta2",
   "pluginVersions": {
-    "save-as-sticker": "1.0.0-beta3",
-    "stealmoji": "1.0.0-beta3",
+    "save-as-sticker": "1.0.0-beta4",
+    "stealmoji": "1.0.0-beta4",
     "expression-cloner": "1.0.0-beta3",
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
     "more-alts": "1.0.0-beta8",
-    "server-leaver": "1.0.0-beta5",
+    "server-leaver": "1.0.0-beta6",
     "copy-user-id": "1.0.0-beta3",
     "addon-list": "1.0.0-beta3",
     "info-commands": "1.0.0-beta5",
@@ -34,14 +34,27 @@
     "valid-user": "main"
   },
   "settingsShortcuts": {
-    "blocked-user-list": { "title": "Blocked User List", "icon": "WrenchIcon" },
-    "custom-rpc": { "title": "CustomRPC", "icon": "RichActivityIcon" },
+    "blocked-user-list": {
+      "title": "Blocked User List",
+      "icon": "WrenchIcon"
+    },
+    "custom-rpc": {
+      "title": "CustomRPC",
+      "icon": "RichActivityIcon"
+    },
     "friends-list": {
-      "title": "Friends List", "icon": "FriendsIcon",
+      "title": "Friends List",
+      "icon": "FriendsIcon",
       "description": "Shows your total Discord friend count, a searchable friends list, and profile buttons. Opens directly from the Valenced settings section."
     },
-    "more-alts": { "title": "More Alts!", "icon": "UserIcon" },
-    "server-leaver": { "title": "Server Leaver", "icon": "PuzzlePieceIcon" }
+    "more-alts": {
+      "title": "More Alts!",
+      "icon": "UserIcon"
+    },
+    "server-leaver": {
+      "title": "Server Leaver",
+      "icon": "PuzzlePieceIcon"
+    }
   },
   "themeVersion": "1.0.0-beta1",
   "sourceCommit": "7beaf1ac7573310e393a7ddfaa35317155b24180",

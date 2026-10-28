@@ -8,6 +8,14 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/stealmoji/
 
 Disable the old Stealmoji copy before installing this one, then reload Revenge.
 
+## Confirmation and scrolling in 2.1.5
+
+Valenced **1.0.0-beta4**, Next **1.0.0-beta6** and Classic **2.1.5** accept JSON text, nested data/body envelopes and Fetch-style upload responses. When a successful REST response has no created ID, the plugin compares the server's emoji list before and after the single POST. Exactly one new matching ID confirms the upload. An existing same-name emoji, another user's creation or ambiguous matches cannot produce a false success. Failed or uncertain writes are never retried automatically.
+
+The menu picker uses a bounded native modal with one virtualized server list, a fixed title/search area and a separate form scroll view. It dismisses the originating message sheet. Close, Android Back, backdrop, disable and reopen release the picker, including when native alert dismissal retains a node or throws. Legacy sheets remain available when a native modal cannot be opened.
+
+Refresh the repository, update Stealmoji and fully restart Discord. Native integration checks cover a 196-server picker, search, choosing/back navigation, dismissal and reopening, and exactly one POST with empty/text/enveloped responses. Tests simulate Valenced and Next; physical phone uploads and gesture scrolling remain unverified.
+
 ## Upload compatibility in 2.1.4
 
 Valenced **1.0.0-beta3**, Next **1.0.0-beta5** and Classic **2.1.4** fix the missing emoji upload module error. Add emoji resolves the native action at submission time. If it is absent, the prepared image data is posted to Discord’s guild emoji endpoint using the signed-in HTTP client. PNG and animated GIF bytes and the edited name are retained; uploads do not read or expose account tokens.

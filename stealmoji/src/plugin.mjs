@@ -1,10 +1,12 @@
 import { createCore } from './core.mjs';
 import { createExpressionUpload } from '../../compatibility/expression-upload.mjs';
+import { createExpressionPanel } from '../../compatibility/expression-panel.mjs';
 
 export function createPlugin(V, env = globalThis) {
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement, core = createCore(env);
   const uploads = createExpressionUpload(V, env);
+  const panels = createExpressionPanel(V, 'StealmojiPicker');
   const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
   let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
   const unpatches = [], dialogs = new Set();
@@ -129,7 +131,7 @@ export function createPlugin(V, env = globalThis) {
     return h(RN.View, { style: { ...style, backgroundColor: '#5865f2', alignItems: 'center', justifyContent: 'center' } },
       text(initials, { color: '#fff', fontWeight: '600' }));
   }
-  function Picker({ emojis = [], close, settings = false, inSheet = false }) {
+  function Picker({ emojis = [], close, settings = false, inSheet = false, inPanel = false }) {
     const [emoji, setEmoji] = React.useState(emojis.length === 1 ? emojis[0] : null);
     const [source, setSource] = React.useState(''), [name, setName] = React.useState(emojis[0]?.name ?? 'emoji');
     const [guildId, setGuild] = React.useState(null), [search, setSearch] = React.useState('');
@@ -187,7 +189,7 @@ export function createPlugin(V, env = globalThis) {
         : 'No servers available. You need Create Expressions permission to add emoji.', { color: palette.muted }));
       const listProps = { style: { flex: 1, minHeight: 0 }, contentContainerStyle: { paddingBottom: 36 },
         keyboardShouldPersistTaps: 'handled', keyboardDismissMode: 'on-drag', nestedScrollEnabled: true,
-        showsVerticalScrollIndicator: true };
+        showsVerticalScrollIndicator: true, removeClippedSubviews: false };
       const list = List ? h(List, { ...listProps, data: guilds, keyExtractor: guild => guild.id,
         renderItem: ({ item }) => row(item), extraData: `${revision}:${emoji.id}:${emoji.animated}:${busy}`,
         initialNumToRender: 8, maxToRenderPerBatch: 8, windowSize: 5, ListEmptyComponent: empty })
@@ -197,7 +199,7 @@ export function createPlugin(V, env = globalThis) {
         text(label, { color: palette.muted, fontSize: 14, fontWeight: '600' }));
       const height = Math.min(680, (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.72);
       // The list owns scrolling. A surrounding ScrollView would compete with the sheet gesture.
-      return h(RN.View, { style: settings ? { flex: 1, minHeight: 0 } : { height } },
+      return h(RN.View, { style: settings || inPanel ? { flex: 1, minHeight: 0 } : { height } },
         h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 28, minHeight: 72 } },
           h(RN.Image, { source: { uri: core.url(emoji) }, resizeMode: 'contain', accessible: false, style: { width: 30, height: 30 } }),
           h(RN.Text, { numberOfLines: 1, style: { flex: 1, color: palette.text, fontSize: 20, fontWeight: '700',
@@ -250,7 +252,7 @@ export function createPlugin(V, env = globalThis) {
     }
     if (error) content.push(text(error, { color: '#e66b70', marginTop: 12 }));
     return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled',
-      style: settings ? { flex: 1 } : { maxHeight: (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.66 },
+      style: settings || inPanel ? { flex: 1 } : { maxHeight: (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.66 },
       contentContainerStyle: { padding: 20, paddingBottom: 40 } }, ...content);
   }
   function guarded(element) {
@@ -263,6 +265,8 @@ export function createPlugin(V, env = globalThis) {
     pickerOpening = opening;
     const release = () => { if (pickerOpening === opening) pickerOpening = undefined; };
     const live = () => active && generation === opening.session && pickerOpening === opening;
+    const modal = panels.open(close => guarded(h(Picker, { emojis, close, inPanel: true })), 'emoji picker', release);
+    if (modal) { host()?.hideActionSheet?.(fromKey); return; }
     function Content(props) {
       React.useEffect(() => release, []);
       return live() ? h(Picker, props) : null;
@@ -432,6 +436,7 @@ export function createPlugin(V, env = globalThis) {
   }
   function onUnload() {
     active = false; generation++; hooked = false; pickerOpening = undefined;
+    panels.closeAll();
     env.clearTimeout(retryTimer);
     try { resume?.remove?.(); } catch {}
     resume = undefined;

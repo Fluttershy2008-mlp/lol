@@ -50,7 +50,11 @@ function scenario(t, options = {}) {
         const module = await world.sheets.openLazy(Promise.resolve({ default: Sheet }), name, props);
         return world.mount(h(module.default, props));
     };
-    world.picker = async () => { const module = await world.openedSheets.at(-1).promise; return world.mount(h(module.default, world.openedSheets.at(-1).context)); };
+    world.picker = async () => {
+        const panel = world.alerts.at(-1);
+        if (panel && /Picker\.panel\./.test(panel[0])) return world.mount(panel[1]);
+        const module = await world.openedSheets.at(-1).promise; return world.mount(h(module.default, world.openedSheets.at(-1).context));
+    };
     return world;
 }
 

@@ -199,6 +199,33 @@ return (() => {
 'use strict';
 // Shared by the mobile SaveAsSticker and Stealmoji ports.
 // Resolve on the explicit upload action; never read authentication tokens.
+async function expressionResponse(value) {
+  const seen = new Set();
+  async function unwrap(item, depth) {
+    if (item == null || depth > 5) return;
+    if (typeof item === 'string') { try { return unwrap(JSON.parse(item), depth + 1); } catch { return; } }
+    if (typeof item !== 'object' || seen.has(item)) return;
+    seen.add(item);
+    if (typeof item.then === 'function') { try { return unwrap(await item, depth + 1); } catch { return; } }
+    if (Array.isArray(item) || (typeof item.id === 'string' && item.id)) return item;
+    for (const key of ['body', 'data', 'result', 'response', 'emoji', 'sticker', 'emojis', 'stickers', 'parsedBody']) {
+      const parsed = await unwrap(item[key], depth + 1);
+      if (parsed) return parsed;
+    }
+    if (typeof item.json === 'function') {
+      try { const parsed = await unwrap(await item.json(), depth + 1); if (parsed) return parsed; } catch {}
+    } else {
+      const parsed = await unwrap(item.json, depth + 1); if (parsed) return parsed;
+    }
+    let bodyText;
+    try { bodyText = typeof item.text === 'function' ? await item.text() : item.text; } catch {}
+    const parsed = await unwrap(bodyText, depth + 1);
+    if (parsed) return parsed;
+    return typeof item.message === 'string' ? item : undefined;
+  }
+  return unwrap(value, 0);
+}
+
 function createExpressionUpload(V, env = globalThis) {
   const safe = fn => { try { return fn(); } catch {} };
   const byProps = (...keys) => safe(() => V.metro.findByProps(...keys));
@@ -230,7 +257,18 @@ function createExpressionUpload(V, env = globalThis) {
     if (!native && !rest) throw new Error('Discord’s signed-in upload API is unavailable. Restart Discord and try again.');
     return async (input, check = () => {}) => {
       check();
-      let result;
+      const url = `/guilds/${input.guildId}/${kind === 'sticker' ? 'stickers' : 'emojis'}`;
+      let result, baseline;
+      const readList = async () => {
+        if (typeof rest?.get !== 'function') return;
+        check();
+        const response = await rest.get({ url, failImmediatelyWhenRateLimited: true });
+        check();
+        if (response?.ok === false || Number(response?.status ?? response?.statusCode) >= 400) return;
+        const list = await expressionResponse(response);
+        check();
+        return Array.isArray(list) ? list : undefined;
+      };
       if (native) result = await actions[method](input);
       else {
         let body;
@@ -246,12 +284,26 @@ function createExpressionUpload(V, env = globalThis) {
         } else body = { name: input.name, image: input.image, roles: input.roles ?? [] };
         // Pick one route before dispatch. Never retry an uncertain POST through
         // a second uploader or wait in a rate-limit queue after the user leaves.
+        // Snapshot IDs before creating, so a read-back cannot mistake an
+        // existing expression with the same name for this upload.
+        try { const before = await readList(); if (before) baseline = new Set(before.map(row => row.id)); } catch { check(); }
         check();
-        result = await rest.post({ url: `/guilds/${input.guildId}/${kind === 'sticker' ? 'stickers' : 'emojis'}`,
+        result = await rest.post({ url,
           body, oldFormErrors: true, failImmediatelyWhenRateLimited: true });
       }
-      if (result?.ok === false || Number(result?.status ?? result?.statusCode) >= 400) throw result;
-      const created = result?.body ?? result;
+      let created = await expressionResponse(result);
+      const status = result?.status ?? result?.statusCode ?? result?.response?.status;
+      if (result?.ok === false || Number(status) >= 400)
+        throw { status, body: created ?? result?.body };
+      check();
+      if (!created?.id && !native && baseline) {
+        let after;
+        try { after = await readList(); } catch { check(); }
+        const currentId = safe(() => V.metro.findByStoreName('UserStore')?.getCurrentUser?.()?.id);
+        const matches = after?.filter(row => typeof row.id === 'string' && row.id && !baseline.has(row.id)
+          && row.name === input.name && (!row.user?.id || row.user.id === currentId)) ?? [];
+        if (matches.length === 1) created = matches[0];
+      }
       // Some native emoji actions return void after dispatching their own
       // success event. REST creates and native sticker actions return an object.
       if ((!native || kind === 'sticker') && !created?.id)
@@ -265,6 +317,68 @@ function createExpressionUpload(V, env = globalThis) {
     };
   }
   return { resolve, files };
+}
+
+// A native Modal owns its scroll area. It does not compete with the gesture
+// handler of the message action sheet that opened the expression picker.
+function createExpressionPanel(V, prefix) {
+  const { React, ReactNative: RN } = V.metro.common, h = React.createElement;
+  const entries = new Set(); let serial = 0;
+  const safe = fn => { try { return fn(); } catch {} };
+  const byProps = (...keys) => safe(() => V.metro.findByProps(...keys));
+  function open(render, title, onClosed) {
+    const manager = byProps('openAlert', 'dismissAlert');
+    if (!RN.Modal || typeof manager?.openAlert !== 'function' || !React.useState || !React.useEffect) return false;
+    for (const previous of [...entries]) previous.close();
+    const key = `${prefix}.panel.${Date.now().toString(36)}.${Math.random().toString(36).slice(2)}.${++serial}`;
+    const entry = { visible: true, listeners: new Set() };
+    const close = () => {
+      if (!entry.visible) return;
+      entry.visible = false;
+      for (const fn of entry.listeners) fn();
+      entries.delete(entry);
+      safe(() => onClosed?.());
+      safe(() => manager.dismissAlert(key));
+      // Some native alert hosts retain dismissed entries. Remove this exact
+      // node/key only; visibility has already closed the native Modal window.
+      const module = byProps('useAlertStore') ?? safe(() => V.metro.findByImportedPath?.('design/components/AlertModal/native/useAlertStore.native.tsx'));
+      const store = module?.useAlertStore ?? module?.default;
+      if (typeof store?.setState === 'function') safe(() => store.setState(state => {
+        if (!Array.isArray(state.alerts)) return state;
+        const remaining = state.alerts.filter(item => item.key !== key && item.node !== entry.node);
+        return remaining.length === state.alerts.length ? state : { alerts: remaining };
+      }));
+    };
+    entry.close = close;
+    function Panel() {
+      const [, refresh] = React.useState(0);
+      React.useEffect(() => {
+        const changed = () => refresh(n => n + 1); entry.listeners.add(changed);
+        return () => { entry.listeners.delete(changed); close(); };
+      }, []);
+      const screen = RN.useWindowDimensions?.() ?? RN.Dimensions?.get?.('window') ?? { height: 800 };
+      if (!entry.visible) return null;
+      const theme = safe(() => V.metro.findByStoreName('ThemeStore')?.theme) ?? RN.Appearance?.getColorScheme?.();
+      const bg = theme === 'light' ? '#ffffff' : '#242429';
+      return h(RN.Modal, { visible: true, transparent: true, animationType: 'slide', presentationStyle: 'overFullScreen',
+        onRequestClose: close, onDismiss: close, statusBarTranslucent: false, navigationBarTranslucent: false },
+        h(RN.KeyboardAvoidingView ?? RN.View, { style: { flex: 1 }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : 'height' },
+          h(RN.View, { style: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' } },
+            h(RN.Pressable ?? RN.TouchableOpacity, { onPress: close, accessibilityRole: 'button', accessibilityLabel: `Close ${title}`,
+              style: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } }),
+            h(RN.View, { testID: prefix + '-panel', accessibilityViewIsModal: true, onAccessibilityEscape: close,
+              style: { height: Math.min(720, screen.height * 0.86), maxHeight: '92%', backgroundColor: bg,
+                borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingTop: 8, paddingBottom: 16 } },
+              render(close)))));
+    }
+    entry.node = h(Panel); entries.add(entry);
+    try {
+      const result = manager.openAlert(key, entry.node, close, { dismissable: true });
+      if (result?.catch) result.catch(close);
+      return true;
+    } catch { close(); return false; }
+  }
+  return { open, closeAll() { for (const entry of [...entries]) entry.close(); } };
 }
 
 // Stealmoji Revenge adaptation, GPL-3.0. See LICENSE and NOTICE.
@@ -385,10 +499,12 @@ function createCore(env = globalThis) {
 
 
 
+
 function createPlugin(V, env = globalThis) {
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement, core = createCore(env);
   const uploads = createExpressionUpload(V, env);
+  const panels = createExpressionPanel(V, 'StealmojiPicker');
   const KEY = 'StealmojiPicker', ROW = 'stealmoji-actions';
   let active = false, generation = 0, pending = false, hooked = false, retryTimer, resume, pickerOpening;
   const unpatches = [], dialogs = new Set();
@@ -513,7 +629,7 @@ function createPlugin(V, env = globalThis) {
     return h(RN.View, { style: { ...style, backgroundColor: '#5865f2', alignItems: 'center', justifyContent: 'center' } },
       text(initials, { color: '#fff', fontWeight: '600' }));
   }
-  function Picker({ emojis = [], close, settings = false, inSheet = false }) {
+  function Picker({ emojis = [], close, settings = false, inSheet = false, inPanel = false }) {
     const [emoji, setEmoji] = React.useState(emojis.length === 1 ? emojis[0] : null);
     const [source, setSource] = React.useState(''), [name, setName] = React.useState(emojis[0]?.name ?? 'emoji');
     const [guildId, setGuild] = React.useState(null), [search, setSearch] = React.useState('');
@@ -571,7 +687,7 @@ function createPlugin(V, env = globalThis) {
         : 'No servers available. You need Create Expressions permission to add emoji.', { color: palette.muted }));
       const listProps = { style: { flex: 1, minHeight: 0 }, contentContainerStyle: { paddingBottom: 36 },
         keyboardShouldPersistTaps: 'handled', keyboardDismissMode: 'on-drag', nestedScrollEnabled: true,
-        showsVerticalScrollIndicator: true };
+        showsVerticalScrollIndicator: true, removeClippedSubviews: false };
       const list = List ? h(List, { ...listProps, data: guilds, keyExtractor: guild => guild.id,
         renderItem: ({ item }) => row(item), extraData: `${revision}:${emoji.id}:${emoji.animated}:${busy}`,
         initialNumToRender: 8, maxToRenderPerBatch: 8, windowSize: 5, ListEmptyComponent: empty })
@@ -581,7 +697,7 @@ function createPlugin(V, env = globalThis) {
         text(label, { color: palette.muted, fontSize: 14, fontWeight: '600' }));
       const height = Math.min(680, (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.72);
       // The list owns scrolling. A surrounding ScrollView would compete with the sheet gesture.
-      return h(RN.View, { style: settings ? { flex: 1, minHeight: 0 } : { height } },
+      return h(RN.View, { style: settings || inPanel ? { flex: 1, minHeight: 0 } : { height } },
         h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 28, minHeight: 72 } },
           h(RN.Image, { source: { uri: core.url(emoji) }, resizeMode: 'contain', accessible: false, style: { width: 30, height: 30 } }),
           h(RN.Text, { numberOfLines: 1, style: { flex: 1, color: palette.text, fontSize: 20, fontWeight: '700',
@@ -634,7 +750,7 @@ function createPlugin(V, env = globalThis) {
     }
     if (error) content.push(text(error, { color: '#e66b70', marginTop: 12 }));
     return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled',
-      style: settings ? { flex: 1 } : { maxHeight: (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.66 },
+      style: settings || inPanel ? { flex: 1 } : { maxHeight: (RN.Dimensions?.get?.('window')?.height ?? 800) * 0.66 },
       contentContainerStyle: { padding: 20, paddingBottom: 40 } }, ...content);
   }
   function guarded(element) {
@@ -647,6 +763,8 @@ function createPlugin(V, env = globalThis) {
     pickerOpening = opening;
     const release = () => { if (pickerOpening === opening) pickerOpening = undefined; };
     const live = () => active && generation === opening.session && pickerOpening === opening;
+    const modal = panels.open(close => guarded(h(Picker, { emojis, close, inPanel: true })), 'emoji picker', release);
+    if (modal) { host()?.hideActionSheet?.(fromKey); return; }
     function Content(props) {
       React.useEffect(() => release, []);
       return live() ? h(Picker, props) : null;
@@ -816,6 +934,7 @@ function createPlugin(V, env = globalThis) {
   }
   function onUnload() {
     active = false; generation++; hooked = false; pickerOpening = undefined;
+    panels.closeAll();
     env.clearTimeout(retryTimer);
     try { resume?.remove?.(); } catch {}
     resume = undefined;

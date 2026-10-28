@@ -131,15 +131,15 @@
     },
     "dev.fluttershy2008.save-as-sticker": {
       "path": "save-as-sticker/index.js",
-      "sha256": "bc9bede955093d4dfa80627fae7d8627519056d3c40214d9862accfb14dc1dd9",
-      "originalVersion": "1.3.5",
+      "sha256": "54299924ef3a801a542f7e255d81abc669de1241b0227360140c7c7baff4fbbf",
+      "originalVersion": "1.3.6",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
     "dev.fluttershy2008.server-leaver": {
       "path": "server-leaver/index.js",
-      "sha256": "e0dc1b4cd4d1bd5a9248015c887775e429704ab76302f6dd6dc270b3cbe8a585",
-      "originalVersion": "1.0.4",
+      "sha256": "7e51497ce0d1b61cfafb27d7c4b3b350d047392ec81f81985b434695aa21757b",
+      "originalVersion": "1.0.5",
       "kind": "compatibility-preview",
       "sourceRef": "main",
       "settingsShortcut": {
@@ -151,8 +151,8 @@
     },
     "dev.fluttershy2008.stealmoji": {
       "path": "stealmoji/index.js",
-      "sha256": "3b98a1d12f10f555f33d95632d1429812a701919e23ef907bc1b2795b86096fa",
-      "originalVersion": "2.1.4",
+      "sha256": "117280f52c3ad832ec2cfe8a32da72c731ce1391f78a12743e05fd6439022b74",
+      "originalVersion": "2.1.5",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

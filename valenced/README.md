@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**Server Leaver 1.0.0-beta5 fixes the jumping preview after tapping Protect.** Server rows stay in name order, the ID editor has a fixed height, and real guild/theme changes replace the repeating refresh timer. All 22 main server IDs remain protected. Refresh the repository, update Server Leaver, then fully restart Discord. The main IDs stay protected after editing the field or switching accounts, and their rows show a disabled **Main protected** button. Existing additional protected IDs are preserved and remain separate for each account. Main IDs absent from the current account do not block its preview.
+**Server Leaver 1.0.0-beta6 separates ID editing from the scrolling preview.** Tap **Edit protected IDs** to open the bounded editor; Save closes it and Cancel or Android Back discards unsaved changes. Protect updates rows in place without an editable ID field in the list. All 22 main IDs stay protected and existing additional protections remain scoped to their account. Refresh the repository, update Server Leaver and fully restart Discord.
 
 **More Alts! 1.0.0-beta8 adds the Discord-style QR panel and public RN messaging support.** The supplied image is a layout reference; each attempt generates a fresh code with live scan-and-approve status. Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
 
@@ -16,7 +16,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; CustomRPC, ExpressionCloner, SaveAsSticker, Stealmoji, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands remains at **1.0.0-beta5**; SaveAsSticker and Stealmoji at **1.0.0-beta4**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -26,11 +26,11 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/index.jso
 
 Use an address ending in `index.json`. A GitHub repository page or a `github.com/.../blob/...` page returns HTML and causes the JSON error shown in your screenshot.
 
-**SaveAsSticker and Stealmoji 1.0.0-beta3 fix missing upload modules.** Refresh this repository, update both plugins and fully restart Discord. Sticker uploads use a native multipart fallback and emoji uploads use image data through Discord’s signed-in HTTP client. The pickers also follow Discord’s theme when it differs from the system theme.
+**SaveAsSticker and Stealmoji 1.0.0-beta4 fix cropping, scrolling and upload confirmation.** SaveAsSticker can fit PNG/JPEG into a 320×320 transparent PNG without Discord's cropper. Both menu pickers use a bounded native modal with a fixed title/search and one virtualized list. Uploads accept text/nested/Fetch responses and verify an empty success response against a newly created server entry, without repeating the POST. Refresh the repository, update both plugins and fully restart Discord.
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta5**. Friends List and Blocked User List are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, SaveAsSticker, Stealmoji, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker and Stealmoji are at **1.0.0-beta4**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |
@@ -151,3 +151,13 @@ The QR panel has a square white code, the Discord-style heading and scan instruc
 ### SaveAsSticker and Stealmoji beta3 — upload fallbacks
 
 A shared helper resolves native actions at submission time and uses canonical authenticated HTTP when an action is missing. Stickers retain their prepared PNG/GIF local file in native multipart; emoji retain their image data in JSON. Native file APIs include the curated FileModule. No POST is retried through a second route. REST success requires a returned ID; account/session, permissions and slots are checked before creation. Both pickers respect Discord’s theme. Nineteen native cases per host cover the full menus/pickers, upload bytes, JPEG cropping, cleanup, late actions, rate limits, unconfirmed responses, account changes, permission loss, repeated taps and theme contrast. Four missing-action cases fail against beta2 and pass against beta3. Twelve helper contract checks and existing source/GIF tests also run. The Classic fixtures now expose the Android toast API used by their compatibility wrapper. Physical phone upload remains unverified; the optional Hermes test requires HERMES_BINARY. Classic receives SaveAsSticker 1.3.5 and Stealmoji 2.1.4; Next receives beta5 for both.
+
+### SaveAsSticker/Stealmoji beta4 and Server Leaver beta6
+
+SaveAsSticker bundles PNG/JPEG decoding, EXIF rotation and aspect-preserving 320×320 fitting when native cropping is absent or fails to open. PNG inflation and decoded dimensions are bounded. Private dependency text codecs avoid relying on browser TextEncoder/TextDecoder or installing global polyfills. GIF conversion and local-file cleanup remain covered. Both expression pickers own one native modal/list instead of nesting a scrolling list inside a draggable action sheet. Close/Back/backdrop/disable/reopen remain functional even with a retaining or throwing alert host. Upload confirmation unwraps JSON strings, data envelopes, promises and Fetch responses. A successful empty REST result is checked against a before/after list of IDs, requiring one new matching entry. Existing or ambiguous matches cannot report success, and no POST is retried.
+
+Server Leaver uses a separate protected-ID modal so tapping Protect cannot alter or focus a text input in the scrolling preview. Save, Cancel, Android Back and account switches close it correctly. The 22 main IDs and existing account protections are unchanged.
+
+Validation: **851 Node checks passed, one optional Hermes check skipped, and 16 Python checks passed**. Deterministic package checks cover both 25-entry catalogues. The expression suite now has 38 native cases per host, including real PNG/JPEG output without native cropping or browser codecs, 196-server lists, response variants and dismissal/reopening. Six Server Leaver cases per host cover the editor and protection behavior. These are simulated native hosts, not physical phone verification. Classic releases are SaveAsSticker 1.3.6, Stealmoji 2.1.5 and Server Leaver 1.0.5; Next releases are beta6, beta6 and beta7 respectively.
+
+Seven selected cropping/response/picker/editor scenarios fail against each host's preceding published packages and pass against these builds. The scroll checks verify structure and component identity; they do not simulate Android touch physics.

@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.5
+# SaveAsSticker 1.3.6
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -13,6 +13,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/
 This is a plugin directory URL. Revenge appends `manifest.json` and `index.js` itself. Do not paste a GitHub `blob`/`tree` page or the URL of an individual JS/JSON file.
 
 If already installed, open the plugin's menu, choose **Refetch**, and restart Discord. The root install URL (`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/`) is kept as an identical legacy alias. Enable only one copy.
+
+## Cropping, scrolling and confirmation in 1.3.6
+
+Valenced **1.0.0-beta4**, Next **1.0.0-beta6** and Classic **1.3.6** bundle PNG/JPEG decoding and resizing. When Discord has no working cropper, images fit inside a 320×320 transparent PNG while keeping their aspect ratio. JPEG EXIF rotation is applied. This path needs no browser, canvas, native image module or global text-encoding polyfill. Images above 16 megapixels are rejected before allocating full PNG pixels. GIF animation preparation is unchanged; animated APNG needing resizing is rejected rather than flattened by this fallback. Discord attachment WebP/AVIF can use Discord's media proxy to obtain PNG; unsupported external formats need an original PNG/JPEG or GIF.
+
+The picker opens in a bounded native modal where available. A fixed title and search field sit above one virtualized server list; the message action sheet is dismissed. The form has its own scroll view. Close, Android Back, backdrop, disable and reopen dismiss the owned modal even if the native alert host retains its node. Hosts without native modal support retain the legacy picker.
+
+Upload confirmation reads JSON strings, nested response envelopes and Fetch-style responses. If a successful REST response omits its body, the plugin compares the server list before and after the single POST. Only one new matching expression ID confirms success; an existing same-name entry or ambiguous result does not. No creation request is repeated automatically.
+
+Refresh the repository, update SaveAsSticker and fully restart Discord. Regression checks decode real PNG/JPEG output with native cropping and browser text codecs absent, exercise 196-server pickers and verify one POST for different response shapes. Tests simulate both hosts; physical phone scrolling and uploads remain unverified.
 
 ## Upload compatibility in 1.3.5
 
@@ -30,13 +40,13 @@ The multipart fields follow [Discord’s Create Guild Sticker endpoint](https://
 2. If a message has several images and Discord has not identified the selected one, choose the image from its preview.
 3. Tap the **+** beside a server. You must own it or have **Create Expressions** permission. Full servers stay visible, greyed out and disabled, with **No slots available**.
 4. Enter the sticker name, review the preview, and tap **Add sticker**.
-5. Crop static images if prompted. GIFs resize automatically and stay animated. A successful upload shows **Sticker added to [server]**.
+5. Crop static images if prompted; otherwise PNG/JPEG fit automatically with transparent padding. GIFs resize automatically and stay animated. A successful upload shows **Sticker added to [server]**.
 
 Servers with an unknown cached sticker count are marked **Check slots on upload**. Discord is the final authority for permissions and free slots. The plugin rechecks its local permission/slot state immediately before uploading and displays server errors.
 
 ## Image support
 
-- Static images supported by Discord's native cropper, including JPEG, PNG and WebP, are converted to a 320×320 PNG.
+- PNG/JPEG resize locally if the native cropper is absent or cannot open. A working native cropper can also prepare supported image formats.
 - Valid 320×320 PNGs under 512 KiB skip cropping. PNG signatures, dimensions and byte size are checked before upload.
 - Animated GIFs keep their frames, timing, loop settings and transparency. GIFs are fitted inside a 320×320 canvas with transparent padding, preserving their aspect ratio. Well-formed, ready-to-upload GIFs are preserved byte-for-byte.
 - GIF validation follows actual block boundaries. Extra bytes after the GIF trailer are removed; a missing trailer is repaired only when all image/extension blocks are complete. Truncated blocks are rejected without uploading a partial animation.
@@ -44,7 +54,7 @@ Servers with an unknown cached sticker count are marked **Check slots on upload*
 - GIF attachments and embeds that expose an original `.gif` URL are supported. MP4-only GIFV/Tenor previews are not converted into GIFs; share the original GIF file instead. GIF links returning a still preview are rejected instead of silently flattening the animation.
 - To keep conversion bounded on mobile, GIFs must contain no more than 250 frames and have a canvas no larger than 4 megapixels; resizing is limited to 80 megapixels across all frames. The converter yields between frames and avoids storing every decoded frame in memory.
 - Animated APNG/WebP files are outside the GIF conversion path and may become still images when cropped.
-- GIF conversion runs locally using bundled libraries. Static images use Discord's own cropper. Both use local cache files and Discord's authenticated sticker action or multipart HTTP fallback. The plugin does not request your token or send images to an external converter.
+- GIF conversion runs locally using bundled libraries. Static images use a working native cropper or the bundled PNG/JPEG converter. Both use local cache files and Discord's authenticated sticker action or multipart HTTP fallback. The plugin does not request your token or send images to an external converter.
 - Canceling the crop or disabling the plugin before submission prevents the upload. An upload already submitted to Discord cannot be canceled by unloading the plugin.
 
 ## Changes in 1.3.2

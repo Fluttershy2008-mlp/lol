@@ -204,7 +204,7 @@ test('native picker matches reference layout, keeps full servers disabled and ex
   assert.equal(full.props.subLabel, 'No slots available');
   assert.equal(full.props.accessibilityState.disabled, true);
   full.props.onPress();
-  assert.equal(nodes(p.render()).some(n => n.type === 'TextInput'), false, 'full server cannot open the add form');
+  assert.equal(nodes(p.render()).some(n => n.type === 'TextInput' && n.props.placeholder === 'Sticker name'), false, 'full server cannot open the add form');
   for (const row of rows) {
     assert.equal(row.props.leading.type, 'GuildIcon');
     assert.equal(row.props.leading.props.size, 44);

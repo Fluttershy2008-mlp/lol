@@ -178,3 +178,11 @@ Shares Valenced beta8’s Discord-style square QR panel, scan instructions and n
 ### SaveAsSticker and Stealmoji beta5 — upload fallbacks
 
 Share Valenced beta3’s native-action/REST selection and Discord-theme fix. Missing sticker actions use prepared local-file multipart, and missing emoji actions use the original image data in JSON. Curated FileModule access, account/session checks, permission/slot rechecks, cleanup and one POST without route retries are retained. REST success requires a created ID. Nineteen native cases run per host; four missing-action cases fail on beta4 and pass on beta5. Twelve helper contract checks and existing Classic/GIF tests run too; the optional Hermes test requires HERMES_BINARY. Actual phone upload remains unverified. Classic receives SaveAsSticker 1.3.5 and Stealmoji 2.1.4.
+
+## SaveAsSticker/Stealmoji beta6 and Server Leaver beta7
+
+Shared source with Valenced beta4/beta4/beta6 adds bundled PNG/JPEG fitting and EXIF orientation without a native cropper, a bounded native modal for both expression pickers, and response normalization plus before/after ID verification for empty REST successes. A creation request is never retried automatically. Existing/ambiguous IDs and another user's entry cannot confirm the write. Server Leaver moves ID editing outside its preview list into a modal; Save, Cancel, Android Back and account changes are exercised with the 22 main protections intact.
+
+Both deterministic package checks pass. The full regression run passes 851 Node checks and 16 Python checks, with one optional Hermes check skipped because HERMES_BINARY is not supplied. The native expression suite has 38 cases per host and Server Leaver has six per host. Real PNG/JPEG bytes are decoded from uploads without native cropper or browser text codecs. Physical Android gesture scrolling and uploads remain unverified. Other current packages and all previous ZIPs are preserved.
+
+Seven selected cropping/response/picker/editor scenarios fail against each host's preceding published packages and pass against these builds. The scroll checks verify structure and component identity; they do not simulate Android touch physics.

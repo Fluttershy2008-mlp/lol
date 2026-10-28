@@ -1,7 +1,7 @@
 {
   "name": "Stealmoji",
   "description": "Add static or animated emoji with a scrolling server picker, server icons, search, and save/copy tools.",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "authors": [
     {
       "name": "Fiery",
@@ -24,5 +24,5 @@
   "vendetta": {
     "icon": "ic_emoji_24px"
   },
-  "hash": "3b98a1d12f10f555f33d95632d1429812a701919e23ef907bc1b2795b86096fa"
+  "hash": "117280f52c3ad832ec2cfe8a32da72c731ce1391f78a12743e05fd6439022b74"
 }

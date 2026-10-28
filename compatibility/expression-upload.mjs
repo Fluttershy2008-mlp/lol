@@ -1,5 +1,32 @@
 // Shared by the mobile SaveAsSticker and Stealmoji ports.
 // Resolve on the explicit upload action; never read authentication tokens.
+export async function expressionResponse(value) {
+  const seen = new Set();
+  async function unwrap(item, depth) {
+    if (item == null || depth > 5) return;
+    if (typeof item === 'string') { try { return unwrap(JSON.parse(item), depth + 1); } catch { return; } }
+    if (typeof item !== 'object' || seen.has(item)) return;
+    seen.add(item);
+    if (typeof item.then === 'function') { try { return unwrap(await item, depth + 1); } catch { return; } }
+    if (Array.isArray(item) || (typeof item.id === 'string' && item.id)) return item;
+    for (const key of ['body', 'data', 'result', 'response', 'emoji', 'sticker', 'emojis', 'stickers', 'parsedBody']) {
+      const parsed = await unwrap(item[key], depth + 1);
+      if (parsed) return parsed;
+    }
+    if (typeof item.json === 'function') {
+      try { const parsed = await unwrap(await item.json(), depth + 1); if (parsed) return parsed; } catch {}
+    } else {
+      const parsed = await unwrap(item.json, depth + 1); if (parsed) return parsed;
+    }
+    let bodyText;
+    try { bodyText = typeof item.text === 'function' ? await item.text() : item.text; } catch {}
+    const parsed = await unwrap(bodyText, depth + 1);
+    if (parsed) return parsed;
+    return typeof item.message === 'string' ? item : undefined;
+  }
+  return unwrap(value, 0);
+}
+
 export function createExpressionUpload(V, env = globalThis) {
   const safe = fn => { try { return fn(); } catch {} };
   const byProps = (...keys) => safe(() => V.metro.findByProps(...keys));
@@ -31,7 +58,18 @@ export function createExpressionUpload(V, env = globalThis) {
     if (!native && !rest) throw new Error('Discord’s signed-in upload API is unavailable. Restart Discord and try again.');
     return async (input, check = () => {}) => {
       check();
-      let result;
+      const url = `/guilds/${input.guildId}/${kind === 'sticker' ? 'stickers' : 'emojis'}`;
+      let result, baseline;
+      const readList = async () => {
+        if (typeof rest?.get !== 'function') return;
+        check();
+        const response = await rest.get({ url, failImmediatelyWhenRateLimited: true });
+        check();
+        if (response?.ok === false || Number(response?.status ?? response?.statusCode) >= 400) return;
+        const list = await expressionResponse(response);
+        check();
+        return Array.isArray(list) ? list : undefined;
+      };
       if (native) result = await actions[method](input);
       else {
         let body;
@@ -47,12 +85,26 @@ export function createExpressionUpload(V, env = globalThis) {
         } else body = { name: input.name, image: input.image, roles: input.roles ?? [] };
         // Pick one route before dispatch. Never retry an uncertain POST through
         // a second uploader or wait in a rate-limit queue after the user leaves.
+        // Snapshot IDs before creating, so a read-back cannot mistake an
+        // existing expression with the same name for this upload.
+        try { const before = await readList(); if (before) baseline = new Set(before.map(row => row.id)); } catch { check(); }
         check();
-        result = await rest.post({ url: `/guilds/${input.guildId}/${kind === 'sticker' ? 'stickers' : 'emojis'}`,
+        result = await rest.post({ url,
           body, oldFormErrors: true, failImmediatelyWhenRateLimited: true });
       }
-      if (result?.ok === false || Number(result?.status ?? result?.statusCode) >= 400) throw result;
-      const created = result?.body ?? result;
+      let created = await expressionResponse(result);
+      const status = result?.status ?? result?.statusCode ?? result?.response?.status;
+      if (result?.ok === false || Number(status) >= 400)
+        throw { status, body: created ?? result?.body };
+      check();
+      if (!created?.id && !native && baseline) {
+        let after;
+        try { after = await readList(); } catch { check(); }
+        const currentId = safe(() => V.metro.findByStoreName('UserStore')?.getCurrentUser?.()?.id);
+        const matches = after?.filter(row => typeof row.id === 'string' && row.id && !baseline.has(row.id)
+          && row.name === input.name && (!row.user?.id || row.user.id === currentId)) ?? [];
+        if (matches.length === 1) created = matches[0];
+      }
       // Some native emoji actions return void after dispatching their own
       // success event. REST creates and native sticker actions return an object.
       if ((!native || kind === 'sticker') && !created?.id)
