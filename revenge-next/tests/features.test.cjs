@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createLegacyAdapter } = require('../runtime.cjs');
 const { createWorld, React, Renderer, ACCOUNT, FRIEND, BLOCKED, IGNORED, CHANNEL, GUILD } = require('./next-harness.cjs');
+const { installNavigationHost } = require('./navigation-fixture.cjs');
 const h = React.createElement;
 
 function text(node) {
@@ -455,9 +456,13 @@ test('Relationship Notifier detects a removal after its initial baseline', async
 
 test('Save as Sticker extends image menus and renders eligible server rows', async t => {
     const w = scenario(t, { curatedOnly: true }); await w.start('save-as-sticker');
+    const page = process.env.PLUGIN_TEST_TARGET === 'valenced' ? installNavigationHost(w) : undefined;
+    const pageRoot = page ? await w.mount(h(page.Root)) : undefined;
     const attachment = { id: '800000000000000001', filename: 'pony.png', content_type: 'image/png', width: 320, height: 320, url: 'https://cdn.discordapp.com/attachments/1/2/pony.png' };
     const ui = await w.menu('MessageLongPressActionSheet', { message: { attachments: [attachment] } });
-    await press(ui, 'Save as Sticker'); const picker = await w.picker();
+    await press(ui, 'Save as Sticker');
+    if (page) await w.tick(350);
+    const picker = pageRoot ?? await w.picker();
     assert.ok(button(picker, 'Test Guild'));
     assert.equal(w.calls.some(c => c[0] === 'fetch'), false, 'opening a picker does not download or upload');
 });

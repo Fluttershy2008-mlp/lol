@@ -41,6 +41,7 @@ function makeHarness(options = {}) {
       return [hooks[index], value => { hooks[index] = typeof value === 'function' ? value(hooks[index]) : value; }];
     },
     useEffect(fn) { if (!effects.length) effects.push(fn()); },
+    useRef(initial) { const index = hookIndex++; return hooks[index] ?? (hooks[index] = { current: initial }); },
     memo: (type, compare) => ({ $$typeof: Symbol.for('react.memo'), type, compare }),
     forwardRef: render => ({ $$typeof: Symbol.for('react.forward_ref'), render }),
   };
@@ -102,7 +103,7 @@ function makeHarness(options = {}) {
     utils: { safeFetch: fetcher },
   };
   class Reader { readAsDataURL(blob) { this.result = 'data:' + blob.type + ';base64,' + blob.data; this.onload(); } }
-  const context = vm.createContext({ FileReader: Reader, console, setTimeout: fn => setImmediate(fn), fetch: fetcher });
+  const context = vm.createContext({ FileReader: Reader, console, setTimeout: fn => setImmediate(fn), clearTimeout: clearImmediate, fetch: fetcher });
   // Same expression wrapper as Revenge's core/vendetta/plugins.ts; no global API supplied.
   const plugin = vm.runInContext('vendetta=>{return ' + source + '\n}', context)(V);
   plugin.onLoad();
@@ -127,6 +128,7 @@ function makeHarness(options = {}) {
     return { rendered, row: nodes(rendered).find(n => n.props?.label === 'Save as Sticker'), mod };
   }
   async function openPicker(menuResult) {
+    hooks = []; hookIndex = 0;
     menuResult.row.props.onPress();
     const mod = await calls.opens.at(-1).lazy;
     const element = mod.default();

@@ -29,13 +29,13 @@ function button(ui, label) {
     assert.ok(n, 'button exists: ' + label); assert.notEqual(n.props.disabled, true); return n.props.onPress;
 }
 function pickerCount(ui) {
-    return ui.root.findAllByType('Modal').length + ui.root.findAll(n => n.type === 'View' && n.props.testID === 'StealmojiPage').length;
+    return ui.root.findAllByType('Modal').length + ui.root.findAll(n => n.type === 'View' && ['StealmojiPage','SaveAsStickerPage'].includes(n.props.testID)).length;
 }
 function scenario(t, options = {}) {
     const bytes = options.bytes ?? (options.gif ? Buffer.from(gifFixture({ width: 320, height: 320 })) : options.jpeg ? Buffer.from([255,216,255,224,0]) : png);
     const mime = options.gif ? 'image/gif' : options.jpeg ? 'image/jpeg' : 'image/png';
     const w = createWorld({ splitHTTP: true, curatedOnly: true,
-        globals: { FileReader: Reader, FormData: NativeFormData },
+        globals: { FileReader: options.reader ?? Reader, FormData: NativeFormData },
         fetch: options.fetch ?? (() => new Response(bytes, { headers: { 'content-type': mime } })),
         http: async (method, input) => {
             if (method === 'get') return options.read ? options.read(input) : { status: 200, body: [] };
@@ -48,7 +48,7 @@ function scenario(t, options = {}) {
     const renders = [], writes = [], deletes = [], crops = [], cleans = [], nativePosts = [];
     const files = { async writeFile(dir, name, data, encoding) {
         writes.push({ dir, name, data, encoding }); return options.write ? options.write(name) : '/cache/' + name;
-    }, async removeFile(dir, name) { deletes.push({ dir, name }); } };
+    }, async removeFile(dir, name) { deletes.push({ dir, name }); return options.remove?.(name); } };
     // This API is the only file module: no Metro barrel or RN.NativeModules entry.
     w.U.discord.native = { FileModule: files };
     if (!options.noCropper) w.addModule({ async launchCropper(input) {
@@ -62,7 +62,7 @@ function scenario(t, options = {}) {
     if (VALENCED) w.pageHost = installNavigationHost(w, { loadSettingsOnOpen: !!options.loadSettingsOnOpen });
     w.mount = async element => { let ui; await act(() => { ui = Renderer.create(element); }); renders.push(ui); return ui; };
     w.open = async (kind, { choose = true, advance = true } = {}) => {
-        w.pageMode = VALENCED && kind === 'stealmoji';
+        w.pageMode = VALENCED;
         if (w.pageMode && !w.pageRoot) w.pageRoot = await w.mount(h(w.pageHost.Root));
         if (w.panelHost && !w.panelRoot) w.panelRoot = await w.mount(h(w.panelHost.Root));
         const item = w.loaded.get(kind) ?? await w.start(kind), Row = w.U.discord.design.Design.ActionSheetRow;
@@ -87,7 +87,8 @@ function scenario(t, options = {}) {
         return { item, ui, submit: button(ui, kind === 'save-as-sticker' ? 'Add sticker' : 'Add emoji') };
     };
     w.posts = () => w.calls.filter(c => c[0] === 'http' && c[1] === 'post');
-    w.pickerKey = () => w.pageMode ? w.navigation.getCurrentRoute().params.__stealmojiPage : w.alerts.at(-1)[0];
+    w.pickerKey = () => w.pageMode ? w.navigation.getCurrentRoute().params.__stealmojiPage
+        ?? w.navigation.getCurrentRoute().params.__expressionPage : w.alerts.at(-1)[0];
     w.submit = async open => { await act(() => { void open.submit(); }); await act(() => w.advance(300)); };
     Object.assign(w, { bytes, writes, deletes, crops, cleans, nativePosts });
     t.after(async () => {
@@ -194,7 +195,7 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         assert.equal(w.posts().length,0);
     });
     for (const closeMethod of ['Close', 'Android Back', 'Backdrop', 'Disable']) {
-    if (VALENCED && kind === 'stealmoji' && closeMethod === 'Backdrop') continue; // A normal page has no backdrop.
+    if (VALENCED && closeMethod === 'Backdrop') continue; // A normal page has no backdrop.
     test(kind + ' closes and reopens its native picker using ' + closeMethod, async t => {
         const w = scenario(t);
         w.U.discord.actions.AlertActionCreators.dismissAlert = () => { throw new Error('retained alert host'); };
@@ -226,7 +227,7 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         if (kind === 'save-as-sticker') w.expectedErrors = 1;
         await w.submit(open); assert.equal(w.posts().length, 1);
         assert.equal(w.toasts.some(value => /^(Sticker added|renamed added)/.test(value)), false);
-        const shown = kind === 'save-as-sticker' ? JSON.stringify(w.alerts) : text(open.ui.toJSON());
+        const shown = kind === 'save-as-sticker' && !VALENCED ? JSON.stringify(w.alerts) : text(open.ui.toJSON());
         assert.match(shown, /rate limit|did not confirm/i);
     });
     test(kind + ' blocks a pending upload after the Discord account changes', async t => {
@@ -372,6 +373,170 @@ test('Stealmoji cancels a delayed image viewer when another picker has already o
 });
 
 if (VALENCED) {
+    for (const failure of ['download','crop','upload','unconfirmed']) test('Valenced SaveAsSticker can exit and reopen after ' + failure + ' failure', async t => {
+        const options = failure === 'download' ? { fetch: () => new Response('',{ status: 404 }) }
+            : failure === 'crop' ? { jpeg: true, crop: async () => { throw Object.assign(new Error('User cancelled'),{ code: 'E_PICKER_CANCELLED' }); } }
+            : { post: () => failure === 'upload' ? { status: 403,body: { code: 50013,message: 'Missing Permissions' } } : { status: 200,body: {} } };
+        const w = scenario(t,options); w.expectedErrors = failure === 'crop' ? 0 : 1;
+        w.RN.Modal = () => assert.fail('SaveAsSticker must not open an OS modal');
+        w.RN.Alert.alert = () => assert.fail('Upload errors must stay on the normal page');
+        w.U.discord.actions.AlertActionCreators.openAlert = () => assert.fail('SaveAsSticker must not open an alert host');
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(pickerCount(open.ui),1); assert.ok(button(open.ui,'Close'));
+        if (failure !== 'crop') assert.match(text(open.ui.toJSON()),/download failed|Create Expressions|did not confirm/);
+        assert.equal(w.alerts.length,0); assert.equal(w.openedSheets.length,1); assert.deepEqual(w.pageHost.unhandled,[]);
+        await act(button(open.ui,'Close')); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+        await act(button(fresh.ui,'Close')); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        assert.equal(w.posts().length,['upload','unconfirmed'].includes(failure) ? 1 : 0);
+        assert.equal(w.timers.size,0); assert.equal(w.pageHost.subscribers.size,0);
+    });
+
+    test('Valenced SaveAsSticker repeatedly uploads and returns to a responsive Discord screen', async t => {
+        const w = scenario(t), initialListeners = w.stores.GuildStore.listeners.size;
+        for (let n = 0; n < 6; n++) {
+            const open = await w.open('save-as-sticker'); await w.submit(open);
+            assert.equal(w.posts().length,n + 1); assert.equal(pickerCount(open.ui),0);
+            assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.pageHost.subscribers.size,0);
+            assert.equal(w.stores.GuildStore.listeners.size,initialListeners); assert.equal(w.timers.size,0);
+            await act(button(open.ui,'Discord test control'));
+        }
+        assert.equal(w.pageHost.taps(),6); assert.equal(w.alerts.length,0);
+        assert.deepEqual(w.pageHost.unhandled,[]);
+    });
+
+    for (const method of ['Close','Android Back','Disable']) test('Valenced SaveAsSticker cancels image preparation with ' + method, async t => {
+        const gate = deferred(); let signal;
+        const w = scenario(t,{ fetch: (_url,options) => { signal = options.signal; return gate.promise; } });
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.ok(signal); assert.ok(button(open.ui,'Close'));
+        await act(method === 'Close' ? button(open.ui,'Close') : method === 'Android Back' ? () => w.navigation.goBack() : () => w.stop(open.item));
+        assert.equal(signal.aborted,true); assert.equal(pickerCount(open.ui),0); assert.equal(w.timers.size,0);
+        gate.resolve(new Response(png,{ headers: { 'content-type': 'image/png' } })); await act();
+        assert.equal(w.posts().length,0); assert.equal(w.alerts.length,0);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+    });
+
+    test('Valenced SaveAsSticker Back while the native cropper is pending cannot upload its late result', async t => {
+        const gate = deferred(), w = scenario(t,{ jpeg: true,crop: () => gate.promise });
+        const open = await w.open('save-as-sticker'); await w.submit(open); assert.equal(w.crops.length,1);
+        await act(() => w.navigation.goBack()); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        gate.resolve({ path: '/crop/result.png',data: png.toString('base64') }); await act();
+        assert.equal(w.posts().length,0); assert.equal(w.cleans.length,1); assert.equal(w.alerts.length,0);
+        assert.equal(w.writes.length,w.deletes.length); assert.equal(w.timers.size,0);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+    });
+
+    test('Valenced SaveAsSticker keeps a pending multipart upload from changing an unrelated screen', async t => {
+        const gate = deferred(), w = scenario(t,{ post: () => gate.promise });
+        const open = await w.open('save-as-sticker'); await w.submit(open); assert.equal(w.posts().length,1);
+        const backCalls = () => w.calls.filter(c => c[0] === 'goBack').length;
+        await act(() => w.navigation.navigate('UserProfile',{ userId: FRIEND })); const before = backCalls();
+        gate.resolve({ status: 201,body: { id: CREATED } }); await act();
+        assert.equal(w.navigation.getCurrentRoute().name,'UserProfile'); assert.equal(backCalls(),before);
+        assert.equal(w.toasts.some(value => /^Sticker added/.test(value)),false); assert.equal(w.alerts.length,0);
+        assert.equal(w.writes.length,w.deletes.length);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        await act(() => w.navigation.goBack()); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+    });
+
+    test('Valenced SaveAsSticker bounds a stalled upload response while Close stays usable', async t => {
+        const gate = deferred(), w = scenario(t,{ post: () => gate.promise });
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(w.posts().length,1); assert.ok(button(open.ui,'Close'));
+        await act(() => w.advance(45000)); assert.match(text(open.ui.toJSON()),/response timed out/);
+        assert.ok(button(open.ui,'Close')); await act(button(open.ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.timers.size,0);
+        await act(button(open.ui,'Discord test control')); assert.equal(w.pageHost.taps(),1);
+        gate.resolve({ status: 201,body: { id: CREATED } }); await act();
+        assert.equal(w.toasts.some(value => /^Sticker added/.test(value)),false); assert.equal(w.alerts.length,0);
+        assert.equal(w.posts().length,1); assert.equal(w.writes.length,w.deletes.length);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+    });
+
+    test('Valenced SaveAsSticker loads cold Settings and cancels a queued opening on Back', async t => {
+        const w = scenario(t); w.setSettingsLoaded(false);
+        const first = await w.open('save-as-sticker',{ choose: false });
+        assert.equal(w.navigation.getCurrentRoute().name,'SettingsOverview');
+        await act(() => w.navigation.goBack()); await act(() => w.setSettingsLoaded(true)); await act(() => w.advance(10000));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(pickerCount(first.ui),0);
+        assert.equal(w.timers.size,0); assert.equal(w.pageHost.subscribers.size,0);
+        const fresh = await w.open('save-as-sticker',{ choose: false });
+        assert.equal(pickerCount(fresh.ui),1); assert.deepEqual(w.pageHost.unhandled,[]);
+    });
+
+    test('Valenced SaveAsSticker runs with no sheet or modal presentation component', async t => {
+        const w = scenario(t); delete w.U.discord.design.Design.ActionSheet; delete w.RN.Modal;
+        w.U.discord.actions.AlertActionCreators.openAlert = () => assert.fail('No alert fallback');
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(w.posts().length,1); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        assert.equal(w.alerts.length,0); assert.equal(pickerCount(open.ui),0);
+    });
+
+    test('Valenced SaveAsSticker closing during preflight prevents a later POST', async t => {
+        const gate = deferred(), w = scenario(t,{ read: () => gate.promise });
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(w.posts().length,0); assert.equal(w.writes.length,1);
+        await act(button(open.ui,'Close')); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        gate.resolve({ status: 200,body: [] }); await act();
+        assert.equal(w.posts().length,0); assert.equal(w.writes.length,w.deletes.length);
+        assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced SaveAsSticker disable before page dispatch cannot open it later', async t => {
+        const w = scenario(t), open = await w.open('save-as-sticker',{ choose: false,advance: false });
+        await act(() => w.stop(open.item)); await act(() => w.advance(10000));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(pickerCount(open.ui),0);
+        assert.equal(w.registeredScreens.size,0); assert.equal(w.timers.size,0);
+        assert.equal(w.pageHost.subscribers.size,0); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced SaveAsSticker cancels a stalled FileReader without a late upload', async t => {
+        let reader, aborted = 0;
+        class StalledReader {
+            readAsDataURL() { reader = this; }
+            abort() { aborted++; }
+        }
+        const w = scenario(t,{ reader: StalledReader }), open = await w.open('save-as-sticker');
+        await w.submit(open); assert.ok(reader);
+        await act(button(open.ui,'Close')); assert.equal(aborted,1);
+        reader.result = 'data:image/png;base64,' + png.toString('base64'); await act(() => reader.onload());
+        assert.equal(w.posts().length,0); assert.equal(w.writes.length,0); assert.equal(w.alerts.length,0);
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.timers.size,0);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+    });
+
+    test('Valenced SaveAsSticker a timed-out response cannot unlock a newer explicit upload', async t => {
+        const first = deferred(), second = deferred(); let calls = 0;
+        const w = scenario(t,{ post: () => ++calls === 1 ? first.promise : second.promise });
+        const open = await w.open('save-as-sticker'); await w.submit(open); await act(() => w.advance(45000));
+        assert.equal(w.posts().length,1); assert.match(text(open.ui.toJSON()),/response timed out/);
+        await w.submit({ submit: button(open.ui,'Add sticker') }); assert.equal(w.posts().length,2);
+        first.resolve({ status: 201,body: { id: CREATED } }); await act();
+        const add = open.ui.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Add sticker')[0];
+        assert.equal(add.props.disabled,true,'the old result cannot clear the new operation lock');
+        await act(open.submit); assert.equal(w.posts().length,2);
+        second.resolve({ status: 201,body: { id: CREATED } }); await act();
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(pickerCount(open.ui),0);
+        assert.equal(w.toasts.filter(value => /^Sticker added/.test(value)).length,1);
+        assert.equal(w.writes.length,w.deletes.length); assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced SaveAsSticker a slow temporary-file cleanup cannot keep the failed form busy', async t => {
+        const cleanup = deferred(), w = scenario(t,{ remove: () => cleanup.promise,
+            post: () => ({ status: 403,body: { code: 50013 } }) });
+        w.expectedErrors = 1;
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.match(text(open.ui.toJSON()),/Create Expressions/); assert.equal(w.deletes.length,1);
+        assert.ok(button(open.ui,'Add sticker'),'a completed request releases the controls before native cleanup finishes');
+        await act(button(open.ui,'Close')); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        cleanup.resolve(); await act(); assert.equal(w.timers.size,0); assert.equal(w.alerts.length,0);
+        const fresh = await w.open('save-as-sticker',{ choose: false }); assert.equal(pickerCount(fresh.ui),1);
+    });
+
     test('Valenced Stealmoji uses a regular page with no alert, Modal or second action sheet', async t => {
         const w = scenario(t);
         w.RN.Modal = () => { assert.fail('Stealmoji must not open an OS modal'); };

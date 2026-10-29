@@ -1,6 +1,7 @@
 import { isGIF, prepareGIF } from "./gif.js";
 import { createExpressionUpload } from "../../compatibility/expression-upload.mjs";
 import { createExpressionPanel } from "../../compatibility/expression-panel.mjs";
+import { createExpressionPage } from "../../compatibility/expression-page.mjs";
 import { prepareStaticImage } from "./static-image.mjs";
 
 export default (() => {
@@ -11,10 +12,11 @@ export default (() => {
   const h = React.createElement;
   const uploads = createExpressionUpload(V);
   const panels = createExpressionPanel(V, 'SaveAsStickerPicker');
+  const pages = createExpressionPage(V, { title: 'Save as Sticker', id: 'save-as-sticker', testID: 'SaveAsStickerPage' });
   const SHEET_KEY = "SaveAsStickerPicker", ROW_KEY = "save-as-sticker-action";
   const MAX_BYTES = 512 * 1024, MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
-  const LIMITS = [5, 15, 30, 60], unpatches = [];
-  let active = false, generation = 0, saving = false;
+  const LIMITS = [5, 15, 30, 60], unpatches = [], operations = new Set();
+  let active = false, generation = 0, saving = false, pickerOpening;
 
   const byProps = (...keys) => {
     try { return V.metro.findByProps(...keys); } catch { return undefined; }
@@ -167,12 +169,23 @@ export default (() => {
     return uploads.files();
   }
 
-  function readBlob(blob) {
+  function readBlob(blob, signal) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error("Could not read the image."));
-      reader.onload = () => resolve(String(reader.result).split(",")[1]);
-      reader.readAsDataURL(blob);
+      let finished = false;
+      const finish = (callback, value) => {
+        if (finished) return;
+        finished = true; signal?.removeEventListener?.('abort', abort); callback(value);
+      };
+      const abort = () => {
+        finish(reject, Object.assign(new Error('Cancelled'), { code: 'E_PICKER_CANCELLED' }));
+        try { reader.abort?.(); } catch {}
+      };
+      reader.onerror = () => finish(reject, reader.error ?? new Error("Could not read the image."));
+      reader.onload = () => finish(resolve, String(reader.result).split(",")[1]);
+      if (signal?.aborted) { abort(); return; }
+      signal?.addEventListener?.('abort', abort);
+      try { reader.readAsDataURL(blob); } catch (error) { finish(reject, error); }
     });
   }
   function base64Bytes(data) {
@@ -199,7 +212,7 @@ export default (() => {
     return /^(file|content):\/\//.test(path) ? path : "file://" + path;
   }
 
-  async function prepare(image, check) {
+  async function prepare(image, check, control = {}) {
     const files = nativeFiles();
     if (!files?.writeFile || !files?.removeFile) throw new Error("Discord's image file module is unavailable on this build.");
     const temporary = [], picker = byProps("launchCropper", "cleanSingle") ?? byProps("launchCropper");
@@ -219,11 +232,11 @@ export default (() => {
         const converted = new URL(source.replace(/^https:\/\/cdn\.discordapp\.com/i, 'https://media.discordapp.net'));
         converted.searchParams.set('format', 'png'); converted.searchParams.set('width', '320'); converted.searchParams.set('height', '320');
         check();
-        const response = await (V.utils?.safeFetch ?? fetch)(converted.toString(), {}, 20000);
+        const response = await (V.utils?.safeFetch ?? fetch)(converted.toString(), { signal: control.controller?.signal }, 20000);
         if (!response.ok) throw new Error('Discord could not convert this image to PNG. Use the original PNG or JPEG.');
         const blob = await response.blob();
         if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error('Choose an image smaller than 25 MB.');
-        const encoded = await readBlob(blob); check();
+        const encoded = await readBlob(blob, control.controller?.signal); check();
         return prepareStaticImage(encoded, check).base64;
       }
     }
@@ -233,12 +246,13 @@ export default (() => {
       if (/^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\//i.test(url)) {
         try { url = await refresh?.maybeRefreshAttachmentUrl?.(url) || url; } catch {}
       }
-      const response = await (V.utils?.safeFetch ?? fetch)(url, {}, 20000);
+      check();
+      const response = await (V.utils?.safeFetch ?? fetch)(url, { signal: control.controller?.signal }, 20000);
       if (!response.ok) throw new Error("Image download failed (HTTP " + response.status + "). Reopen the image and try again.");
       if (Number(response.headers?.get?.("content-length")) > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image smaller than 25 MB.");
       const blob = await response.blob();
       if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error("Choose an image smaller than 25 MB.");
-      let data = await readBlob(blob);
+      let data = await readBlob(blob, control.controller?.signal);
       check();
       if (!data) throw new Error("The image is empty.");
       const prefix = "save-as-sticker-" + Date.now() + "-" + Math.random().toString(36).slice(2);
@@ -298,27 +312,38 @@ export default (() => {
     } catch (error) { await cleanup(); throw error; }
   }
 
-  async function save(guild, image, name) {
+  async function save(guild, image, name, page) {
     if (saving || !active) return;
-    saving = true;
+    const control = page?.control ?? {};
+    saving = control; operations.add(control);
     const session = generation;
     const account = byStore("UserStore")?.getCurrentUser?.()?.id;
     const check = () => {
-      if (!active || generation !== session || !account || byStore("UserStore")?.getCurrentUser?.()?.id !== account)
+      if (!active || generation !== session || control.cancelled || control.expired
+        || (page && !page.isCurrent()) || !account || byStore("UserStore")?.getCurrentUser?.()?.id !== account)
         throw Object.assign(new Error("Cancelled"), { code: "E_PICKER_CANCELLED" });
     };
-    let prepared;
+    let prepared, responseTimer;
+    control.cancel = force => {
+      if (control.writing && !force) return;
+      control.cancelled = true;
+      try { control.controller?.abort(); } catch {}
+      clearTimeout(responseTimer);
+      if (saving === control) saving = false;
+    };
     try {
       if (name.length < 2 || name.length > 30) throw new Error("Use a sticker name between 2 and 30 characters.");
       if (!account) throw new Error("Your Discord account is still loading. Reopen the picker and try again.");
       check();
       const upload = uploads.resolve('sticker');
-      sheetHost.hideActionSheet(SHEET_KEY);
-      RN.Keyboard?.dismiss?.();
-      await new Promise(resolve => setTimeout(resolve, 300));
+      if (!page) {
+        sheetHost.hideActionSheet(SHEET_KEY);
+        RN.Keyboard?.dismiss?.();
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
       check();
       toast("Preparing your sticker…");
-      prepared = await prepare(image, check);
+      prepared = await prepare(image, check, control);
       check();
       const store = byStore("GuildStore");
       const currentGuild = store?.getGuild?.(guild.id) ?? store?.getGuilds?.()?.[guild.id];
@@ -326,37 +351,65 @@ export default (() => {
       const slots = stickerSlots(currentGuild);
       if (slots.used != null && slots.used >= slots.max) throw new Error("This server has no free sticker slots. Choose another server.");
       toast("Adding sticker to " + guild.name + "…");
+      control.writing = true;
+      if (page) responseTimer = setTimeout(() => {
+        control.expired = true;
+        if (saving === control) saving = false;
+        if (page.isCurrent()) {
+          page.onError('Discord’s upload response timed out. Check the server’s stickers before trying again.');
+          page.onFinished();
+        }
+      }, 45000);
       // Android's native multipart uploader accepts a local file:// URI.
       // Never retry a POST automatically: a timeout may follow a successful creation.
       const result = await upload({
         guildId: guild.id, name, tags: "slight_smile", description: "",
         uri: prepared.uri, mimeType: prepared.mimeType, platform: "mobile", originalMd5: null,
       }, check);
+      check();
       if (!result?.id && !result?.body?.id) throw new Error("Discord did not confirm the upload. Check the server's stickers before trying again.");
+      if (page) page.onSuccess();
       if (active && generation === session) toast("Sticker added to " + guild.name);
     } catch (error) {
-      if (error?.code === "E_PICKER_CANCELLED" || /cancel/i.test(String(error?.message ?? ""))) return;
+      if (control.cancelled || control.expired || error?.code === "E_PICKER_CANCELLED" || /cancel/i.test(String(error?.message ?? ""))) return;
       log("Upload failed", error);
       if (active && generation === session) {
         const message = errorText(error);
-        if (RN.Alert?.alert) RN.Alert.alert("Sticker could not be added", message); else toast(message);
+        if (page) { if (page.isCurrent()) page.onError(message); }
+        else if (RN.Alert?.alert) RN.Alert.alert("Sticker could not be added", message); else toast(message);
       }
-    } finally { await prepared?.cleanup?.(); saving = false; }
+    } finally {
+      clearTimeout(responseTimer);
+      operations.delete(control);
+      if (saving === control) saving = false;
+      if (page?.isCurrent()) page.onFinished();
+      // The native request has settled. Release the controls before deleting
+      // its files, since a slow file bridge must not keep the picker busy.
+      await prepared?.cleanup?.();
+    }
   }
 
-  function Picker({ images, onClose, inPanel = false }) {
+  function Picker({ images, onClose, inPanel = false, page = false, isOpen }) {
     const [image, setImage] = React.useState(images.length === 1 ? images[0] : null);
     const [guild, setGuild] = React.useState(null);
     const [name, setName] = React.useState(filenameName(images[0]?.filename));
     const [, setRevision] = React.useState(0);
     const [query, setQuery] = React.useState('');
+    const [busy, setBusy] = React.useState(false), [error, setError] = React.useState('');
+    const mounted = React.useRef(true), closed = React.useRef(false), operation = React.useRef(), lock = React.useRef(false);
+    const session = React.useRef(generation);
+    const alive = () => mounted.current && !closed.current && active && generation === session.current && (!isOpen || isOpen());
     const dark = (byStore("ThemeStore")?.theme ?? RN.Appearance?.getColorScheme?.()) !== "light";
     const colors = { text: dark ? "#f2f3f5" : "#1e1f22", muted: dark ? "#b5bac1" : "#4e5058", input: dark ? "#1e1f22" : "#e3e5e8" };
     React.useEffect(() => {
+      mounted.current = true;
       const stores = [byStore("GuildStore"), byStore("PermissionStore"), byStore("GuildStickersStore"), byStore("StickersStore")].filter(Boolean);
       const refresh = () => setRevision(value => value + 1);
       stores.forEach(store => store.addChangeListener?.(refresh));
-      return () => stores.forEach(store => store.removeChangeListener?.(refresh));
+      return () => {
+        mounted.current = false; operation.current?.cancel?.();
+        stores.forEach(store => store.removeChangeListener?.(refresh));
+      };
     }, []);
     const text = (value, style = {}) => h(RN.Text, { style: { color: colors.text, fontSize: 16, ...style } }, value);
     const button = (label, onPress, disabled = false) => h(RN.Pressable, {
@@ -364,7 +417,23 @@ export default (() => {
       style: { padding: 14, borderRadius: 8, backgroundColor: disabled ? "#555967" : "#5865f2", marginTop: 12 },
     }, text(label, { color: "#ffffff", fontWeight: "600", textAlign: "center" }));
     const inputStyle = { color: colors.text, backgroundColor: colors.input, borderRadius: 8, padding: 12, fontSize: 16, marginTop: 10 };
-    const close = onClose ?? (() => sheetHost.hideActionSheet(SHEET_KEY));
+    const close = () => {
+      if (closed.current) return;
+      closed.current = true; operation.current?.cancel?.();
+      try { RN.Keyboard?.dismiss?.(); } catch {}
+      (onClose ?? (() => sheetHost.hideActionSheet(SHEET_KEY)))();
+    };
+    const submit = () => {
+      if (!page) { close(); void save(guild, image, name.trim()); return; }
+      if (!alive() || lock.current) return;
+      if (saving) { setError('A sticker upload is already in progress. You can close this page while it finishes.'); return; }
+      try { RN.Keyboard?.dismiss?.(); } catch {}
+      lock.current = true; setBusy(true); setError('');
+      const control = { controller: typeof AbortController === 'function' ? new AbortController() : undefined };
+      operation.current = control;
+      void save(guild, image, name.trim(), { control, isCurrent: alive, onError: setError, onSuccess: close,
+        onFinished() { if (operation.current === control) { operation.current = undefined; lock.current = false; setBusy(false); } } });
+    };
     const headerImage = image ? h(RN.Image, {
       source: { uri: image.url }, resizeMode: "contain", accessibilityLabel: "Sticker preview",
       style: { width: 26, height: 26, marginRight: 12 },
@@ -400,10 +469,11 @@ export default (() => {
       const subLabel = full ? "No slots available" : slots.used == null ? "Check slots on upload" : undefined;
       // Also guard the callback: the store may change before this row re-renders.
       const select = () => {
+        if (page && (!alive() || busy)) return;
         const current = byStore("GuildStore")?.getGuild?.(item.id) ?? item;
         const now = stickerSlots(current);
         if (!canCreate(current) || (now.used != null && now.used >= now.max)) return;
-        setGuild(current);
+        setGuild(current); setError('');
       };
       const plusAsset = asset("ic_add_24px", "PlusSmallIcon", "PlusIcon");
       const plus = Forms.FormIcon && plusAsset != null
@@ -457,10 +527,12 @@ export default (() => {
       content = h(RN.View, null,
         h(RN.Image, { source: { uri: image.url }, style: { height: 128, width: "100%", marginBottom: 12 }, resizeMode: "contain" }),
         text("Server: " + guild.name, { fontWeight: "600" }), text("Sticker name", { marginTop: 12 }),
-        h(RN.TextInput, { value: name, onChangeText: setName, maxLength: 30, placeholder: "Sticker name", placeholderTextColor: colors.muted, style: inputStyle, selectTextOnFocus: true }),
+        h(RN.TextInput, { value: name, onChangeText: setName, maxLength: 30, placeholder: "Sticker name", placeholderTextColor: colors.muted, style: inputStyle, selectTextOnFocus: true, editable: !busy }),
         text(image.contentType === "image/gif" ? "GIFs keep their animation and resize automatically. Maximum 5 seconds and 512 KiB." : "Images fit inside 320×320 with transparent padding. GIFs keep their animation.", { color: colors.muted, fontSize: 13, marginTop: 12 }),
-        button("Add sticker", () => { close(); void save(guild, image, name.trim()); }, !valid),
-        button("Choose another server", () => setGuild(null))
+        button("Add sticker", submit, !valid || busy),
+        busy ? text('Preparing and adding your sticker…', { color: colors.muted, marginTop: 12 }) : null,
+        error ? text(error, { color: '#e66b70', marginTop: 12 }) : null,
+        button("Choose another server", () => { setGuild(null); setError(''); }, busy)
       );
     }
     const body = h(RN.View, { style: inPanel ? { flex: 1, minHeight: 0 } : {} }, header, h(RN.ScrollView, {
@@ -471,7 +543,20 @@ export default (() => {
   }
 
   function openPicker(images, fromKey) {
-    if (!active) return;
+    if (!active || pickerOpening) return;
+    if (V.host?.id === 'valenced') {
+      const opening = { session: generation };
+      pickerOpening = opening;
+      const release = () => { opening.closed = true; if (pickerOpening === opening) pickerOpening = undefined; };
+      const live = () => active && generation === opening.session && !opening.closed && pickerOpening === opening;
+      try { sheetHost.hideActionSheet(fromKey); } catch {}
+      const Boundary = V.ui.components?.ErrorBoundary;
+      if (pages.open((close, visible) => {
+        const body = h(Picker, { images, onClose: close, inPanel: true, page: true, isOpen: () => live() && visible() });
+        return Boundary ? h(Boundary, null, body) : body;
+      }, release)) return;
+      release(); toast('Save as Sticker could not open. Restart Discord and reopen the image menu.'); return;
+    }
     if (saving) { toast("A sticker upload is already in progress."); return; }
     if (panels.open(close => h(Picker, { images, onClose: close, inPanel: true }), 'sticker picker')) {
       sheetHost.hideActionSheet(fromKey); return;
@@ -549,7 +634,7 @@ export default (() => {
     return component;
   }
   function onLoad() {
-    if (!sheetHost?.openLazy || !Row || !Sheet || !byStore("GuildStore")) throw new Error("SaveAsSticker: required menu modules were not found on this Discord build.");
+    if (!sheetHost?.openLazy || !Row || (!Sheet && V.host?.id !== 'valenced') || !byStore("GuildStore")) throw new Error("SaveAsSticker: required menu modules were not found on this Discord build.");
     if (active) return;
     active = true; generation++;
     unpatches.push(V.patcher.before("openLazy", sheetHost, args => {
@@ -567,8 +652,11 @@ export default (() => {
     toast("SaveAsSticker enabled");
   }
   function onUnload() {
-    active = false; generation++;
+    active = false; generation++; pickerOpening = undefined;
+    pages.closeAll();
     panels.closeAll();
+    for (const control of operations) control.cancel?.(true);
+    operations.clear(); saving = false;
     for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }
     try { sheetHost?.hideActionSheet?.(SHEET_KEY); } catch {}
   }

@@ -149,12 +149,13 @@ def build(check=False):
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
         plugin_runtime = runtime
-        if directory.name == "stealmoji":
-            # Only this package opens its custom page from chat. The ordinary
+        if directory.name in ("stealmoji", "save-as-sticker"):
+            # These packages open their custom pages from chat. The ordinary
             # legacy navigation bridge is used by plugins already in Settings.
             start = runtime.index("    function openLegacyPage(")
             end = runtime.index("    function wrapNavigation(", start)
-            page_navigation = (HERE / "stealmoji-navigation.cjs").read_text()
+            navigation_file = "stealmoji-navigation.cjs" if directory.name == "stealmoji" else "expression-navigation.cjs"
+            page_navigation = (HERE / navigation_file).read_text()
             plugin_runtime = runtime[:start] + page_navigation + "\n" + runtime[end:]
         if directory.name == "addonList":
             transformed = transformed.replace("entry.enabled ? 'Enabled' : 'Disabled'",
