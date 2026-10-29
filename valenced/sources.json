@@ -131,8 +131,8 @@
     },
     "dev.fluttershy2008.save-as-sticker": {
       "path": "save-as-sticker/index.js",
-      "sha256": "70737fb825ab4a25969817d08c6c68f6e0336468372c10f02835daf2e62b9ea8",
-      "originalVersion": "1.3.7",
+      "sha256": "9ac85e3a572f058bd4cf5a9f6d9c1bdb08e6d84cc3e69e036cbaf48e41f0ab2b",
+      "originalVersion": "1.3.8",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

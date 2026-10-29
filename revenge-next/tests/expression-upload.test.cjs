@@ -217,9 +217,11 @@ for (const kind of ['save-as-sticker', 'stealmoji']) {
         const label = open.ui.root.findAll(n => n.type === 'Text' && text(n) === 'Server: Test Guild')[0];
         assert.ok(label); assert.equal(w.RN.StyleSheet.flatten(label.props.style).color, '#f2f3f5');
     });
-    test(kind + ' discovers a native action loaded after opening and does not also POST', async t => {
+    test(kind + (VALENCED && kind === 'save-as-sticker' ? ' keeps signed-in HTTP when an internal action appears'
+        : ' discovers a native action loaded after opening and does not also POST'), async t => {
         const w = scenario(t), open = await w.open(kind); w.addModule(w.native); await w.submit(open);
-        assert.equal(w.nativePosts.length, 1); assert.equal(w.posts().length, 0);
+        const directSticker = VALENCED && kind === 'save-as-sticker';
+        assert.equal(w.nativePosts.length,directSticker ? 0 : 1); assert.equal(w.posts().length,directSticker ? 1 : 0);
     });
     for (const result of [{ status: 429, body: { message: 'Upload rate limited' } }, { status: 200, body: {} }])
     test(kind + ' rejects unconfirmed REST creation without retry: ' + JSON.stringify(result), async t => {
@@ -373,6 +375,35 @@ test('Stealmoji cancels a delayed image viewer when another picker has already o
 });
 
 if (VALENCED) {
+    test('Valenced SaveAsSticker uploads through signed-in HTTP when the internal sticker action returns void', async t => {
+        const w = scenario(t); let native = 0;
+        w.addModule({ createGuildSticker() { native++; } });
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(native,0); assert.equal(w.posts().length,1); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        assert.equal(w.toasts.filter(value => /^Sticker added/.test(value)).length,1); assert.equal(w.alerts.length,0);
+    });
+
+    test('Valenced SaveAsSticker confirms an empty response after a delayed server-list update', async t => {
+        let reads = 0;
+        const w = scenario(t,{ post: () => ({ status: 201 }), read: () => ({ body: ++reads < 3 ? []
+            : [{ id: CREATED,name: 'renamed',guild_id: GUILD,user: { id: ACCOUNT },format_type: 1 }] }) });
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.equal(w.posts().length,1); assert.equal(pickerCount(open.ui),1);
+        await act(() => w.advance(3000));
+        assert.equal(w.posts().length,1); assert.equal(reads,3); assert.equal(w.navigation.getCurrentRoute().name,'Chat');
+        assert.equal(w.toasts.filter(value => /^Sticker added/.test(value)).length,1); assert.equal(w.timers.size,0);
+    });
+
+    test('Valenced SaveAsSticker Back cancels a delayed confirmation without a second upload', async t => {
+        const w = scenario(t,{ post: () => ({ status: 201 }) });
+        const open = await w.open('save-as-sticker'); await w.submit(open); assert.equal(w.posts().length,1);
+        const reads = () => w.calls.filter(c => c[0] === 'http' && c[1] === 'get').length;
+        assert.equal(reads(),2); await act(button(open.ui,'Close'));
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.timers.size,0);
+        await act(() => w.advance(5000)); assert.equal(reads(),2); assert.equal(w.posts().length,1);
+        assert.equal(w.alerts.length,0); assert.equal(w.toasts.some(value => /^Sticker added/.test(value)),false);
+    });
+
     for (const failure of ['download','crop','upload','unconfirmed']) test('Valenced SaveAsSticker can exit and reopen after ' + failure + ' failure', async t => {
         const options = failure === 'download' ? { fetch: () => new Response('',{ status: 404 }) }
             : failure === 'crop' ? { jpeg: true, crop: async () => { throw Object.assign(new Error('User cancelled'),{ code: 'E_PICKER_CANCELLED' }); } }

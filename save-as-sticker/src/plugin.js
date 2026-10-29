@@ -1,5 +1,5 @@
 import { isGIF, prepareGIF } from "./gif.js";
-import { createExpressionUpload } from "../../compatibility/expression-upload.mjs";
+import { createStickerUpload } from "./upload.mjs";
 import { createExpressionPanel } from "../../compatibility/expression-panel.mjs";
 import { createExpressionPage } from "../../compatibility/expression-page.mjs";
 import { prepareStaticImage } from "./static-image.mjs";
@@ -10,7 +10,7 @@ export default (() => {
   if (!V?.metro || !V?.patcher) throw new Error("SaveAsSticker needs Revenge's Vendetta plugin support.");
   const { React, ReactNative: RN, constants } = V.metro.common;
   const h = React.createElement;
-  const uploads = createExpressionUpload(V);
+  const uploads = createStickerUpload(V);
   const panels = createExpressionPanel(V, 'SaveAsStickerPicker');
   const pages = createExpressionPage(V, { title: 'Save as Sticker', id: 'save-as-sticker', testID: 'SaveAsStickerPage' });
   const SHEET_KEY = "SaveAsStickerPicker", ROW_KEY = "save-as-sticker-action";
@@ -325,9 +325,9 @@ export default (() => {
     };
     let prepared, responseTimer;
     control.cancel = force => {
-      if (control.writing && !force) return;
       control.cancelled = true;
       try { control.controller?.abort(); } catch {}
+      if (control.writing && !force) return;
       clearTimeout(responseTimer);
       if (saving === control) saving = false;
     };
@@ -365,7 +365,7 @@ export default (() => {
       const result = await upload({
         guildId: guild.id, name, tags: "slight_smile", description: "",
         uri: prepared.uri, mimeType: prepared.mimeType, platform: "mobile", originalMd5: null,
-      }, check);
+      }, check, control.controller?.signal);
       check();
       if (!result?.id && !result?.body?.id) throw new Error("Discord did not confirm the upload. Check the server's stickers before trying again.");
       if (page) page.onSuccess();

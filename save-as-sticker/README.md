@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.6
+# SaveAsSticker 1.3.8
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -13,6 +13,12 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/
 This is a plugin directory URL. Revenge appends `manifest.json` and `index.js` itself. Do not paste a GitHub `blob`/`tree` page or the URL of an individual JS/JSON file.
 
 If already installed, open the plugin's menu, choose **Refetch**, and restart Discord. The root install URL (`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/`) is kept as an identical legacy alias. Enable only one copy.
+
+## Valenced upload and confirmation in 1.3.8
+
+Valenced **1.0.0-beta6** uses Discord's signed-in HTTP client for the sticker's native multipart request, including when an internal `createGuildSticker` action is available. This avoids relying on an undocumented action's arguments or return value. A returned sticker ID confirms success. An empty successful response is checked against an authoritative server-list snapshot with up to four follow-up reads over a short propagation window; an existing same-name sticker, ambiguous IDs, or another user's sticker cannot confirm this upload. The creation request is sent exactly once and is never automatically repeated through another route.
+
+The normal Valenced page introduced in **1.0.0-beta5** is retained. Errors stay on the page, Close remains usable, and Back cancels pending preparation or verification. Next **1.0.0-beta8** and Classic **1.3.8** retain their existing upload-action selection. PNG/GIF preparation, animation, permissions, cache cleanup and the legacy root alias are preserved. Automated tests mock Discord's APIs; physical phone uploads remain unverified.
 
 ## Cropping, scrolling and confirmation in 1.3.6
 
