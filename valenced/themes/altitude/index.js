@@ -129,6 +129,171 @@
     families['ggsans-' + style] = [{ path: 'assets/fonts/' + file, weight }];
   }
 
+  function installSettingsBackdrop(api) {
+    const U = api.unscoped;
+    const { React: R, ReactNative: RN } = U.react;
+    const finders = U.modules.finders;
+    const imported = U.discord.utils?.modules?.finders;
+    const native = U.modules.native;
+    const settings = U.discord.modules?.settings;
+    const Scope = R.createContext(false);
+    const listeners = new Set(), removers = [], seen = new WeakMap();
+    const clear = { backgroundColor: 'transparent' };
+    const fill = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 };
+    const containers = new Set([RN.View, RN.ScrollView, RN.FlatList, RN.SectionList, RN.SafeAreaView, RN.KeyboardAvoidingView].filter(Boolean));
+    let active = true, revision = 0, gradient, display;
+
+    const live = () => active;
+    const subscribe = listener => {
+      if (!active) return () => {};
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+    const snapshot = () => revision;
+    const notify = () => { revision++; for (const listener of listeners) listener(); };
+    const keep = remove => {
+      if (typeof remove !== 'function') return;
+      if (active) removers.push(remove); else remove();
+    };
+
+    function selection() {
+      try {
+        const raw = native.callNativeMethodSync('valenced.themes.getState', []);
+        const state = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (state?.colors?.plugin !== 'dev.fluttershy2008.altitude-theme' || state.background?.source === 'none') return;
+        return variants.find(variant => variant.id === state.colors.theme);
+      } catch { return undefined; }
+    }
+
+    function clearScreen(tree, navigation) {
+      let budget = 160;
+      function visit(node, depth) {
+        if (--budget < 0 || depth > 8) return node;
+        if (Array.isArray(node)) return node.map(child => visit(child, depth + 1));
+        if (!R.isValidElement(node)) return node;
+        const props = node.props, next = {};
+        if (containers.has(node.type)) {
+          next.style = [props.style, clear];
+          if (props.contentContainerStyle) next.contentContainerStyle = [props.contentContainerStyle, clear];
+        }
+        // SettingListRenderer accepts this separately from its scroll view's style.
+        if (props.node?.type === 'list' || Array.isArray(props.node?.sections) || props.containerStyle) {
+          next.containerStyle = [props.containerStyle, clear];
+        }
+        if (navigation) {
+          const children = R.Children.toArray(props.children);
+          const screens = children.some(child => R.isValidElement(child) && typeof child.props.name === 'string'
+            && (child.props.component || child.props.getComponent));
+          if (props.screenOptions != null || screens) {
+            const options = value => ({
+              ...value,
+              cardStyle: [value?.cardStyle, clear],
+              contentStyle: [value?.contentStyle, clear],
+              headerStyle: [value?.headerStyle, clear],
+              headerBackgroundContainerStyle: [value?.headerBackgroundContainerStyle, clear]
+            });
+            next.screenOptions = typeof props.screenOptions === 'function'
+              ? function (...args) { return options(Reflect.apply(props.screenOptions, this, args)); }
+              : options(props.screenOptions);
+            next.sceneContainerStyle = [props.sceneContainerStyle, clear];
+          }
+        }
+        const list = node.type === RN.ScrollView || node.type === RN.FlatList || node.type === RN.SectionList;
+        if (!list && props.children != null) next.children = visit(props.children, depth + 1);
+        return Object.keys(next).length ? R.cloneElement(node, next) : node;
+      }
+      return visit(tree, 0);
+    }
+
+    function Surface({ content }) {
+      const enabled = R.useContext(Scope);
+      return enabled && active ? clearScreen(content, false) : content;
+    }
+
+    function Backdrop({ content }) {
+      // This hook follows the Themes API's image/opacity/blur/dimming updates.
+      const themeDisplay = display.useCustomThemeDisplaySettings();
+      const variant = selection();
+      const enabled = active && !!variant && !!themeDisplay;
+      return R.createElement(Scope.Provider, { value: enabled },
+        R.createElement(RN.View, { style: [{ flex: 1 }, enabled && { backgroundColor: variant.palette.base }] },
+          enabled ? R.createElement(RN.View, {
+            key: 'wallpaper', style: fill, pointerEvents: 'none', accessible: false,
+            importantForAccessibility: 'no-hide-descendants'
+          }, R.createElement(gradient.default, { absolute: true, mix: true })) : null,
+          enabled ? clearScreen(content, true) : content));
+    }
+
+    function Frame({ content }) {
+      R.useSyncExternalStore(subscribe, snapshot, snapshot);
+      return live() && gradient && display ? R.createElement(Backdrop, { content }) : content;
+    }
+
+    function patch(owner, key, navigator) {
+      for (let depth = 0; depth < 8; depth++) {
+        const value = owner?.[key];
+        if (!value) return;
+        if (value.$$typeof === Symbol.for('react.memo')) { owner = value; key = 'type'; continue; }
+        if (value.$$typeof === Symbol.for('react.forward_ref')) { owner = value; key = 'render'; continue; }
+        if (typeof value === 'function' && value.prototype?.render) { owner = value.prototype; key = 'render'; }
+        if (typeof owner?.[key] !== 'function') return;
+        let keys = seen.get(owner);
+        if (!keys) seen.set(owner, keys = new Set());
+        if (keys.has(key)) return;
+        keys.add(key);
+        keep(U.patcher.instead(owner, key, function (args, original) {
+          const content = Reflect.apply(original, this, args);
+          if (!active || content == null) return content;
+          return R.createElement(navigator ? Frame : Surface, { content });
+        }));
+        return;
+      }
+    }
+
+    function watch(path, callback) {
+      if (!imported?.getModuleWithImportedPath) return;
+      keep(imported.getModuleWithImportedPath(path, exports => { if (active) callback(exports); }));
+    }
+    function renderer(exports) {
+      if (!active || !exports) return;
+      patch(exports, 'SettingsList', false);
+      patch(exports, 'SearchableSettingsList', false);
+    }
+    const modules = (props, callback) => keep(finders.getModules(finders.filters.withProps(...props), exports => {
+      if (active) callback(exports);
+    }, { cached: true, initialize: false, returnNamespace: true }));
+
+    function stop() {
+      if (!active) return;
+      active = false;
+      notify();
+      listeners.clear();
+      for (const remove of removers.splice(0).reverse()) {
+        try { remove(); } catch (error) {
+          api.logger?.warn?.('Altitude could not remove a Settings wallpaper hook.', error?.message ?? String(error));
+        }
+      }
+      settings?.refreshSettings?.();
+    }
+    api.cleanup(stop);
+    try {
+      modules(['CustomThemedGradient', 'validateColors'], exports => {
+        if (!exports.default) return;
+        gradient = exports; notify();
+      });
+      modules(['useCustomThemeDisplaySettings'], exports => { display = exports; notify(); });
+      modules(['SettingsList', 'SearchableSettingsList'], renderer);
+      watch('modules/user_settings/core/native/SettingsNavigator.tsx', exports => patch(exports, 'default', true));
+      watch('modules/user_settings/overview/native/SettingsOverviewScreen.tsx', exports => patch(exports, 'default', false));
+      watch('modules/settings/native/renderer/SettingListRenderer.tsx', renderer);
+    } catch (error) {
+      stop();
+      api.logger?.warn?.('Altitude Settings wallpaper could not start.', error?.message ?? String(error));
+    }
+    return stop;
+  }
+
+  let stopSettingsBackdrop;
   return {
     default: {
       preInit({ themes }) {
@@ -139,6 +304,14 @@
           description: 'The original Altitude body font, bundled for use after a reload.',
           families
         });
+      },
+      start(api) {
+        stopSettingsBackdrop?.();
+        stopSettingsBackdrop = installSettingsBackdrop(api);
+      },
+      stop() {
+        stopSettingsBackdrop?.();
+        stopSettingsBackdrop = undefined;
       }
     }
   };

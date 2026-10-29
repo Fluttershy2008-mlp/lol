@@ -195,8 +195,8 @@
     },
     "dev.fluttershy2008.altitude-theme": {
       "path": "valenced/themes/altitude/index.js",
-      "sha256": "012d50664c1b0b36a2b1906e89a0a5a569b6c7daa82a881a2fcf9cbe12031690",
-      "originalVersion": "1.0.0-beta2",
+      "sha256": "982326a856ba22a5fb0bd6baeb44b091c2beb9c13971a1229b0c7d613ad4fb25",
+      "originalVersion": "1.0.0-beta3",
       "kind": "native-theme"
     }
   }

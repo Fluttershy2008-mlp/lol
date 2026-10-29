@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**Altitude 1.0.0-beta2** removes the heavy background blur from **High Altitude** and **Low Altitude**. Update Altitude and restart Discord. If a saved setting still blurs the image, open **Themes → Colors → Background → Reset** to follow the new defaults (full opacity, blur 0). The **Altitude · Lexend Deca** font pack is retained. [Altitude setup, backgrounds and differences from Aliucord](themes/altitude/README.md).
+**Altitude 1.0.0-beta3** adds the selected wallpaper behind **Settings**, including the overview and theme picker. Update Altitude and fully restart Discord. It retains beta2's clear backgrounds, the **Altitude · Lexend Deca** font pack and your background preferences. If needed, **Themes → Colors → Background → Reset** follows the theme defaults (full opacity, blur 0). [Altitude setup, backgrounds and differences from Aliucord](themes/altitude/README.md).
 
 **Server Leaver 1.0.0-beta6 separates ID editing from the scrolling preview.** Tap **Edit protected IDs** to open the bounded editor; Save closes it and Cancel or Android Back discards unsaved changes. Protect updates rows in place without an editable ID field in the list. All 22 main IDs stay protected and existing additional protections remain scoped to their account. Refresh the repository, update Server Leaver and fully restart Discord.
 

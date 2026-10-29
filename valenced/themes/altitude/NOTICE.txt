@@ -17,6 +17,10 @@ original images are displayed without additional blur. The original 95/255
 overlay alpha is mapped to surface dimming; its surface blending differs
 from Aliucord's black overlay. Users can adjust the background from Colours.
 
+The Settings backdrop reuses the Themes API renderer behind Settings and
+clears the Settings navigator and list viewport backgrounds. Cards and
+controls retain their original rendering. Hooks are removed when stopped.
+
 Aliucord-only BetterChatbox, SquareAvatars, BetterStatusIndicators, NoBurnIn
 and LayoutController settings are not part of this theme plugin.
 Icons are recoloured using semantic colour tokens; icon shapes and emojis

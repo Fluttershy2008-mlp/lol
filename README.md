@@ -12,7 +12,7 @@ All **21 unique plugins** plus five native theme plugins are available as Valenc
 
 More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta5**, Friends List and Blocked User List at **1.0.0-beta4**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and other ports at **1.0.0-beta2**. [Valenced setup, raw fallback and validation notes](valenced/README.md).
 
-**Altitude** is now available for Valenced, including **High Altitude**, **Low Altitude**, blurred backgrounds and a bundled **Lexend Deca** font pack. [Install and select Altitude](valenced/themes/altitude/README.md).
+**Altitude** is now available for Valenced, including **High Altitude**, **Low Altitude**, clear wallpapers in chat and Settings, and a bundled **Lexend Deca** font pack. [Install and select Altitude](valenced/themes/altitude/README.md).
 
 ## Revenge Next
 

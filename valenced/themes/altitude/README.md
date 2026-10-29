@@ -19,6 +19,8 @@ Colours, fonts, icons and emojis are separate selections in Valenced. Choosing t
 
 ## Background
 
+**Beta3 adds the wallpaper behind Settings**, including the overview and theme picker. It uses the Themes API's existing wallpaper renderer, with transparent Settings screen containers. Menu cards, list scrolling, touch handlers and navigation stay intact. The backdrop follows the selected Altitude variant, custom image preferences and the **None** option; it stops when another colour theme is selected or Altitude is disabled.
+
 **Beta2 removes the added blur** from High and Low Altitude so the stars, clouds and image details remain visible. Both backgrounds use the original images from a pinned source revision, at full opacity with dimming 95/255. Internet access is required to load them.
 
 After updating Altitude, restart Discord. If a saved background setting still applies the old blur, open **Themes → Colors → Background** and tap **Reset** to follow the updated theme defaults. For manual settings, choose **From theme**, set **Opacity** to **100%** and **Blur** to **0**. These preferences override a theme's defaults, even after changing or updating themes.
@@ -40,7 +42,8 @@ From the repository root:
 python3 valenced/build.py
 python3 valenced/build.py --check
 node --test valenced/tests/altitude.test.cjs
+node --test valenced/tests/altitude-settings.test.cjs
 python3 -m unittest discover -s valenced/tests -p 'test_*.py'
 ```
 
-The source uses no Discord module searches, UI patches or timers. The Themes API owns registration, applying selections and cleanup. The port has not been tested on a physical phone.
+The Settings integration waits for imported Settings modules and initialized gradient exports; it does not force unrelated modules to load or poll with timers. Its patches and subscriptions are removed when the plugin stops. The Themes API owns the image, saved background preferences, colour selection and fonts. The port has not been tested on a physical phone.

@@ -91,14 +91,30 @@
               "version": ">=1 <2"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.altitude-theme@1.0.0-beta3.zip",
+          "sha256": "b678d942274ccd2f84d5b70075a91d537d4e379c3f145bdbd18e1b7c0b52a27a",
+          "size": 128771,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Altitude",
-      "description": "High and Low Altitude by nyraki: warm cream accents, blue-grey surfaces, blurred backgrounds and Lexend Deca fonts. Ported for Valenced.",
+      "description": "High and Low Altitude by nyraki: warm cream accents, blue-grey surfaces, clear wallpapers in chat and Settings, and Lexend Deca fonts. Ported for Valenced.",
       "author": "nyraki (https://github.com/myumichi \"Original theme\")",
       "contributors": [
         "fluttershy_simper67 <753962426407452713> (https://github.com/Fluttershy2008-mlp \"Valenced port\")"
