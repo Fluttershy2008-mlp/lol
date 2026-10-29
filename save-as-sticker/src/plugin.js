@@ -1,5 +1,5 @@
 import { isGIF, prepareGIF } from "./gif.js";
-import { createStickerUpload } from "./upload.mjs";
+import { createStickerUpload, stickerValidationError } from "./upload.mjs";
 import { createExpressionPanel } from "../../compatibility/expression-panel.mjs";
 import { createExpressionPage } from "../../compatibility/expression-page.mjs";
 import { prepareStaticImage } from "./static-image.mjs";
@@ -158,6 +158,8 @@ export default (() => {
     const code = Number(error?.body?.code ?? error?.code);
     if (code === 50013) return "You need Create Expressions permission in this server.";
     if (code === 30039) return "This server has no free sticker slots. Choose another server.";
+    const validation = stickerValidationError(error);
+    if (validation) return validation;
     for (const value of [error?.body?.message, error?.message, error?.text]) {
       if (typeof value !== "string" || !value) continue;
       try { return JSON.parse(value)?.message ?? value; } catch { return value; }

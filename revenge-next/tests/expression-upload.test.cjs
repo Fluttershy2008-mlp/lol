@@ -5,6 +5,7 @@ const { createWorld, React, Renderer, ACCOUNT, FRIEND, GUILD } = require('./next
 const { gifFixture } = require('../../save-as-sticker/tests/gif-fixture.mjs');
 const { installServerPanelHost } = require('../../valenced/tests/server-info-fixture.cjs');
 const { installNavigationHost } = require('./navigation-fixture.cjs');
+const { mobileStickerRequest } = require('../../valenced/tests/mobile-http-fixture.cjs');
 const VALENCED = process.env.PLUGIN_TEST_TARGET === 'valenced';
 const h = React.createElement, EMOJI = '800000000000000008', CREATED = '800000000000000009';
 const png = Buffer.alloc(32); Buffer.from([137,80,78,71,13,10,26,10]).copy(png);
@@ -30,6 +31,10 @@ function button(ui, label) {
 }
 function pickerCount(ui) {
     return ui.root.findAllByType('Modal').length + ui.root.findAll(n => n.type === 'View' && ['StealmojiPage','SaveAsStickerPage'].includes(n.props.testID)).length;
+}
+function stickerParts(input) {
+    if (input.body?.getParts) return input.body.getParts();
+    return [...input.fields.map(field => [field.name,field.value]),...input.attachments.map(item => [item.name,item.file])];
 }
 function scenario(t, options = {}) {
     const bytes = options.bytes ?? (options.gif ? Buffer.from(gifFixture({ width: 320, height: 320 })) : options.jpeg ? Buffer.from([255,216,255,224,0]) : png);
@@ -107,7 +112,8 @@ for (const gif of [false, true]) test('SaveAsSticker uploads ' + (gif ? 'animate
     w.modules.unshift({ get() {}, post() { assert.fail('unrelated HTTP barrel'); }, del() {} });
     assert.equal(w.posts().length, 0); await w.submit(open);
     assert.equal(w.posts().length, 1); assert.equal(w.nativePosts.length, 0);
-    const input = w.posts()[0][2], parts = input.body.getParts();
+    const input = w.posts()[0][2], parts = stickerParts(input);
+    if (VALENCED) assert.equal(input.body,undefined,'mobile HTTP expects fields/attachments, not body FormData');
     assert.equal(input.url, '/guilds/' + GUILD + '/stickers');
     assert.equal(input.failImmediatelyWhenRateLimited, true);
     assert.equal(parts.find(([name]) => name === 'name')[1], 'renamed');
@@ -146,7 +152,7 @@ test('SaveAsSticker still prepares JPEG when the native cropper exists but rejec
 test('SaveAsSticker crops static media and cleans both input/output files through the REST path', async t => {
     const w = scenario(t, { jpeg: true }), open = await w.open('save-as-sticker'); await w.submit(open);
     assert.equal(w.posts().length, 1); assert.equal(w.crops.length, 1); assert.equal(w.writes.length, 2); assert.equal(w.cleans.length, 1);
-    assert.equal(w.posts()[0][2].body.getParts().find(([name]) => name === 'file')[1].type, 'image/png');
+    assert.equal(stickerParts(w.posts()[0][2]).find(([name]) => name === 'file')[1].type, 'image/png');
 });
 
 for (const gif of [false, true]) test('Stealmoji uploads ' + (gif ? 'animated GIF' : 'static PNG') + ' without Discord’s emoji upload module', async t => {
@@ -375,6 +381,43 @@ test('Stealmoji cancels a delayed image viewer when another picker has already o
 });
 
 if (VALENCED) {
+    for (const gif of [false,true]) test('Valenced SaveAsSticker encodes real mobile multipart fields and ' + (gif ? 'GIF' : 'PNG') + ' bytes', async t => {
+        const { encode,decode } = await import('fast-png');
+        const pixels = new Uint8Array(320 * 320 * 4).fill(255);
+        const bytes = gif ? Buffer.from(gifFixture({ width: 320,height: 320 }))
+            : Buffer.from(encode({ width: 320,height: 320,data: pixels,depth: 8,channels: 4 }));
+        let w, wire;
+        w = scenario(t,{ gif,bytes,noCropper: true,post: async input => {
+            wire = await mobileStickerRequest(input,uri => {
+                const file = w.writes.find(row => uri.endsWith('/' + row.name)); assert.ok(file,'the attachment refers to an owned, prepared file');
+                return Buffer.from(file.data,'base64');
+            });
+            if (wire.response) return wire.response;
+            return { status: 201,body: { id: CREATED,name: wire.form.get('name'),guild_id: GUILD,format_type: gif ? 4 : 1 } };
+        } });
+        const open = await w.open('save-as-sticker');
+        const field = open.ui.root.findAll(n => n.type === 'TextInput' && n.props.placeholder === 'Sticker name')[0];
+        await act(() => field.props.onChangeText('2114282434187673653'));
+        await w.submit({ submit: button(open.ui,'Add sticker') });
+        assert.equal(w.posts().length,1); assert.ok(wire.form,'the server receives multipart rather than a JSON FormData object');
+        assert.match(wire.contentType,/^multipart\/form-data; boundary=/);
+        assert.equal(wire.form.get('name'),'2114282434187673653'); assert.equal(wire.form.get('tags'),'slight_smile'); assert.equal(wire.form.get('description'),'');
+        const file = wire.form.get('file'), uploaded = Buffer.from(await file.arrayBuffer());
+        assert.equal(file.name,gif ? 'sticker.gif' : 'sticker.png'); assert.equal(file.type,gif ? 'image/gif' : 'image/png');
+        assert.deepEqual(uploaded,bytes,'all binary image bytes survive multipart serialization');
+        if (!gif) { const image = decode(uploaded,{ checkCrc: true }); assert.equal(image.width,320); assert.equal(image.height,320); }
+        assert.equal(w.navigation.getCurrentRoute().name,'Chat'); assert.equal(w.toasts.filter(value => /^Sticker added/.test(value)).length,1);
+    });
+
+    test('Valenced SaveAsSticker shows the exact rejected field for Invalid Form Body', async t => {
+        const w = scenario(t,{ post: () => ({ status: 400,body: { code: 50035,message: 'Invalid Form Body',
+            errors: { file: { _errors: [{ code: 'STICKER_INVALID_FILE',message: 'The sticker file could not be decoded.' }] } } } }) });
+        w.expectedErrors = 1;
+        const open = await w.open('save-as-sticker'); await w.submit(open);
+        assert.match(text(open.ui.toJSON()),/Sticker file: The sticker file could not be decoded\./);
+        assert.ok(button(open.ui,'Close')); assert.equal(w.posts().length,1); assert.equal(w.alerts.length,0);
+    });
+
     test('Valenced SaveAsSticker uploads through signed-in HTTP when the internal sticker action returns void', async t => {
         const w = scenario(t); let native = 0;
         w.addModule({ createGuildSticker() { native++; } });

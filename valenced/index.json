@@ -997,11 +997,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta7": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta7.zip",
+          "sha256": "47e371e14885d5ab6bb261d7d41688974f9cfe8b1ab50558348e1b5de30fbdde",
+          "size": 60343,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta6",
-        "beta": "1.0.0-beta6"
+        "latest": "1.0.0-beta7",
+        "beta": "1.0.0-beta7"
       },
       "name": "SaveAsSticker (Valenced)",
       "description": "Valenced preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",

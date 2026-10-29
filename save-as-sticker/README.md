@@ -1,4 +1,4 @@
-# SaveAsSticker 1.3.8
+# SaveAsSticker 1.3.9
 
 Save an image or animated GIF from Discord chat as a sticker in a server you choose. Built for Revenge's Vendetta-compatible plugin loader on Discord mobile.
 
@@ -13,6 +13,14 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/save-as-sticker/
 This is a plugin directory URL. Revenge appends `manifest.json` and `index.js` itself. Do not paste a GitHub `blob`/`tree` page or the URL of an individual JS/JSON file.
 
 If already installed, open the plugin's menu, choose **Refetch**, and restart Discord. The root install URL (`https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/`) is kept as an identical legacy alias. Enable only one copy.
+
+## Mobile multipart correction in 1.3.9
+
+Valenced **1.0.0-beta7** passes sticker metadata in the mobile HTTP client's `fields` array and the local file in its `attachments` array. A React Native FormData object must not be passed through the client's JSON `body` path. The HTTP client builds the multipart boundary and streams the prepared PNG/GIF from its cache URI. The existing page, cancellation, single-POST guard and bounded confirmation checks are retained. Next **1.0.0-beta9** and Classic **1.3.9** retain their upload selection.
+
+If Discord rejects a field, the page now displays its validation detail, such as **Sticker file: …**, instead of discarding it behind **Invalid Form Body**. Validation text is bounded and stays on the normal page.
+
+The mobile request contract follows the recovered [HTTPUtils implementation](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/ba7734c84fbed39fde47c4aa3fc16e106fe90915/discord_common/js/packages/http-utils/HTTPUtils.tsx) and [sticker action](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/ba7734c84fbed39fde47c4aa3fc16e106fe90915/discord_app/modules/stickers/StickersActionCreators.tsx). Regression tests model that request contract, serialize and parse actual multipart bytes, and verify numeric sticker names, PNG decoding, GIF bytes, filenames, MIME types and one creation request. The old body-FormData request fails this test with missing-field errors. These checks do not perform a real Discord upload or replace phone verification.
 
 ## Valenced upload and confirmation in 1.3.8
 

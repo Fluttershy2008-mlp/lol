@@ -1478,11 +1478,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta9": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta9.zip",
+          "sha256": "98dd74f058e3d24eedcd7b9128a28c7391eaf6652e7855509cba66919c05de4b",
+          "size": 59552,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta8",
-        "beta": "1.0.0-beta8"
+        "latest": "1.0.0-beta9",
+        "beta": "1.0.0-beta9"
       },
       "name": "SaveAsSticker (Next preview)",
       "description": "Revenge Next preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",

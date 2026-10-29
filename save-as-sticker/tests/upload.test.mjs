@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStickerUpload } from '../src/upload.mjs';
+import { createStickerUpload, stickerValidationError } from '../src/upload.mjs';
 
 const input = { guildId: '123',name: 'Test',tags: 'slight_smile',description: '',uri: 'file:///cache/test.png',mimeType: 'image/png' };
 class Form {
@@ -25,9 +25,11 @@ test('Valenced stickers use one signed-in multipart request even when an interna
   assert.equal(created.id,'new'); assert.equal(f.native(),0); assert.equal(f.posts.length,1);
   assert.equal(f.posts[0].url,'/guilds/123/stickers'); assert.equal(f.posts[0].headers,undefined);
   assert.equal(f.posts[0].failImmediatelyWhenRateLimited,true);
-  assert.deepEqual(f.posts[0].body.getParts(),[['name','Test'],['tags','slight_smile'],['description',''],
-    ['file',{ uri: input.uri,name: 'sticker.png',type: 'image/png' }]]);
+  assert.equal(f.posts[0].body,undefined,'mobile HTTP must not receive a FormData object through .send()');
+  assert.deepEqual(f.posts[0].fields,[{ name: 'name',value: 'Test' },{ name: 'tags',value: 'slight_smile' },{ name: 'description',value: '' }]);
+  assert.deepEqual(f.posts[0].attachments,[{ name: 'file',file: { uri: input.uri,name: 'sticker.png',type: 'image/png' } }]);
   assert.equal(f.events[0].sticker.id,'new'); assert.equal(f.events[0].sticker.guild_id,'123');
+  assert.equal(f.events[0].sticker.user_id,'me','the cache event keeps the mobile action’s creator ID');
 });
 
 test('an empty success is confirmed after server propagation without another upload', async () => {
@@ -60,7 +62,7 @@ test('ambiguous new IDs cannot confirm a sticker', async () => {
   await assert.rejects(f.upload()(input),/did not confirm/); assert.equal(f.posts.length,1); assert.equal(f.events.length,0); assert.equal(f.delays.length,0);
 });
 
-for (const mismatch of [{ user: { id: 'other' } },{ guild_id: 'other' },{ format_type: 4 }])
+for (const mismatch of [{ user: { id: 'other' } },{ user_id: 'other' },{ guild_id: 'other' },{ format_type: 4 }])
 test('verification rejects unrelated sticker metadata: ' + JSON.stringify(mismatch), async () => {
   const f = fixture(); let posted = false;
   f.rest.get = async () => ({ body: posted ? [{ id: 'new',name: 'Test',...mismatch }] : [] });
@@ -93,4 +95,26 @@ test('classic and Next sticker action selection is preserved', async () => {
   const f = fixture(); delete f.V.host;
   f.V.metro.findByProps = () => ({ createGuildSticker() { return { id: 'legacy' }; } });
   assert.equal((await f.upload()(input)).id,'legacy'); assert.equal(f.posts.length,0);
+});
+
+test('Valenced multipart is built by the client and needs no plugin FormData global', async () => {
+  const f = fixture(); delete f.env.FormData;
+  assert.equal((await f.upload()(input)).id,'new'); assert.equal(f.posts.length,1);
+});
+
+test('form validation reports the rejected file and name instead of hiding their details', () => {
+  const error = { body: { code: 50035,message: 'Invalid Form Body',errors: {
+    file: { _errors: [{ code: 'STICKER_INVALID_FILE',message: 'File is not a valid PNG.' }] },
+    name: { _errors: [{ code: 'BASE_TYPE_REQUIRED',message: 'This field is required.' }] },
+  } } };
+  assert.equal(stickerValidationError(error),'Discord rejected the sticker:\nSticker file: File is not a valid PNG.\nSticker name: This field is required.');
+  assert.equal(stickerValidationError({ body: JSON.stringify(error.body) }),stickerValidationError(error));
+});
+
+test('validation formatting is bounded and never renders message objects as React children', () => {
+  const errors = { file: { _errors: Array.from({ length: 20 },() => ({ message: 'x'.repeat(1000) })) } };
+  errors.loop = errors;
+  const result = stickerValidationError({ body: { errors } });
+  assert.equal(result.split('\n').length,7); assert.ok(result.length < 1300);
+  assert.equal(stickerValidationError({ body: { errors: { file: { _errors: [{ message: { locale: 'en',ast: [] } }] } } } }),undefined);
 });
