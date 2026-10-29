@@ -229,6 +229,22 @@ def build(check=False):
             "originalVersion": theme.get("version", ""), "kind": "native-theme"}
         entries.append((slug, manifest, files))
 
+    for slug, relative in config.get("nativeThemes", {}).items():
+        directory = ROOT / relative
+        manifest = json.loads((directory / "manifest.json").read_text())
+        files = {name: (directory / name).read_bytes()
+                 for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt")}
+        for path in sorted((directory / "assets").rglob("*")):
+            if path.is_file():
+                files[path.relative_to(directory).as_posix()] = path.read_bytes()
+        source_path = directory / "index.js"
+        source_info[manifest["id"]] = {
+            "path": source_path.relative_to(ROOT).as_posix(),
+            "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            "originalVersion": manifest["version"], "kind": "native-theme",
+        }
+        entries.append((slug, manifest, files))
+
     for slug, manifest, files in entries:
         validate_manifest(manifest)
         write(HERE / ".build" / "plugins" / slug / "manifest.json", dump(manifest), False)
@@ -263,7 +279,8 @@ def build(check=False):
     index = {"format": 1, **index, "plugins": plugins}
     write(HERE / "index.json", dump(index), check)
     write(HERE / "sources.json", dump({"sourceCommit": config["sourceCommit"], "plugins": source_info}), check)
-    print(f"{'Verified' if check else 'Built'} {len(entries)} packages ({len(config['themes'])} native themes); {len(plugins)} catalogue entries.")
+    theme_count = len(config["themes"]) + len(config.get("nativeThemes", {}))
+    print(f"{'Verified' if check else 'Built'} {len(entries)} packages ({theme_count} native theme plugins); {len(plugins)} catalogue entries.")
 
 
 if __name__ == "__main__":

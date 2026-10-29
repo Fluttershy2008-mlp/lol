@@ -16,7 +16,7 @@ class ValencedPackages(unittest.TestCase):
     def test_index_matches_every_download_and_host_dependency(self):
         index = json.loads((HERE / "index.json").read_text())
         self.assertEqual(index["format"], 1)
-        self.assertEqual(len(index["plugins"]), 25)
+        self.assertEqual(len(index["plugins"]), 26)
         for plugin_id, plugin in index["plugins"].items():
             self.assertIn(plugin["channels"]["latest"], plugin["versions"])
             for version, entry in plugin["versions"].items():
@@ -70,7 +70,23 @@ class ValencedPackages(unittest.TestCase):
     def test_themes_use_valenced_themes_api(self):
         plugins = json.loads((HERE / "index.json").read_text())["plugins"]
         themes = [p for p in plugins.values() if "valenced.api.themes" in p["versions"][p["channels"]["latest"]]["dependencies"]]
-        self.assertEqual(len(themes), 4)
+        self.assertEqual(len(themes), 5)
+
+    def test_native_theme_assets_ship_with_their_manifest_and_licences(self):
+        config = json.loads((HERE / "repo.config.json").read_text())
+        index = json.loads((HERE / "index.json").read_text())["plugins"]
+        for slug, relative in config["nativeThemes"].items():
+            directory = ROOT / relative
+            manifest = json.loads((directory / "manifest.json").read_text())
+            self.assertIn("valenced.api.themes", manifest["dependencies"])
+            item = index[manifest["id"]]
+            version = item["channels"]["latest"]
+            with zipfile.ZipFile(HERE / "pool" / f"{manifest['id']}@{version}.zip") as package:
+                for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt"):
+                    self.assertEqual(package.read(name), (directory / name).read_bytes())
+                for path in (directory / "assets").rglob("*"):
+                    if path.is_file():
+                        self.assertEqual(package.read(path.relative_to(directory).as_posix()), path.read_bytes())
 
     def test_shortcut_helper_is_bundled_only_with_the_five_requested_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "name": "Fluttershy's Valenced Repository",
-  "description": "Valenced ports of all unique Revenge plugins and four native colour themes.",
+  "description": "Valenced ports of all unique Revenge plugins and native colour themes, including High and Low Altitude.",
   "icon": "GlobeEarthIcon",
   "plugins": {
     "dev.fluttershy2008.addon-list": {
@@ -57,6 +57,37 @@
       "contributors": [
         "fluttershy_simper"
       ]
+    },
+    "dev.fluttershy2008.altitude-theme": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.altitude-theme@1.0.0-beta1.zip",
+          "sha256": "bd5c3739a6a6627e5746e19a576174eab9e6f0a4a1fbbd8bde016b78c694be4e",
+          "size": 126126,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Altitude",
+      "description": "High and Low Altitude by nyraki: warm cream accents, blue-grey surfaces, blurred backgrounds and Lexend Deca fonts. Ported for Valenced.",
+      "author": "nyraki (https://github.com/myumichi \"Original theme\")",
+      "contributors": [
+        "fluttershy_simper67 <753962426407452713> (https://github.com/Fluttershy2008-mlp \"Valenced port\")"
+      ],
+      "icon": "PaintPaletteIcon"
     },
     "dev.fluttershy2008.auto-text": {
       "versions": {

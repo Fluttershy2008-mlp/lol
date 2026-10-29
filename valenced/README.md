@@ -8,6 +8,8 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
+**Altitude 1.0.0-beta1** adds **High Altitude**, **Low Altitude** and the **Altitude · Lexend Deca** font pack. Install and enable **Altitude** from **Themes → Manage theme plugins → +**, restart, then select the variant under **Themes → Colors** and the font pack under **Themes → Fonts**. [Altitude setup, backgrounds and differences from Aliucord](themes/altitude/README.md).
+
 **Server Leaver 1.0.0-beta6 separates ID editing from the scrolling preview.** Tap **Edit protected IDs** to open the bounded editor; Save closes it and Cancel or Android Back discards unsaved changes. Protect updates rows in place without an editable ID field in the list. All 22 main IDs stay protected and existing additional protections remain scoped to their account. Refresh the repository, update Server Leaver and fully restart Discord.
 
 **More Alts! 1.0.0-beta8 adds the Discord-style QR panel and public RN messaging support.** The supplied image is a layout reference; each attempt generates a fresh code with live scan-and-approve status. Refresh the repository, update More Alts!, then force-close and reopen Discord. Open **Settings → Valenced → More Alts! → Add another account → Log in with QR Code**. The QR button connects the bundled component to React Native directly, without requiring Discord’s WebView JavaScript module. The earlier `{locale, ast}` crash protection is retained. Keep the existing plugin data when updating.
@@ -42,7 +44,7 @@ All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8**
 | Relationship Notifier | Save as Sticker | Server Leaver |
 | Stealmoji | Valid User | View Icons |
 
-Four native colour themes are included: Fluttershy, Rainbow Dash, Sunset Shimmer and Tokyo Nights. Keep **Valenced Community Plugins** available so the `valenced.api.themes` dependency can be installed.
+Five native theme plugins are included: Altitude (High and Low), Fluttershy, Rainbow Dash, Sunset Shimmer and Tokyo Nights. Keep **Valenced Community Plugins** available so the `valenced.api.themes` dependency can be installed.
 
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 

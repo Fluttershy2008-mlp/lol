@@ -1,0 +1,24 @@
+Altitude for Valenced
+
+Original theme: nyraki / myumichi
+Source: https://github.com/myumichi/altitude
+Pinned source revision: f3c94dc11da9b60ee988d811aedd5a785c50a32c
+High Altitude and Low Altitude: version 1.0.0, MIT (see LICENSE).
+Valenced port: fluttershy_simper67 / Fluttershy2008-mlp, MIT.
+
+Lexend Deca Regular, SemiBold and Bold are unchanged upstream font files.
+Copyright 2019 The Lexend Project Authors (https://github.com/googlefonts/lexend).
+Licensed under the SIL Open Font License 1.1; see assets/fonts/OFL.txt.
+Rawson Pro fonts are not redistributed. Modern Discord headings use Lexend.
+
+Backgrounds are loaded by the Themes API from the original repository at the
+pinned revision above. They require network access on first display. The
+original 25px blur and 95/255 overlay alpha are mapped to the Themes API's
+blur and surface dimming; its surface blending differs from Aliucord's black
+overlay. Users can adjust the background from the Colours screen.
+
+Aliucord-only BetterChatbox, SquareAvatars, BetterStatusIndicators, NoBurnIn
+and LayoutController settings are not part of this theme plugin.
+Icons are recoloured using semantic colour tokens; icon shapes and emojis
+remain Discord's own. Noto Sans and code fonts are retained for glyph coverage.
+Built and checked against the Valenced Themes API; not tested on a phone.

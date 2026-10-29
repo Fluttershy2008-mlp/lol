@@ -1,6 +1,6 @@
 {
   "name": "Fluttershy's Valenced Repository",
-  "description": "Valenced ports of all unique Revenge plugins and four native colour themes.",
+  "description": "Valenced ports of all unique Revenge plugins and native colour themes, including High and Low Altitude.",
   "icon": "GlobeEarthIcon",
   "baseUrl": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced",
   "repositoryUrl": "https://fluttershy2008-mlp.github.io/lol/valenced/index.json",
@@ -63,6 +63,9 @@
     "fluttershy-background": "Replaced by the native Fluttershy theme package.",
     "rainbow-dash-background": "Replaced by the native Rainbow Dash theme package.",
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
+  },
+  "nativeThemes": {
+    "altitude-theme": "valenced/themes/altitude"
   },
   "themes": {
     "fluttershy-theme": "Fluttershy_Pink_Yellow_Theme.json",

@@ -8,9 +8,11 @@ Paste this into Valenced's **Repository URL** field:
 https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 ```
 
-All **21 unique plugins** plus four native colour themes are available as Valenced previews. **SaveAsSticker 1.0.0-beta4** and **Stealmoji 1.0.0-beta6** include a searchable server picker and accept Discord's different upload-response formats, verifying a new server entry when a successful response is empty. Stealmoji now uses a regular Valenced page, avoiding nested popup windows. It returns after success/copying, keeps Close available while busy and bounds stalled operations. SaveAsSticker also bundles PNG/JPEG resizing for builds without a working cropper. **Server Leaver 1.0.0-beta6** puts ID editing in a separate dialog so Protect cannot focus an editor in the scrolling preview. Your 22 main server IDs and additional protections are preserved. Refresh the repository, update these three plugins, then fully restart Discord.
+All **21 unique plugins** plus five native theme plugins are available as Valenced previews. **SaveAsSticker 1.0.0-beta4** and **Stealmoji 1.0.0-beta6** include a searchable server picker and accept Discord's different upload-response formats, verifying a new server entry when a successful response is empty. Stealmoji now uses a regular Valenced page, avoiding nested popup windows. It returns after success/copying, keeps Close available while busy and bounds stalled operations. SaveAsSticker also bundles PNG/JPEG resizing for builds without a working cropper. **Server Leaver 1.0.0-beta6** puts ID editing in a separate dialog so Protect cannot focus an editor in the scrolling preview. Your 22 main server IDs and additional protections are preserved. Refresh the repository, update these three plugins, then fully restart Discord.
 
 More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta5**, Friends List and Blocked User List at **1.0.0-beta4**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and other ports at **1.0.0-beta2**. [Valenced setup, raw fallback and validation notes](valenced/README.md).
+
+**Altitude** is now available for Valenced, including **High Altitude**, **Low Altitude**, blurred backgrounds and a bundled **Lexend Deca** font pack. [Install and select Altitude](valenced/themes/altitude/README.md).
 
 ## Revenge Next
 
