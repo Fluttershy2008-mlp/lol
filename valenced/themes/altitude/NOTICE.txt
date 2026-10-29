@@ -13,9 +13,9 @@ Rawson Pro fonts are not redistributed. Modern Discord headings use Lexend.
 
 Backgrounds are loaded by the Themes API from the original repository at the
 pinned revision above. They require network access on first display. The
-original 25px blur and 95/255 overlay alpha are mapped to the Themes API's
-blur and surface dimming; its surface blending differs from Aliucord's black
-overlay. Users can adjust the background from the Colours screen.
+original images are displayed without additional blur. The original 95/255
+overlay alpha is mapped to surface dimming; its surface blending differs
+from Aliucord's black overlay. Users can adjust the background from Colours.
 
 Aliucord-only BetterChatbox, SquareAvatars, BetterStatusIndicators, NoBurnIn
 and LayoutController settings are not part of this theme plugin.

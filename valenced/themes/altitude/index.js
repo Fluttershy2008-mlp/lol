@@ -110,7 +110,7 @@
       background: {
         path: upstream + 'backgrounds/' + variant.image,
         opacity: 1,
-        blur: 25,
+        blur: 0,
         dimming: 95 / 255
       }
     }];

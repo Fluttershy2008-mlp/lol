@@ -19,7 +19,9 @@ Colours, fonts, icons and emojis are separate selections in Valenced. Choosing t
 
 ## Background
 
-Both backgrounds use their original images from a pinned revision of the source repository, with blur 25 and dimming 95/255. Internet access is required to load them. If you previously selected a custom background or **None**, open **Colors → Background** and switch the source to **Theme**. Valenced also lets you change the blur and dimming there.
+**Beta2 removes the added blur** from High and Low Altitude so the stars, clouds and image details remain visible. Both backgrounds use the original images from a pinned source revision, at full opacity with dimming 95/255. Internet access is required to load them.
+
+After updating Altitude, restart Discord. If a saved background setting still applies the old blur, open **Themes → Colors → Background** and tap **Reset** to follow the updated theme defaults. For manual settings, choose **From theme**, set **Opacity** to **100%** and **Blur** to **0**. These preferences override a theme's defaults, even after changing or updating themes.
 
 The warm cream accents, blue-grey surfaces, link colours, icon tints, mention highlight and status colours come from the original JSON. Modern cards, inputs, floating bars and opacity tokens are mapped to those colours. Select Discord's Dark or Ash base for the closest result.
 

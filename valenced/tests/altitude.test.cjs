@@ -38,12 +38,12 @@ test('Altitude loads through the lexical Valenced contract and registers native 
   assert.equal(built, fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8'));
 });
 
-for (const id of ['high', 'low']) test(id + ' preserves source colours, ARGB alpha and background settings', () => {
+for (const id of ['high', 'low']) test(id + ' preserves source colours and displays the background without added blur', () => {
   const source = JSON.parse(fs.readFileSync(path.join(ROOT, 'upstream', id + '-altitude.json'), 'utf8'));
   const theme = load().themes.get(id), colors = theme.getColors({ raw: {} });
   assert.equal(theme.getColors({ raw: { BRAND_500: '#ff0000' } }), colors);
   assert.equal(theme.background.opacity, 1);
-  assert.equal(theme.background.blur, source.background.blur_radius);
+  assert.equal(theme.background.blur, 0);
   assert.equal(theme.background.dimming, source.background.overlay_alpha / 255);
   const image = id === 'high' ? 'IMG_20240211_225656_(1200_x_2560_pixel).jpg' : 'IMG_20240211_003054_(1200_x_2560_pixel).png';
   assert.equal(theme.background.path, 'https://raw.githubusercontent.com/myumichi/altitude/f3c94dc11da9b60ee988d811aedd5a785c50a32c/backgrounds/' + image);
