@@ -2,15 +2,29 @@
   "format": 1,
   "id": "dev.fluttershy2008.altitude-theme",
   "name": "Altitude",
-  "description": "High and Low Altitude by nyraki: warm cream accents, blue-grey surfaces, clear wallpapers in chat and Settings, and Lexend Deca fonts. Ported for Valenced.",
+  "description": "High and Low Altitude by nyraki, with original colours, local wallpapers, Lexend Deca and Rawson Pro fonts, square chat/profile avatars and classic chat typography. Ported for Valenced.",
   "author": "nyraki (https://github.com/myumichi \"Original theme\")",
-  "contributors": ["fluttershy_simper67 <753962426407452713> (https://github.com/Fluttershy2008-mlp \"Valenced port\")"],
+  "contributors": [
+    "fluttershy_simper67 <753962426407452713> (https://github.com/Fluttershy2008-mlp \"Valenced port\")"
+  ],
   "icon": "PaintPaletteIcon",
-  "version": "1.0.0-beta3",
+  "version": "1.0.0-beta4",
   "dependencies": {
-    "valenced.api": { "version": ">=1 <2" },
-    "discord": { "version": ">=352.2" },
-    "valenced.api.themes": { "version": ">=1 <2" }
+    "valenced.api": {
+      "version": ">=1.2.4 <2"
+    },
+    "discord": {
+      "version": ">=352.2"
+    },
+    "valenced.api.themes": {
+      "version": ">=1 <2"
+    }
   },
-  "dist": { "script": "index.js" }
+  "dist": {
+    "script": "index.js",
+    "android": {
+      "path": "plugin.jar",
+      "class": "dev.fluttershy2008.altitude.Altitude"
+    }
+  }
 }

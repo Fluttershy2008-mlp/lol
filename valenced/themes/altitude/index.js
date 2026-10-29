@@ -1,5 +1,4 @@
 (() => {
-  const upstream = 'https://raw.githubusercontent.com/myumichi/altitude/f3c94dc11da9b60ee988d811aedd5a785c50a32c/';
   const variants = [
     {
       id: 'high',
@@ -108,7 +107,7 @@
       description: 'Original Altitude palette and background by nyraki.',
       getColors: () => colors,
       background: {
-        path: upstream + 'backgrounds/' + variant.image,
+        path: 'assets/backgrounds/' + (variant.id === 'high' ? 'high-altitude.jpg' : 'low-altitude.png'),
         opacity: 1,
         blur: 0,
         dimming: 95 / 255
@@ -128,6 +127,67 @@
     const [file, weight] = fontFiles[style];
     families['ggsans-' + style] = [{ path: 'assets/fonts/' + file, weight }];
   }
+
+    // React Native profile and member avatars are separate from native chat.
+    // Restrict the image patch to avatar and guild-icon CDN URLs.
+    function isAvatarSource(source) {
+        if (Array.isArray(source)) return source.some(isAvatarSource);
+        const uri = typeof source === 'string' ? source : source && source.uri;
+        return typeof uri === 'string' && /\/(?:avatars|icons)\//.test(uri);
+    }
+
+    function squareProps(props) {
+        const next = { ...props };
+        const square = {
+            borderRadius: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3,
+            borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
+            borderTopStartRadius: 3, borderTopEndRadius: 3,
+            borderBottomStartRadius: 3, borderBottomEndRadius: 3,
+        };
+        next.style = [props.style, square];
+        return next;
+    }
+
+    function patchImages(api) {
+        const Image = valenced.react.ReactNative?.Image ?? valenced.react.native?.Image;
+        if (Image && typeof Image.render === 'function') {
+            api.cleanup(valenced.patcher.instead(Image, 'render', function (args, original) {
+                const props = args[0];
+                const next = props && isAvatarSource(props.source) ? [squareProps(props), ...args.slice(1)] : args;
+                return Reflect.apply(original, this, next);
+            }));
+        }
+        // No global createElement patch, image URL changes, or render loop.
+    }
+
+    function SettingsComponent() {
+        const R = valenced.react.React;
+        const { ScrollView, View, Text } = valenced.react.ReactNative;
+        const [status, setStatus] = R.useState(null);
+        R.useEffect(() => {
+            let mounted = true;
+            valenced.modules.native.callNativeMethod('dev.fluttershy2008.altitude-theme.status', [])
+                .then(value => { if (mounted) setStatus(value); })
+                .catch(() => { if (mounted) setStatus({ active: false }); });
+            return () => { mounted = false; };
+        }, []);
+        const text = (value, extra) => R.createElement(Text, {
+            style: { color: '#ffebce', fontSize: 15, lineHeight: 22, marginBottom: 12, ...extra },
+        }, value);
+        return R.createElement(ScrollView, { style: { backgroundColor: '#31364a', flex: 1 } },
+            R.createElement(View, { style: { padding: 20 } },
+                text('Altitude', { fontSize: 26, color: '#c0a381' }),
+                text('Original theme by myumichi / nyraki. Port for Valenced.'),
+                text('1. In Valenced → Themes, choose High Altitude or Low Altitude.'),
+                text('2. In Fonts, choose Altitude · Lexend Deca for sans fonts. Rawson Pro is available for display fonts.'),
+                text('3. Reload Discord to apply native avatars, chat fonts and the background.'),
+                text('Square avatars use the original 3dp corners. Both wallpapers and all five original font files are bundled.'),
+                text(status === null ? 'Checking native chat styling…' : status.active
+                    ? 'Square avatar styling is active. Chat fonts are ' + (status.fontLoaded ? 'loaded' : 'unavailable') + '.'
+                    : 'Native styling is unavailable. Update Valenced to 1.2.4 or later and reload Discord.'),
+            ));
+    }
+
 
   function installSettingsBackdrop(api) {
     const U = api.unscoped;
@@ -304,7 +364,20 @@
           description: 'The original Altitude body font, bundled for use after a reload.',
           families
         });
+        const displayFamilies = {};
+        for (const prefix of ['ABCGintoNormal-', 'ABCGintoNord-', 'Ginto-']) {
+          displayFamilies[prefix + 'Normal'] = [{ path: 'assets/fonts/LexendDeca-Regular.ttf', weight: 400 }];
+          for (const [style, weight] of [['Medium', 500], ['Semibold', 600], ['Bold', 700], ['ExtraBold', 800]])
+            displayFamilies[prefix + style] = [{
+              path: 'assets/fonts/RawsonPro-' + (weight < 700 ? 'SemiBold' : 'Bold') + '.ttf', weight
+            }];
+        }
+        themes.registerFontPack('altitude', 'rawson-pro', {
+          name: 'Altitude · Rawson Pro', description: 'Original Altitude display fonts.', families: displayFamilies
+        });
       },
+      init(api) { patchImages(api); },
+      SettingsComponent,
       start(api) {
         stopSettingsBackdrop?.();
         stopSettingsBackdrop = installSettingsBackdrop(api);

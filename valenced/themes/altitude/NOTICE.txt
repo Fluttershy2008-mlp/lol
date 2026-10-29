@@ -9,10 +9,10 @@ Valenced port: fluttershy_simper67 / Fluttershy2008-mlp, MIT.
 Lexend Deca Regular, SemiBold and Bold are unchanged upstream font files.
 Copyright 2019 The Lexend Project Authors (https://github.com/googlefonts/lexend).
 Licensed under the SIL Open Font License 1.1; see assets/fonts/OFL.txt.
-Rawson Pro fonts are not redistributed. Modern Discord headings use Lexend.
+Rawson Pro SemiBold and Bold are unchanged original theme assets, provided as a separate display pack; they are not covered by the Lexend OFL notice above.
 
-Backgrounds are loaded by the Themes API from the original repository at the
-pinned revision above. They require network access on first display. The
+Backgrounds are bundled unchanged from the original theme and loaded locally
+by the Themes API. The
 original images are displayed without additional blur. The original 95/255
 overlay alpha is mapped to surface dimming; its surface blending differs
 from Aliucord's black overlay. Users can adjust the background from Colours.
@@ -21,8 +21,16 @@ The Settings backdrop reuses the Themes API renderer behind Settings and
 clears the Settings navigator and list viewport backgrounds. Cards and
 controls retain their original rendering. Hooks are removed when stopped.
 
-Aliucord-only BetterChatbox, SquareAvatars, BetterStatusIndicators, NoBurnIn
-and LayoutController settings are not part of this theme plugin.
+Square avatar clipping and classic chat typography are included. Aliucord-only
+BetterChatbox, BetterStatusIndicators, NoBurnIn and LayoutController settings
+are not part of this theme plugin.
 Icons are recoloured using semantic colour tokens; icon shapes and emojis
 remain Discord's own. Noto Sans and code fonts are retained for glyph coverage.
 Built and checked against the Valenced Themes API; not tested on a phone.
+
+Version 1.0.0-beta4 adds native Android square avatar masks and chat typography.
+Both original wallpaper files and Rawson Pro fonts now ship as local assets.
+The existing no-blur setting and Settings wallpaper integration are preserved.
+Native hooks use Valenced PluginBuilder, Xposed and Android classes supplied by
+the host. plugin.jar contains only this plugin's own classes. Source and JVM
+lifecycle regression fixtures are in source/. This build has no live-device QA.

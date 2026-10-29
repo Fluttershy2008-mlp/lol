@@ -71,6 +71,12 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund --prefix revenge-next
           node --test revenge-next/tests/plugins.test.cjs valenced/tests/*.test.cjs
           node --test --test-skip-pattern=InfoCommands revenge-next/tests/features.test.cjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Check native Altitude avatar lifecycle
+        run: python3 valenced/themes/altitude/source/test_native.py
       - name: Check ZIP integrity and catalogue metadata
         run: python3 -m unittest discover -s valenced/tests -p 'test_*.py'
       - name: Check requested plugins' source regressions

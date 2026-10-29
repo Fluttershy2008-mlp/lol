@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import unittest
 import zipfile
+import struct
+import zlib
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parent
@@ -87,6 +89,16 @@ class ValencedPackages(unittest.TestCase):
                 for path in (directory / "assets").rglob("*"):
                     if path.is_file():
                         self.assertEqual(package.read(path.relative_to(directory).as_posix()), path.read_bytes())
+                native = manifest.get("dist", {}).get("android")
+                if native:
+                    payload = package.read(native["path"])
+                    self.assertEqual(payload, (directory / native["path"]).read_bytes())
+                    with zipfile.ZipFile(__import__('io').BytesIO(payload)) as jar:
+                        dex = jar.read("classes.dex")
+                    self.assertEqual(dex[:8], b"dex\n035\0")
+                    self.assertEqual(hashlib.sha1(dex[32:]).digest(), dex[12:32])
+                    self.assertEqual(zlib.adler32(dex[12:]) & 0xffffffff, struct.unpack_from("<I", dex, 8)[0])
+                    self.assertIn(native["class"].replace(".", "/").encode(), dex)
 
     def test_shortcut_helper_is_bundled_only_with_the_five_requested_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())

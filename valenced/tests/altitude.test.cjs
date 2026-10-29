@@ -32,7 +32,7 @@ test('Altitude loads through the lexical Valenced contract and registers native 
   const { groups, themes, fonts, sandbox } = load();
   assert.deepEqual([...groups.keys()], ['altitude']);
   assert.deepEqual([...themes.keys()], ['high', 'low']);
-  assert.deepEqual([...fonts.keys()], ['lexend-deca']);
+  assert.deepEqual([...fonts.keys()], ['lexend-deca', 'rawson-pro']);
   assert.equal(Object.keys(sandbox).length, 0);
   const built = fs.readFileSync(path.resolve(ROOT, '../../.build/plugins/altitude-theme/index.js'), 'utf8');
   assert.equal(built, fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8'));
@@ -45,8 +45,9 @@ for (const id of ['high', 'low']) test(id + ' preserves source colours and displ
   assert.equal(theme.background.opacity, 1);
   assert.equal(theme.background.blur, 0);
   assert.equal(theme.background.dimming, source.background.overlay_alpha / 255);
-  const image = id === 'high' ? 'IMG_20240211_225656_(1200_x_2560_pixel).jpg' : 'IMG_20240211_003054_(1200_x_2560_pixel).png';
-  assert.equal(theme.background.path, 'https://raw.githubusercontent.com/myumichi/altitude/f3c94dc11da9b60ee988d811aedd5a785c50a32c/backgrounds/' + image);
+  assert.equal(theme.background.path, 'assets/backgrounds/' + id + '-altitude.' + (id === 'high' ? 'jpg' : 'png'));
+  const image = fs.readFileSync(path.join(ROOT, theme.background.path));
+  assert.ok(image.length > 200000, 'the original wallpaper must be bundled');
   assert.deepEqual(Object.keys(colors.semantic).sort(), ['dark', 'darker', 'light', 'midnight']);
   for (const base of Object.values(colors.semantic)) {
     assert.equal(base.BACKGROUND_BASE_LOWER, argb(source.colors.primary_dark_600));
@@ -106,4 +107,15 @@ test('the font pack resolves bundled original font bytes and preserves fallback 
     assert.equal(data.readUInt32BE(0), 0x00010000);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'assets/fonts/OFL.txt'), 'utf8'), /SIL OPEN FONT LICENSE Version 1.1/);
+});
+
+test('the additional display pack uses the original Rawson fonts without replacing the Lexend selection ID', () => {
+  const { fonts } = load();
+  assert.ok(fonts.has('lexend-deca'));
+  const { families } = fonts.get('rawson-pro');
+  assert.ok(families['ABCGintoNormal-Bold']);
+  for (const variants of Object.values(families)) {
+    const data = fs.readFileSync(path.join(ROOT, variants[0].path));
+    assert.equal(data.readUInt32BE(0), 0x00010000);
+  }
 });

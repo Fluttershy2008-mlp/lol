@@ -234,6 +234,12 @@ def build(check=False):
         manifest = json.loads((directory / "manifest.json").read_text())
         files = {name: (directory / name).read_bytes()
                  for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt")}
+        native = manifest.get("dist", {}).get("android")
+        if native:
+            native_path = Path(native["path"])
+            if native_path.is_absolute() or ".." in native_path.parts:
+                raise RuntimeError(f"Unsafe native payload path: {native_path}")
+            files[native_path.as_posix()] = (directory / native_path).read_bytes()
         for path in sorted((directory / "assets").rglob("*")):
             if path.is_file():
                 files[path.relative_to(directory).as_posix()] = path.read_bytes()
