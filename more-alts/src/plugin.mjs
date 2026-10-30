@@ -232,6 +232,15 @@ export function createPlugin(V, host = globalThis) {
                 onUseAlternative: () => {
                     setCode(''); void run(() => instance.useVerificationMethod(verification?.alternative));
                 },
+                onSmsHelp: () => {
+                    const state = instance.verification;
+                    if (!state?.smsSent) return;
+                    RN.Alert.alert('No SMS code received?',
+                        `Discord accepted the SMS request for ${state.phone} at ${new Date(state.requestedAt).toLocaleTimeString()}. This does not confirm delivery to your phone.\n\nCheck that the masked number is yours and check blocked or spam messages. Try SMS for this same account in Discord’s normal sign-in to compare. Codes from that sign-in belong to that attempt. If no code arrives there either, contact Discord support about SMS delivery.`, [
+                            { text: 'Close', style: 'cancel' },
+                            { text: 'Discord sign-in help', onPress: nativeLoginHelp },
+                        ]);
+                },
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa') { cancel(); return; }
                     instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');

@@ -9,7 +9,7 @@
     "save-as-sticker": "1.0.0-beta9",
     "stealmoji": "1.0.0-beta9",
     "server-leaver": "1.0.0-beta7",
-    "more-alts": "1.0.0-stable16",
+    "more-alts": "1.0.0-stable17",
     "expression-cloner": "1.0.0-beta5",
     "blocked-user-list": "1.0.0-beta5",
     "friends-list": "1.0.0-beta5",
@@ -49,8 +49,8 @@
   },
   "channels": {
     "dev.fluttershy2008.more-alts": {
-      "latest": "1.0.0-stable16",
-      "stable": "1.0.0-stable16",
+      "latest": "1.0.0-stable17",
+      "stable": "1.0.0-stable17",
       "beta": "1.0.0-beta12"
     }
   }

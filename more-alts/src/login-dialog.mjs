@@ -6,7 +6,7 @@ export function createLoginDialog(React, RN) {
     const h = React.createElement;
     return function LoginDialog({ visible, mfa = false, light = false, busy = false, reauthUsername,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
-        verification, onSendSms, onUseSms, onUseAlternative,
+        verification, onSendSms, onUseSms, onUseAlternative, onSmsHelp,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
         const c = light
@@ -49,7 +49,7 @@ export function createLoginDialog(React, RN) {
                                     style: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' } },
                                     text('×', { color: c.muted, fontSize: 30, lineHeight: 32 }))),
                             text(mfa ? sms
-                                ? verification.smsSent ? `Enter the SMS code Discord sent to ${verification.phone}.`
+                                ? verification.smsSent ? `SMS requested for ${verification.phone}. Enter the code when it arrives.`
                                     : 'Send a code to the phone number linked to this Discord account.'
                                 : verification?.method === 'backup' ? 'Enter an unused backup code to finish signing in.'
                                     : 'Enter your authenticator or backup code to finish signing in.'
@@ -75,6 +75,9 @@ export function createLoginDialog(React, RN) {
                                     : link('Use SMS code', onUseSms),
                                 verification.resendAfter > 0 ? text(`You can request another SMS in ${verification.resendAfter}s.`,
                                     { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }) : null,
+                                verification.smsSent ? text(`Request accepted at ${new Date(verification.requestedAt).toLocaleTimeString()}. Phone delivery is not confirmed.`,
+                                    { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }) : null,
+                                verification.smsSent ? link('No code received?', onSmsHelp) : null,
                                 sms && verification.alternative ? link(verification.alternative === 'backup' ? 'Use backup code' : 'Use authenticator or backup code', onUseAlternative) : null)
                                 : mfa ? text('SMS authentication is not enabled for this account. Enable it in Discord’s account settings while signed in to use SMS here.',
                                     { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 }) : null,

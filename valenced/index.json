@@ -859,12 +859,25 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-stable17": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-stable17.zip",
+          "sha256": "f041666b6d5670a559cd14ad65fb7b4ae4a0858ee1d99d1dd315f945502e2c4e",
+          "size": 47892,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-stable16",
+        "latest": "1.0.0-stable17",
         "beta": "1.0.0-beta11",
-        "stable": "1.0.0-stable16"
+        "stable": "1.0.0-stable17"
       },
       "name": "More Alts! (Valenced)",
       "description": "Save and switch Discord accounts with verified session storage, SMS verification, authenticator/backup codes and native account management. No QR login.",

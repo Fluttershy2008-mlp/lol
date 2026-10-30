@@ -11,7 +11,9 @@ function harness(options = {}) {
     const calls = [], storage = options.storage || {};
     let session = { user: a, token: ta }, switched = [];
     const fetcher = options.fetcher || (async (url, init) => response(init.headers.Authorization === ta ? a : b));
-    const client = createClient({ fetcher: async (...args) => { calls.push(args); return fetcher(...args); }, timeoutMs: options.timeoutMs || 100, now: options.now });
+    const client = createClient({ fetcher: async (...args) => { calls.push(args); return fetcher(...args); },
+        getFingerprint: options.getFingerprint || (async () => 'fixture-core-login-fingerprint'),
+        timeoutMs: options.timeoutMs || 100, now: options.now });
     const controller = createController({ storage, client, getSession: () => session, persistStorage: options.persistStorage,
         getSwitcher: () => options.unsupported ? undefined : token => {
             switched.push(token);
@@ -197,12 +199,80 @@ test('duplicate clicks cannot start concurrent credential requests', async () =>
     resolve(response({}, 400)); await assert.rejects(attempt); assert.equal(h.calls.length, 1);
 });
 test('cancellation clears MFA and prevents a late request from saving an account', async () => {
-    let resolve;
-    const h = harness({ fetcher: () => new Promise(r => { resolve = r; }) });
-    const attempt = h.controller.login('x', 'y'); await Promise.resolve();
+    let resolve, started;
+    const ready = new Promise(r => { started = r; });
+    const h = harness({ fetcher: () => new Promise(r => { resolve = r; started(); }) });
+    const attempt = h.controller.login('x', 'y'); await ready;
     h.controller.cancelLogin(); resolve(response({ token: tb }));
     await assert.rejects(attempt, isCode('cancelled')); assert.deepEqual(h.storage.accounts, {});
     await assert.rejects(h.controller.submitCode('123456'), isCode('mfa-expired'));
+});
+
+test('login bootstraps Discord context once and uses the same fingerprint through SMS verification', async () => {
+    const calls = [], storage = {};
+    const fingerprint = 'fixture-server-issued-anonymous-fingerprint';
+    const client = createClient({ fetcher: async (url, init) => {
+        calls.push([url, init]);
+        return response(url.endsWith('/experiments') ? { fingerprint }
+            : url.endsWith('/auth/login') ? { mfa: true, sms: true, ticket: 'fixture-context-ticket' }
+            : url.endsWith('/sms/send') ? { phone: '+*******4321' }
+            : url.endsWith('/sms') ? { token: tb } : b);
+    } });
+    const controller = createController({ storage, client, getSession: () => ({}), getSwitcher: () => undefined });
+    await controller.login('fixture@example.invalid', 'fixture-password');
+    assert.equal(calls[0][0], 'https://discord.com/api/v9/experiments');
+    assert.equal(calls[0][1].method, 'GET');
+    assert.equal(calls[0][1].body, undefined);
+    assert.equal(calls[0][1].headers.Authorization, undefined);
+    assert.equal(calls[0][1].headers['X-Fingerprint'], undefined);
+    await controller.requestSms();
+    assert.equal(controller.verification.deliveryConfirmed, false);
+    assert.ok(Number.isFinite(controller.verification.requestedAt));
+    await controller.submitCode('001234');
+    for (const [url, init] of calls.filter(([url]) => url.includes('/auth/'))) {
+        assert.equal(init.headers['X-Fingerprint'], fingerprint, url);
+        assert.equal(init.headers.Authorization, undefined);
+    }
+    assert.equal(calls.at(-1)[1].headers['X-Fingerprint'], undefined, 'authenticated profile validation has no anonymous fingerprint');
+    assert.equal(calls.filter(([url]) => url.endsWith('/experiments')).length, 1);
+    assert.doesNotMatch(JSON.stringify(storage), /fixture-server-issued-anonymous-fingerprint|fixture-context-ticket|001234/);
+});
+
+test('invalid login context stops before submitting a password and cancelled context cannot be reused', async () => {
+    let calls = 0;
+    const client = createClient({ fetcher: async () => { calls++; return response({}); } });
+    const controller = createController({ storage: {}, client, getSession: () => ({}), getSwitcher: () => undefined });
+    await assert.rejects(controller.login('fixture@example.invalid', 'fixture-password'), isCode('auth-context'));
+    assert.equal(calls, 1, 'no password request follows an invalid bootstrap response');
+    let finish, started, fingerprint = 'fixture-new-context-fingerprint';
+    const ready = new Promise(resolve => { started = resolve; });
+    const requests = [];
+    const nextClient = createClient({ fetcher: async (url, init) => {
+        requests.push([url, init]);
+        if (url.endsWith('/experiments') && requests.length === 1) return new Promise(resolve => { finish = resolve; started(); });
+        return response(url.endsWith('/experiments') ? { fingerprint }
+            : { mfa: true, sms: true, ticket: 'fixture-new-context-ticket' });
+    } });
+    const next = createController({ storage: {}, client: nextClient, getSession: () => ({}), getSwitcher: () => undefined });
+    const pending = next.login('first@example.invalid', 'first-password'); await ready;
+    next.cancelLogin(); finish(response({ fingerprint: 'fixture-stale-context-fingerprint' }));
+    await assert.rejects(pending, isCode('cancelled'));
+    assert.equal(requests.length, 1);
+    await next.login('second@example.invalid', 'second-password');
+    assert.equal(requests.at(-1)[1].headers['X-Fingerprint'], fingerprint);
+    assert.doesNotMatch(requests.at(-1)[1].body, /first-password/);
+});
+
+test('an unconfirmed SMS response keeps a cooldown and cannot claim delivery or immediately resend', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, ticket: 'fixture-unconfirmed-dispatch-ticket' } : {}) });
+    await h.controller.login('x', 'y');
+    await assert.rejects(h.controller.requestSms(), isCode('sms-send'));
+    assert.equal(h.controller.verification.deliveryConfirmed, false);
+    assert.equal(h.controller.verification.requestedAt, null);
+    assert.equal(h.controller.verification.smsSent, false);
+    await assert.rejects(h.controller.requestSms(), isCode('sms-cooldown'));
+    assert.equal(h.calls.length, 2);
 });
 test('unload aborts pending work without any late storage writes', async () => {
     let resolve;

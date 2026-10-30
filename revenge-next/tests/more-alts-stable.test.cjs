@@ -22,7 +22,9 @@ async function act(action) {
 }
 
 function scenario(t, options = {}) {
-    const w = createWorld(options), section = installSettingsSection(w), renders = [];
+    const w = createWorld({ ...options, fetch: (url, init) => url.endsWith('/experiments')
+        ? Response.json({ fingerprint: 'fixture-native-login-fingerprint' }) : options.fetch?.(url, init) }),
+        section = installSettingsSection(w), renders = [];
     t.after(async () => {
         for (const ui of renders.reverse()) await Renderer.act(async () => ui.unmount());
         for (const item of [...w.loaded.values()].reverse()) await w.stop(item);
@@ -328,11 +330,19 @@ test('native MFA sends SMS on demand, enforces resend cooldown, and saves only t
     await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
     await act(() => field('Password').props.onChangeText('fixture-native-sms-password'));
     await act(() => getButton(ui, 'Continue').props.onPress());
-    assert.equal(w.calls.filter(call => call[0] === 'fetch').length, 1);
+    assert.equal(w.calls.filter(call => call[0] === 'fetch').length, 2);
     await act(() => getButton(ui, 'Send SMS code').props.onPress());
     assert.ok(field('SMS Code'));
     assert.equal(getButton(ui, 'Resend SMS code').props.disabled, true);
     assert.match(JSON.stringify(ui.toJSON()), /•••• 4321/);
+    assert.match(JSON.stringify(ui.toJSON()), /Phone delivery is not confirmed/);
+    const sentBeforeHelp = w.calls.filter(call => call[0] === 'fetch').length;
+    await act(() => getButton(ui, 'No code received?').props.onPress());
+    assert.equal(w.alerts.at(-1)[0], 'No SMS code received?');
+    assert.equal(w.calls.filter(call => call[0] === 'fetch').length, sentBeforeHelp);
+    assert.ok(w.calls.some(call => call[0] === 'fetch' && call[1].endsWith('/experiments')));
+    for (const call of w.calls.filter(call => call[0] === 'fetch' && call[1].includes('/auth/')))
+        assert.equal(call[2].headers['X-Fingerprint'], 'fixture-native-login-fingerprint');
     assert.doesNotMatch(JSON.stringify(ui.toJSON()), /6587654321/);
     await act(() => getButton(ui, 'Use authenticator or backup code').props.onPress());
     assert.ok(field('Verification Code'));

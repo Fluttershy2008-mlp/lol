@@ -69,20 +69,22 @@ export function describeFailure(status, body, retryHeader, path = '') {
     // Never print server messages, full HTTP errors, credentials, or response bodies.
     return new AccountError('login', 'Discord could not complete sign-in. Check your details, or sign in through Discord and save the current account.');
 }
-export function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort = globalThis.AbortController }) {
+export function createClient({ fetcher, getFingerprint, now = Date.now, timeoutMs = 20000, Abort = globalThis.AbortController }) {
     const pending = new Set();
-    let stopped = false, blockedUntil = 0;
+    let stopped = false, blockedUntil = 0, fingerprint, authGeneration = 0;
     function cancel() {
+        authGeneration++; fingerprint = undefined;
         for (const entry of [...pending]) { entry.abort?.(); entry.reject(new AccountError('cancelled', 'Cancelled.')); }
     }
     async function request(path, { method = 'GET', body, token } = {}) {
         if (stopped) fail('cancelled', 'Plugin disabled.');
         if (now() < blockedUntil) throw new AccountError('rate-limit', `Wait ${Math.ceil((blockedUntil - now()) / 1000)} seconds before trying again.`, Math.ceil((blockedUntil - now()) / 1000));
-        if (!['/auth/login', '/auth/mfa/totp', '/auth/mfa/backup', '/auth/mfa/sms/send', '/auth/mfa/sms', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
+        if (!['/experiments', '/auth/login', '/auth/mfa/totp', '/auth/mfa/backup', '/auth/mfa/sms/send', '/auth/mfa/sms', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
         const controller = typeof Abort === 'function' ? new Abort() : null;
         let timer, entry;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = token;
+        if (fingerprint && path.startsWith('/auth/')) headers['X-Fingerprint'] = fingerprint;
         try {
             const response = await Promise.race([
                 Promise.resolve().then(async () => {
@@ -109,7 +111,17 @@ export function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort
             throw new AccountError('network', 'Could not reach Discord. Check your connection and try again.');
         } finally { clearTimeout(timer); pending.delete(entry); }
     }
-    return { request, cancel, stop() { stopped = true; cancel(); } };
+    async function prepareLogin() {
+        const epoch = ++authGeneration; fingerprint = undefined;
+        const value = getFingerprint ? await getFingerprint() : (await request('/experiments')).fingerprint;
+        if (stopped || epoch !== authGeneration) fail('cancelled', 'Cancelled.');
+        if (typeof value !== 'string' || !/^[\x21-\x7e]{8,1024}$/.test(value))
+            fail('auth-context', 'Discord could not prepare this sign-in. Try again, or use Discord’s normal sign-in.');
+        // Use Discord's own anonymous session identifier for this attempt. Do
+        // not invent device properties or reuse a cancelled attempt's context.
+        fingerprint = value;
+    }
+    return { request, prepareLogin, cancel, stop() { stopped = true; cancel(); } };
 }
 export function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
@@ -180,7 +192,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
             if (!totp && !backup && !sms) fail('verification', 'This account needs a passkey or another verification method. Use Discord’s normal login screen, then save the current account.');
             challenge = { ticket: data.ticket, until: now() + 5 * 60 * 1000, smsAvailable: sms,
                 alternative: totp ? 'totp' : backup ? 'backup' : null,
-                method: totp ? 'totp' : backup ? 'backup' : 'sms', smsSent: false, nextSmsAt: 0, phone: null,
+                method: totp ? 'totp' : backup ? 'backup' : 'sms', smsSent: false, requestedAt: null, nextSmsAt: 0, phone: null,
                 loginInstance: typeof data.login_instance_id === 'string' ? data.login_instance_id : undefined };
             return { kind: 'mfa' };
         }
@@ -195,6 +207,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
     function verificationState() {
         return challenge ? { smsAvailable: challenge.smsAvailable, smsSent: challenge.smsSent,
             method: challenge.method, alternative: challenge.alternative, phone: challenge.phone,
+            requestedAt: challenge.requestedAt, deliveryConfirmed: false,
             resendAfter: Math.max(0, Math.ceil((challenge.nextSmsAt - now()) / 1000)) } : null;
     }
     function delay() { return new Promise(resolve => { const item = { timer: null, resolve }; item.timer = setTimeout(() => { delays.delete(item); resolve(); }, pollMs); delays.add(item); }); }
@@ -208,6 +221,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
             return exclusive(async epoch => {
                 challenge = undefined;
                 if (typeof login !== 'string' || !login.trim() || typeof password !== 'string' || !password.length) fail('credentials', 'Enter your email or phone number and password.');
+                await client.prepareLogin(); assertActive(epoch);
                 const data = await client.request('/auth/login', { method: 'POST', body: { login: login.trim(), password, undelete: false } });
                 return completeLogin(data, epoch);
             });
@@ -227,18 +241,24 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 if (!current.smsAvailable) fail('sms-unavailable', 'SMS authentication is not enabled for this Discord account. Enable it in Discord’s account settings while signed in, or use another verification method.');
                 const remaining = Math.ceil((current.nextSmsAt - now()) / 1000);
                 if (remaining > 0) throw new AccountError('sms-cooldown', `Wait ${remaining} seconds before requesting another SMS.`, remaining);
+                // Even a lost response may follow a dispatched request. Avoid
+                // immediate repeat sends after a timeout or malformed response.
+                current.nextSmsAt = now() + 30000; notify();
                 let data;
                 try { data = await client.request('/auth/mfa/sms/send', { method: 'POST', body: { ticket: current.ticket } }); }
                 catch (error) {
                     assertActive(epoch);
-                    if (error?.retryAfter) { current.nextSmsAt = now() + error.retryAfter * 1000; notify(); }
+                    if (error?.retryAfter) current.nextSmsAt = Math.max(current.nextSmsAt, now() + error.retryAfter * 1000);
+                    notify();
                     throw error;
                 }
                 assertActive(epoch);
                 const phone = typeof data.phone === 'string' && data.phone.length <= 64 ? data.phone.replace(/\D/g, '') : '';
                 if (phone.length < 2) fail('sms-send', 'Discord did not confirm sending the SMS. Try again or use Discord’s normal sign-in.');
                 current.phone = `•••• ${phone.slice(-4)}`;
-                current.smsSent = true; current.method = 'sms'; current.nextSmsAt = now() + 30000;
+                // This acknowledges the API request, not receipt by a carrier
+                // or handset. Discord provides no delivery receipt here.
+                current.smsSent = true; current.requestedAt = now(); current.method = 'sms'; current.nextSmsAt = now() + 30000;
                 notify(); return verificationState();
             });
         },

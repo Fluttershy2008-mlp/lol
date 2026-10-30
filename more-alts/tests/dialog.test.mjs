@@ -16,7 +16,8 @@ function harness(fetcher, withWebView = false) {
     Object.assign(RN, { Platform: { OS: 'android' }, useColorScheme: () => 'dark', Alert: { alert: (...args) => alerts.push(args) }, Linking: { openURL: async url => opened.push(url) } });
     function WebView(props) { return { type: 'WebView', props }; }
     const V = { plugin: { storage: {} }, metro: { common: { React, ReactNative: RN }, findByProps: key => key === 'WebView' && withWebView ? { WebView, default: WebView } : undefined, findByStoreName: () => undefined } };
-    const plugin = createPlugin(V, { fetch: fetcher }); plugin.onLoad();
+    const plugin = createPlugin(V, { fetch: (url, init) => url.endsWith('/experiments')
+        ? Promise.resolve(response({ fingerprint: 'fixture-dialog-login-fingerprint' })) : fetcher(url, init) }); plugin.onLoad();
     function expand(tree) {
         if (Array.isArray(tree)) return tree.map(expand);
         if (!tree || typeof tree !== 'object') return tree;
@@ -78,10 +79,11 @@ test('MFA opens inside the dialog and Back cancels the challenge while preservin
     assert.equal(h.find('Password', 'TextInput').props.value, ''); assert.deepEqual(h.V.plugin.storage.accounts, {});
 });
 test('Android back cancels a pending login and clears fields even if the request responds later', async t => {
-    let resolve;
-    const h = harness(() => new Promise(r => { resolve = r; })); t.after(h.close);
+    let resolve, started;
+    const ready = new Promise(r => { started = r; });
+    const h = harness(() => new Promise(r => { resolve = r; started(); })); t.after(h.close);
     h.press('Add another account'); h.type('Email or Phone Number', 'fixture@example.invalid'); h.type('Password', 'password');
-    h.press('Continue'); await Promise.resolve(); h.modal().props.onRequestClose();
+    h.press('Continue'); await ready; h.modal().props.onRequestClose();
     resolve(response({ token })); await flush();
     assert.equal(h.modal(), undefined); assert.deepEqual(h.V.plugin.storage.accounts, {});
     h.press('Add another account'); assert.equal(h.find('Email or Phone Number', 'TextInput').props.value, '');
@@ -111,7 +113,14 @@ test('MFA can request an SMS, display only its masked destination, and save afte
     assert.equal(h.find('SMS Code', 'TextInput').props.keyboardType, 'number-pad');
     assert.equal(h.find('Resend SMS code').props.disabled, true);
     assert.match(JSON.stringify(h.modal()), /•••• 4321/);
+    assert.match(JSON.stringify(h.modal()), /Phone delivery is not confirmed/);
+    assert.doesNotMatch(JSON.stringify(h.modal()), /code Discord sent/);
     assert.doesNotMatch(JSON.stringify(h.modal()), /6587654321/);
+    h.press('No code received?');
+    assert.equal(h.alerts.at(-1)[0], 'No SMS code received?');
+    assert.match(h.alerts.at(-1)[1], /This does not confirm delivery to your phone/);
+    assert.doesNotMatch(h.alerts.at(-1)[1], /fixture-dialog-login-fingerprint|fixture-dialog-sms-ticket|6587654321/);
+    assert.equal(requests.length, 2, 'opening delivery help never sends an SMS');
     h.press('Use authenticator or backup code'); await flush();
     assert.ok(h.find('Verification Code', 'TextInput'));
     h.press('Use SMS code'); await flush();
@@ -120,6 +129,8 @@ test('MFA can request an SMS, display only its masked destination, and save afte
     assert.equal(h.modal(), undefined);
     assert.equal(h.V.plugin.storage.accounts[user.id].token, token);
     assert.ok(requests[2][0].endsWith('/auth/mfa/sms'));
+    for (const [url, init] of requests.filter(([url]) => url.includes('/auth/')))
+        assert.equal(init.headers['X-Fingerprint'], 'fixture-dialog-login-fingerprint');
     assert.doesNotMatch(JSON.stringify(h.V.plugin.storage), /fixture-dialog-sms-ticket|001234|6587654321/);
 });
 

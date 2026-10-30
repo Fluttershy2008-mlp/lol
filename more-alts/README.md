@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.16
+# More Alts! for Revenge — 3.1.17
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable17: login context and SMS request status
+
+Before a password sign-in, More Alts now retrieves Discord's anonymous fingerprint from its experiments endpoint and uses the same `X-Fingerprint` value through login and MFA, including SMS send and verification. A cancelled attempt cannot supply context to a later attempt. This corrects a missing piece of the unauthenticated request flow; it does not establish why a particular SMS failed to arrive.
+
+The MFA dialog now says **SMS requested**, shows when Discord accepted the request, and explicitly says phone delivery is not confirmed. A masked phone response acknowledges the request; it is not a receipt from the phone. **No code received?** explains how to compare the same account with Discord's own sign-in and check the destination without exposing tickets, fingerprints or codes. The help action never sends another SMS. A cooldown also applies after an unconfirmed or lost SMS response, while longer server rate limits remain enforced.
+
+Update to **1.0.0-stable17**, restart Discord, and begin a fresh sign-in before requesting a code. Existing saved sessions and the no-QR settings switcher are retained. Classic is **3.1.17**. Tests cover request context, cancellation, privacy, accepted-versus-delivered status and the existing account flows using synthetic responses. Actual carrier and handset delivery remains unverified.
+
+References: [unauthenticated fingerprints and login MFA](https://docs.discord.food/authentication) and [experiment assignments](https://docs.discord.food/topics/experiments), unofficial protocol documentation; [Discord's SMS MFA setup guide](https://support.discord.com/hc/en-us/articles/219576828-Setting-up-Multi-Factor-Authentication).
 
 ## Stable16: SMS verification
 
