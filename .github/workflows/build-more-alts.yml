@@ -29,11 +29,12 @@ jobs:
         run: |
           node more-alts/build.mjs
           python3 valenced/build.py
+          python3 revenge-next/build.py
       - name: Commit generated release files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A more-alts/index.js more-alts/manifest.json valenced/index.json valenced/sources.json valenced/pool
+          git add -A more-alts/index.js more-alts/manifest.json valenced/index.json valenced/sources.json valenced/pool revenge-next/index.json revenge-next/sources.json revenge-next/pool index.json
           if ! git diff --cached --quiet; then
             git commit -m "Build More Alts packages from updated sources"
             git push
