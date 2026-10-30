@@ -1133,10 +1133,10 @@ function createNativeWebView(React, RN, host = globalThis, getClient = webViewRu
 
 // Vendetta's finders require uninitialized Metro factories while searching.
 // Optional features must never do that during Discord's startup.
-function createModuleResolver(metro, { now = Date.now } = {}) {
+function createModuleResolver(metro, { now = Date.now, getClient = webViewRuntimeClient } = {}) {
     const entries = new Map();
     let rejectedWebViews = new WeakSet();
-    const coldWebView = createColdWebViewLoader();
+    const coldWebView = createColdWebViewLoader(getClient);
     const modules = metro.modules;
     const loadedOnly = !!modules && typeof modules === 'object';
     function componentType(value, depth = 0) {
@@ -1548,8 +1548,11 @@ function createPlugin(V, host = globalThis) {
     const h = React.createElement, storage = V.plugin.storage;
     const installedVersion = V.plugin.version ?? V.plugin.manifest?.version ?? 'unknown';
     const LoginDialog = createLoginDialog(React, RN);
-    const resolver = createModuleResolver(V.metro);
-    const nativeWebView = createNativeWebView(React, RN, host);
+    // Valenced passes its native lookup through the compatibility adapter.
+    // No Valenced global exists in an external plugin's lexical scope.
+    const qrClient = () => V.host?.getQrRuntimeClient?.() ?? webViewRuntimeClient();
+    const resolver = createModuleResolver(V.metro, { getClient: qrClient });
+    const nativeWebView = createNativeWebView(React, RN, host, qrClient);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [], qrStops = new Set();
