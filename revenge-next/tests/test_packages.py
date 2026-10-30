@@ -87,7 +87,7 @@ class PackageTests(unittest.TestCase):
             self.assertIn(url, filename.read_text(), filename.name)
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         for plugin_id, source in sources.items():
-            if source["kind"] == "compatibility-preview":
+            if source["kind"] in ("compatibility-preview", "compatibility-stable"):
                 slug = plugin_id.removeprefix("dev.fluttershy2008.")
                 version = config.get("pluginVersions", {}).get(slug, config["portVersion"])
                 with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{version}.zip") as package:
@@ -97,14 +97,18 @@ class PackageTests(unittest.TestCase):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         config = json.loads((HERE / "repo.config.json").read_text())
-        ports = {key: source for key, source in sources.items() if source["kind"] == "compatibility-preview"}
+        ports = {key: source for key, source in sources.items() if source["kind"] in ("compatibility-preview", "compatibility-stable")}
         self.assertEqual(len(ports), 21)
         for plugin_id in ports:
             slug = plugin_id.removeprefix("dev.fluttershy2008.")
             release = config.get("pluginVersions", {}).get(slug, config["portVersion"])
             plugin = index[plugin_id]
             self.assertEqual(plugin["channels"]["latest"], release, plugin_id)
-            self.assertEqual(plugin["channels"]["beta"], release, plugin_id)
+            if source["kind"] == "compatibility-stable":
+                self.assertEqual(plugin["channels"]["stable"], release, plugin_id)
+                self.assertNotEqual(plugin["channels"]["beta"], release, plugin_id)
+            else:
+                self.assertEqual(plugin["channels"]["beta"], release, plugin_id)
             self.assertIn(release, plugin["versions"], plugin_id)
 
     def test_native_theme_converts_dark_light_and_midnight(self):
