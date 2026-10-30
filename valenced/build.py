@@ -149,6 +149,13 @@ def build(check=False):
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
         plugin_runtime = runtime
+        if directory.name == "more-alts":
+            # This compatibility hook is private to More Alts, not other plugin ZIPs.
+            old = "        host: { id: 'valenced' },"
+            if plugin_runtime.count(old) != 1:
+                raise RuntimeError("More Alts native API bridge needs updating")
+            plugin_runtime = plugin_runtime.replace(old, """        host: { id: 'valenced',
+            getQrRuntimeClient: () => active ? U : undefined },""")
         if directory.name in ("stealmoji", "save-as-sticker"):
             # These packages open their custom pages from chat. The ordinary
             # legacy navigation bridge is used by plugins already in Settings.
