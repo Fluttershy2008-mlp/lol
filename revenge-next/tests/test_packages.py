@@ -53,7 +53,7 @@ class PackageTests(unittest.TestCase):
         for plugin_id, source in sources.items():
             data = (HERE.parent / source["path"]).read_bytes()
             self.assertEqual(source["sha256"], hashlib.sha256(data).hexdigest())
-            if source["kind"] != "compatibility-preview":
+            if source["kind"] not in ("compatibility-preview", "compatibility-stable"):
                 continue
             directory = (HERE.parent / source["path"]).parent
             version = index[plugin_id]["channels"]["latest"]
@@ -69,7 +69,7 @@ class PackageTests(unittest.TestCase):
         config = json.loads((HERE / "repo.config.json").read_text())
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         ports = {str(Path(entry["path"]).parent) for entry in sources.values()
-                 if entry["kind"] == "compatibility-preview"}
+                 if entry["kind"] in ("compatibility-preview", "compatibility-stable")}
         for manifest in HERE.parent.glob("*/manifest.json"):
             data = json.loads(manifest.read_text())
             if not data.get("main") or "authors" not in data:
