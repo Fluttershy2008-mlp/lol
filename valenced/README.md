@@ -8,7 +8,7 @@ https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
 Tap **Add repository**, open **Browse Plugins**, install the plugins you want, then fully restart Discord.
 
-**More Alts! 1.0.0-stable12 (stable, QR-free):** This release removes the nonworking QR login, the QR placeholder, and the large Discord web-login panel. Add another account now opens a compact native email/password form with two-factor authentication and an option to use Discord's normal sign-in. Saved accounts, search, switching, session refresh and importing remain available. This stable label applies **only** to More Alts; other plugins remain on their current channels. Refresh the repository and update More Alts! without clearing its saved data.
+**More Alts! 1.0.0-stable12 (stable, QR-free):** This release removes the nonworking QR login, the QR placeholder, and the large Discord web-login panel. Add another account now opens a compact native email/password form with two-factor authentication and an option to use Discord's normal sign-in. Saved accounts, search, switching, session refresh and importing remain available. The stable12 channel is dedicated to More Alts! only; every other plugin keeps its own existing version and release channel. Refresh the repository and update More Alts! without clearing its saved data.
 
 
 **Altitude 1.0.0-beta3** adds the selected wallpaper behind **Settings**, including the overview and theme picker. Update Altitude and fully restart Discord. It retains beta2's clear backgrounds, the **Altitude · Lexend Deca** font pack and your background preferences. If needed, **Themes → Colors → Background → Reset** follows the theme defaults (full opacity, blur 0). [Altitude setup, backgrounds and differences from Aliucord](themes/altitude/README.md).
