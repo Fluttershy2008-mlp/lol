@@ -797,8 +797,8 @@
         },
         "1.0.0-stable12": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-stable12.zip",
-          "sha256": "555d4a33eebc0f90d4df66b15fec2698aeaa7593cd9cbe76cd4e2701c01d0659",
-          "size": 42985,
+          "sha256": "73051dcd79991408aa58d775399d9c08999d673bcce3b7799be15471b6eb3b16",
+          "size": 42954,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -814,7 +814,7 @@
         "beta": "1.0.0-stable12"
       },
       "name": "More Alts! (Valenced)",
-      "description": "Valenced preview. Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
+      "description": "Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
       "author": "Win8.1VMUser <793935599702507542>",
       "icon": "UserIcon",
       "contributors": [
