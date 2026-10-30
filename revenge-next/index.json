@@ -1043,8 +1043,8 @@
         },
         "1.0.0-stable12": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.more-alts@1.0.0-stable12.zip",
-          "sha256": "31ebb9096778b0486da5d1ca334fd1fc2f16553a18026a119fa76b7d9bba5c8d",
-          "size": 42339,
+          "sha256": "f005b1a2772f43b00d71387749a22e3118d80f69f71eaf87803f6b755e61d949",
+          "size": 41701,
           "dependencies": {
             "revenge.api": {
               "version": ">=1.2.1 <2"
