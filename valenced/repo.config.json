@@ -12,7 +12,7 @@
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
-    "more-alts": "1.0.0-beta11",
+    "more-alts": "1.0.0-stable12",
     "server-leaver": "1.0.0-beta6",
     "copy-user-id": "1.0.0-beta3",
     "addon-list": "1.0.0-beta3",
@@ -72,5 +72,12 @@
     "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
     "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
     "tokyo-nights-theme": "Tokyo_Nights_Theme.json"
+  },
+  "channels": {
+    "dev.fluttershy2008.more-alts": {
+      "latest": "1.0.0-stable12",
+      "stable": "1.0.0-stable12",
+      "beta": "1.0.0-beta11"
+    }
   }
 }

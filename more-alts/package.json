@@ -1,8 +1,11 @@
 {
   "name": "more-alts-revenge",
-  "version": "3.1.8",
+  "version": "3.1.12",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "scripts": { "build": "node build.mjs", "test": "node build.mjs && node --test tests/*.test.mjs" }
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node --test tests/*.test.mjs"
+  }
 }

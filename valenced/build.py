@@ -58,7 +58,7 @@ def manifest_for(slug, legacy, version, theme=False):
         dependencies["discord"] = {"version": ">=352.2"}
     manifest = {"format": 1, "id": "dev.fluttershy2008." + slug,
                 "name": legacy["name"] + " (Valenced)",
-                "description": "Valenced preview. " + legacy.get("description", "").replace("Revenge", "Valenced"),
+                "description": ("" if slug == "more-alts" else "Valenced preview. ") + legacy.get("description", "").replace("Revenge", "Valenced"),
                 "author": authors[0], "version": version, "dependencies": dependencies,
                 "icon": "PaintPaletteIcon" if theme else legacy.get("vendetta", {}).get("icon", "PuzzlePieceIcon"),
                 "dist": {"script": "index.js"}}
@@ -149,13 +149,6 @@ def build(check=False):
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
         plugin_runtime = runtime
-        if directory.name == "more-alts":
-            # This compatibility hook is private to More Alts, not other plugin ZIPs.
-            old = "        host: { id: 'valenced' },"
-            if plugin_runtime.count(old) != 1:
-                raise RuntimeError("More Alts native API bridge needs updating")
-            plugin_runtime = plugin_runtime.replace(old, """        host: { id: 'valenced',
-            getQrRuntimeClient: () => active ? U : undefined },""")
         if directory.name in ("stealmoji", "save-as-sticker"):
             # These packages open their custom pages from chat. The ordinary
             # legacy navigation bridge is used by plugins already in Settings.
@@ -203,7 +196,7 @@ def build(check=False):
             "Classic settings/accounts are not imported automatically.\n")
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
-            "kind": "compatibility-preview"}
+            "kind": "compatibility-stable" if slug == "more-alts" else "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
         if shortcut:

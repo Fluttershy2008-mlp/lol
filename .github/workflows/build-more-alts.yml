@@ -6,6 +6,9 @@ on:
       - 'more-alts/src/**'
       - 'more-alts/tests/**'
       - 'more-alts/manifest.base.json'
+      - 'more-alts/build.mjs'
+      - 'revenge-next/repo.config.json'
+      - 'revenge-next/build.py'
       - 'valenced/repo.config.json'
       - 'valenced/build.py'
       - '.github/workflows/build-more-alts.yml'
@@ -31,7 +34,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Rebuild the Classic and Valenced More Alts packages
+      - name: Rebuild the Classic, Valenced and Next More Alts packages
         run: |
           node more-alts/build.mjs
           python3 valenced/build.py

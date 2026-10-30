@@ -9,7 +9,7 @@
     "save-as-sticker": "1.0.0-beta9",
     "stealmoji": "1.0.0-beta9",
     "server-leaver": "1.0.0-beta7",
-    "more-alts": "1.0.0-beta12",
+    "more-alts": "1.0.0-stable12",
     "expression-cloner": "1.0.0-beta5",
     "blocked-user-list": "1.0.0-beta5",
     "friends-list": "1.0.0-beta5",
@@ -46,5 +46,12 @@
     "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
     "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
     "tokyo-nights-theme": "Tokyo_Nights_Theme.json"
+  },
+  "channels": {
+    "dev.fluttershy2008.more-alts": {
+      "latest": "1.0.0-stable12",
+      "stable": "1.0.0-stable12",
+      "beta": "1.0.0-beta12"
+    }
   }
 }

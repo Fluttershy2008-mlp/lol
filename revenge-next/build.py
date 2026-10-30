@@ -57,8 +57,8 @@ def manifest_for(slug, legacy, version, theme=False):
         dependencies["revenge.api.themes"] = {"version": ">=1.5 <2"}
         dependencies["discord"] = {"version": ">=352.2"}
     manifest = {"format": 1, "id": "dev.fluttershy2008." + slug,
-                "name": legacy["name"] + " (Next preview)",
-                "description": "Revenge Next preview. " + legacy.get("description", ""),
+                "name": legacy["name"] + (" (Revenge Next)" if slug == "more-alts" else " (Next preview)"),
+                "description": ("" if slug == "more-alts" else "Revenge Next preview. ") + legacy.get("description", ""),
                 "author": authors[0], "version": version, "dependencies": dependencies,
                 "icon": "PaintPaletteIcon" if theme else legacy.get("vendetta", {}).get("icon", "PuzzlePieceIcon"),
                 "dist": {"script": "index.js"}}
@@ -177,7 +177,7 @@ def build(check=False):
             "Classic settings/accounts are not imported automatically.\n")
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
-            "kind": "compatibility-preview"}
+            "kind": "compatibility-stable" if slug == "more-alts" else "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
         entries.append((slug, manifest, files))

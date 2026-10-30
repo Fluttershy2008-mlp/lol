@@ -44,16 +44,17 @@ const user = { id: '100000000000000009', username: 'fixture-user' };
 const token = 'fixture-dialog-session-not-a-real-token';
 const response = data => ({ ok: true, status: 200, json: async () => data });
 
-test('Add Account uses a Discord web-style login and requires explicit QR generation', t => {
+test('stable12 opens the compact Add Account dialog with no QR control or web login UI', t => {
     const h = harness(() => { throw new Error('must not authenticate'); }); t.after(h.close);
     h.press('Add another account');
-    assert.match(JSON.stringify(h.modal()), /Welcome back!/);
-    assert.ok(h.find('QR code not generated'));
+    const modal = JSON.stringify(h.modal());
+    assert.match(modal, /Add Account/);
+    assert.doesNotMatch(modal, /Welcome back!|QR code|Log in with QR Code|MA-QR-/i);
+    assert.equal(h.find('Log in with QR Code'), undefined);
+    assert.equal(h.webview(), undefined);
     assert.ok(h.find('Email or Phone Number', 'TextInput'));
     assert.ok(h.find('Password', 'TextInput'));
-    h.press('Log in with QR Code');
-    assert.match(JSON.stringify(h.modal()), /MA-QR-/);
-    assert.ok(h.find('Email or Phone Number', 'TextInput'));
+    assert.ok(h.find('Use Discord’s normal sign-in', 'TouchableOpacity'));
 });
 
 test('Add Account dialog submits the entered password and returns to the saved list', async t => {
@@ -93,26 +94,3 @@ test('password reset opens only Discord’s official login page on the user’s 
     assert.deepEqual(h.opened, ['https://discord.com/login']);
 });
 
-const qrEvent = (view, token, userId) => ({ nativeEvent: { url: 'https://discord.com/', data: JSON.stringify({
-    provider: 'more-alts-qr', session: view.props.source.html.match(/session:'([^']+)'/)[1], type: 'complete', token, userId
-}) } });
-test('QR approval bridge saves the verified account through the new mobile dialog', async t => {
-    const h = harness(async () => response(user), true); t.after(h.close);
-    h.press('Add another account'); h.press('Log in with QR Code');
-    const view = h.webview(); assert.ok(view); assert.ok(h.find('Refresh QR code'));
-    view.props.onMessage(qrEvent(view, token, user.id)); await flush();
-    assert.equal(h.V.plugin.storage.accounts[user.id].token, token); assert.equal(h.modal(), undefined);
-});
-test('QR cannot add an account after the user dismisses the dialog', async t => {
-    let requests = 0, stopped = 0;
-    const h = harness(async () => { requests++; return response(user); }, true); t.after(h.close);
-    h.press('Add another account'); h.press('Log in with QR Code');
-    const old = h.webview(); old.props.ref({ injectJavaScript: () => stopped++ });
-    h.modal().props.onRequestClose(); old.props.onMessage(qrEvent(old, token, user.id)); await flush();
-    assert.equal(stopped, 1); assert.equal(requests, 0); assert.deepEqual(h.V.plugin.storage.accounts, {});
-});
-test('plugin unload explicitly stops a QR session even if the settings screen remains mounted', () => {
-    const h = harness(() => { throw new Error('must not authenticate'); }, true);
-    h.press('Add another account'); h.press('Log in with QR Code');
-    let stopped = 0; h.webview().props.ref({ injectJavaScript: () => stopped++ }); h.close(); assert.equal(stopped, 1);
-});

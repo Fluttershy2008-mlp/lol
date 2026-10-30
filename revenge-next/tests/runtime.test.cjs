@@ -344,7 +344,7 @@ test('all 21 legacy factories initialize with the scoped Next adapter', async ()
     const sources = JSON.parse(fs.readFileSync(path.join(ROOT, 'sources.json'), 'utf8')).plugins;
     let count = 0;
     for (const [id, source] of Object.entries(sources)) {
-        if (source.kind !== 'compatibility-preview') continue;
+        if (!['compatibility-preview', 'compatibility-stable'].includes(source.kind)) continue;
         const env = environment(), bridge = createLegacyAdapter(env.api, { ...metadata, id }, env.host);
         const file = path.resolve(ROOT, '..', source.path);
         const options = vm.runInNewContext(fs.readFileSync(file, 'utf8'), { console,
