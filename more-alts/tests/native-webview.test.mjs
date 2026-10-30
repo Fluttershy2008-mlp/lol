@@ -33,7 +33,7 @@ for (const nativeName of ['RNCWebView', 'RNCWebViewModule']) test('bundled brows
 test('direct native WebView can initialize when RNCWebViewModule is absent but the view exists', () => {
     const f = fixture({ noModule: true });
     const view = f.provider.load();
-    assert.equal(view.$typeof, Symbol.for('react.forward_ref'));
+    assert.equal(typeof view.render, 'function');
     assert.equal(f.provider.reason(), undefined);
     assert.equal(f.views(), 1);
     f.provider.dispose();
