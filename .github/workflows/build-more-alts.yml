@@ -6,6 +6,7 @@ on:
       - 'more-alts/src/**'
       - 'more-alts/manifest.base.json'
       - 'valenced/repo.config.json'
+      - 'valenced/build.py'
       - '.github/workflows/build-more-alts.yml'
   workflow_dispatch:
 
