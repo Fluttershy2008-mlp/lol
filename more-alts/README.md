@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.15
+# More Alts! for Revenge — 3.1.16
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,16 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable16: SMS verification
+
+On the Two-Factor Authentication dialog, choose **Send SMS code** if Discord reports SMS authentication enabled for the account. Discord sends the code to its linked phone number; More Alts does not accept a replacement destination during MFA. Enter the **SMS Code** and press **Verify**. The destination is shown only as a masked suffix. The SMS request uses the existing login ticket, and the returned account is verified and saved using stable14's storage readback.
+
+**Resend SMS code** has a 30-second local cooldown and respects longer Discord rate limits. No SMS is sent automatically on opening the dialog, changing methods, retrying a failed code, or restarting. You can return to an authenticator/backup code and use an already sent SMS without requesting another one. SMS-only challenges are supported. Tickets, login instance IDs, SMS codes, and phone destination details remain temporary and are never written to saved account storage. Closing, Back, and disabling the plugin cancel the pending challenge and countdown.
+
+SMS authentication must already be enabled in Discord, as explained in [Discord's MFA setup guide](https://support.discord.com/hc/en-us/articles/219576828-Setting-up-Multi-Factor-Authentication). Linking a phone number alone does not enable SMS MFA. If unavailable, sign into the account using another supported method, then enable SMS authentication in Discord's account settings. Existing accounts, the Valenced settings switcher, and the no-QR interface are retained. Update to **1.0.0-stable16** and restart Discord. Classic is **3.1.16**. Tests use synthetic responses; actual SMS delivery still needs to be checked on the installed app.
+
+Protocol reference: [Userdoccers' authentication documentation](https://docs.discord.food/authentication), an unofficial description of Discord's login MFA endpoints and response flags.
 
 ## Stable15: account switcher in Valenced settings
 

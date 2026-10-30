@@ -44,6 +44,9 @@ export function importLegacy(storage, legacy) {
 }
 export function describeFailure(status, body, retryHeader, path = '') {
     const data = body && typeof body === 'object' ? body : {};
+    const rejectedCode = () => path === '/auth/mfa/sms'
+        ? new AccountError('sms-code', 'That SMS code was rejected or expired. Try the latest SMS code, or request a new one.')
+        : new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
     if (status === 429) {
         const seconds = Number(data.retry_after ?? retryHeader);
         const retry = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 60;
@@ -52,11 +55,13 @@ export function describeFailure(status, body, retryHeader, path = '') {
     if (data.captcha_key || data.captcha_sitekey) return new AccountError('verification', 'Discord requires a CAPTCHA. Complete sign-in in Discord’s normal login screen, then use Save current account here.');
     if ([70007, 60003, 60006].includes(data.code)) return new AccountError('verification', 'Discord requires additional verification. Complete sign-in in Discord’s normal login screen, then save the account here.');
     if (status >= 500) return new AccountError('server', 'Discord is having trouble. Try again later.');
-    if (data.code === 60008 || data.code === 60009 || data.errors?.code) return new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
+    if (data.code === 60008 || data.code === 60009 || data.errors?.code) return rejectedCode();
     if (status === 401) {
         if (path === '/auth/login') return new AccountError('credentials',
             'Discord did not accept these sign-in details. Check your email or phone number and password.');
-        if (path === '/auth/mfa/totp') return new AccountError('mfa-code',
+        if (path === '/auth/mfa/sms') return rejectedCode();
+        if (path === '/auth/mfa/sms/send') return new AccountError('mfa-expired', 'This sign-in step has expired. Go back and sign in again before requesting an SMS.');
+        if (path === '/auth/mfa/totp' || path === '/auth/mfa/backup') return new AccountError('mfa-code',
             'Discord did not accept that verification code. Try a new code or an unused backup code.');
         return new AccountError('expired', 'Discord no longer accepts this saved account session. Sign in again to refresh it.');
     }
@@ -73,7 +78,7 @@ export function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort
     async function request(path, { method = 'GET', body, token } = {}) {
         if (stopped) fail('cancelled', 'Plugin disabled.');
         if (now() < blockedUntil) throw new AccountError('rate-limit', `Wait ${Math.ceil((blockedUntil - now()) / 1000)} seconds before trying again.`, Math.ceil((blockedUntil - now()) / 1000));
-        if (!['/auth/login', '/auth/mfa/totp', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
+        if (!['/auth/login', '/auth/mfa/totp', '/auth/mfa/backup', '/auth/mfa/sms/send', '/auth/mfa/sms', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
         const controller = typeof Abort === 'function' ? new Abort() : null;
         let timer, entry;
         const headers = { 'Content-Type': 'application/json' };
@@ -171,16 +176,32 @@ export function createController({ storage, client, getSession, getSwitcher, per
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
-            if (data.totp === false) fail('verification', 'This account needs a passkey, SMS, or another verification method. Use Discord’s normal login screen, then save the current account.');
-            challenge = { ticket: data.ticket, until: now() + 5 * 60 * 1000 };
+            const totp = data.totp !== false, backup = data.backup === true, sms = data.sms === true;
+            if (!totp && !backup && !sms) fail('verification', 'This account needs a passkey or another verification method. Use Discord’s normal login screen, then save the current account.');
+            challenge = { ticket: data.ticket, until: now() + 5 * 60 * 1000, smsAvailable: sms,
+                alternative: totp ? 'totp' : backup ? 'backup' : null,
+                method: totp ? 'totp' : backup ? 'backup' : 'sms', smsSent: false, nextSmsAt: 0, phone: null,
+                loginInstance: typeof data.login_instance_id === 'string' ? data.login_instance_id : undefined };
             return { kind: 'mfa' };
         }
         fail('verification', 'Discord needs another sign-in step. Complete sign-in in Discord’s normal login screen, then save the current account.');
+    }
+    function requireChallenge() {
+        if (!challenge || now() > challenge.until) {
+            challenge = undefined; fail('mfa-expired', 'The verification step expired. Go back and sign in again.');
+        }
+        return challenge;
+    }
+    function verificationState() {
+        return challenge ? { smsAvailable: challenge.smsAvailable, smsSent: challenge.smsSent,
+            method: challenge.method, alternative: challenge.alternative, phone: challenge.phone,
+            resendAfter: Math.max(0, Math.ceil((challenge.nextSmsAt - now()) / 1000)) } : null;
     }
     function delay() { return new Promise(resolve => { const item = { timer: null, resolve }; item.timer = setTimeout(() => { delays.delete(item); resolve(); }, pollMs); delays.add(item); }); }
     return {
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         get busy() { return busy; },
+        get verification() { return verificationState(); },
         get accounts() { return storage.accountOrder.map(id => storage.accounts[id]).filter(Boolean); },
         saveCurrent() { return exclusive(epoch => saveSession(epoch)); },
         login(login, password) {
@@ -200,12 +221,45 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 return { kind: 'saved', ...result };
             });
         },
+        requestSms() {
+            return exclusive(async epoch => {
+                const current = requireChallenge();
+                if (!current.smsAvailable) fail('sms-unavailable', 'SMS authentication is not enabled for this Discord account. Enable it in Discord’s account settings while signed in, or use another verification method.');
+                const remaining = Math.ceil((current.nextSmsAt - now()) / 1000);
+                if (remaining > 0) throw new AccountError('sms-cooldown', `Wait ${remaining} seconds before requesting another SMS.`, remaining);
+                let data;
+                try { data = await client.request('/auth/mfa/sms/send', { method: 'POST', body: { ticket: current.ticket } }); }
+                catch (error) {
+                    assertActive(epoch);
+                    if (error?.retryAfter) { current.nextSmsAt = now() + error.retryAfter * 1000; notify(); }
+                    throw error;
+                }
+                assertActive(epoch);
+                const phone = typeof data.phone === 'string' && data.phone.length <= 64 ? data.phone.replace(/\D/g, '') : '';
+                if (phone.length < 2) fail('sms-send', 'Discord did not confirm sending the SMS. Try again or use Discord’s normal sign-in.');
+                current.phone = `•••• ${phone.slice(-4)}`;
+                current.smsSent = true; current.method = 'sms'; current.nextSmsAt = now() + 30000;
+                notify(); return verificationState();
+            });
+        },
+        useVerificationMethod(method) {
+            if (busy || stopped) fail('busy', 'Wait for the current action to finish.');
+            const current = requireChallenge();
+            if (method === 'sms' && current.smsAvailable && current.smsSent) current.method = 'sms';
+            else if (current.alternative && method === current.alternative) current.method = method;
+            else fail('verification', 'Choose a verification method available for this account.');
+            notify(); return verificationState();
+        },
         submitCode(code) {
             return exclusive(async epoch => {
-                if (!challenge || now() > challenge.until) { challenge = undefined; fail('mfa-expired', 'The verification step expired. Go back and sign in again.'); }
+                const current = requireChallenge();
+                if (current.method === 'sms' && !current.smsSent) fail('sms-not-sent', 'Request an SMS code first, then enter the code Discord sends to your linked phone.');
                 const normalized = String(code).replace(/[\s-]/g, '');
                 if (!normalized) fail('mfa-code', 'Enter an authenticator code or backup code.');
-                const data = await client.request('/auth/mfa/totp', { method: 'POST', body: { ticket: challenge.ticket, code: normalized } });
+                if (current.method === 'sms' && !/^\d+$/.test(normalized)) fail('sms-code', 'Enter the numeric code from Discord’s latest SMS.');
+                const body = { ticket: current.ticket, code: normalized };
+                if (current.loginInstance) body.login_instance_id = current.loginInstance;
+                const data = await client.request(`/auth/mfa/${current.method}`, { method: 'POST', body });
                 return completeLogin(data, epoch);
             });
         },

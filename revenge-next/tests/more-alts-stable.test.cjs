@@ -314,3 +314,85 @@ test('Valenced picker adds an account through verified sign-in and returns to th
     assert.doesNotMatch(JSON.stringify(item.api.jsonStorage.cache), /fixture-private-password/);
     assert.doesNotMatch(JSON.stringify(ui.toJSON()), /QR code|Log in with QR Code|fixture-added-quick-picker-account-session/);
 });
+
+test('native MFA sends SMS on demand, enforces resend cooldown, and saves only the verified account', async t => {
+    const account = { id: '100000000000000097', username: 'sms-account' };
+    const token = 'fixture-native-sms-authenticated-session';
+    const w = scenario(t, { fetch: async url => Response.json(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, totp: true, ticket: 'fixture-native-sms-ticket' }
+        : url.endsWith('/sms/send') ? { phone: '+6587654321' }
+        : url.endsWith('/sms') ? { token } : account) });
+    const { ui, item } = await w.openManager();
+    await act(() => getButton(ui, 'Add another account').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-native-sms-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    assert.equal(w.calls.filter(call => call[0] === 'fetch').length, 1);
+    await act(() => getButton(ui, 'Send SMS code').props.onPress());
+    assert.ok(field('SMS Code'));
+    assert.equal(getButton(ui, 'Resend SMS code').props.disabled, true);
+    assert.match(JSON.stringify(ui.toJSON()), /•••• 4321/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /6587654321/);
+    await act(() => getButton(ui, 'Use authenticator or backup code').props.onPress());
+    assert.ok(field('Verification Code'));
+    await act(() => getButton(ui, 'Use SMS code').props.onPress());
+    assert.equal(w.calls.filter(call => call[0] === 'fetch' && call[1].endsWith('/sms/send')).length, 1);
+    await act(() => w.advance(30001));
+    assert.equal(getButton(ui, 'Resend SMS code').props.disabled, false);
+    await act(() => getButton(ui, 'Resend SMS code').props.onPress());
+    assert.equal(w.calls.filter(call => call[0] === 'fetch' && call[1].endsWith('/sms/send')).length, 2);
+    await act(() => field('SMS Code').props.onChangeText('001234'));
+    await act(() => getButton(ui, 'Verify').props.onPress());
+    assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+    assert.equal(item.api.jsonStorage.cache.accounts[account.id].token, token);
+    assert.doesNotMatch(JSON.stringify(item.api.jsonStorage.cache), /fixture-native-sms-ticket|fixture-native-sms-password|001234|6587654321/);
+});
+
+test('native SMS-only sign-in waits for delivery and reports SMS code rejection without losing the challenge', async t => {
+    let codes = 0;
+    const w = scenario(t, { fetch: async url => url.endsWith('/auth/login')
+        ? Response.json({ mfa: true, sms: true, totp: false, ticket: 'fixture-sms-only-native-ticket' })
+        : url.endsWith('/sms/send') ? Response.json({ phone: '+*******4321' })
+        : ++codes === 1 ? new Response(JSON.stringify({ code: 60008 }), { status: 400 })
+        : Response.json({ token: 'fixture-native-sms-only-session-value' }) });
+    const { ui, item } = await w.openManager();
+    await act(() => getButton(ui, 'Add another account').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    assert.ok(field('SMS Code'));
+    await act(() => field('SMS Code').props.onChangeText('001234'));
+    assert.equal(getButton(ui, 'Verify').props.disabled, true);
+    await act(() => getButton(ui, 'Send SMS code').props.onPress());
+    await act(() => field('SMS Code').props.onChangeText('654321'));
+    await act(() => getButton(ui, 'Verify').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /That SMS code was rejected or expired/);
+    assert.ok(field('SMS Code'));
+    assert.deepEqual(item.api.jsonStorage.cache.accounts, {});
+    await act(() => getButton(ui, 'Close add account').props.onPress());
+    assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+});
+
+test('native SMS rate limits disable requests until the server cooldown ends', async t => {
+    let sends = 0;
+    const w = scenario(t, { fetch: async url => url.endsWith('/auth/login')
+        ? Response.json({ mfa: true, sms: true, ticket: 'fixture-rate-limited-native-ticket' })
+        : ++sends === 1 ? new Response(JSON.stringify({ retry_after: 45 }), { status: 429 })
+        : Response.json({ phone: '+*******4321' }) });
+    const { ui } = await w.openManager();
+    await act(() => getButton(ui, 'Add another account').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    await act(() => getButton(ui, 'Send SMS code').props.onPress());
+    assert.equal(getButton(ui, 'Send SMS code').props.disabled, true);
+    assert.match(JSON.stringify(ui.toJSON()), /Wait 45 seconds|Wait 45|45 seconds|45s/);
+    assert.equal(sends, 1);
+    await act(() => w.advance(45001));
+    assert.equal(getButton(ui, 'Send SMS code').props.disabled, false);
+    await act(() => getButton(ui, 'Send SMS code').props.onPress());
+    assert.equal(sends, 2); assert.ok(field('SMS Code'));
+});

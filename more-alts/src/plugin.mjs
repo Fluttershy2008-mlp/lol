@@ -17,6 +17,7 @@ export function createPlugin(V, host = globalThis) {
     const disposers = [];
     let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
     const pendingFrames = new Map();
+    const countdownTimers = new Set();
     const byProps = resolver.byProps;
     const byStore = resolver.byStore;
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
@@ -91,6 +92,13 @@ export function createPlugin(V, host = globalThis) {
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
+        const verification = instance?.verification;
+        React.useEffect(() => {
+            if (page !== 'mfa' || !verification?.resendAfter) return;
+            const timer = setTimer(() => { countdownTimers.delete(timer); if (mounted.current && active) redraw(x => x + 1); }, 1000);
+            countdownTimers.add(timer);
+            return () => { clearTimer(timer); countdownTimers.delete(timer); };
+        }, [instance, page, verification?.resendAfter]);
         React.useEffect(() => {
             // Legacy loaders initialize compatibility features when the manager is opened.
             if (!resolver.loadedOnly && active && !optionalReady) initializeOptional();
@@ -216,7 +224,14 @@ export function createPlugin(V, host = globalThis) {
                     onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
-                login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
+                login, password, code, error, verification, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
+                onSendSms: () => { setCode(''); void run(() => instance.requestSms()); },
+                onUseSms: () => {
+                    setCode(''); void run(() => instance.useVerificationMethod('sms'));
+                },
+                onUseAlternative: () => {
+                    setCode(''); void run(() => instance.useVerificationMethod(verification?.alternative));
+                },
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa') { cancel(); return; }
                     instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');
@@ -313,6 +328,7 @@ export function createPlugin(V, host = globalThis) {
     function onUnload() {
         active = false; epoch++; optionalReady = false; nativeReady = false;
         clearTimer(refreshTimer); clearTimer(initTimer); initTimer = undefined;
+        for (const timer of countdownTimers) clearTimer(timer); countdownTimers.clear();
         try { idleTask?.cancel?.(); } catch {} idleTask = undefined;
         for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
         controller?.stop();

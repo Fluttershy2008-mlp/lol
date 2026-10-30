@@ -243,6 +243,9 @@ function importLegacy(storage, legacy) {
 }
 function describeFailure(status, body, retryHeader, path = '') {
     const data = body && typeof body === 'object' ? body : {};
+    const rejectedCode = () => path === '/auth/mfa/sms'
+        ? new AccountError('sms-code', 'That SMS code was rejected or expired. Try the latest SMS code, or request a new one.')
+        : new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
     if (status === 429) {
         const seconds = Number(data.retry_after ?? retryHeader);
         const retry = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 60;
@@ -251,11 +254,13 @@ function describeFailure(status, body, retryHeader, path = '') {
     if (data.captcha_key || data.captcha_sitekey) return new AccountError('verification', 'Discord requires a CAPTCHA. Complete sign-in in Discord’s normal login screen, then use Save current account here.');
     if ([70007, 60003, 60006].includes(data.code)) return new AccountError('verification', 'Discord requires additional verification. Complete sign-in in Discord’s normal login screen, then save the account here.');
     if (status >= 500) return new AccountError('server', 'Discord is having trouble. Try again later.');
-    if (data.code === 60008 || data.code === 60009 || data.errors?.code) return new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
+    if (data.code === 60008 || data.code === 60009 || data.errors?.code) return rejectedCode();
     if (status === 401) {
         if (path === '/auth/login') return new AccountError('credentials',
             'Discord did not accept these sign-in details. Check your email or phone number and password.');
-        if (path === '/auth/mfa/totp') return new AccountError('mfa-code',
+        if (path === '/auth/mfa/sms') return rejectedCode();
+        if (path === '/auth/mfa/sms/send') return new AccountError('mfa-expired', 'This sign-in step has expired. Go back and sign in again before requesting an SMS.');
+        if (path === '/auth/mfa/totp' || path === '/auth/mfa/backup') return new AccountError('mfa-code',
             'Discord did not accept that verification code. Try a new code or an unused backup code.');
         return new AccountError('expired', 'Discord no longer accepts this saved account session. Sign in again to refresh it.');
     }
@@ -272,7 +277,7 @@ function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort = glob
     async function request(path, { method = 'GET', body, token } = {}) {
         if (stopped) fail('cancelled', 'Plugin disabled.');
         if (now() < blockedUntil) throw new AccountError('rate-limit', `Wait ${Math.ceil((blockedUntil - now()) / 1000)} seconds before trying again.`, Math.ceil((blockedUntil - now()) / 1000));
-        if (!['/auth/login', '/auth/mfa/totp', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
+        if (!['/auth/login', '/auth/mfa/totp', '/auth/mfa/backup', '/auth/mfa/sms/send', '/auth/mfa/sms', '/users/@me'].includes(path)) fail('endpoint', 'Unsupported sign-in request.');
         const controller = typeof Abort === 'function' ? new Abort() : null;
         let timer, entry;
         const headers = { 'Content-Type': 'application/json' };
@@ -370,16 +375,32 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
-            if (data.totp === false) fail('verification', 'This account needs a passkey, SMS, or another verification method. Use Discord’s normal login screen, then save the current account.');
-            challenge = { ticket: data.ticket, until: now() + 5 * 60 * 1000 };
+            const totp = data.totp !== false, backup = data.backup === true, sms = data.sms === true;
+            if (!totp && !backup && !sms) fail('verification', 'This account needs a passkey or another verification method. Use Discord’s normal login screen, then save the current account.');
+            challenge = { ticket: data.ticket, until: now() + 5 * 60 * 1000, smsAvailable: sms,
+                alternative: totp ? 'totp' : backup ? 'backup' : null,
+                method: totp ? 'totp' : backup ? 'backup' : 'sms', smsSent: false, nextSmsAt: 0, phone: null,
+                loginInstance: typeof data.login_instance_id === 'string' ? data.login_instance_id : undefined };
             return { kind: 'mfa' };
         }
         fail('verification', 'Discord needs another sign-in step. Complete sign-in in Discord’s normal login screen, then save the current account.');
+    }
+    function requireChallenge() {
+        if (!challenge || now() > challenge.until) {
+            challenge = undefined; fail('mfa-expired', 'The verification step expired. Go back and sign in again.');
+        }
+        return challenge;
+    }
+    function verificationState() {
+        return challenge ? { smsAvailable: challenge.smsAvailable, smsSent: challenge.smsSent,
+            method: challenge.method, alternative: challenge.alternative, phone: challenge.phone,
+            resendAfter: Math.max(0, Math.ceil((challenge.nextSmsAt - now()) / 1000)) } : null;
     }
     function delay() { return new Promise(resolve => { const item = { timer: null, resolve }; item.timer = setTimeout(() => { delays.delete(item); resolve(); }, pollMs); delays.add(item); }); }
     return {
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         get busy() { return busy; },
+        get verification() { return verificationState(); },
         get accounts() { return storage.accountOrder.map(id => storage.accounts[id]).filter(Boolean); },
         saveCurrent() { return exclusive(epoch => saveSession(epoch)); },
         login(login, password) {
@@ -399,12 +420,45 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
                 return { kind: 'saved', ...result };
             });
         },
+        requestSms() {
+            return exclusive(async epoch => {
+                const current = requireChallenge();
+                if (!current.smsAvailable) fail('sms-unavailable', 'SMS authentication is not enabled for this Discord account. Enable it in Discord’s account settings while signed in, or use another verification method.');
+                const remaining = Math.ceil((current.nextSmsAt - now()) / 1000);
+                if (remaining > 0) throw new AccountError('sms-cooldown', `Wait ${remaining} seconds before requesting another SMS.`, remaining);
+                let data;
+                try { data = await client.request('/auth/mfa/sms/send', { method: 'POST', body: { ticket: current.ticket } }); }
+                catch (error) {
+                    assertActive(epoch);
+                    if (error?.retryAfter) { current.nextSmsAt = now() + error.retryAfter * 1000; notify(); }
+                    throw error;
+                }
+                assertActive(epoch);
+                const phone = typeof data.phone === 'string' && data.phone.length <= 64 ? data.phone.replace(/\D/g, '') : '';
+                if (phone.length < 2) fail('sms-send', 'Discord did not confirm sending the SMS. Try again or use Discord’s normal sign-in.');
+                current.phone = `•••• ${phone.slice(-4)}`;
+                current.smsSent = true; current.method = 'sms'; current.nextSmsAt = now() + 30000;
+                notify(); return verificationState();
+            });
+        },
+        useVerificationMethod(method) {
+            if (busy || stopped) fail('busy', 'Wait for the current action to finish.');
+            const current = requireChallenge();
+            if (method === 'sms' && current.smsAvailable && current.smsSent) current.method = 'sms';
+            else if (current.alternative && method === current.alternative) current.method = method;
+            else fail('verification', 'Choose a verification method available for this account.');
+            notify(); return verificationState();
+        },
         submitCode(code) {
             return exclusive(async epoch => {
-                if (!challenge || now() > challenge.until) { challenge = undefined; fail('mfa-expired', 'The verification step expired. Go back and sign in again.'); }
+                const current = requireChallenge();
+                if (current.method === 'sms' && !current.smsSent) fail('sms-not-sent', 'Request an SMS code first, then enter the code Discord sends to your linked phone.');
                 const normalized = String(code).replace(/[\s-]/g, '');
                 if (!normalized) fail('mfa-code', 'Enter an authenticator code or backup code.');
-                const data = await client.request('/auth/mfa/totp', { method: 'POST', body: { ticket: challenge.ticket, code: normalized } });
+                if (current.method === 'sms' && !/^\d+$/.test(normalized)) fail('sms-code', 'Enter the numeric code from Discord’s latest SMS.');
+                const body = { ticket: current.ticket, code: normalized };
+                if (current.loginInstance) body.login_instance_id = current.loginInstance;
+                const data = await client.request(`/auth/mfa/${current.method}`, { method: 'POST', body });
                 return completeLogin(data, epoch);
             });
         },
@@ -695,18 +749,21 @@ function createLoginDialog(React, RN) {
     const h = React.createElement;
     return function LoginDialog({ visible, mfa = false, light = false, busy = false, reauthUsername,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
+        verification, onSendSms, onUseSms, onUseAlternative,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
         const c = light
             ? { card: '#ffffff', field: '#f2f3f5', border: '#d3d5da', text: '#1e1f22', muted: '#5c5e66', link: '#4752c4', danger: '#c32943', footer: '#f2f3f5' }
             : { card: '#242429', field: '#1f1f24', border: '#3a3a42', text: '#f2f3f5', muted: '#b5b5bd', link: '#8991ff', danger: '#ffb0b9', footer: '#202025' };
-        const ready = !busy && (mfa ? !!code.trim() : !!login.trim() && !!password.length);
+        const sms = mfa && verification?.method === 'sms';
+        const ready = !busy && (mfa ? !!code.trim() && (!sms || verification.smsSent) : !!login.trim() && !!password.length);
         const submit = () => { if (ready) onSubmit(); };
         const text = (value, style = {}, extra = {}) => h(RN.Text,
             { style: { color: c.text, fontSize: 15, lineHeight: 21, ...style }, ...extra }, value);
-        const link = (title, action) => h(RN.TouchableOpacity, {
+        const link = (title, action, disabled = false) => h(RN.TouchableOpacity, {
             accessibilityRole: 'button', accessibilityLabel: title, onPress: action,
-            disabled: busy, style: { minHeight: 44, justifyContent: 'center', opacity: busy ? 0.5 : 1 }
+            disabled: busy || disabled, accessibilityState: { disabled: busy || disabled },
+            style: { minHeight: 44, justifyContent: 'center', opacity: busy || disabled ? 0.5 : 1 }
         }, text(title, { color: c.link, fontSize: 14 }));
         const field = (label, value, onChangeText, props) => h(RN.View, { style: { marginBottom: 16 } },
             text(label, { fontWeight: '600', marginBottom: 6 }),
@@ -734,14 +791,19 @@ function createLoginDialog(React, RN) {
                                     accessibilityLabel: 'Close add account', onPress: onClose,
                                     style: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' } },
                                     text('×', { color: c.muted, fontSize: 30, lineHeight: 32 }))),
-                            text(mfa ? 'Enter your authenticator or backup code to finish signing in.'
+                            text(mfa ? sms
+                                ? verification.smsSent ? `Enter the SMS code Discord sent to ${verification.phone}.`
+                                    : 'Send a code to the phone number linked to this Discord account.'
+                                : verification?.method === 'backup' ? 'Enter an unused backup code to finish signing in.'
+                                    : 'Enter your authenticator or backup code to finish signing in.'
                                 : reauthUsername ? `Sign in to @${reauthUsername} using its email or phone number and password. Only that account will be updated.`
                                 : 'Sign in to save another account and switch between profiles.',
                                 { color: c.muted, marginTop: 4, marginBottom: 20 }),
                             error ? text(error, { color: c.danger, marginBottom: 16 },
                                 { accessibilityRole: 'alert', accessibilityLiveRegion: 'polite' }) : null,
-                            mfa ? field('Verification Code', code, onCodeChange,
+                            mfa ? field(sms ? 'SMS Code' : 'Verification Code', code, onCodeChange,
                                 { secureTextEntry: true, autoComplete: 'one-time-code',
+                                    keyboardType: sms ? 'number-pad' : 'default', textContentType: 'oneTimeCode',
                                     returnKeyType: 'done', onSubmitEditing: submit })
                                 : h(RN.View, null,
                                     field('Email or Phone Number', login, onLoginChange,
@@ -750,6 +812,15 @@ function createLoginDialog(React, RN) {
                                         { secureTextEntry: true, autoComplete: 'password',
                                             textContentType: 'password', returnKeyType: 'go', onSubmitEditing: submit }),
                                     link('Forgot your password?', onForgotPassword)),
+                            mfa && verification?.smsAvailable ? h(RN.View, null,
+                                sms || !verification.smsSent
+                                    ? link(verification.smsSent ? 'Resend SMS code' : 'Send SMS code', onSendSms, verification.resendAfter > 0)
+                                    : link('Use SMS code', onUseSms),
+                                verification.resendAfter > 0 ? text(`You can request another SMS in ${verification.resendAfter}s.`,
+                                    { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }) : null,
+                                sms && verification.alternative ? link(verification.alternative === 'backup' ? 'Use backup code' : 'Use authenticator or backup code', onUseAlternative) : null)
+                                : mfa ? text('SMS authentication is not enabled for this account. Enable it in Discord’s account settings while signed in to use SMS here.',
+                                    { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 }) : null,
                             link('Use Discord’s normal sign-in', onNativeLogin),
                             text('Passwords and verification codes are never saved.',
                                 { color: c.muted, fontSize: 12, lineHeight: 17, marginTop: 8 })),
@@ -848,6 +919,7 @@ function createPlugin(V, host = globalThis) {
     const disposers = [];
     let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
     const pendingFrames = new Map();
+    const countdownTimers = new Set();
     const byProps = resolver.byProps;
     const byStore = resolver.byStore;
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
@@ -922,6 +994,13 @@ function createPlugin(V, host = globalThis) {
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
+        const verification = instance?.verification;
+        React.useEffect(() => {
+            if (page !== 'mfa' || !verification?.resendAfter) return;
+            const timer = setTimer(() => { countdownTimers.delete(timer); if (mounted.current && active) redraw(x => x + 1); }, 1000);
+            countdownTimers.add(timer);
+            return () => { clearTimer(timer); countdownTimers.delete(timer); };
+        }, [instance, page, verification?.resendAfter]);
         React.useEffect(() => {
             // Legacy loaders initialize compatibility features when the manager is opened.
             if (!resolver.loadedOnly && active && !optionalReady) initializeOptional();
@@ -1047,7 +1126,14 @@ function createPlugin(V, host = globalThis) {
                     onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
-                login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
+                login, password, code, error, verification, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
+                onSendSms: () => { setCode(''); void run(() => instance.requestSms()); },
+                onUseSms: () => {
+                    setCode(''); void run(() => instance.useVerificationMethod('sms'));
+                },
+                onUseAlternative: () => {
+                    setCode(''); void run(() => instance.useVerificationMethod(verification?.alternative));
+                },
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa') { cancel(); return; }
                     instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');
@@ -1144,6 +1230,7 @@ function createPlugin(V, host = globalThis) {
     function onUnload() {
         active = false; epoch++; optionalReady = false; nativeReady = false;
         clearTimer(refreshTimer); clearTimer(initTimer); initTimer = undefined;
+        for (const timer of countdownTimers) clearTimer(timer); countdownTimers.clear();
         try { idleTask?.cancel?.(); } catch {} idleTask = undefined;
         for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
         controller?.stop();

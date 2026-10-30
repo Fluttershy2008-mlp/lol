@@ -60,6 +60,111 @@ test('expired MFA challenge requires another login without making a request', as
     await assert.rejects(h.controller.submitCode('123456'), isCode('mfa-expired'));
     assert.equal(h.calls.length, 1);
 });
+test('SMS is sent only on request to the ticket-linked phone, then verified at the SMS endpoint', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, totp: true, ticket: 'fixture-sms-ticket', login_instance_id: 'fixture-login-instance' }
+        : url.endsWith('/sms/send') ? { phone: '+6587654321' }
+        : url.endsWith('/sms') ? { token: tb } : b) });
+    await h.controller.login('linked@example.invalid', 'fixture-password');
+    assert.equal(h.calls.length, 1, 'opening MFA must never send an SMS automatically');
+    assert.equal(h.controller.verification.smsAvailable, true);
+    assert.equal(h.controller.verification.smsSent, false);
+    const state = await h.controller.requestSms();
+    assert.equal(h.calls[1][0], 'https://discord.com/api/v9/auth/mfa/sms/send');
+    assert.deepEqual(JSON.parse(h.calls[1][1].body), { ticket: 'fixture-sms-ticket' });
+    assert.equal(h.calls[1][1].headers.Authorization, undefined);
+    assert.equal(state.method, 'sms'); assert.equal(state.phone, '•••• 4321');
+    assert.ok(!JSON.stringify(state).includes('fixture-sms-ticket'));
+    assert.deepEqual(h.storage.accounts, {});
+    assert.equal((await h.controller.submitCode('00 1234')).kind, 'saved');
+    assert.equal(h.calls[2][0], 'https://discord.com/api/v9/auth/mfa/sms');
+    assert.deepEqual(JSON.parse(h.calls[2][1].body), { ticket: 'fixture-sms-ticket', code: '001234', login_instance_id: 'fixture-login-instance' });
+    assert.equal(h.storage.accounts[b.id].token, tb);
+    assert.equal(h.controller.verification, null);
+    for (const secret of ['fixture-sms-ticket', 'fixture-login-instance', '+6587654321', '001234', '4321'])
+        assert.ok(!JSON.stringify(h.storage).includes(secret), 'MFA data must remain ephemeral');
+});
+test('SMS-only MFA is supported, but a code cannot be verified before requesting the SMS', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, totp: false, ticket: 'fixture-sms-only-ticket' }
+        : url.endsWith('/sms/send') ? { phone: '+*******4321' }
+        : url.endsWith('/sms') ? { token: tb } : b) });
+    assert.deepEqual(await h.controller.login('x', 'y'), { kind: 'mfa' });
+    assert.equal(h.controller.verification.method, 'sms');
+    await assert.rejects(h.controller.submitCode('001234'), isCode('sms-not-sent'));
+    assert.equal(h.calls.length, 1);
+    await h.controller.requestSms();
+    assert.equal((await h.controller.submitCode('001234')).kind, 'saved');
+});
+test('SMS availability comes from Discord and an unavailable method makes no send request', async () => {
+    const h = harness({ fetcher: async () => response({ mfa: true, sms: false, totp: true, ticket: 'fixture-no-sms-ticket' }) });
+    await h.controller.login('x', 'y');
+    await assert.rejects(h.controller.requestSms(), isCode('sms-unavailable'));
+    assert.equal(h.calls.length, 1); assert.deepEqual(h.storage.accounts, {});
+});
+test('SMS resend cooldown prevents duplicate messages and permits a deliberate later resend', async () => {
+    let clock = 1000;
+    const h = harness({ now: () => clock, fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, ticket: 'fixture-resend-ticket' } : { phone: '+*******4321' }) });
+    await h.controller.login('x', 'y'); await h.controller.requestSms();
+    await assert.rejects(h.controller.requestSms(), isCode('sms-cooldown'));
+    assert.equal(h.calls.length, 2); assert.equal(h.controller.verification.resendAfter, 30);
+    h.controller.useVerificationMethod('totp'); h.controller.useVerificationMethod('sms');
+    assert.equal(h.calls.length, 2, 'changing methods must not send another SMS');
+    clock += 30001; await h.controller.requestSms();
+    assert.equal(h.calls.length, 3);
+});
+test('SMS rate limits expose a cooldown, preserve the challenge, and do not automatically retry', async () => {
+    let clock = 1000, sends = 0;
+    const h = harness({ now: () => clock, fetcher: async url => url.endsWith('/auth/login')
+        ? response({ mfa: true, sms: true, ticket: 'fixture-rate-limit-ticket' })
+        : ++sends === 1 ? response({ retry_after: 45 }, 429) : response({ phone: '+*******4321' }) });
+    await h.controller.login('x', 'y');
+    await assert.rejects(h.controller.requestSms(), isCode('rate-limit'));
+    assert.equal(h.controller.verification.smsSent, false);
+    assert.equal(h.controller.verification.resendAfter, 45);
+    await assert.rejects(h.controller.requestSms(), isCode('sms-cooldown'));
+    assert.equal(sends, 1);
+    clock += 45001; await h.controller.requestSms(); assert.equal(sends, 2);
+});
+test('cancelled or expired SMS challenges cannot send, save an account, or restore stale UI state', async () => {
+    let clock = 0, finish;
+    const h = harness({ now: () => clock, fetcher: async url => url.endsWith('/auth/login')
+        ? response({ mfa: true, sms: true, ticket: 'fixture-cancel-sms-ticket' })
+        : new Promise(resolve => { finish = resolve; }) });
+    await h.controller.login('x', 'y');
+    const pending = h.controller.requestSms(); await Promise.resolve(); h.controller.cancelLogin();
+    finish(response({ phone: '+*******4321' }));
+    await assert.rejects(pending, isCode('cancelled'));
+    assert.equal(h.controller.verification, null); assert.deepEqual(h.storage.accounts, {});
+    await h.controller.login('x', 'y'); clock += 300001;
+    await assert.rejects(h.controller.requestSms(), isCode('mfa-expired'));
+    assert.equal(h.calls.length, 3);
+});
+test('rejected SMS codes do not save an account and can be corrected without another SMS', async () => {
+    let codes = 0;
+    const h = harness({ fetcher: async url => url.endsWith('/auth/login')
+        ? response({ mfa: true, sms: true, ticket: 'fixture-rejected-sms-ticket' })
+        : url.endsWith('/sms/send') ? response({ phone: '+*******4321' })
+        : url.endsWith('/sms') ? ++codes === 1 ? response({ code: 60008 }, 400) : response({ token: tb }) : response(b) });
+    await h.controller.login('x', 'y'); await h.controller.requestSms();
+    await assert.rejects(h.controller.submitCode('654321'), isCode('sms-code'));
+    assert.deepEqual(h.storage.accounts, {});
+    assert.equal((await h.controller.submitCode('001234')).kind, 'saved');
+    assert.equal(h.calls.filter(([url]) => url.endsWith('/sms/send')).length, 1);
+});
+test('SMS send without confirmation cannot claim delivery, and backup-only MFA uses its method', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, sms: true, ticket: 'fixture-unconfirmed-sms-ticket' } : {}) });
+    await h.controller.login('x', 'y'); await assert.rejects(h.controller.requestSms(), isCode('sms-send'));
+    assert.equal(h.controller.verification.smsSent, false);
+    const backup = harness({ fetcher: async url => response(url.endsWith('/auth/login')
+        ? { mfa: true, totp: false, backup: true, sms: false, ticket: 'fixture-backup-only-ticket' }
+        : url.endsWith('/backup') ? { token: tb } : b) });
+    await backup.controller.login('x', 'y'); await backup.controller.submitCode('ab-cd1234');
+    assert.ok(backup.calls[1][0].endsWith('/auth/mfa/backup'));
+    assert.equal(backup.storage.accounts[b.id].token, tb);
+});
 test('CAPTCHA and unsupported MFA explain normal sign-in and do not retry', async () => {
     for (const data of [{ captcha_key: ['required'], captcha_sitekey: 'key' }, { mfa: true, totp: false, ticket: 'ticket', webauthn: true }]) {
         const h = harness({ fetcher: async () => response(data, data.mfa ? 200 : 400) });
@@ -201,6 +306,9 @@ test('401 errors distinguish password, MFA and saved session checks', async () =
     for (const [path, expected] of [
         ['/auth/login', 'credentials'],
         ['/auth/mfa/totp', 'mfa-code'],
+        ['/auth/mfa/backup', 'mfa-code'],
+        ['/auth/mfa/sms', 'sms-code'],
+        ['/auth/mfa/sms/send', 'mfa-expired'],
         ['/users/@me', 'expired'],
     ]) {
         const client = createClient({ fetcher: async () => response({}, 401) });

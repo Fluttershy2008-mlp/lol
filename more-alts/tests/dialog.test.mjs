@@ -94,3 +94,56 @@ test('password reset opens only Discord’s official login page on the user’s 
     assert.deepEqual(h.opened, ['https://discord.com/login']);
 });
 
+test('MFA can request an SMS, display only its masked destination, and save after SMS verification', async t => {
+    const requests = [];
+    const h = harness(async (url, init) => {
+        requests.push([url, init]);
+        return response(url.endsWith('/auth/login') ? { mfa: true, sms: true, ticket: 'fixture-dialog-sms-ticket' }
+            : url.endsWith('/sms/send') ? { phone: '+6587654321' }
+            : url.endsWith('/sms') ? { token } : user);
+    }); t.after(h.close);
+    h.press('Add another account'); h.type('Email or Phone Number', '+6599990000'); h.type('Password', 'fixture-password');
+    h.press('Continue'); await flush();
+    assert.equal(requests.length, 1);
+    assert.ok(h.find('Send SMS code'));
+    h.press('Send SMS code'); await flush();
+    assert.ok(h.find('SMS Code', 'TextInput'));
+    assert.equal(h.find('SMS Code', 'TextInput').props.keyboardType, 'number-pad');
+    assert.equal(h.find('Resend SMS code').props.disabled, true);
+    assert.match(JSON.stringify(h.modal()), /•••• 4321/);
+    assert.doesNotMatch(JSON.stringify(h.modal()), /6587654321/);
+    h.press('Use authenticator or backup code'); await flush();
+    assert.ok(h.find('Verification Code', 'TextInput'));
+    h.press('Use SMS code'); await flush();
+    assert.equal(requests.length, 2, 'method changes do not resend an SMS');
+    h.type('SMS Code', '001234'); h.press('Verify'); await flush();
+    assert.equal(h.modal(), undefined);
+    assert.equal(h.V.plugin.storage.accounts[user.id].token, token);
+    assert.ok(requests[2][0].endsWith('/auth/mfa/sms'));
+    assert.doesNotMatch(JSON.stringify(h.V.plugin.storage), /fixture-dialog-sms-ticket|001234|6587654321/);
+});
+
+test('MFA explains unavailable SMS and never sends a request for an unenrolled account', async t => {
+    let requests = 0;
+    const h = harness(async () => { requests++; return response({ mfa: true, sms: false, ticket: 'fixture-dialog-no-sms' }); });
+    t.after(h.close);
+    h.press('Add another account'); h.type('Email or Phone Number', 'fixture@example.invalid'); h.type('Password', 'fixture-password');
+    h.press('Continue'); await flush();
+    assert.equal(h.find('Send SMS code'), undefined);
+    assert.match(JSON.stringify(h.modal()), /SMS authentication is not enabled/);
+    assert.ok(h.find('Use Discord’s normal sign-in'));
+    assert.equal(requests, 1);
+});
+
+test('closing during SMS delivery discards the challenge and ignores a late send response', async t => {
+    let finish;
+    const h = harness(async url => url.endsWith('/auth/login')
+        ? response({ mfa: true, sms: true, ticket: 'fixture-pending-dialog-sms' })
+        : new Promise(resolve => { finish = resolve; })); t.after(h.close);
+    h.press('Add another account'); h.type('Email or Phone Number', 'fixture@example.invalid'); h.type('Password', 'fixture-password');
+    h.press('Continue'); await flush(); h.press('Send SMS code'); await Promise.resolve();
+    h.modal().props.onRequestClose(); finish(response({ phone: '+*******4321' })); await flush();
+    assert.equal(h.modal(), undefined); assert.deepEqual(h.V.plugin.storage.accounts, {});
+    h.press('Add another account'); assert.equal(h.find('SMS Code'), undefined);
+    assert.equal(h.find('Email or Phone Number', 'TextInput').props.value, '');
+});

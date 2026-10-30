@@ -6,18 +6,21 @@ export function createLoginDialog(React, RN) {
     const h = React.createElement;
     return function LoginDialog({ visible, mfa = false, light = false, busy = false, reauthUsername,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
+        verification, onSendSms, onUseSms, onUseAlternative,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
         const c = light
             ? { card: '#ffffff', field: '#f2f3f5', border: '#d3d5da', text: '#1e1f22', muted: '#5c5e66', link: '#4752c4', danger: '#c32943', footer: '#f2f3f5' }
             : { card: '#242429', field: '#1f1f24', border: '#3a3a42', text: '#f2f3f5', muted: '#b5b5bd', link: '#8991ff', danger: '#ffb0b9', footer: '#202025' };
-        const ready = !busy && (mfa ? !!code.trim() : !!login.trim() && !!password.length);
+        const sms = mfa && verification?.method === 'sms';
+        const ready = !busy && (mfa ? !!code.trim() && (!sms || verification.smsSent) : !!login.trim() && !!password.length);
         const submit = () => { if (ready) onSubmit(); };
         const text = (value, style = {}, extra = {}) => h(RN.Text,
             { style: { color: c.text, fontSize: 15, lineHeight: 21, ...style }, ...extra }, value);
-        const link = (title, action) => h(RN.TouchableOpacity, {
+        const link = (title, action, disabled = false) => h(RN.TouchableOpacity, {
             accessibilityRole: 'button', accessibilityLabel: title, onPress: action,
-            disabled: busy, style: { minHeight: 44, justifyContent: 'center', opacity: busy ? 0.5 : 1 }
+            disabled: busy || disabled, accessibilityState: { disabled: busy || disabled },
+            style: { minHeight: 44, justifyContent: 'center', opacity: busy || disabled ? 0.5 : 1 }
         }, text(title, { color: c.link, fontSize: 14 }));
         const field = (label, value, onChangeText, props) => h(RN.View, { style: { marginBottom: 16 } },
             text(label, { fontWeight: '600', marginBottom: 6 }),
@@ -45,14 +48,19 @@ export function createLoginDialog(React, RN) {
                                     accessibilityLabel: 'Close add account', onPress: onClose,
                                     style: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' } },
                                     text('×', { color: c.muted, fontSize: 30, lineHeight: 32 }))),
-                            text(mfa ? 'Enter your authenticator or backup code to finish signing in.'
+                            text(mfa ? sms
+                                ? verification.smsSent ? `Enter the SMS code Discord sent to ${verification.phone}.`
+                                    : 'Send a code to the phone number linked to this Discord account.'
+                                : verification?.method === 'backup' ? 'Enter an unused backup code to finish signing in.'
+                                    : 'Enter your authenticator or backup code to finish signing in.'
                                 : reauthUsername ? `Sign in to @${reauthUsername} using its email or phone number and password. Only that account will be updated.`
                                 : 'Sign in to save another account and switch between profiles.',
                                 { color: c.muted, marginTop: 4, marginBottom: 20 }),
                             error ? text(error, { color: c.danger, marginBottom: 16 },
                                 { accessibilityRole: 'alert', accessibilityLiveRegion: 'polite' }) : null,
-                            mfa ? field('Verification Code', code, onCodeChange,
+                            mfa ? field(sms ? 'SMS Code' : 'Verification Code', code, onCodeChange,
                                 { secureTextEntry: true, autoComplete: 'one-time-code',
+                                    keyboardType: sms ? 'number-pad' : 'default', textContentType: 'oneTimeCode',
                                     returnKeyType: 'done', onSubmitEditing: submit })
                                 : h(RN.View, null,
                                     field('Email or Phone Number', login, onLoginChange,
@@ -61,6 +69,15 @@ export function createLoginDialog(React, RN) {
                                         { secureTextEntry: true, autoComplete: 'password',
                                             textContentType: 'password', returnKeyType: 'go', onSubmitEditing: submit }),
                                     link('Forgot your password?', onForgotPassword)),
+                            mfa && verification?.smsAvailable ? h(RN.View, null,
+                                sms || !verification.smsSent
+                                    ? link(verification.smsSent ? 'Resend SMS code' : 'Send SMS code', onSendSms, verification.resendAfter > 0)
+                                    : link('Use SMS code', onUseSms),
+                                verification.resendAfter > 0 ? text(`You can request another SMS in ${verification.resendAfter}s.`,
+                                    { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 }) : null,
+                                sms && verification.alternative ? link(verification.alternative === 'backup' ? 'Use backup code' : 'Use authenticator or backup code', onUseAlternative) : null)
+                                : mfa ? text('SMS authentication is not enabled for this account. Enable it in Discord’s account settings while signed in to use SMS here.',
+                                    { color: c.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 }) : null,
                             link('Use Discord’s normal sign-in', onNativeLogin),
                             text('Passwords and verification codes are never saved.',
                                 { color: c.muted, fontSize: 12, lineHeight: 17, marginTop: 8 })),
