@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { createWorld, React, Renderer } = require('./next-harness.cjs');
 const { installSettingsSection } = require('../../valenced/tests/settings-fixture.cjs');
 
@@ -30,8 +31,8 @@ function scenario(t, options = {}) {
         assert.deepEqual(section.section.settings, section.core);
         assert.deepEqual(w.errors, []);
     });
-    w.openManager = async () => {
-        const item = await w.start('more-alts', options.initial ?? {});
+    w.openManager = async (initial = options.initial ?? {}) => {
+        const item = await w.start('more-alts', initial);
         const Page = isValenced
             ? w.registeredScreens.get('dev.fluttershy2008.more-alts.valenced-settings').screen.getComponent()
             : item.options.SettingsComponent;
@@ -134,4 +135,95 @@ test('signing into another account does not claim to renew the selected expired 
     assert.equal(item.api.jsonStorage.cache.accounts[otherId].token, newToken);
     assert.ok(getButton(ui, 'Re-sign in'));
     assert.match(JSON.stringify(ui.toJSON()), /still needs to be signed in again/);
+});
+
+test('Save current account waits for file readback, saves fresh authentication details, and survives restart', async t => {
+    const token = 'fixture-fresh-authentication-store-session';
+    const previousToken = 'fixture-old-saved-authentication-session';
+    const otherId = '100000000000000099';
+    const otherToken = 'fixture-preserved-other-account-session';
+    const w = scenario(t, { fetch: async (_url, init) => {
+        if (init.headers.Authorization === otherToken)
+            return new Response(JSON.stringify(w.users[otherId]), { status: 200 });
+        assert.equal(init.headers.Authorization, token, 'use AuthenticationStore rather than an unrelated getToken export');
+        return new Response(JSON.stringify({ ...w.users[id], global_name: 'Fresh Profile', avatar: 'freshavatar' }), { status: 200 });
+    } });
+    const id = w.accountId();
+    w.users[otherId] = { id: otherId, username: 'other-account' };
+    w.stores.AuthenticationStore.getToken = () => token;
+    w.modules.unshift({ getToken: () => 'fixture-stale-unrelated-token-export' });
+    const { ui, item } = await w.openManager({ accounts: {
+        [id]: { ...w.users[id], token: previousToken },
+        [otherId]: { ...w.users[otherId], token: otherToken },
+    }, accountOrder: [id, otherId] });
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'more-alts-save-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const file = path.join(directory, 'storage.json');
+    fs.writeFileSync(file, JSON.stringify(item.api.jsonStorage.cache));
+    let releaseRead, startedRead;
+    const reading = new Promise(resolve => { startedRead = resolve; });
+    item.api.jsonStorage.set = async function(value, replace) {
+        assert.equal(replace, true); this.cache = structuredClone(value);
+        await fs.promises.writeFile(file, JSON.stringify(value));
+    };
+    item.api.jsonStorage.get = async function() {
+        startedRead(); await new Promise(resolve => { releaseRead = resolve; });
+        return this.cache = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+    };
+    let pending;
+    await act(async () => { pending = getButton(ui, 'Save current account').props.onPress(); await reading; });
+    assert.equal(getButton(ui, 'Save current account').props.disabled, true);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    await act(async () => { releaseRead(); await pending; });
+    assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Updated test-owner/);
+    assert.match(JSON.stringify(ui.toJSON()), /Last saved:/);
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(saved.accounts[id].token, token);
+    assert.equal(saved.accounts[id].displayName, 'Fresh Profile');
+    assert.equal(saved.accounts[id].avatar, 'freshavatar');
+    assert.equal(saved.accounts[otherId].token, otherToken);
+    assert.deepEqual(saved.accountOrder, [id, otherId]);
+    await act(() => w.stop(item));
+    const restarted = await w.openManager(JSON.parse(fs.readFileSync(file, 'utf8')));
+    assert.equal(restarted.item.api.jsonStorage.cache.accounts[id].token, token);
+    assert.equal(restarted.item.api.jsonStorage.cache.accounts[id].updatedAt, saved.accounts[id].updatedAt);
+    assert.match(JSON.stringify(restarted.ui.toJSON()), /Fresh Profile/);
+    restarted.item.api.jsonStorage.set = async function(value) {
+        this.cache = structuredClone(value); await fs.promises.writeFile(file, JSON.stringify(value));
+    };
+    restarted.item.api.jsonStorage.get = async function() {
+        return this.cache = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+    };
+    w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = nextToken => {
+        w.stores.AuthenticationStore.getToken = () => nextToken;
+        w.setAccount(nextToken === token ? id : otherId);
+    };
+    await act(() => getButton(restarted.ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), otherId);
+    await act(() => getButton(restarted.ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), id, 'the session saved before restart remains usable for switching back');
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).accounts[id].token, token);
+});
+
+test('a silently discarded native write shows a save failure, retains accounts, and permits retry', async t => {
+    const w = scenario(t, { fetch: async () => new Response(JSON.stringify(w.users[w.accountId()]), { status: 200 }) });
+    const id = w.accountId();
+    const { ui, item } = await w.openManager({ accounts: { [id]: { ...w.users[id], token: 'fixture-old-preserved-session-value' } }, accountOrder: [id] });
+    let disk = structuredClone(item.api.jsonStorage.cache), discard = true;
+    item.api.jsonStorage.set = async function(value) {
+        this.cache = structuredClone(value); if (!discard) disk = structuredClone(value);
+    };
+    item.api.jsonStorage.get = async function() { return this.cache = structuredClone(disk); };
+    await act(() => getButton(ui, 'Save current account').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /Could not confirm the account was saved/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    assert.equal(disk.accounts[id].token, 'fixture-old-preserved-session-value');
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, 'fixture-old-preserved-session-value');
+    assert.equal(getButton(ui, 'Save current account').props.disabled, false);
+    discard = false;
+    await act(() => getButton(ui, 'Save current account').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    assert.equal(disk.accounts[id].token, 'fake-test-session-token-only');
+    assert.deepEqual(Object.keys(disk.accounts), [id]);
 });

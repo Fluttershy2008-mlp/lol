@@ -19,7 +19,8 @@ export function createPlugin(V, host = globalThis) {
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
     const log = text => { try { V.logger?.warn?.(`[More Alts] ${text}`); } catch {} };
     function getSession() {
-        try { return { user: byStore('UserStore')?.getCurrentUser?.(), token: byProps('getToken')?.getToken?.() }; }
+        try { return { user: byStore('UserStore')?.getCurrentUser?.(),
+            token: byStore('AuthenticationStore')?.getToken?.() ?? byProps('getToken')?.getToken?.() }; }
         catch { return {}; }
     }
     function getSwitcher() {
@@ -146,11 +147,13 @@ export function createPlugin(V, host = globalThis) {
                 const account = instance.accounts.find(item => item.id === target);
                 setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
             } else {
-                setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+                setNotice(`Saved @${result.user.username} successfully.`);
             }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            clearAuth(); setReauthId(null); setPage('accounts');
+            if (expiredAccountId === result.user.id) setExpiredAccountId(null);
+            setNotice(`Saved @${result.user.username} successfully.`);
         });
         function beginReauth(account) {
             clearAuth(); setError(''); setNotice('');
@@ -182,6 +185,7 @@ export function createPlugin(V, host = globalThis) {
                 account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
+            Number.isFinite(account.updatedAt) ? text(`Last saved: ${new Date(account.updatedAt).toLocaleString()}`, { color: colors.muted, fontSize: 12 }) : null,
             currentId !== account.id ? button('Switch account', () =>
                 run(() => instance.switchTo(account.id), result => {
                     setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
@@ -268,7 +272,8 @@ export function createPlugin(V, host = globalThis) {
     }
     function onLoad() {
         if (active) return;
-        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
+        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher,
+            persistStorage: typeof V.plugin.persistStorage === 'function' ? (value, isCurrent) => V.plugin.persistStorage(value, isCurrent) : undefined });
         active = true; optionalReady = false;
         const generation = ++epoch;
         // No synchronous Discord module searches, API calls or native patches.

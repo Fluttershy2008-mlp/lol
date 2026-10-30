@@ -7,6 +7,7 @@ on:
       - 'more-alts/tests/**'
       - 'more-alts/manifest.base.json'
       - 'more-alts/build.mjs'
+      - 'more-alts/native-storage.cjs'
       - 'revenge-next/repo.config.json'
       - 'revenge-next/build.py'
       - 'valenced/repo.config.json'

@@ -208,7 +208,8 @@ function normalizeStorage(storage) {
     const accounts = {};
     for (const account of Object.values(storage.accounts && typeof storage.accounts === 'object' ? storage.accounts : {})) {
         if (!validId(account?.id) || !validToken(account?.token) || typeof account.username !== 'string') continue;
-        accounts[account.id] = cleanAccount(account, account.token, account);
+        accounts[account.id] = { ...cleanAccount(account, account.token, account),
+            updatedAt: Number.isFinite(account.updatedAt) ? account.updatedAt : account.addedAt };
     }
     const order = Array.isArray(storage.accountOrder) ? storage.accountOrder : [];
     storage.accounts = accounts;
@@ -304,7 +305,7 @@ function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort = glob
     }
     return { request, cancel, stop() { stopped = true; cancel(); } };
 }
-function createController({ storage, client, getSession, getSwitcher, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
+function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
     let stopped = false, busy = false, generation = 0, challenge, refreshKey;
     const listeners = new Set(), delays = new Set();
@@ -323,6 +324,31 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
         if (!validId(user?.id) || typeof user.username !== 'string') fail('invalid-user', 'Could not verify this account with Discord.');
         return user;
     }
+    async function saveVerifiedAccount(user, token, epoch) {
+        assertActive(epoch);
+        // Stage a complete record, including the session, before changing the
+        // visible list. Native hosts write and read this snapshot back from disk.
+        const next = { ...storage, accounts: { ...storage.accounts }, accountOrder: [...storage.accountOrder] };
+        const result = saveAccount(next, user, token);
+        let committed = next;
+        if (typeof persistStorage === 'function') {
+            try {
+                const saved = await persistStorage(next, () => !stopped && epoch === generation);
+                if (saved !== undefined) {
+                    if (JSON.stringify(saved) !== JSON.stringify(next)) throw new Error('Storage mismatch.');
+                    committed = saved;
+                }
+            }
+            catch {
+                assertActive(epoch);
+                fail('save-failed', 'Could not confirm the account was saved on this device. Your previous saved accounts are unchanged. Try Save current account again.');
+            }
+        }
+        assertActive(epoch);
+        storage.accounts = committed.accounts;
+        storage.accountOrder = committed.accountOrder;
+        return result;
+    }
     async function saveSession(epoch, session = getSession()) {
         if (!session?.user || !validToken(session.token)) fail('no-session', 'Discord has not finished signing in. Try again after your chats load.');
         let user;
@@ -333,14 +359,14 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
             throw error;
         }
         if (user.id !== session.user.id || !sameSession(session, getSession())) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
-        const result = saveAccount(storage, user, session.token);
+        const result = await saveVerifiedAccount(user, session.token, epoch);
         refreshKey = `${user.id}:${session.token}`; notify(); return result;
     }
     async function completeLogin(data, epoch) {
         assertActive(epoch);
         if (validToken(data.token)) {
             const user = await inspectToken(data.token, epoch);
-            const result = saveAccount(storage, user, data.token); challenge = undefined; notify();
+            const result = await saveVerifiedAccount(user, data.token, epoch); challenge = undefined; notify();
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
@@ -369,7 +395,7 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
                 if (!validId(expectedUserId)) fail('mismatch', 'The QR login did not identify the approved account.');
                 const user = await inspectToken(token, epoch);
                 if (user.id !== expectedUserId) fail('mismatch', 'The approved QR account does not match the returned session. Please start again.');
-                const result = saveAccount(storage, user, token); notify();
+                const result = await saveVerifiedAccount(user, token, epoch); notify();
                 return { kind: 'saved', ...result };
             });
         },
@@ -412,7 +438,7 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
                     assertActive(epoch);
                     const session = getSession();
                     if (session?.user?.id === id && session.token === savedToken) {
-                        saveAccount(storage, target, savedToken); refreshKey = `${id}:${savedToken}`; notify();
+                        await saveVerifiedAccount(target, savedToken, epoch); refreshKey = `${id}:${savedToken}`; notify();
                         return { user: target };
                     }
                     if (rejected) fail('switch-failed', 'Discord could not switch accounts. Your previous account is saved so you can select it again.');
@@ -758,7 +784,8 @@ function createPlugin(V, host = globalThis) {
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
     const log = text => { try { V.logger?.warn?.(`[More Alts] ${text}`); } catch {} };
     function getSession() {
-        try { return { user: byStore('UserStore')?.getCurrentUser?.(), token: byProps('getToken')?.getToken?.() }; }
+        try { return { user: byStore('UserStore')?.getCurrentUser?.(),
+            token: byStore('AuthenticationStore')?.getToken?.() ?? byProps('getToken')?.getToken?.() }; }
         catch { return {}; }
     }
     function getSwitcher() {
@@ -885,11 +912,13 @@ function createPlugin(V, host = globalThis) {
                 const account = instance.accounts.find(item => item.id === target);
                 setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
             } else {
-                setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+                setNotice(`Saved @${result.user.username} successfully.`);
             }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            clearAuth(); setReauthId(null); setPage('accounts');
+            if (expiredAccountId === result.user.id) setExpiredAccountId(null);
+            setNotice(`Saved @${result.user.username} successfully.`);
         });
         function beginReauth(account) {
             clearAuth(); setError(''); setNotice('');
@@ -921,6 +950,7 @@ function createPlugin(V, host = globalThis) {
                 account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
+            Number.isFinite(account.updatedAt) ? text(`Last saved: ${new Date(account.updatedAt).toLocaleString()}`, { color: colors.muted, fontSize: 12 }) : null,
             currentId !== account.id ? button('Switch account', () =>
                 run(() => instance.switchTo(account.id), result => {
                     setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
@@ -1007,7 +1037,8 @@ function createPlugin(V, host = globalThis) {
     }
     function onLoad() {
         if (active) return;
-        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
+        controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher,
+            persistStorage: typeof V.plugin.persistStorage === 'function' ? (value, isCurrent) => V.plugin.persistStorage(value, isCurrent) : undefined });
         active = true; optionalReady = false;
         const generation = ++epoch;
         // No synchronous Discord module searches, API calls or native patches.

@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.13
+# More Alts! for Revenge — 3.1.14
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,12 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable14: verified account saving (3.1.14 / Valenced stable14 / Next stable14)
+
+**Save current account** reads the active AuthenticationStore session, verifies its account identity with Discord, and saves the full session and profile. Valenced and Next wait for the storage write and read the file back before showing **Saved @username successfully.** This catches native storage failures even when the host reports a successful write. A failed save leaves the existing in-memory account records unchanged, reports the failure, and prevents switching away before the outgoing account is saved. Password and MFA sign-in use the same persistence check.
+
+Saving an existing account replaces its old session without creating a duplicate or changing other saved accounts. Account cards show **Last saved**, and this timestamp survives restarting. Refresh the repository, update More Alts! to **1.0.0-stable14**, and fully restart Discord. Sign into each account and press **Save current account** once. Keep plugin data. QR login remains removed. Tests use synthetic sessions and simulated native storage; a physical-device sign-in and switch still need to be checked on the user's build.
 
 ## Stable13: saved-session recovery (3.1.13 / Valenced stable13 / Next stable13)
 

@@ -9,7 +9,8 @@ export function normalizeStorage(storage) {
     const accounts = {};
     for (const account of Object.values(storage.accounts && typeof storage.accounts === 'object' ? storage.accounts : {})) {
         if (!validId(account?.id) || !validToken(account?.token) || typeof account.username !== 'string') continue;
-        accounts[account.id] = cleanAccount(account, account.token, account);
+        accounts[account.id] = { ...cleanAccount(account, account.token, account),
+            updatedAt: Number.isFinite(account.updatedAt) ? account.updatedAt : account.addedAt };
     }
     const order = Array.isArray(storage.accountOrder) ? storage.accountOrder : [];
     storage.accounts = accounts;
@@ -105,7 +106,7 @@ export function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort
     }
     return { request, cancel, stop() { stopped = true; cancel(); } };
 }
-export function createController({ storage, client, getSession, getSwitcher, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
+export function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
     let stopped = false, busy = false, generation = 0, challenge, refreshKey;
     const listeners = new Set(), delays = new Set();
@@ -124,6 +125,31 @@ export function createController({ storage, client, getSession, getSwitcher, now
         if (!validId(user?.id) || typeof user.username !== 'string') fail('invalid-user', 'Could not verify this account with Discord.');
         return user;
     }
+    async function saveVerifiedAccount(user, token, epoch) {
+        assertActive(epoch);
+        // Stage a complete record, including the session, before changing the
+        // visible list. Native hosts write and read this snapshot back from disk.
+        const next = { ...storage, accounts: { ...storage.accounts }, accountOrder: [...storage.accountOrder] };
+        const result = saveAccount(next, user, token);
+        let committed = next;
+        if (typeof persistStorage === 'function') {
+            try {
+                const saved = await persistStorage(next, () => !stopped && epoch === generation);
+                if (saved !== undefined) {
+                    if (JSON.stringify(saved) !== JSON.stringify(next)) throw new Error('Storage mismatch.');
+                    committed = saved;
+                }
+            }
+            catch {
+                assertActive(epoch);
+                fail('save-failed', 'Could not confirm the account was saved on this device. Your previous saved accounts are unchanged. Try Save current account again.');
+            }
+        }
+        assertActive(epoch);
+        storage.accounts = committed.accounts;
+        storage.accountOrder = committed.accountOrder;
+        return result;
+    }
     async function saveSession(epoch, session = getSession()) {
         if (!session?.user || !validToken(session.token)) fail('no-session', 'Discord has not finished signing in. Try again after your chats load.');
         let user;
@@ -134,14 +160,14 @@ export function createController({ storage, client, getSession, getSwitcher, now
             throw error;
         }
         if (user.id !== session.user.id || !sameSession(session, getSession())) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
-        const result = saveAccount(storage, user, session.token);
+        const result = await saveVerifiedAccount(user, session.token, epoch);
         refreshKey = `${user.id}:${session.token}`; notify(); return result;
     }
     async function completeLogin(data, epoch) {
         assertActive(epoch);
         if (validToken(data.token)) {
             const user = await inspectToken(data.token, epoch);
-            const result = saveAccount(storage, user, data.token); challenge = undefined; notify();
+            const result = await saveVerifiedAccount(user, data.token, epoch); challenge = undefined; notify();
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
@@ -170,7 +196,7 @@ export function createController({ storage, client, getSession, getSwitcher, now
                 if (!validId(expectedUserId)) fail('mismatch', 'The QR login did not identify the approved account.');
                 const user = await inspectToken(token, epoch);
                 if (user.id !== expectedUserId) fail('mismatch', 'The approved QR account does not match the returned session. Please start again.');
-                const result = saveAccount(storage, user, token); notify();
+                const result = await saveVerifiedAccount(user, token, epoch); notify();
                 return { kind: 'saved', ...result };
             });
         },
@@ -213,7 +239,7 @@ export function createController({ storage, client, getSession, getSwitcher, now
                     assertActive(epoch);
                     const session = getSession();
                     if (session?.user?.id === id && session.token === savedToken) {
-                        saveAccount(storage, target, savedToken); refreshKey = `${id}:${savedToken}`; notify();
+                        await saveVerifiedAccount(target, savedToken, epoch); refreshKey = `${id}:${savedToken}`; notify();
                         return { user: target };
                     }
                     if (rejected) fail('switch-failed', 'Discord could not switch accounts. Your previous account is saved so you can select it again.');

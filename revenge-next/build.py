@@ -164,8 +164,16 @@ def build(check=False):
                 if transformed.count(old) != 1:
                     raise RuntimeError("AutoText React key bridge needs updating")
                 transformed = transformed.replace(old, new)
+        plugin_runtime = runtime
+        if directory.name == "more-alts":
+            marker = "plugin: { id:"
+            if plugin_runtime.count(marker) != 1:
+                raise RuntimeError("More Alts storage adapter needs updating")
+            storage_adapter = (directory / "native-storage.cjs").read_text().rstrip()
+            plugin_runtime = plugin_runtime.replace(marker,
+                "plugin: { persistStorage: " + storage_adapter + ", id:")
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
-        script = "(() => {\n" + runtime + "\nreturn { default: createNextPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
+        script = "(() => {\n" + plugin_runtime + "\nreturn { default: createNextPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         files = {"manifest.json": dump(manifest), "index.js": script}
         for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
             if (directory / name).exists():

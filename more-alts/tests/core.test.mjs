@@ -12,7 +12,7 @@ function harness(options = {}) {
     let session = { user: a, token: ta }, switched = [];
     const fetcher = options.fetcher || (async (url, init) => response(init.headers.Authorization === ta ? a : b));
     const client = createClient({ fetcher: async (...args) => { calls.push(args); return fetcher(...args); }, timeoutMs: options.timeoutMs || 100, now: options.now });
-    const controller = createController({ storage, client, getSession: () => session,
+    const controller = createController({ storage, client, getSession: () => session, persistStorage: options.persistStorage,
         getSwitcher: () => options.unsupported ? undefined : token => {
             switched.push(token);
             if (options.switcher) return options.switcher(token, next => { session = next; });
@@ -123,6 +123,60 @@ test('missing current user and mismatched user/token pairs do not crash or save'
     await assert.rejects(h.controller.saveCurrent(), isCode('no-session'));
     h.setSession({ user: a, token: tb });
     await assert.rejects(h.controller.saveCurrent(), isCode('session-changed')); assert.deepEqual(h.storage.accounts, {});
+});
+test('save waits for durable storage, replaces the full session, and survives a fresh controller', async () => {
+    let release, started, disk;
+    const reachedStorage = new Promise(resolve => { started = resolve; });
+    const storage = {}; normalizeStorage(storage);
+    saveAccount(storage, a, 'fixture-outdated-current-session'); saveAccount(storage, b, tb);
+    const previous = JSON.parse(JSON.stringify(storage));
+    const freshUser = { ...a, username: 'renamed-account', global_name: 'Fresh Display', avatar: 'newavatar' };
+    const h = harness({ storage, fetcher: async () => response(freshUser), persistStorage: async value => {
+        disk = JSON.parse(JSON.stringify(value)); started(); await new Promise(resolve => { release = resolve; });
+    } });
+    const attempt = h.controller.saveCurrent(); await reachedStorage;
+    assert.equal(h.controller.busy, true);
+    assert.deepEqual(storage.accounts, previous.accounts, 'pending writes cannot appear as a completed save');
+    assert.equal(disk.accounts[a.id].token, ta);
+    assert.equal(disk.accounts[a.id].username, freshUser.username);
+    assert.equal(disk.accounts[a.id].displayName, freshUser.global_name);
+    assert.equal(disk.accounts[a.id].avatar, freshUser.avatar);
+    assert.deepEqual(disk.accounts[b.id], previous.accounts[b.id]);
+    await assert.rejects(h.controller.saveCurrent(), isCode('busy'));
+    release(); assert.equal((await attempt).updated, true);
+    const savedAt = storage.accounts[a.id].updatedAt;
+    const restart = harness({ storage: JSON.parse(JSON.stringify(disk)) });
+    assert.equal(restart.storage.accounts[a.id].token, ta);
+    assert.equal(restart.storage.accounts[a.id].updatedAt, savedAt);
+    assert.deepEqual(restart.storage.accountOrder, [a.id, b.id]);
+});
+test('failed account persistence preserves previous records and a later save can retry', async () => {
+    let failWrite = true;
+    const h = harness({ persistStorage: async () => { if (failWrite) throw new Error('private storage error with a session'); } });
+    saveAccount(h.storage, a, 'fixture-previous-good-session'); saveAccount(h.storage, b, tb);
+    const previous = JSON.parse(JSON.stringify(h.storage));
+    await assert.rejects(h.controller.saveCurrent(), error => isCode('save-failed')(error) && !error.message.includes('private'));
+    assert.deepEqual(h.storage, previous);
+    assert.equal(h.controller.busy, false);
+    failWrite = false; await h.controller.saveCurrent();
+    assert.equal(h.storage.accounts[a.id].token, ta);
+    assert.deepEqual(h.storage.accounts[b.id], previous.accounts[b.id]);
+    assert.deepEqual(h.storage.accountOrder, [a.id, b.id]);
+});
+test('switch stays on the current account when saving its outgoing session fails', async () => {
+    const h = harness({ persistStorage: async () => { throw new Error('write failed'); } });
+    saveAccount(h.storage, b, tb);
+    await assert.rejects(h.controller.switchTo(b.id), isCode('save-failed'));
+    assert.deepEqual(h.switched, []);
+    assert.equal(h.session.user.id, a.id);
+    assert.equal(h.storage.accounts[a.id], undefined);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+});
+test('password login does not report an account saved when persistence fails', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login') ? { token: tb } : b),
+        persistStorage: async () => { throw new Error('write failed'); } });
+    await assert.rejects(h.controller.login('fixture@example.invalid', 'fixture-password'), isCode('save-failed'));
+    assert.deepEqual(h.storage.accounts, {});
 });
 test('an account change during validation cannot attach the wrong token to a user', async () => {
     let resolve;
