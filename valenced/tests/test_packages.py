@@ -42,7 +42,7 @@ class ValencedPackages(unittest.TestCase):
     def test_every_unique_classic_plugin_is_included_or_replaced(self):
         config = json.loads((HERE / "repo.config.json").read_text())
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
-        ports = {str(Path(info["path"]).parent) for info in sources.values() if info["kind"] == "compatibility-preview"}
+        ports = {str(Path(info["path"]).parent) for info in sources.values() if info["kind"] in ("compatibility-preview", "compatibility-stable")}
         self.assertEqual(len(ports), 21)
         self.assertTrue({"info-commands", "auto-text", "valid-user"}.issubset(ports))
         for path in ROOT.glob("*/manifest.json"):
@@ -58,7 +58,7 @@ class ValencedPackages(unittest.TestCase):
             self.assertEqual(info["sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
             with zipfile.ZipFile(HERE / "pool" / f"{plugin_id}@{index[plugin_id]['channels']['latest']}.zip") as package:
                 for name in ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.txt", "THIRD_PARTY_NOTICES.md", "LICENSE.upstream"):
-                    if info["kind"] == "compatibility-preview" and (source.parent / name).exists():
+                    if info["kind"] in ("compatibility-preview", "compatibility-stable") and (source.parent / name).exists():
                         self.assertEqual(package.read(name), (source.parent / name).read_bytes())
                 self.assertIn("NOTICE.txt", package.namelist())
 
