@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'more-alts/src/**'
+      - 'more-alts/tests/**'
       - 'more-alts/manifest.base.json'
       - 'valenced/repo.config.json'
       - 'valenced/build.py'

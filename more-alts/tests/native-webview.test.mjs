@@ -6,9 +6,9 @@ function fixture(options = {}) {
     let probes = 0, views = 0;
     const React = { forwardRef: render => ({ $$typeof: Symbol.for('react.forward_ref'), render }) };
     const native = Object.freeze({ shouldStartLoadWithLockIdentifier() {}, isFileUploadSupported: async () => true });
-    const RN = { Platform: { OS: 'android' }, NativeModules: { [options.nativeName ?? 'RNCWebView']: native },
+    const RN = { Platform: { OS: 'android' }, NativeModules: options.noModule ? {} : { [options.nativeName ?? 'RNCWebView']: native },
         Image: { resolveAssetSource: value => value }, StyleSheet: { create: value => value },
-        UIManager: { getViewManagerConfig() { probes++; return { Commands: {} }; }, dispatchViewManagerCommand() {} },
+        UIManager: { getViewManagerConfig() { probes++; return options.missingView ? undefined : { Commands: {} }; }, hasViewManagerConfig() { return !options.missingView; }, dispatchViewManagerCommand() {} },
         findNodeHandle: () => 42, requireNativeComponent(name) {
             views++; assert.equal(name, 'RNCWebView');
             if (options.duplicate) throw new Error('Tried to register two views with the same name RNCWebView');
@@ -28,6 +28,22 @@ for (const nativeName of ['RNCWebView', 'RNCWebViewModule']) test('bundled brows
     assert.equal(f.provider.load(), view); assert.equal(f.probes(), 1); assert.equal(f.views(), 1);
     assert.equal(f.provider.reason(), undefined); assert.ok(Object.isFrozen(f.native));
     f.provider.dispose(); assert.equal(f.provider.load(), undefined);
+});
+
+test('direct native WebView can initialize when RNCWebViewModule is absent but the view exists', () => {
+    const f = fixture({ noModule: true });
+    const view = f.provider.load();
+    assert.equal(typeof view.render, 'function');
+    assert.equal(f.provider.reason(), undefined);
+    assert.equal(f.views(), 1);
+    f.provider.dispose();
+});
+
+test('native fallback declines when the WebView view itself is not registered', () => {
+    const f = fixture({ noModule: true, missingView: true });
+    assert.equal(f.provider.load(), undefined);
+    assert.equal(f.provider.reason(), 'NATIVE-VIEW');
+    assert.equal(f.views(), 0);
 });
 
 test('bundled browser reuses a view name already registered by Discord', () => {

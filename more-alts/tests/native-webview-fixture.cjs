@@ -9,12 +9,13 @@ function installNativeWebView(world, options = {}) {
     let views = 0, dependencies = 0;
     const native = Object.freeze({ isFileUploadSupported: async () => true,
         shouldStartLoadWithLockIdentifier: (...args) => nativeNavigation.push(args) });
-    RN.NativeModules = Object.freeze(options.nativeViaValencedOnly ? {} : { [options.nativeName ?? 'RNCWebView']: native });
+    RN.NativeModules = Object.freeze(options.nativeViaValencedOnly || options.nativeViewOnly ? {} : { [options.nativeName ?? 'RNCWebView']: native });
     Object.assign(RN.Image, { resolveAssetSource: value => value });
     RN.UIManager = {
+        hasViewManagerConfig(name) { return !options.missingView && name === 'RNCWebView'; },
         getViewManagerConfig(name) {
             lookups.push(name); assert.equal(name, 'RNCWebView');
-            return { Commands: options.commandNames ? {} : { injectJavaScript: 5, loadUrl: 8 } };
+            return options.missingView ? undefined : { Commands: options.commandNames ? {} : { injectJavaScript: 5, loadUrl: 8 } };
         },
         dispatchViewManagerCommand(tag, command, args) {
             assert.equal(tag, 42); commands.push({ tag, command, args });

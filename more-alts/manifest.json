@@ -1,7 +1,7 @@
 {
   "name": "More Alts!",
   "description": "Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Revenge settings.",
-  "version": "3.1.10",
+  "version": "3.1.11",
   "authors": [
     {
       "name": "Win8.1VMUser",
@@ -22,5 +22,5 @@
   "vendetta": {
     "icon": "UserIcon"
   },
-  "hash": "5b4fac604f73ffd8b82f2224a2531bcbca0b56065dbc8d185df5ec466cbf2a0c"
+  "hash": "cbd0cd1e29e3785e94603d1f3d7e336859b75c5152f5a18a40ee282e4bc41385"
 }
