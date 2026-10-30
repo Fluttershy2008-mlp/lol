@@ -165,7 +165,7 @@ export function createPlugin(V, host = globalThis) {
             if (!stillHere()) return;
             if (!WebView) {
                 const reason = [nativeWebView.reason(), resolver.webViewFailure()].filter(Boolean).join('/');
-                setError('QR login could not load Discord’s browser on this build. Update More Alts and fully restart Discord, then try again. You can still use email and password.'
+                setError('QR sign-in is unavailable: this Discord build does not expose the WebView module required for QR login. Use email/password or Discord’s normal sign-in instead.'
                     + ` (More Alts ${installedVersion}; MA-QR-${reason || 'BROWSER'})`);
                 return;
             }
@@ -210,9 +210,7 @@ export function createPlugin(V, host = globalThis) {
                         void run(() => instance.acceptQrLogin(data.token, data.userId), handleLogin);
                     }
                 }
-            }), text('Log in with QR Code', { fontSize: 21, lineHeight: 28, fontWeight: '700', textAlign: 'center', marginTop: 20, marginBottom: 8 }),
-            text('Scan this with the Discord mobile app on another signed-in device, then approve the login.', { color: colors.muted, textAlign: 'center', fontSize: 14 }),
-            text('Discord Settings → Scan QR Code', { color: colors.muted, textAlign: 'center', fontSize: 13 }),
+            }),
             h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: colors.text, textAlign: 'center', fontSize: 14, lineHeight: 21, marginBottom: 10 } }, qrStatusMessage(qrStatus)),
             text('Only approve the code you generated here.', { color: colors.muted, textAlign: 'center', fontSize: 12 })) : null;
         function remove(account) {

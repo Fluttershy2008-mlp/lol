@@ -1,0 +1,41 @@
+name: Build More Alts packages
+
+on:
+  push:
+    paths:
+      - 'more-alts/src/**'
+      - 'more-alts/manifest.base.json'
+      - 'valenced/repo.config.json'
+      - '.github/workflows/build-more-alts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Rebuild the Classic and Valenced More Alts packages
+        run: |
+          node more-alts/build.mjs
+          python3 valenced/build.py
+          python3 revenge-next/build.py
+      - name: Commit generated release files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A more-alts/index.js more-alts/manifest.json valenced/index.json valenced/sources.json valenced/pool revenge-next/index.json revenge-next/sources.json revenge-next/pool index.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Build More Alts packages from updated sources"
+            git push
+          fi
