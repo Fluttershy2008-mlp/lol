@@ -108,7 +108,7 @@ test('More Alts QR shows an inline error for translations alone and discovers a 
     const w = scenario(t); w.addModule({ WebView: { locale: 'en-US', ast: [] } });
     const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));
     assert.equal(w.browser(ui), undefined);
-    assert.match(JSON.stringify(ui.toJSON()), /could not load Discord’s browser/);
+    assert.match(JSON.stringify(ui.toJSON()), /QR sign-in is unavailable/);
     w.addWebView(); await act(button(ui, 'Log in with QR Code'));
     assert.ok(w.browser(ui), 'a failed lookup does not impose the generic five-second cooldown');
 });
@@ -371,7 +371,7 @@ test('More Alts QR presents a square code with Discord-style instructions and li
     assert.ok(style.width >= 200); assert.equal(style.width, style.height, 'QR panel is square');
     const json = JSON.stringify(ui.toJSON());
     assert.match(json, /Log in with QR Code/); assert.match(json, /Discord mobile app/); assert.match(json, /Scan QR Code/);
-    assert.equal(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Password').length, 0);
+    assert.equal(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Password').length, 1, 'web-style panel keeps the email form beside the QR code');
     const { session } = JSON.parse(event.nativeEvent.data);
     await act(() => view.props.onMessage({ nativeEvent: { ...event.nativeEvent,
         data: JSON.stringify({ provider: 'more-alts-qr', session, type: 'status', status: 'scanned' }) } }));
