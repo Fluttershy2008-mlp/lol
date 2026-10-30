@@ -1057,7 +1057,8 @@
       },
       "channels": {
         "latest": "1.0.0-stable12",
-        "beta": "1.0.0-stable12"
+        "beta": "1.0.0-beta12",
+        "stable": "1.0.0-stable12"
       },
       "name": "More Alts! (Revenge Next)",
       "description": "Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
