@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.9
+# More Alts! for Revenge — 3.1.10
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,10 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Valenced native-module lookup (3.1.10 / Valenced beta10 / Next beta11)
+
+Valenced's external plugin API is passed as a function argument, not exposed as a global. The QR loader now gets this scoped API through the Valenced compatibility adapter and can look up registered native WebView modules even when React Native's legacy NativeModules map hides them. The native module and Android view must still exist in the installed Discord build. This change cannot add missing Android code. QR login on a physical device has not been verified.
 
 ## Discord-style web login panel (3.1.9 / Valenced beta9)
 
