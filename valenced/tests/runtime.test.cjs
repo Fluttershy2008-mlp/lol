@@ -49,6 +49,12 @@ test('every package evaluates through the actual lexical Valenced loader contrac
     }
 });
 
+test('Only More Alts embeds its Valenced QR native-module bridge', () => {
+    const read = slug => fs.readFileSync(path.join(ROOT, '.build/plugins', slug, 'index.js'), 'utf8');
+    assert.match(read('more-alts'), /getQrRuntimeClient:/);
+    assert.doesNotMatch(read('info-commands'), /getQrRuntimeClient:/);
+});
+
 test('Addon List requests the Valenced native registry and recognises native themes', async t => {
     const w = scenario(t), item = await w.start('addon-list');
     w.U.modules.native.callNativeMethod = async (name, args) => {
