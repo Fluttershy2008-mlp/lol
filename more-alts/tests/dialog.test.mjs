@@ -44,6 +44,18 @@ const user = { id: '100000000000000009', username: 'fixture-user' };
 const token = 'fixture-dialog-session-not-a-real-token';
 const response = data => ({ ok: true, status: 200, json: async () => data });
 
+test('Add Account uses a Discord web-style login and requires explicit QR generation', t => {
+    const h = harness(() => { throw new Error('must not authenticate'); }); t.after(h.close);
+    h.press('Add another account');
+    assert.match(JSON.stringify(h.modal()), /Welcome back!/);
+    assert.ok(h.find('QR code not generated'));
+    assert.ok(h.find('Email or Phone Number', 'TextInput'));
+    assert.ok(h.find('Password', 'TextInput'));
+    h.press('Log in with QR Code');
+    assert.match(JSON.stringify(h.modal()), /MA-QR-/);
+    assert.ok(h.find('Email or Phone Number', 'TextInput'));
+});
+
 test('Add Account dialog submits the entered password and returns to the saved list', async t => {
     const requests = [];
     const h = harness(async (url, init) => { requests.push([url, init]); return response(url.endsWith('/auth/login') ? { token } : user); });
