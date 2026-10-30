@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-import { createColdWebViewLoader } from './webview-loader.mjs';
+import { createColdWebViewLoader, webViewRuntimeClient } from './webview-loader.mjs';
 
 // Vendetta's finders require uninitialized Metro factories while searching.
 // Optional features must never do that during Discord's startup.
-export function createModuleResolver(metro, { now = Date.now } = {}) {
+export function createModuleResolver(metro, { now = Date.now, getClient = webViewRuntimeClient } = {}) {
     const entries = new Map();
     let rejectedWebViews = new WeakSet();
-    const coldWebView = createColdWebViewLoader();
+    const coldWebView = createColdWebViewLoader(getClient);
     const modules = metro.modules;
     const loadedOnly = !!modules && typeof modules === 'object';
     function componentType(value, depth = 0) {
