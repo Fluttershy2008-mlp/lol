@@ -104,7 +104,7 @@ class PackageTests(unittest.TestCase):
             release = config.get("pluginVersions", {}).get(slug, config["portVersion"])
             plugin = index[plugin_id]
             self.assertEqual(plugin["channels"]["latest"], release, plugin_id)
-            if source["kind"] == "compatibility-stable":
+            if ports[plugin_id]["kind"] == "compatibility-stable":
                 self.assertEqual(plugin["channels"]["stable"], release, plugin_id)
                 self.assertNotEqual(plugin["channels"]["beta"], release, plugin_id)
             else:
