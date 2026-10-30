@@ -436,7 +436,11 @@ function createLegacyAdapter(api, metadata, host = globalThis) {
                 else log(...args);
             },
         },
-        host: { id: 'valenced' },
+        // The external plugin receives a scoped API, not a global "valenced".
+        // Expose the runtime lookup only for More Alts and only while loaded.
+        host: { id: 'valenced',
+            getQrRuntimeClient: metadata.id === 'dev.fluttershy2008.more-alts'
+                ? () => active ? U : undefined : undefined },
         plugin: { id: metadata.id, manifest: metadata.legacyManifest, storage, version: metadata.version },
         storage: { useProxy, awaitSyncWrapper: async value => {
             if (value === plugins || value === themes) await refreshRegistry();
