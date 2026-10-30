@@ -2,6 +2,8 @@
 
 # Fluttershy's Valenced plugins
 
+**InfoCommands 1.0.0-beta6:** addresses the frozen Discord home screen after Server Info → Owner → profile X/Android Back. Owner and friend profiles wait for the Server Info content and its hosting alert to close, rather than opening after a fixed 180 ms delay. The panel no longer uses a native slide transition on Android. Late or repeated taps, disabling the plugin, a new panel and account changes cannot reopen an old profile. Refresh this repository, update InfoCommands, then force-close and reopen Discord. Automated window/host regressions pass; this release still needs verification on the affected phone.
+
 Paste this exact URL into Valenced's **Repository URL** field:
 
 ```text
@@ -25,7 +27,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands remains at **1.0.0-beta5**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands is at **1.0.0-beta6**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -39,7 +41,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta5**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta6**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |

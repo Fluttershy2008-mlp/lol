@@ -1173,7 +1173,7 @@ var InfoCommandsBundle = (() => {
   }
 
   // info-commands/src/server-info/ui/ServerInfoModal.tsx
-  function ServerInfoModal({ guildId: guildId2, onClose, onPresented, onDismiss, onOpenProfile, onCopyServerId }) {
+  function ServerInfoModal({ guildId: guildId2, onClose, onPresented, onDismiss, onUnmount, onOpenProfile, onCopyServerId }) {
     const { React: React4, ReactNative: RN4 } = runtime.react;
     const { View, Modal, ScrollView, Image, TouchableOpacity, ActivityIndicator } = RN4;
     const { Text: Text2 } = runtime.discord.design.Design;
@@ -1181,78 +1181,83 @@ var InfoCommandsBundle = (() => {
     const height = Math.min(Math.max(220, dimensions.height * 0.86), dimensions.height - 24);
     const colors = sheetColors();
     const { guild, isLoading, ...info } = useGuildInfo(guildId2);
-    return /* @__PURE__ */ runtime.react.React.createElement(
-      Modal,
-      {
-        visible: true,
-        transparent: true,
-        animationType: "slide",
-        presentationStyle: "overFullScreen",
-        onRequestClose: onClose,
-        onShow: onPresented,
-        onDismiss
-      },
-      /* @__PURE__ */ runtime.react.React.createElement(View, { style: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" } }, /* @__PURE__ */ runtime.react.React.createElement(
-        TouchableOpacity,
+    React4.useEffect(() => onUnmount, [onUnmount]);
+    return (
+      // Android does not provide Modal.onDismiss. Avoid an unobservable native
+      // slide transition when handing this window off to Discord's profile sheet.
+      /* @__PURE__ */ runtime.react.React.createElement(
+        Modal,
         {
-          accessibilityRole: "button",
-          accessibilityLabel: "Dismiss server info",
-          activeOpacity: 1,
-          onPress: onClose,
-          style: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }
-        }
-      ), /* @__PURE__ */ runtime.react.React.createElement(
-        View,
-        {
-          testID: "info-commands-server-panel",
-          accessibilityViewIsModal: true,
-          onAccessibilityEscape: onClose,
-          onLayout: (event) => {
-            const layout = event?.nativeEvent?.layout;
-            if (layout?.width > 0 && layout?.height > 0) onPresented();
-          },
-          style: {
-            height,
-            maxHeight: "100%",
-            width: "100%",
-            maxWidth: 640,
-            alignSelf: "center",
-            backgroundColor: colors.background,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            overflow: "hidden"
-          }
+          visible: true,
+          transparent: true,
+          animationType: "none",
+          presentationStyle: "overFullScreen",
+          onRequestClose: onClose,
+          onShow: onPresented,
+          onDismiss
         },
-        /* @__PURE__ */ runtime.react.React.createElement(
-          ScrollView,
+        /* @__PURE__ */ runtime.react.React.createElement(View, { style: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" } }, /* @__PURE__ */ runtime.react.React.createElement(
+          TouchableOpacity,
           {
-            style: { flex: 1 },
-            contentContainerStyle: { paddingBottom: 28, gap: 18 },
-            nestedScrollEnabled: true,
-            keyboardShouldPersistTaps: "handled",
-            showsVerticalScrollIndicator: false
-          },
-          info.bannerUri && /* @__PURE__ */ runtime.react.React.createElement(
-            Image,
-            {
-              accessibilityLabel: "Server banner",
-              source: { uri: info.bannerUri },
-              style: { width: "100%", height: 140, resizeMode: "cover" }
-            }
-          ),
-          /* @__PURE__ */ runtime.react.React.createElement(View, { style: { paddingHorizontal: 16, paddingTop: info.bannerUri ? 0 : 8 } }, guild ? /* @__PURE__ */ runtime.react.React.createElement(ServerHeader, { name: guild.name, description: guild.description, iconUri: info.iconUri }) : /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-lg/semibold" }, "Server Info"), /* @__PURE__ */ runtime.react.React.createElement(
-            TouchableOpacity,
-            {
-              accessibilityRole: "button",
-              accessibilityLabel: "Close server info",
-              onPress: onClose,
-              style: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginTop: 4 }
+            accessibilityRole: "button",
+            accessibilityLabel: "Dismiss server info",
+            activeOpacity: 1,
+            onPress: onClose,
+            style: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }
+          }
+        ), /* @__PURE__ */ runtime.react.React.createElement(
+          View,
+          {
+            testID: "info-commands-server-panel",
+            accessibilityViewIsModal: true,
+            onAccessibilityEscape: onClose,
+            onLayout: (event) => {
+              const layout = event?.nativeEvent?.layout;
+              if (layout?.width > 0 && layout?.height > 0) onPresented();
             },
-            /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", onPress: onClose, accessibilityRole: "button" }, "Close")
-          )),
-          guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(OverviewRows, { ...info, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(ServerRows, { guildId: guildId2, ...info, onOpenProfile, onCopyServerId, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(FriendsRows, { guildId: guildId2, friends: info.friends, loading: info.friendsPending, onOpenProfile, design: panelDesign }), info.cachedOnly && /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingHorizontal: 16 } }, "Showing cached server details.")) : /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24, alignItems: "center", gap: 12 } }, isLoading && /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { size: "large", color: "#5865f2" }), /* @__PURE__ */ runtime.react.React.createElement(Text2, null, isLoading ? "Loading server info…" : info.error ?? "Server details are unavailable."))
-        )
-      ))
+            style: {
+              height,
+              maxHeight: "100%",
+              width: "100%",
+              maxWidth: 640,
+              alignSelf: "center",
+              backgroundColor: colors.background,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              overflow: "hidden"
+            }
+          },
+          /* @__PURE__ */ runtime.react.React.createElement(
+            ScrollView,
+            {
+              style: { flex: 1 },
+              contentContainerStyle: { paddingBottom: 28, gap: 18 },
+              nestedScrollEnabled: true,
+              keyboardShouldPersistTaps: "handled",
+              showsVerticalScrollIndicator: false
+            },
+            info.bannerUri && /* @__PURE__ */ runtime.react.React.createElement(
+              Image,
+              {
+                accessibilityLabel: "Server banner",
+                source: { uri: info.bannerUri },
+                style: { width: "100%", height: 140, resizeMode: "cover" }
+              }
+            ),
+            /* @__PURE__ */ runtime.react.React.createElement(View, { style: { paddingHorizontal: 16, paddingTop: info.bannerUri ? 0 : 8 } }, guild ? /* @__PURE__ */ runtime.react.React.createElement(ServerHeader, { name: guild.name, description: guild.description, iconUri: info.iconUri }) : /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-lg/semibold" }, "Server Info"), /* @__PURE__ */ runtime.react.React.createElement(
+              TouchableOpacity,
+              {
+                accessibilityRole: "button",
+                accessibilityLabel: "Close server info",
+                onPress: onClose,
+                style: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginTop: 4 }
+              },
+              /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", onPress: onClose, accessibilityRole: "button" }, "Close")
+            )),
+            guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(OverviewRows, { ...info, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(ServerRows, { guildId: guildId2, ...info, onOpenProfile, onCopyServerId, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(FriendsRows, { guildId: guildId2, friends: info.friends, loading: info.friendsPending, onOpenProfile, design: panelDesign }), info.cachedOnly && /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingHorizontal: 16 } }, "Showing cached server details.")) : /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24, alignItems: "center", gap: 12 } }, isLoading && /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { size: "large", color: "#5865f2" }), /* @__PURE__ */ runtime.react.React.createElement(Text2, null, isLoading ? "Loading server info…" : info.error ?? "Server details are unavailable."))
+          )
+        ))
+      )
     );
   }
 
@@ -1372,7 +1377,7 @@ var InfoCommandsBundle = (() => {
   var ITEM_ID = "info-commands-server-info";
   var activeSheet;
   var menuTimer;
-  var profileTimer;
+  var pendingProfile;
   var panelSequence = 0;
   var sheets;
   var contexts;
@@ -1392,6 +1397,11 @@ var InfoCommandsBundle = (() => {
   }
   function notify2(text) {
     optional5(() => vendetta.ui.toasts.showToast(text));
+  }
+  function cancelPendingProfile() {
+    const request = pendingProfile;
+    pendingProfile = void 0;
+    request?.cancel();
   }
   function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID || item?.label === "Server Info" || item?.props?.label === "Server Info";
@@ -1537,8 +1547,7 @@ var InfoCommandsBundle = (() => {
     const key = `${ITEM_ID}-${id}`;
     if (activeSheet?.key === key) return;
     activeSheet?.close();
-    clearTimeout(profileTimer);
-    profileTimer = void 0;
+    cancelPendingProfile();
     const next = nextAPI();
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional5(() => findByProps2("ActionSheet")?.ActionSheet);
@@ -1552,6 +1561,9 @@ var InfoCommandsBundle = (() => {
       panelKey: void 0,
       panelNode: void 0,
       closed: false,
+      contentReleased: true,
+      hostReleased: false,
+      profile: void 0,
       close
     };
     activeSheet = attempt;
@@ -1566,6 +1578,75 @@ var InfoCommandsBundle = (() => {
       if (attempt.closed) return;
       attempt.closed = true;
       for (const listener of [...panelListeners]) optional5(listener);
+    }
+    function contentUnmounted() {
+      attempt.contentReleased = true;
+      releaseProfile();
+    }
+    function hostDismissed() {
+      attempt.hostReleased = true;
+      if (attempt.closed) releaseProfile();
+      else dismissed();
+    }
+    function releaseProfile() {
+      if (attempt.closed && attempt.contentReleased && attempt.hostReleased) attempt.profile?.release();
+    }
+    function requestProfile(options) {
+      if (!live() || !guildId(options.userId) || attempt.profile) return;
+      cancelPendingProfile();
+      const accountId = () => optional5(() => findByStoreName("UserStore")?.getCurrentUser?.()?.id);
+      const account = accountId();
+      let cancelled = false, queued = false, timer, interaction;
+      const current = () => !cancelled && running && epoch === generation && pendingProfile === request && accountId() === account;
+      const finish = () => {
+        if (pendingProfile === request) pendingProfile = void 0;
+        request.cancel();
+      };
+      const open = () => {
+        timer = setTimeout(() => {
+          timer = void 0;
+          if (!current()) {
+            finish();
+            return;
+          }
+          openUserProfile(vendetta, { ...options }, current).then((opened) => {
+            if (!opened && current()) notify2("Profiles are unavailable on this Discord version");
+          }).catch(() => {
+            if (current()) notify2("Unable to open profile. Try again.");
+          }).finally(finish);
+        }, 0);
+      };
+      const request = {
+        cancel() {
+          cancelled = true;
+          clearTimeout(timer);
+          optional5(() => interaction?.cancel());
+        },
+        release() {
+          if (queued || cancelled) return;
+          if (!current()) {
+            finish();
+            return;
+          }
+          queued = true;
+          clearTimeout(timer);
+          try {
+            if (typeof RN3.InteractionManager?.runAfterInteractions === "function")
+              interaction = RN3.InteractionManager.runAfterInteractions(open);
+            else open();
+          } catch {
+            open();
+          }
+        }
+      };
+      pendingProfile = attempt.profile = request;
+      timer = setTimeout(() => {
+        const show = current();
+        finish();
+        if (show) notify2("Server Info is still closing. Close it before trying the profile again.");
+      }, 2500);
+      close();
+      releaseProfile();
     }
     function dismissPanelHost() {
       const alerts = attempt.panel;
@@ -1583,6 +1664,12 @@ var InfoCommandsBundle = (() => {
           return remaining.length === state.alerts.length ? state : { alerts: remaining };
         });
       });
+      optional5(() => {
+        const entries = alerts.useAlertStore?.getState?.()?.alerts;
+        if (Array.isArray(entries) && !entries.some((entry) => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode))
+          attempt.hostReleased = true;
+      });
+      releaseProfile();
     }
     function close(hide = true) {
       clearTimeout(attempt.timer);
@@ -1659,27 +1746,17 @@ var InfoCommandsBundle = (() => {
         let ManagedServerInfoModal = function() {
           const visible = React3.useSyncExternalStore(subscribePanel, panelVisible, panelVisible);
           if (!visible || !live() || attempt.fallback) return null;
+          attempt.contentReleased = false;
           const content = React3.createElement(ServerInfoModal, {
             guildId: id,
             onClose: () => close(),
             onPresented: presented,
             onDismiss: dismissed,
+            onUnmount: contentUnmounted,
             onCopyServerId: (value) => {
               if (live() && value === id) copy(id);
             },
-            onOpenProfile: (options) => {
-              if (!live() || !guildId(options.userId)) return;
-              close();
-              const current = () => running && epoch === generation;
-              profileTimer = setTimeout(() => {
-                profileTimer = void 0;
-                openUserProfile(vendetta, options, current).then((opened) => {
-                  if (!opened && current()) notify2("Profiles are unavailable on this Discord version");
-                }).catch(() => {
-                  if (current()) notify2("Unable to open profile. Try again.");
-                });
-              }, 180);
-            }
+            onOpenProfile: requestProfile
           });
           return Boundary ? React3.createElement(Boundary, null, content) : content;
         };
@@ -1688,7 +1765,7 @@ var InfoCommandsBundle = (() => {
         attempt.panelNode = React3.createElement(ManagedServerInfoModal);
         attempt.timer = setTimeout(() => fallback(), 2500);
         try {
-          const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, dismissed, { dismissable: true });
+          const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, hostDismissed, { dismissable: true });
           Promise.resolve(result).catch(fallback);
           return;
         } catch (error) {
@@ -1734,8 +1811,7 @@ var InfoCommandsBundle = (() => {
     activeSheet?.close();
     clearTimeout(menuTimer);
     menuTimer = void 0;
-    clearTimeout(profileTimer);
-    profileTimer = void 0;
+    cancelPendingProfile();
     running = false;
     generation++;
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional5(() => unpatch());

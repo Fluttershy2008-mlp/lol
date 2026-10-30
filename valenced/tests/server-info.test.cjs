@@ -3,7 +3,7 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, GUILD, FRIEND, ACCOUNT } = require('../../revenge-next/tests/next-harness.cjs');
-const { installServerPanelHost } = require('./server-info-fixture.cjs');
+const { installServerPanelHost, trackNativeWindows, installProfileSheetHost } = require('./server-info-fixture.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
 const h = React.createElement;
 
@@ -194,4 +194,97 @@ for (const action of ['close', 'back', 'backdrop']) test('InfoCommands ' + actio
     await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
     await Renderer.act(async () => w.panelHost.flushDismissals());
     assert.equal(w.panelNodes.size, 0);
+});
+
+for (const dismiss of ['X', 'Android Back']) test('InfoCommands leaves no blocking windows after the owner profile closes with ' + dismiss, async t => {
+    const w = await scenario(t), windows = trackNativeWindows(w), cold = installColdProfileModule(w);
+    const profileHost = installProfileSheetHost(w);
+    let profileUI;
+    await Renderer.act(async () => { profileUI = Renderer.create(h(profileHost.Root)); });
+    t.after(async () => { await Renderer.act(async () => profileUI.unmount()); });
+    const snapshots = [];
+    const original = cold.namespace.default;
+    cold.namespace.default = function (...args) {
+        snapshots.push({ nativeWindows: windows.size, alertHosts: w.panelNodes.size });
+        return original.apply(this, args);
+    };
+    const ui = await w.openPanel();
+    assert.equal(windows.size, 1);
+    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+    await Renderer.act(async () => w.advance(1000));
+    assert.equal(snapshots.length, 1);
+    assert.deepEqual(snapshots[0], { nativeWindows: 0, alertHosts: 0 }, 'profile opens only after both blocking surfaces have gone');
+    assert.equal(profileHost.sheets.size, 1);
+    assert.equal(windows.size, 1, 'only the native profile window is open');
+    await Renderer.act(async () => dismiss === 'X'
+        ? button(profileUI, 'Close native profile').props.onPress()
+        : profileUI.root.findByType('Modal').props.onRequestClose());
+    assert.equal(profileHost.sheets.size, 0);
+    assert.equal(windows.size, 0, 'no invisible native window can absorb home-screen presses');
+    assert.equal(w.panelNodes.size, 0, 'no hosting alert remains underneath the profile');
+    await w.openPanel();
+    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
+    await Renderer.act(async () => w.advance(1000));
+});
+
+test('InfoCommands waits for a delayed alert host before opening the owner profile', async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
+    const cold = installColdProfileModule(w), ui = await w.openPanel();
+    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+    await Renderer.act(async () => w.advance(1000));
+    assert.equal(cold.initializedFactories(), 0, 'a fixed delay cannot establish that the host has closed');
+    assert.equal(w.panelNodes.size, 1);
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    await Renderer.act(async () => w.advance(0));
+    assert.equal(cold.initializedFactories(), 1);
+    assert.equal(w.panelNodes.size, 0);
+});
+
+test('InfoCommands does not open a profile after the alert dismissal times out', async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
+    const cold = installColdProfileModule(w), ui = await w.openPanel();
+    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+    await Renderer.act(async () => w.advance(3000));
+    assert.equal(cold.initializedFactories(), 0);
+    assert.ok(w.toasts.some(text => /still closing/.test(text)));
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    await Renderer.act(async () => w.advance(1000));
+    assert.equal(cold.initializedFactories(), 0, 'a late host callback cannot revive an expired owner tap');
+});
+
+test('InfoCommands cancels a waiting owner tap when the signed-in account changes', async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
+    const cold = installColdProfileModule(w), ui = await w.openPanel();
+    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+    await Renderer.act(async () => w.setAccount(FRIEND));
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    await Renderer.act(async () => w.advance(3000));
+    assert.equal(cold.initializedFactories(), 0);
+    assert.equal(w.toasts.length, 0);
+});
+
+test('InfoCommands repeated owner taps queue one profile and a new panel cancels the old tap', async t => {
+    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
+    const cold = installColdProfileModule(w), ui = await w.openPanel();
+    const owner = button(ui, 'Owner').props.onPress;
+    await Renderer.act(async () => { owner(); owner(); });
+    await w.openPanel();
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    await Renderer.act(async () => w.advance(1000));
+    assert.equal(cold.initializedFactories(), 0);
+    assert.equal(ui.root.findAllByType('Modal').length, 1, 'the reopened panel remains usable');
+    await Renderer.act(async () => { button(ui, 'Owner').props.onPress(); });
+    await Renderer.act(async () => w.panelHost.flushDismissals());
+    await Renderer.act(async () => w.advance(0));
+    assert.equal(w.calls.filter(call => call[0] === 'profileOpened').length, 1);
+});
+
+test('InfoCommands can release a profile when InteractionManager is unavailable', async t => {
+    const w = await scenario(t), cold = installColdProfileModule(w);
+    delete w.RN.InteractionManager;
+    const ui = await w.openPanel();
+    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+    assert.equal(cold.initializedFactories(), 0, 'do not open inside the React unmount commit');
+    await Renderer.act(async () => w.advance(0));
+    assert.equal(cold.initializedFactories(), 1);
 });

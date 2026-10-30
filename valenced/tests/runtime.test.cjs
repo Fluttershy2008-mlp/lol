@@ -286,7 +286,11 @@ test('the Owner row loads an anonymous default profile opener on the first tap',
     const owner = button(panel, 'Owner');
     assert.ok(owner);
     assert.equal(cold.initializedFactories(), 0);
-    await Renderer.act(async () => { owner.props.onPress(); await w.advance(180); });
+    await Renderer.act(async () => {
+        owner.props.onPress(); await w.advance(180);
+        assert.equal(cold.initializedFactories(), 0, 'React has not committed the panel unmount yet');
+    });
+    await Renderer.act(async () => w.advance(0));
     const opened = w.calls.filter(c => c[0] === 'profileOpened');
     assert.equal(opened.length, 1);
     assert.equal(opened[0][1].userId, w.accountId());
@@ -341,7 +345,11 @@ test('a loaded default profile module opens even when its function has an unrela
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
     await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    await Renderer.act(async () => { button(panel, 'Owner').props.onPress(); await w.advance(180); });
+    await Renderer.act(async () => {
+        button(panel, 'Owner').props.onPress(); await w.advance(180);
+        assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 0, 'wait for the panel unmount commit');
+    });
+    await Renderer.act(async () => w.advance(0));
     assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 1);
     assert.equal(cold.initializedFactories(), 0);
 });

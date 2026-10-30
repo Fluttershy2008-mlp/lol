@@ -10,12 +10,13 @@ export interface ServerInfoModalProps {
   onClose(): void
   onPresented(): void
   onDismiss(): void
+  onUnmount(): void
   onOpenProfile(options: Record<string, unknown>): void
   onCopyServerId(id: string): void
 }
 
 /** Mount a native bottom panel through Valenced's React alert host. */
-export default function ServerInfoModal({ guildId, onClose, onPresented, onDismiss, onOpenProfile, onCopyServerId }: ServerInfoModalProps) {
+export default function ServerInfoModal({ guildId, onClose, onPresented, onDismiss, onUnmount, onOpenProfile, onCopyServerId }: ServerInfoModalProps) {
   const { React, ReactNative: RN } = runtime.react
   const { View, Modal, ScrollView, Image, TouchableOpacity, ActivityIndicator } = RN
   const { Text } = runtime.discord.design.Design as any
@@ -23,9 +24,12 @@ export default function ServerInfoModal({ guildId, onClose, onPresented, onDismi
   const height = Math.min(Math.max(220, dimensions.height * 0.86), dimensions.height - 24)
   const colors = sheetColors()
   const { guild, isLoading, ...info } = useGuildInfo(guildId)
+  React.useEffect(() => onUnmount, [onUnmount])
 
   return (
-    <Modal visible transparent animationType="slide" presentationStyle="overFullScreen"
+    // Android does not provide Modal.onDismiss. Avoid an unobservable native
+    // slide transition when handing this window off to Discord's profile sheet.
+    <Modal visible transparent animationType="none" presentationStyle="overFullScreen"
       onRequestClose={onClose} onShow={onPresented} onDismiss={onDismiss}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss server info"

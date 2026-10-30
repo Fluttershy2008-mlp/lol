@@ -9,7 +9,7 @@ const { React, ReactNative: RN } = vendetta.metro.common;
 const ITEM_ID = "info-commands-server-info";
 let activeSheet;
 let menuTimer;
-let profileTimer;
+let pendingProfile;
 let panelSequence = 0;
 let sheets;
 let contexts;
@@ -26,6 +26,11 @@ function guildId(value) {
 }
 function notify(text) {
     optional(() => vendetta.ui.toasts.showToast(text));
+}
+function cancelPendingProfile() {
+    const request = pendingProfile;
+    pendingProfile = undefined;
+    request?.cancel();
 }
 function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID
@@ -184,15 +189,15 @@ export function openServerInfo(id, load) {
     const key = `${ITEM_ID}-${id}`;
     if (activeSheet?.key === key) return;
     activeSheet?.close();
-    clearTimeout(profileTimer);
-    profileTimer = undefined;
+    cancelPendingProfile();
     // Resolve at click time too: the native module may not have been ready at startup.
     const next = nextAPI();
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional(() => findByProps("ActionSheet")?.ActionSheet);
     const epoch = generation;
     const attempt = { key, timer: undefined, fallback: false, presented: false, panel: undefined,
-        panelKey: undefined, panelNode: undefined, closed: false, close };
+        panelKey: undefined, panelNode: undefined, closed: false, contentReleased: true,
+        hostReleased: false, profile: undefined, close };
     activeSheet = attempt;
     const live = () => running && epoch === generation && activeSheet === attempt;
     const panelListeners = new Set();
@@ -205,6 +210,70 @@ export function openServerInfo(id, load) {
         if (attempt.closed) return;
         attempt.closed = true;
         for (const listener of [...panelListeners]) optional(listener);
+    }
+    function contentUnmounted() {
+        attempt.contentReleased = true;
+        releaseProfile();
+    }
+    function hostDismissed() {
+        attempt.hostReleased = true;
+        if (attempt.closed) releaseProfile();
+        else dismissed();
+    }
+    function releaseProfile() {
+        if (attempt.closed && attempt.contentReleased && attempt.hostReleased) attempt.profile?.release();
+    }
+    function requestProfile(options) {
+        if (!live() || !guildId(options.userId) || attempt.profile) return;
+        cancelPendingProfile();
+        const accountId = () => optional(() => findByStoreName("UserStore")?.getCurrentUser?.()?.id);
+        const account = accountId();
+        let cancelled = false, queued = false, timer, interaction;
+        const current = () => !cancelled && running && epoch === generation
+            && pendingProfile === request && accountId() === account;
+        const finish = () => {
+            if (pendingProfile === request) pendingProfile = undefined;
+            request.cancel();
+        };
+        const open = () => {
+            timer = setTimeout(() => {
+                timer = undefined;
+                if (!current()) { finish(); return; }
+                openUserProfile(vendetta, { ...options }, current).then(opened => {
+                    if (!opened && current()) notify("Profiles are unavailable on this Discord version");
+                }).catch(() => {
+                    if (current()) notify("Unable to open profile. Try again.");
+                }).finally(finish);
+            }, 0);
+        };
+        const request = {
+            cancel() {
+                cancelled = true;
+                clearTimeout(timer);
+                optional(() => interaction?.cancel());
+            },
+            release() {
+                if (queued || cancelled) return;
+                if (!current()) { finish(); return; }
+                queued = true;
+                clearTimeout(timer);
+                // Both the React native window and the hosting alert must be
+                // removed first. An elapsed timeout is not proof of dismissal.
+                try {
+                    if (typeof RN.InteractionManager?.runAfterInteractions === "function")
+                        interaction = RN.InteractionManager.runAfterInteractions(open);
+                    else open();
+                } catch { open(); }
+            },
+        };
+        pendingProfile = attempt.profile = request;
+        timer = setTimeout(() => {
+            const show = current();
+            finish();
+            if (show) notify("Server Info is still closing. Close it before trying the profile again.");
+        }, 2500);
+        close();
+        releaseProfile();
     }
     function dismissPanelHost() {
         const alerts = attempt.panel;
@@ -224,6 +293,12 @@ export function openServerInfo(id, load) {
                 return remaining.length === state.alerts.length ? state : { alerts: remaining };
             });
         });
+        optional(() => {
+            const entries = alerts.useAlertStore?.getState?.()?.alerts;
+            if (Array.isArray(entries) && !entries.some(entry => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode))
+                attempt.hostReleased = true;
+        });
+        releaseProfile();
     }
     function close(hide = true) {
         clearTimeout(attempt.timer);
@@ -290,21 +365,12 @@ export function openServerInfo(id, load) {
             function ManagedServerInfoModal() {
                 const visible = React.useSyncExternalStore(subscribePanel, panelVisible, panelVisible);
                 if (!visible || !live() || attempt.fallback) return null;
+                attempt.contentReleased = false;
                 const content = React.createElement(ServerInfoModal, {
                     guildId: id, onClose: () => close(), onPresented: presented, onDismiss: dismissed,
+                    onUnmount: contentUnmounted,
                     onCopyServerId: value => { if (live() && value === id) copy(id); },
-                    onOpenProfile: options => {
-                        if (!live() || !guildId(options.userId)) return;
-                        close();
-                        const current = () => running && epoch === generation;
-                        // Let the native modal dismiss before displaying Discord's profile sheet.
-                        profileTimer = setTimeout(() => {
-                            profileTimer = undefined;
-                            openUserProfile(vendetta, options, current).then(opened => {
-                                if (!opened && current()) notify("Profiles are unavailable on this Discord version");
-                            }).catch(() => { if (current()) notify("Unable to open profile. Try again."); });
-                        }, 180);
-                    },
+                    onOpenProfile: requestProfile,
                 });
                 return Boundary ? React.createElement(Boundary, null, content) : content;
             }
@@ -313,7 +379,7 @@ export function openServerInfo(id, load) {
             attempt.panelNode = React.createElement(ManagedServerInfoModal);
             attempt.timer = setTimeout(() => fallback(), 2500);
             try {
-                const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, dismissed, { dismissable: true });
+                const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, hostDismissed, { dismissable: true });
                 Promise.resolve(result).catch(fallback);
                 return;
             } catch (error) { fallback(error); return; }
@@ -348,8 +414,7 @@ export function disposeServerMenu() {
     activeSheet?.close();
     clearTimeout(menuTimer);
     menuTimer = undefined;
-    clearTimeout(profileTimer);
-    profileTimer = undefined;
+    cancelPendingProfile();
     running = false;
     generation++;
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional(() => unpatch());
