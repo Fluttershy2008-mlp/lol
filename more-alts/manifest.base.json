@@ -1,7 +1,7 @@
 {
   "name": "More Alts!",
-  "description": "Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
-  "version": "3.1.12",
+  "description": "Save and switch Discord accounts with secure session checks, account-specific sign-in recovery, email/password, 2FA and native account management. No QR login.",
+  "version": "3.1.13",
   "authors": [
     {
       "name": "Win8.1VMUser",

@@ -240,7 +240,7 @@ function importLegacy(storage, legacy) {
     }
     return { added, skipped };
 }
-function describeFailure(status, body, retryHeader) {
+function describeFailure(status, body, retryHeader, path = '') {
     const data = body && typeof body === 'object' ? body : {};
     if (status === 429) {
         const seconds = Number(data.retry_after ?? retryHeader);
@@ -251,7 +251,13 @@ function describeFailure(status, body, retryHeader) {
     if ([70007, 60003, 60006].includes(data.code)) return new AccountError('verification', 'Discord requires additional verification. Complete sign-in in Discord’s normal login screen, then save the account here.');
     if (status >= 500) return new AccountError('server', 'Discord is having trouble. Try again later.');
     if (data.code === 60008 || data.code === 60009 || data.errors?.code) return new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
-    if (status === 401) return new AccountError('expired', 'This saved session has expired. Sign in again to update it.');
+    if (status === 401) {
+        if (path === '/auth/login') return new AccountError('credentials',
+            'Discord did not accept these sign-in details. Check your email or phone number and password.');
+        if (path === '/auth/mfa/totp') return new AccountError('mfa-code',
+            'Discord did not accept that verification code. Try a new code or an unused backup code.');
+        return new AccountError('expired', 'Discord no longer accepts this saved account session. Sign in again to refresh it.');
+    }
     if (data.errors?.login || data.errors?.password || data.code === 50035) return new AccountError('credentials', 'Discord rejected the sign-in details. Check your email or phone number and password.');
     // Never print server messages, full HTTP errors, credentials, or response bodies.
     return new AccountError('login', 'Discord could not complete sign-in. Check your details, or sign in through Discord and save the current account.');
@@ -286,7 +292,7 @@ function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort = glob
             ]);
             if (stopped) fail('cancelled', 'Plugin disabled.');
             if (!response.ok || response.data.captcha_key || response.data.captcha_sitekey) {
-                const error = describeFailure(response.status, response.data, response.retry);
+                const error = describeFailure(response.status, response.data, response.retry, path);
                 if (error.retryAfter) blockedUntil = now() + error.retryAfter * 1000;
                 throw error;
             }
@@ -319,7 +325,13 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
     }
     async function saveSession(epoch, session = getSession()) {
         if (!session?.user || !validToken(session.token)) fail('no-session', 'Discord has not finished signing in. Try again after your chats load.');
-        const user = await inspectToken(session.token, epoch);
+        let user;
+        try { user = await inspectToken(session.token, epoch); }
+        catch (error) {
+            if (error?.code === 'expired') fail('expired-current',
+                'Discord could not verify your current session. Sign in through Discord, then use Save current account again.');
+            throw error;
+        }
         if (user.id !== session.user.id || !sameSession(session, getSession())) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
         const result = saveAccount(storage, user, session.token);
         refreshKey = `${user.id}:${session.token}`; notify(); return result;
@@ -377,7 +389,13 @@ function createController({ storage, client, getSession, getSwitcher, now = Date
                 if (original?.user?.id === id) return { user: original.user, already: true };
                 const switcher = getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
-                const target = await inspectToken(account.token, epoch);
+                let target;
+                try { target = await inspectToken(account.token, epoch); }
+                catch (error) {
+                    if (error?.code === 'expired') fail('expired',
+                        `Saved session for @${account.username} needs to be renewed. Choose Re-sign in for this account.`);
+                    throw error;
+                }
                 if (target.id !== id) fail('mismatch', 'This saved session belongs to a different account. Remove it and sign in again.');
                 if (!sameSession(original, getSession())) fail('session-changed', 'Your active account changed. Try again.');
                 if (original?.user && validToken(original.token)) await saveSession(epoch, original);
@@ -649,7 +667,7 @@ function registerSettingsShortcut({ settingsAPI, Settings, constants, treeManage
 // The account manager, login flow, and two-factor verification remain intact.
 function createLoginDialog(React, RN) {
     const h = React.createElement;
-    return function LoginDialog({ visible, mfa = false, light = false, busy = false,
+    return function LoginDialog({ visible, mfa = false, light = false, busy = false, reauthUsername,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
@@ -683,7 +701,7 @@ function createLoginDialog(React, RN) {
                             style: { flexShrink: 1 },
                             contentContainerStyle: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 12 } },
                             h(RN.View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' } },
-                                text(mfa ? 'Two-Factor Authentication' : 'Add Account',
+                                text(mfa ? 'Two-Factor Authentication' : reauthUsername ? 'Update saved account' : 'Add Account',
                                     { fontSize: 22, lineHeight: 28, fontWeight: '700' },
                                     { accessibilityRole: 'header' }),
                                 h(RN.TouchableOpacity, { accessibilityRole: 'button',
@@ -691,6 +709,7 @@ function createLoginDialog(React, RN) {
                                     style: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' } },
                                     text('×', { color: c.muted, fontSize: 30, lineHeight: 32 }))),
                             text(mfa ? 'Enter your authenticator or backup code to finish signing in.'
+                                : reauthUsername ? `Sign in to @${reauthUsername} using its email or phone number and password. Only that account will be updated.`
                                 : 'Sign in to save another account and switch between profiles.',
                                 { color: c.muted, marginTop: 4, marginBottom: 20 }),
                             error ? text(error, { color: c.danger, marginBottom: 16 },
@@ -801,6 +820,8 @@ function createPlugin(V, host = globalThis) {
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
+        const [expiredAccountId, setExpiredAccountId] = React.useState(null);
+        const [reauthId, setReauthId] = React.useState(null);
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
@@ -840,28 +861,47 @@ function createPlugin(V, host = globalThis) {
                 storage.settings = { ...storage.settings, [key]: value }; redraw(x => x + 1); scheduleRefresh();
             } }));
         const clearAuth = () => { setLogin(''); setPassword(''); setCode(''); authenticating.current = false; };
-        const cancel = () => { instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
+        const cancel = () => { instance.cancelLogin(); clearAuth(); setReauthId(null); setPage('accounts'); setError(''); setNotice(''); };
         const stillHere = () => mounted.current && active && controller === instance;
-        async function run(action, success) {
+        async function run(action, success, onError) {
             if (localLock.current || instance.busy) return;
             localLock.current = true; setLocalBusy(true); setError(''); setNotice('');
             try { const result = await action(); if (stillHere()) success?.(result); }
             catch (reason) {
-                if (stillHere() && reason?.code !== 'cancelled') setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
+                if (stillHere() && reason?.code !== 'cancelled') {
+                    onError?.(reason);
+                    setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
+                }
             } finally { localLock.current = false; if (stillHere()) setLocalBusy(false); }
         }
         function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            const target = reauthId;
+            const refreshedTarget = target && target === result.user.id;
+            if (refreshedTarget) setExpiredAccountId(null);
+            clearAuth(); setReauthId(null); setPage('accounts');
+            if (target && !refreshedTarget) {
+                const account = instance.accounts.find(item => item.id === target);
+                setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
+            } else {
+                setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
             clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         });
+        function beginReauth(account) {
+            clearAuth(); setError(''); setNotice('');
+            setReauthId(account.id); setPage('login');
+        }
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
-                    if (active && controller === instance && instance.remove(account.id) && mounted.current) setNotice(`Removed ${account.username}.`);
+                    if (active && controller === instance && instance.remove(account.id) && mounted.current) {
+                        if (expiredAccountId === account.id) setExpiredAccountId(null);
+                        setNotice(`Removed ${account.username}.`);
+                    }
                 } }
             ]);
         }
@@ -873,7 +913,7 @@ function createPlugin(V, host = globalThis) {
             notice ? text(notice, { fontWeight: '600' }) : null,
             busy ? h(RN.ActivityIndicator, { color: '#8993ff', style: { marginBottom: 12 } }) : null];
         contents.push(button('Save current account', saveCurrent),
-            button('Add another account', () => { setPage('login'); setError(''); setNotice(''); }, true),
+            button('Add another account', () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); }, true),
             input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
             text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
         contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
@@ -881,7 +921,13 @@ function createPlugin(V, host = globalThis) {
                 account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
-            currentId !== account.id ? button('Switch account', () => run(() => instance.switchTo(account.id), result => setNotice(`Switched to ${result.user.username}.`))) : null,
+            currentId !== account.id ? button('Switch account', () =>
+                run(() => instance.switchTo(account.id), result => {
+                    setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
+                }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); })) : null,
+            expiredAccountId === account.id ? text('Discord rejected this saved session. Sign in again to update this account without removing it.',
+                { color: colors.error, fontSize: 13 }) : null,
+            expiredAccountId === account.id ? button('Re-sign in', () => beginReauth(account), true) : null,
             button('Remove saved account', () => remove(account), true))));
         if (!matches.length) contents.push(text(query ? 'No matching accounts.' : 'Save your current account to get started.', { color: colors.muted }));
         contents.push(button('Import accounts from old More Alts', () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)), true),
@@ -895,6 +941,7 @@ function createPlugin(V, host = globalThis) {
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
+                reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa') { cancel(); return; }

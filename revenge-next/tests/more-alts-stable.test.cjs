@@ -31,7 +31,7 @@ function scenario(t, options = {}) {
         assert.deepEqual(w.errors, []);
     });
     w.openManager = async () => {
-        const item = await w.start('more-alts');
+        const item = await w.start('more-alts', options.initial ?? {});
         const Page = isValenced
             ? w.registeredScreens.get('dev.fluttershy2008.more-alts.valenced-settings').screen.getComponent()
             : item.options.SettingsComponent;
@@ -76,4 +76,62 @@ test('More Alts stable12 retains password login and saves an account', async t =
     await act(() => getButton(ui, 'Continue').props.onPress());
     assert.equal(item.api.jsonStorage.cache.accounts[id].username, 'stable-account');
     assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+});
+
+test('expired target offers account-specific recovery and keeps both saved accounts', async t => {
+    const id = '100000000000000099';
+    const oldToken = 'fixture-invalid-saved-token-for-second-account';
+    const validToken = 'fixture-renewed-saved-token-for-second-account';
+    const original = { id, username: 'second-account', token: oldToken };
+    const w = scenario(t, {
+        initial: { accounts: { [id]: original }, accountOrder: [id] },
+        fetch: async (url, init) => {
+            if (url.endsWith('/auth/login')) return new Response(JSON.stringify({ token: validToken }), { status: 200 });
+            if (init?.headers?.Authorization === oldToken) return new Response('{}', { status: 401 });
+            if (init?.headers?.Authorization === validToken) return new Response(JSON.stringify({ id, username: 'second-account' }), { status: 200 });
+            throw new Error('Unexpected credentials or URL in saved-account fixture');
+        },
+    });
+    const { ui, item } = await w.openManager();
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    const account = item.api.jsonStorage.cache.accounts[id];
+    assert.equal(account.token, oldToken, 'an expired attempt must never delete the old entry');
+    assert.equal(w.calls.filter(x => x[0] === 'switchAccount').length, 0);
+    assert.ok(getButton(ui, 'Re-sign in'));
+    assert.match(JSON.stringify(ui.toJSON()), /second-account/);
+    await act(() => getButton(ui, 'Re-sign in').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /Update saved account/);
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, validToken);
+    assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+    assert.equal(ui.root.findAll(n => n.props?.accessibilityLabel === 'Re-sign in').length, 0);
+});
+test('signing into another account does not claim to renew the selected expired account', async t => {
+    const id = '100000000000000099', otherId = '100000000000000098';
+    const oldToken = 'fixture-old-saved-token-do-not-overwrite';
+    const newToken = 'fixture-new-account-session-preserve-old-token';
+    const w = scenario(t, {
+        initial: { accounts: { [id]: { id, username: 'expired-target', token: oldToken } }, accountOrder: [id] },
+        fetch: async (url, init) => {
+            if (url.endsWith('/auth/login')) return new Response(JSON.stringify({ token: newToken }), { status: 200 });
+            if (init?.headers?.Authorization === oldToken) return new Response('{}', { status: 401 });
+            if (init?.headers?.Authorization === newToken)
+                return new Response(JSON.stringify({ id: otherId, username: 'different-account' }), { status: 200 });
+            throw new Error('Unexpected call in session recovery test');
+        },
+    });
+    const { ui, item } = await w.openManager();
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    await act(() => getButton(ui, 'Re-sign in').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('other@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, oldToken);
+    assert.equal(item.api.jsonStorage.cache.accounts[otherId].token, newToken);
+    assert.ok(getButton(ui, 'Re-sign in'));
+    assert.match(JSON.stringify(ui.toJSON()), /still needs to be signed in again/);
 });

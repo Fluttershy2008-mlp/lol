@@ -1,7 +1,7 @@
 {
   "name": "More Alts!",
-  "description": "Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
-  "version": "3.1.12",
+  "description": "Save and switch Discord accounts with secure session checks, account-specific sign-in recovery, email/password, 2FA and native account management. No QR login.",
+  "version": "3.1.13",
   "authors": [
     {
       "name": "Win8.1VMUser",
@@ -22,5 +22,5 @@
   "vendetta": {
     "icon": "UserIcon"
   },
-  "hash": "536dfbd935b0b2a687b4f91e925a2bd150f39bb632512e5cd9967bd33c899c62"
+  "hash": "8fde62218379264d45e2ded42836c32e228121345180fe856ae07ff8b3349b52"
 }

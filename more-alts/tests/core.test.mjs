@@ -143,6 +143,44 @@ test('expired target is rejected before native switch or logout', async () => {
     await assert.rejects(h.controller.switchTo(b.id), isCode('expired'));
     assert.deepEqual(h.switched, []); assert.equal(h.session.user.id, a.id);
 });
+test('401 errors distinguish password, MFA and saved session checks', async () => {
+    for (const [path, expected] of [
+        ['/auth/login', 'credentials'],
+        ['/auth/mfa/totp', 'mfa-code'],
+        ['/users/@me', 'expired'],
+    ]) {
+        const client = createClient({ fetcher: async () => response({}, 401) });
+        const options = path === '/users/@me' ? { token: tb } : {};
+        await assert.rejects(client.request(path, options), err => isCode(expected)(err)
+            && !err.message.includes('token') && !err.message.includes('fixture'));
+    }
+});
+test('expired target identifies which saved account needs renewal without deleting anything', async () => {
+    const h = harness({ fetcher: async (_url, init) =>
+        response(init.headers.Authorization === tb ? {} : a, init.headers.Authorization === tb ? 401 : 200) });
+    saveAccount(h.storage, b, tb);
+    const before = h.storage.accounts[b.id].token;
+    await assert.rejects(h.controller.switchTo(b.id), error =>
+        isCode('expired')(error) && error.message.includes('@account-two') && error.message.includes('Re-sign in'));
+    assert.equal(h.storage.accounts[b.id].token, before);
+    assert.equal(h.session.user.id, a.id);
+    assert.deepEqual(h.switched, []);
+});
+test('current session 401 requires native Discord sign-in without claiming a saved target expired', async () => {
+    const h = harness({ fetcher: async () => response({}, 401) });
+    await assert.rejects(h.controller.saveCurrent(), error =>
+        isCode('expired-current')(error) && error.message.includes('Save current account'));
+    assert.deepEqual(h.storage.accounts, {});
+});
+test('re-authentication updates only the account identity that Discord actually verifies', async () => {
+    const h = harness({ fetcher: async (url, init) => response(url.endsWith('/auth/login')
+        ? { token: tb } : b) });
+    saveAccount(h.storage, b, 'fixture-obsolete-saved-token');
+    const result = await h.controller.login('account-two@example.invalid', 'valid-fixture-password');
+    assert.equal(result.user.id, b.id);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+    assert.equal(h.session.user.id, a.id);
+});
 test('target identity mismatch is rejected before native switch', async () => {
     const h = harness({ fetcher: async () => response(a) }); saveAccount(h.storage, b, tb);
     await assert.rejects(h.controller.switchTo(b.id), isCode('mismatch')); assert.deepEqual(h.switched, []);

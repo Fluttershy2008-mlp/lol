@@ -41,7 +41,7 @@ export function importLegacy(storage, legacy) {
     }
     return { added, skipped };
 }
-export function describeFailure(status, body, retryHeader) {
+export function describeFailure(status, body, retryHeader, path = '') {
     const data = body && typeof body === 'object' ? body : {};
     if (status === 429) {
         const seconds = Number(data.retry_after ?? retryHeader);
@@ -52,7 +52,13 @@ export function describeFailure(status, body, retryHeader) {
     if ([70007, 60003, 60006].includes(data.code)) return new AccountError('verification', 'Discord requires additional verification. Complete sign-in in Discord’s normal login screen, then save the account here.');
     if (status >= 500) return new AccountError('server', 'Discord is having trouble. Try again later.');
     if (data.code === 60008 || data.code === 60009 || data.errors?.code) return new AccountError('mfa-code', 'That verification code was rejected. Try a fresh authenticator code or an unused backup code.');
-    if (status === 401) return new AccountError('expired', 'This saved session has expired. Sign in again to update it.');
+    if (status === 401) {
+        if (path === '/auth/login') return new AccountError('credentials',
+            'Discord did not accept these sign-in details. Check your email or phone number and password.');
+        if (path === '/auth/mfa/totp') return new AccountError('mfa-code',
+            'Discord did not accept that verification code. Try a new code or an unused backup code.');
+        return new AccountError('expired', 'Discord no longer accepts this saved account session. Sign in again to refresh it.');
+    }
     if (data.errors?.login || data.errors?.password || data.code === 50035) return new AccountError('credentials', 'Discord rejected the sign-in details. Check your email or phone number and password.');
     // Never print server messages, full HTTP errors, credentials, or response bodies.
     return new AccountError('login', 'Discord could not complete sign-in. Check your details, or sign in through Discord and save the current account.');
@@ -87,7 +93,7 @@ export function createClient({ fetcher, now = Date.now, timeoutMs = 20000, Abort
             ]);
             if (stopped) fail('cancelled', 'Plugin disabled.');
             if (!response.ok || response.data.captcha_key || response.data.captcha_sitekey) {
-                const error = describeFailure(response.status, response.data, response.retry);
+                const error = describeFailure(response.status, response.data, response.retry, path);
                 if (error.retryAfter) blockedUntil = now() + error.retryAfter * 1000;
                 throw error;
             }
@@ -120,7 +126,13 @@ export function createController({ storage, client, getSession, getSwitcher, now
     }
     async function saveSession(epoch, session = getSession()) {
         if (!session?.user || !validToken(session.token)) fail('no-session', 'Discord has not finished signing in. Try again after your chats load.');
-        const user = await inspectToken(session.token, epoch);
+        let user;
+        try { user = await inspectToken(session.token, epoch); }
+        catch (error) {
+            if (error?.code === 'expired') fail('expired-current',
+                'Discord could not verify your current session. Sign in through Discord, then use Save current account again.');
+            throw error;
+        }
         if (user.id !== session.user.id || !sameSession(session, getSession())) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
         const result = saveAccount(storage, user, session.token);
         refreshKey = `${user.id}:${session.token}`; notify(); return result;
@@ -178,7 +190,13 @@ export function createController({ storage, client, getSession, getSwitcher, now
                 if (original?.user?.id === id) return { user: original.user, already: true };
                 const switcher = getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
-                const target = await inspectToken(account.token, epoch);
+                let target;
+                try { target = await inspectToken(account.token, epoch); }
+                catch (error) {
+                    if (error?.code === 'expired') fail('expired',
+                        `Saved session for @${account.username} needs to be renewed. Choose Re-sign in for this account.`);
+                    throw error;
+                }
                 if (target.id !== id) fail('mismatch', 'This saved session belongs to a different account. Remove it and sign in again.');
                 if (!sameSession(original, getSession())) fail('session-changed', 'Your active account changed. Try again.');
                 if (original?.user && validToken(original.token)) await saveSession(epoch, original);
