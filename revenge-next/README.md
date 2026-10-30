@@ -76,3 +76,5 @@ Format and API references: [Revenge publishing guide](https://revenge.palmdevs.m
 Valenced has a separate catalogue at https://fluttershy2008-mlp.github.io/lol/valenced/index.json. See [Valenced setup](../valenced/README.md). This change also publishes AutoText and Valid User 1.0.0-beta6 for Next, with the shared composer and response fixes.
 
 InfoCommands beta10 and Valid User beta7 share the corrected default-export and cold-module profile resolver. The profile fixtures cover opening a profile before any other profile was opened in the session.
+
+The stable12 label is only for More Alts! and does not promote other preview plugins to stable.
