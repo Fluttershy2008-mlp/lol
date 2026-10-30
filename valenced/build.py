@@ -196,7 +196,7 @@ def build(check=False):
             "Classic settings/accounts are not imported automatically.\n")
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
-            "kind": "compatibility-preview"}
+            "kind": "compatibility-stable" if slug == "more-alts" else "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
         if shortcut:
