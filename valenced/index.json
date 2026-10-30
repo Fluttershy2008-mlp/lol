@@ -794,14 +794,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-stable12": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-stable12.zip",
+          "sha256": "555d4a33eebc0f90d4df66b15fec2698aeaa7593cd9cbe76cd4e2701c01d0659",
+          "size": 42985,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta11",
-        "beta": "1.0.0-beta11"
+        "latest": "1.0.0-stable12",
+        "beta": "1.0.0-stable12"
       },
       "name": "More Alts! (Valenced)",
-      "description": "Valenced preview. Save and switch Discord accounts with QR login, 2FA support, session checks, clearer login errors and an account manager in Valenced settings.",
+      "description": "Valenced preview. Save and switch Discord accounts with email/password sign-in, two-factor verification, local session checks and a native account manager. No QR login.",
       "author": "Win8.1VMUser <793935599702507542>",
       "icon": "UserIcon",
       "contributors": [
