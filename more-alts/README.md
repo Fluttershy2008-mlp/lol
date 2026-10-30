@@ -16,7 +16,7 @@ Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's
 
 ## Stable12: native Add Account without QR (3.1.12 / Valenced stable12 / Revenge Next stable12)
 
-The QR login and Discord web-style account panel were removed after repeated unavailable-native-WebView reports. Add Account now uses a smaller native dialog for email/password and Discord two-factor verification, plus a shortcut explaining how to sign in through Discord's normal account menu. There is no QR button or QR code placeholder. Account storage and switching remain unchanged, and existing saved accounts are retained when updating without clearing plugin data. Only More Alts! is labelled stable12; the other repository plugins remain on their previous versions. Package tests cover the login and absence of QR UI, but physical-device testing is not guaranteed.
+The QR login and Discord web-style account panel were removed after repeated unavailable-native-WebView reports. Add Account now uses a smaller native dialog for email/password and Discord two-factor verification, plus a shortcut explaining how to sign in through Discord's normal account menu. There is no QR button or QR code placeholder. Account storage and switching remain unchanged, and existing saved accounts are retained when updating without clearing plugin data. Only More Alts! is labelled stable12; the other repository plugins remain on their previous versions. The stable12 package replaces the beta QR interface, not the local account data. Package tests cover the login and absence of QR UI, but physical-device testing is not guaranteed.
 
 ## View-only WebView fallback (3.1.11 / Valenced beta11 / Next beta12)
 
