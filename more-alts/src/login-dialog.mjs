@@ -59,6 +59,7 @@ export function createLoginDialog(React, RN) {
             text('Log in with QR Code', { textAlign: 'center', fontWeight: '700', fontSize: 18, marginTop: 16, marginBottom: 0 }),
             text('Scan with the Discord mobile app on another signed-in device, then approve the login.',
                 { textAlign: 'center', color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 5 }),
+            text('Discord Settings → Scan QR Code', { textAlign: 'center', color: c.muted, fontSize: 12, marginTop: 4 }),
             link(qrMode ? 'Refresh QR code' : 'Log in with QR Code', qrMode ? onRefreshQr : onQrLogin,
                 { alignItems: 'center', marginTop: 3 }));
         const signInBody = h(RN.View, { style: { flexDirection: wide ? 'row' : 'column', alignItems: 'stretch' } },
