@@ -268,6 +268,17 @@ test('More Alts QR bundled browser supports native command names and stops after
     assert.equal(native.messages.get('WebViewMessageHandler1'), native.existing);
 });
 
+test('More Alts QR can use Valenced native API when React Native hides native modules', { skip: !isValenced }, async t => {
+    const w = scenario(t), native = installNativeWebView(w, { nativeViaValencedOnly: true, publicRegistration: true });
+    const { item, ui } = await w.openManager();
+    await act(button(ui, 'Log in with QR Code'));
+    const view = w.browser(ui);
+    assert.ok(view, 'Valenced native lookup supplies the registered WebView module');
+    assert.equal(native.dependencies(), 0);
+    await act(() => native.owned()[0][1].onMessage(completion(view)));
+    assert.equal(item.api.jsonStorage.cache.accounts[USER.id].username, USER.username);
+});
+
 test('More Alts QR bundled browser refreshes with independent callbacks and ignores old approvals', async t => {
     const w = scenario(t), native = installNativeWebView(w);
     const { ui } = await w.openManager(); await act(button(ui, 'Log in with QR Code'));

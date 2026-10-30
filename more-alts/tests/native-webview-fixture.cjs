@@ -9,7 +9,7 @@ function installNativeWebView(world, options = {}) {
     let views = 0, dependencies = 0;
     const native = Object.freeze({ isFileUploadSupported: async () => true,
         shouldStartLoadWithLockIdentifier: (...args) => nativeNavigation.push(args) });
-    RN.NativeModules = Object.freeze({ [options.nativeName ?? 'RNCWebView']: native });
+    RN.NativeModules = Object.freeze(options.nativeViaValencedOnly ? {} : { [options.nativeName ?? 'RNCWebView']: native });
     Object.assign(RN.Image, { resolveAssetSource: value => value });
     RN.UIManager = {
         getViewManagerConfig(name) {
@@ -43,7 +43,10 @@ function installNativeWebView(world, options = {}) {
     }
     else { world.host.RN$Bridgeless = true; world.host.RN$registerCallableModule = register; }
     world.U.modules.metro.getModuleDependencies = () => { dependencies++; throw new Error('No dependency lookup is needed'); };
-    world.U.modules.native.getNativeModule = () => { throw new Error('Use RN’s native-module facade'); };
+    world.U.modules.native.getNativeModule = name => {
+        if (options.nativeViaValencedOnly && ['RNCWebView', 'RNCWebViewModule'].includes(name)) return native;
+        throw new Error('Native module not found: ' + name);
+    };
     return { messages, existing, nativeNavigation, commands, lookups, views: () => views, dependencies: () => dependencies,
         owned: () => [...messages.entries()].filter(([name]) => name.startsWith('MoreAltsQr_')) };
 }

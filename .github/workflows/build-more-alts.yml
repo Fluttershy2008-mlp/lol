@@ -6,11 +6,16 @@ on:
       - 'more-alts/src/**'
       - 'more-alts/manifest.base.json'
       - 'valenced/repo.config.json'
+      - 'valenced/build.py'
       - '.github/workflows/build-more-alts.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: more-alts-packages-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -37,5 +42,6 @@ jobs:
           git add -A more-alts/index.js more-alts/manifest.json valenced/index.json valenced/sources.json valenced/pool revenge-next/index.json revenge-next/sources.json revenge-next/pool index.json
           if ! git diff --cached --quiet; then
             git commit -m "Build More Alts packages from updated sources"
-            git push
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push origin "HEAD:${{ github.ref_name }}"
           fi
