@@ -2,6 +2,7 @@
 import { AccountError, createClient, createController } from './core.mjs';
 import { createModuleResolver } from './modules.mjs';
 import { createNativeWebView } from './native-webview.mjs';
+import { webViewRuntimeClient } from './webview-loader.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
 import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, qrStatusMessage, QR_BASE_URL } from './qr-html.mjs';
@@ -11,8 +12,11 @@ export function createPlugin(V, host = globalThis) {
     const h = React.createElement, storage = V.plugin.storage;
     const installedVersion = V.plugin.version ?? V.plugin.manifest?.version ?? 'unknown';
     const LoginDialog = createLoginDialog(React, RN);
-    const resolver = createModuleResolver(V.metro);
-    const nativeWebView = createNativeWebView(React, RN, host);
+    // Valenced passes its native lookup through the compatibility adapter.
+    // No Valenced global exists in an external plugin's lexical scope.
+    const qrClient = () => V.host?.getQrRuntimeClient?.() ?? webViewRuntimeClient();
+    const resolver = createModuleResolver(V.metro, { getClient: qrClient });
+    const nativeWebView = createNativeWebView(React, RN, host, qrClient);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [], qrStops = new Set();
