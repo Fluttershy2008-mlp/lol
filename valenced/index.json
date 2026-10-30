@@ -384,11 +384,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.expression-cloner@1.0.0-beta4.zip",
+          "sha256": "15a660dc5f623a986cecf4b654121154457634b76bb2792926d2fe6e2a85d257",
+          "size": 21256,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "ExpressionCloner (Valenced)",
       "description": "Valenced preview. Clone custom emojis and supported stickers from their action sheets to servers you manage.",
@@ -1233,11 +1246,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta8.zip",
+          "sha256": "f15d4ac1bc00a63833275c51d5e4bfa610284c6697a966e75924188a4cc232e2",
+          "size": 60336,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta7",
-        "beta": "1.0.0-beta7"
+        "latest": "1.0.0-beta8",
+        "beta": "1.0.0-beta8"
       },
       "name": "SaveAsSticker (Valenced)",
       "description": "Valenced preview. Save images and animated GIFs as server stickers. Pick a server, name your sticker, and automatically resize GIFs while keeping them animated.",
@@ -1581,11 +1607,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.view-icons@1.0.0-beta3.zip",
+          "sha256": "8a8d3b0fad6f6e1f67f22a2760330ec6eed46d91fafc6d09a8b8b9072c2a23b1",
+          "size": 17138,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "ViewIcons (Valenced)",
       "description": "Valenced preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Valenced mobile.",

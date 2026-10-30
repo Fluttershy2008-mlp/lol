@@ -148,6 +148,20 @@ def build(check=False):
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
         transformed = source.rstrip().rstrip(";")
+        # These legacy plugins announce every onLoad, including app restarts.
+        # Remove only the enabled notification from their Valenced packages;
+        # action results and unsupported-menu errors must still reach the user.
+        startup_notifications = {
+            "save-as-sticker": (r'\b[\w$]+\("SaveAsSticker enabled"\)', 'void 0'),
+            "expression-cloner": (re.escape('showToast("ExpressionCloner enabled", iconEmoji)'), 'void 0'),
+            "view-icons": (re.escape('toast(unpatches.length ? "ViewIcons enabled" : "ViewIcons: no supported menus found on this Discord build");'),
+                           'if (!unpatches.length) toast("ViewIcons: no supported menus found on this Discord build");'),
+        }
+        if slug in startup_notifications:
+            pattern, replacement = startup_notifications[slug]
+            transformed, count = re.subn(pattern, replacement, transformed)
+            if count != 1:
+                raise RuntimeError(f"{slug} startup notification bridge needs updating")
         plugin_runtime = runtime
         if directory.name in ("stealmoji", "save-as-sticker"):
             # These packages open their custom pages from chat. The ordinary

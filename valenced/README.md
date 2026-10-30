@@ -2,6 +2,8 @@
 
 # Fluttershy's Valenced plugins
 
+**SaveAsSticker 1.0.0-beta8, ExpressionCloner 1.0.0-beta4 and ViewIcons 1.0.0-beta3:** start silently when Valenced opens or restarts. The plugins stay enabled, and action confirmations and error messages remain available. Refresh the repository, update these three plugins, then fully close and reopen Discord.
+
 **InfoCommands 1.0.0-beta7:** replaces the nested Server Info alert/native modal with a normal Discord navigation screen. Beta6's timing fix did not resolve the reported handset freeze. The banner, server information, scrolling, ID copying and owner/friend actions remain available. A profile's **X** or **Android Back** now returns to Server Info; **Close** or Back from there returns to Discord. Native screen registration also handles cold Settings modules, cancellation and stopping. Refresh this repository, update InfoCommands, then force-close and reopen Discord to release any window retained by the old version. Automated checks reject the old dialog presentation path; the affected phone still needs to verify beta7.
 
 Paste this exact URL into Valenced's **Repository URL** field:
