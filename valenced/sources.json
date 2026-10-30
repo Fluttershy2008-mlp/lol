@@ -90,7 +90,7 @@
       "path": "more-alts/index.js",
       "sha256": "536dfbd935b0b2a687b4f91e925a2bd150f39bb632512e5cd9967bd33c899c62",
       "originalVersion": "3.1.12",
-      "kind": "compatibility-preview",
+      "kind": "compatibility-stable",
       "sourceRef": "main",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
