@@ -78,3 +78,5 @@ Valenced has a separate catalogue at https://fluttershy2008-mlp.github.io/lol/va
 InfoCommands beta10 and Valid User beta7 share the corrected default-export and cold-module profile resolver. The profile fixtures cover opening a profile before any other profile was opened in the session.
 
 The stable12 label is only for More Alts! and does not promote other preview plugins to stable.
+
+The stable12 release keeps the existing account storage intact; do not clear plugin data during the update.
