@@ -34,8 +34,8 @@
         },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.addon-list@1.0.0-beta3.zip",
-          "sha256": "0dd48a6d2f7da8bc6c0a822ef3005265e8824d7848f147f3c6ee8ffc987f0264",
-          "size": 20837,
+          "sha256": "26c623c2de45fb4b8e767037ea9a96ed4d29b1e6500e66eea9baf575f281e5a7",
+          "size": 20727,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -154,8 +154,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.auto-text@1.0.0-beta2.zip",
-          "sha256": "2a0704ecb202e2020a3e170c29a1daccdbc2124148ba38166024fc444eeebcd3",
-          "size": 28700,
+          "sha256": "ab68b993e21963a6411df911a38dc4b1cd84df40186aaf8a33ab9bbfc2ef4115",
+          "size": 28596,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -218,8 +218,8 @@
         },
         "1.0.0-beta4": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.blocked-user-list@1.0.0-beta4.zip",
-          "sha256": "af42faecd5068c568ed93407797617fbcbc3e50dbccd3c78ab890b569cc05f7e",
-          "size": 24180,
+          "sha256": "07958b7913ad29f4754dcf86e12b3e0e3926c200b103b35efc6ee62c36704cf4",
+          "size": 24060,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -269,8 +269,8 @@
         },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.copy-user-id@1.0.0-beta3.zip",
-          "sha256": "aa10d8eaba5b970f8a32877e521ba198d49a1c3a7ed86afc9bcb0d4b946d1c7c",
-          "size": 16112,
+          "sha256": "c0850eaccc95c3b626b33b5bafbc5d9d9d991bed7ffeb6f306cc5b47b9e26c02",
+          "size": 15995,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -320,8 +320,8 @@
         },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.custom-rpc@1.0.0-beta3.zip",
-          "sha256": "c567f45619d54a146b1508e7be44535b6bfdeb5c3b64be8895fae96b12f07282",
-          "size": 34052,
+          "sha256": "57d4912bb37c2ebc925a7f0d856801c3cfd577166928fdb1df2e0d5fbeca84d6",
+          "size": 33954,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -374,8 +374,8 @@
         },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.expression-cloner@1.0.0-beta3.zip",
-          "sha256": "b6f45c9bfac8d8aa2e1e898930d3be6321ee65cafab0d0fe6338e13f75c5e317",
-          "size": 21383,
+          "sha256": "09a396546eb69ffc2c562fae73949b949536d98d22ecde87a8b9267bd02c8e1c",
+          "size": 21265,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -466,8 +466,8 @@
         },
         "1.0.0-beta4": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.friends-list@1.0.0-beta4.zip",
-          "sha256": "aea86c5dea028855e11482efb57186faebd2ebe559f574f369f92c18ff11ba3e",
-          "size": 20305,
+          "sha256": "ba51440c8d706ed921747f869d9b1a74fea338ab36fe51c35b91fe72e4c58ca2",
+          "size": 20202,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -504,8 +504,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta2.zip",
-          "sha256": "04a55500d401de5c9eed2f8f101062e39b66e642531160d8cf4223905f6b378f",
-          "size": 19256,
+          "sha256": "c1910a82f8a6e848111ebae0074f0ca21ae54288cf9aa7ca632e8bb1fe2eeb48",
+          "size": 19151,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -585,8 +585,8 @@
         },
         "1.0.0-beta5": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.info-commands@1.0.0-beta5.zip",
-          "sha256": "47bba322b07d72c450e70c3e54e16d62098895bf4ed0e5eeffc15efa5ed5abf9",
-          "size": 35294,
+          "sha256": "53e73b6fd0cbaa475493930891f106ff4452c1b0424136893444ef0f5f40d025",
+          "size": 35183,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -626,8 +626,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.message-logger@1.0.0-beta2.zip",
-          "sha256": "e9d65433b9013e86005d585db69ac2386fde804b7220f2f71c21da80a3f2eddf",
-          "size": 35634,
+          "sha256": "d2216a77153d20a92a8ae54b34d498eef771c336e50e60d8e19125611c540738",
+          "size": 35526,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -667,8 +667,8 @@
         },
         "1.0.0-beta10": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-beta10.zip",
-          "sha256": "136ef3ecb7044c996a184c790a989145f8ed2ff66647bf711c4ba88f04bb6196",
-          "size": 70528,
+          "sha256": "acc749fb2572163c7edc1f6bb12c72236ee3caac6bc1656308b8ce8f847ca3fc",
+          "size": 70450,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -814,8 +814,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.nitro-auto-claim@1.0.0-beta2.zip",
-          "sha256": "2b4e94b378917a06511acf29bbfc06cfcdb5bd541043942beeb214018b128469",
-          "size": 17094,
+          "sha256": "9cb7b15113c33b6b28e15c516fa218e09b3857abe9f0e1a9dfd51e45c1fedcb6",
+          "size": 16988,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -852,8 +852,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.ping-jumper@1.0.0-beta2.zip",
-          "sha256": "17ef11dd232a0b037a919c9fe2f8bc6a3f48079b607bf989416d0e67a0d6e5f8",
-          "size": 16021,
+          "sha256": "1a7d1be66f04b2dd05f3f7eba05e1055b594fc932288aeed514b5714f0c1a13a",
+          "size": 15912,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -890,8 +890,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.profile-status-presets@1.0.0-beta2.zip",
-          "sha256": "864601ca144c63c7a5f71e94667b908d15125ca69e7fa4ae5ec9f707991f24dc",
-          "size": 34351,
+          "sha256": "32019a9b0e47f0797b4321c1d864c66bbfb3116f24d033b3f5f0d5268a719da9",
+          "size": 34244,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -956,8 +956,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.read-all-notifications@1.0.0-beta2.zip",
-          "sha256": "49f878ab6e22be31c2f97e9b1ef631919b68181e74329b7915d724f4ee28b61f",
-          "size": 31073,
+          "sha256": "08d77f386f82c8e09833b54abe9bdd4416119c1546833baf798621f3a212f451",
+          "size": 30959,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -998,8 +998,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.relationship-notifier@1.0.0-beta2.zip",
-          "sha256": "bed3ae8191a1857fa9fec5d32833367d96af014c504db980f27a41cd49cd9b53",
-          "size": 35460,
+          "sha256": "fd62475cf729d0367956032ffec14de771cc3f2ea4d60375c105efaf0cb0ec7d",
+          "size": 35353,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -1105,8 +1105,8 @@
         },
         "1.0.0-beta7": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.save-as-sticker@1.0.0-beta7.zip",
-          "sha256": "481396dfc9863846bb6b8d126a18cee835135c434e1bba38c61901df1aee0d49",
-          "size": 60453,
+          "sha256": "47e371e14885d5ab6bb261d7d41688974f9cfe8b1ab50558348e1b5de30fbdde",
+          "size": 60343,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -1195,8 +1195,8 @@
         },
         "1.0.0-beta6": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.server-leaver@1.0.0-beta6.zip",
-          "sha256": "73f7081388b4f6937020d466ebb69e8bfc44c49f6ff3ffe753752faa4bf8c38b",
-          "size": 22027,
+          "sha256": "91147f9af62d66162f106464b593189fd95970393054aafbdec07d0f81d79e2d",
+          "size": 21918,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -1298,8 +1298,8 @@
         },
         "1.0.0-beta7": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.stealmoji@1.0.0-beta7.zip",
-          "sha256": "9a669471a576fb830514481531cefcfee5a32abfea9fb677bea780cdd2aa17b7",
-          "size": 41256,
+          "sha256": "ad16837537487d5fed479159cf72640a9dcff8e2eadefd7ae8ac93c157a215ec",
+          "size": 41147,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -1410,8 +1410,8 @@
         },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.valid-user@1.0.0-beta3.zip",
-          "sha256": "46cf8460ea69b88f747ed732ed873c0e13fe5cd0cd47bf5b637fd7f7f0d224aa",
-          "size": 23808,
+          "sha256": "fa60d02cb63a60470a63b9a23151700ab4d8a96a4fde532c4e3c4e7301f279fb",
+          "size": 23706,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
@@ -1453,8 +1453,8 @@
         },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.view-icons@1.0.0-beta2.zip",
-          "sha256": "059311e3f5e274b9810eeb6ecf368b95bfa81274d784e3adfdbb0b5b385dddbd",
-          "size": 17255,
+          "sha256": "b3d157edf6480a80d9b120479d52879587a9be688710009d9773252f5963508f",
+          "size": 17146,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
