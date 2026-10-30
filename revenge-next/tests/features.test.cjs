@@ -532,7 +532,7 @@ test('all 21 ports coexist with curated modules and split HTTP, then stop in a d
     const w = scenario(t, { curatedOnly: true, splitHTTP: true });
     const sources = JSON.parse(fs.readFileSync(path.join(__dirname, '../..', process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'valenced' : 'revenge-next', 'sources.json'), 'utf8')).plugins;
     const items = [];
-    for (const [id, entry] of Object.entries(sources)) if (entry.kind === 'compatibility-preview')
+    for (const [id, entry] of Object.entries(sources)) if (['compatibility-preview', 'compatibility-stable'].includes(entry.kind))
         items.push(await w.start(id.slice('dev.fluttershy2008.'.length)));
     assert.equal(items.length, 21);
     await w.advance(2000); await w.advance(0);
