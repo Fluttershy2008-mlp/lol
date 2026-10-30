@@ -1,3 +1,5 @@
+**More Alts! stable13:** Added account-specific **Re-sign in** when Discord rejects a saved session. Password and two-factor authentication errors are now explained separately, and the plugin never deletes an expired account automatically. Only More Alts! is promoted to stable13; all other plugin versions remain unchanged. QR login stays removed. Keep your plugin data when updating.
+
 # Fluttershy's Valenced plugins
 
 Paste this exact URL into Valenced's **Repository URL** field:
