@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.12
+# More Alts! for Revenge — 3.1.13
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,10 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable13: saved-session recovery (3.1.13 / Valenced stable13 / Next stable13)
+
+Discord may reject a previously saved session with HTTP 401. This **cannot be bypassed or silently repaired**. Stable13 identifies which saved account needs attention, offers **Re-sign in** on its account card, and updates the stored session only after Discord verifies the account. A different account signing in never overwrites the target's record. Password-login and MFA errors no longer masquerade as expired saved sessions. Current-account verification errors recommend signing in through Discord and using **Save current account** afterward. The QR feature stays removed, and existing saved accounts persist when updating without clearing data.
 
 ## Stable12: native Add Account without QR (3.1.12 / Valenced stable12 / Revenge Next stable12)
 
