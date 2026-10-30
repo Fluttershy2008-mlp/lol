@@ -1051,6 +1051,51 @@ function createColdWebViewLoader(getClient = webViewRuntimeClient) {
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+// Some Discord builds ship the native WebView view but hide its separate
+// RNCWebViewModule. The native view can load an isolated HTML page directly.
+// No navigation approval is possible without the module, so only our own
+// CSP-restricted, navigation-free QR document may be loaded through this path.
+function createViewOnlyWebView(React, RN, NativeView, Commands, bridge, prefix) {
+    const h = React.createElement;
+    let next = 0;
+    return React.forwardRef(function MoreAltsViewOnly(props, outerRef) {
+        const node = React.useRef(null);
+        const channel = React.useRef(prefix + (++next)).current;
+        const onMessage = React.useRef(props.onMessage);
+        onMessage.current = props.onMessage;
+        React.useEffect(() => {
+            bridge.registerCallableModule(channel, {
+                onMessage: event => onMessage.current?.(event?.nativeEvent ? event : { nativeEvent: event }),
+                // WebView's native module is absent. Never approve a
+                // secondary navigation in this limited mode.
+                onShouldStartLoadWithRequest() {}
+            });
+            return () => bridge.unregisterCallableModule(channel);
+        }, [channel]);
+        React.useImperativeHandle(outerRef, () => ({
+            injectJavaScript(script) { Commands.injectJavaScript(node.current, script); },
+            stopLoading() { Commands.stopLoading(node.current); },
+            reload() { Commands.reload(node.current); },
+        }), []);
+        const { source, containerStyle, style, onMessage: _unused, onShouldStartLoadWithRequest: _navigation, ...safe } = props;
+        const document = source && typeof source.html === 'string' && source.baseUrl === 'https://discord.com/'
+            && source.html.includes('default-src \'none\'') && source.html.includes('frame-src \'none\'')
+            && source.html.includes('window.stopMoreAltsQr');
+        if (!document) return null;
+        return h(RN.View, { style: [{ flex: 1 }, containerStyle] },
+            h(NativeView, {
+                ...safe, ref: node, source, newSource: source,
+                style: [{ flex: 1 }, style], messagingEnabled: true, messagingModuleName: channel,
+                injectedJavaScriptObject: '{}',
+                onMessage: event => onMessage.current?.(event?.nativeEvent ? event : { nativeEvent: event }),
+                // Must not permit popups, file access or mixed content.
+                setSupportMultipleWindows: false, allowFileAccess: false,
+                allowFileAccessFromFileURLs: false, allowUniversalAccessFromFileURLs: false,
+                javaScriptCanOpenWindowsAutomatically: false, mixedContentMode: 'never',
+            }));
+    });
+}
+
 // Bind the bundled SDK on an explicit QR click; no Metro package search.
 function createNativeWebView(React, RN, host = globalThis, getClient = webViewRuntimeClient) {
     let active = true, component, rejected = false, failure = 'NATIVE-API';
@@ -1085,7 +1130,6 @@ function createNativeWebView(React, RN, host = globalThis, getClient = webViewRu
             }
             if (nativeModule) break;
         }
-        if (!nativeModule) return;
         failure = 'NATIVE-VIEW';
         const config = safely(() => manager.getViewManagerConfig('RNCWebView'));
         if (!config && safely(() => manager.hasViewManagerConfig('RNCWebView')) === false) return;
@@ -1118,7 +1162,9 @@ function createNativeWebView(React, RN, host = globalThis, getClient = webViewRu
         // Routing identity only; authentication keys remain in Web Crypto.
         const prefix = 'MoreAltsQr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + '_';
         failure = 'NATIVE-SDK';
-        component = safely(() => createPackagedWebView(React, RN, bridge, nativeModule, NativeView, Commands, prefix));
+        component = safely(() => nativeModule
+            ? createPackagedWebView(React, RN, bridge, nativeModule, NativeView, Commands, prefix)
+            : createViewOnlyWebView(React, RN, NativeView, Commands, bridge, prefix));
         if (component) failure = undefined;
         return component;
     }
