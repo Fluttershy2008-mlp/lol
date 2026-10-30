@@ -667,7 +667,7 @@ function registerSettingsShortcut({ settingsAPI, Settings, constants, treeManage
 // The account manager, login flow, and two-factor verification remain intact.
 function createLoginDialog(React, RN) {
     const h = React.createElement;
-    return function LoginDialog({ visible, mfa = false, light = false, busy = false,
+    return function LoginDialog({ visible, mfa = false, light = false, busy = false, reauthUsername,
         login, password, code, error, onLoginChange, onPasswordChange, onCodeChange,
         onSubmit, onClose, onBack, onForgotPassword, onNativeLogin }) {
         if (!visible) return null;
@@ -701,7 +701,7 @@ function createLoginDialog(React, RN) {
                             style: { flexShrink: 1 },
                             contentContainerStyle: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 12 } },
                             h(RN.View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' } },
-                                text(mfa ? 'Two-Factor Authentication' : 'Add Account',
+                                text(mfa ? 'Two-Factor Authentication' : reauthUsername ? 'Update saved account' : 'Add Account',
                                     { fontSize: 22, lineHeight: 28, fontWeight: '700' },
                                     { accessibilityRole: 'header' }),
                                 h(RN.TouchableOpacity, { accessibilityRole: 'button',
@@ -709,6 +709,7 @@ function createLoginDialog(React, RN) {
                                     style: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' } },
                                     text('×', { color: c.muted, fontSize: 30, lineHeight: 32 }))),
                             text(mfa ? 'Enter your authenticator or backup code to finish signing in.'
+                                : reauthUsername ? `Sign in to @${reauthUsername} using its email or phone number and password. Only that account will be updated.`
                                 : 'Sign in to save another account and switch between profiles.',
                                 { color: c.muted, marginTop: 4, marginBottom: 20 }),
                             error ? text(error, { color: c.danger, marginBottom: 16 },
