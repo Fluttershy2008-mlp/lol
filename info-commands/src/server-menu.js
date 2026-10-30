@@ -1,7 +1,7 @@
 import ServerInfoSheet from "./server-info/ui/ServerInfoSheet";
-import ServerInfoModal from "./server-info/ui/ServerInfoModal";
+import { createValencedServerInfo } from "./server-info/valenced-page";
 import { wrapGuildSheet } from "./guild-sheet";
-import { nextAPI, nativeSheets, nativeDesign, nativeAlerts } from "./next-api";
+import { nextAPI, nativeSheets, nativeDesign } from "./next-api";
 import { openUserProfile } from "../../compatibility/user-profile.mjs";
 const { find, findByName, findByProps, findByStoreName } = vendetta.metro;
 const { before, after } = vendetta.patcher;
@@ -9,8 +9,7 @@ const { React, ReactNative: RN } = vendetta.metro.common;
 const ITEM_ID = "info-commands-server-info";
 let activeSheet;
 let menuTimer;
-let pendingProfile;
-let panelSequence = 0;
+let valencedPage;
 let sheets;
 let contexts;
 let running = false;
@@ -26,11 +25,6 @@ function guildId(value) {
 }
 function notify(text) {
     optional(() => vendetta.ui.toasts.showToast(text));
-}
-function cancelPendingProfile() {
-    const request = pendingProfile;
-    pendingProfile = undefined;
-    request?.cancel();
 }
 function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID
@@ -186,130 +180,29 @@ function openOwnerProfile(ownerId, serverId, close) {
 
 export function openServerInfo(id, load) {
     if (!running || !guildId(id)) return;
+    if (vendetta.host?.id === "valenced") {
+        valencedPage ??= createValencedServerInfo(vendetta, nextAPI(), () => running);
+        if (!valencedPage.open(id)) notify("Server Info needs Valenced’s native screen navigation. Update Valenced and try again.");
+        return;
+    }
     const key = `${ITEM_ID}-${id}`;
     if (activeSheet?.key === key) return;
     activeSheet?.close();
-    cancelPendingProfile();
     // Resolve at click time too: the native module may not have been ready at startup.
     const next = nextAPI();
     const host = nativeSheets() ?? sheets;
     const ActionSheet = nativeDesign("ActionSheet") ?? optional(() => findByProps("ActionSheet")?.ActionSheet);
     const epoch = generation;
-    const attempt = { key, timer: undefined, fallback: false, presented: false, panel: undefined,
-        panelKey: undefined, panelNode: undefined, closed: false, contentReleased: true,
-        hostReleased: false, profile: undefined, close };
+    const attempt = { key, timer: undefined, fallback: false, presented: false, closed: false, close };
     activeSheet = attempt;
     const live = () => running && epoch === generation && activeSheet === attempt;
-    const panelListeners = new Set();
-    const panelVisible = () => !attempt.closed;
-    const subscribePanel = listener => {
-        panelListeners.add(listener);
-        return () => panelListeners.delete(listener);
-    };
-    function hidePanel() {
-        if (attempt.closed) return;
-        attempt.closed = true;
-        for (const listener of [...panelListeners]) optional(listener);
-    }
-    function contentUnmounted() {
-        attempt.contentReleased = true;
-        releaseProfile();
-    }
-    function hostDismissed() {
-        attempt.hostReleased = true;
-        if (attempt.closed) releaseProfile();
-        else dismissed();
-    }
-    function releaseProfile() {
-        if (attempt.closed && attempt.contentReleased && attempt.hostReleased) attempt.profile?.release();
-    }
-    function requestProfile(options) {
-        if (!live() || !guildId(options.userId) || attempt.profile) return;
-        cancelPendingProfile();
-        const accountId = () => optional(() => findByStoreName("UserStore")?.getCurrentUser?.()?.id);
-        const account = accountId();
-        let cancelled = false, queued = false, timer, interaction;
-        const current = () => !cancelled && running && epoch === generation
-            && pendingProfile === request && accountId() === account;
-        const finish = () => {
-            if (pendingProfile === request) pendingProfile = undefined;
-            request.cancel();
-        };
-        const open = () => {
-            timer = setTimeout(() => {
-                timer = undefined;
-                if (!current()) { finish(); return; }
-                openUserProfile(vendetta, { ...options }, current).then(opened => {
-                    if (!opened && current()) notify("Profiles are unavailable on this Discord version");
-                }).catch(() => {
-                    if (current()) notify("Unable to open profile. Try again.");
-                }).finally(finish);
-            }, 0);
-        };
-        const request = {
-            cancel() {
-                cancelled = true;
-                clearTimeout(timer);
-                optional(() => interaction?.cancel());
-            },
-            release() {
-                if (queued || cancelled) return;
-                if (!current()) { finish(); return; }
-                queued = true;
-                clearTimeout(timer);
-                // Both the React native window and the hosting alert must be
-                // removed first. An elapsed timeout is not proof of dismissal.
-                try {
-                    if (typeof RN.InteractionManager?.runAfterInteractions === "function")
-                        interaction = RN.InteractionManager.runAfterInteractions(open);
-                    else open();
-                } catch { open(); }
-            },
-        };
-        pendingProfile = attempt.profile = request;
-        timer = setTimeout(() => {
-            const show = current();
-            finish();
-            if (show) notify("Server Info is still closing. Close it before trying the profile again.");
-        }, 2500);
-        close();
-        releaseProfile();
-    }
-    function dismissPanelHost() {
-        const alerts = attempt.panel;
-        if (!alerts) return;
-        optional(() => alerts.dismissAlert(attempt.panelKey));
-        // Some builds retain the hosting alert after dismissal. Remove only this
-        // panel's entry so its dialog backdrop cannot keep blocking Discord.
-        optional(() => {
-            const store = alerts.useAlertStore;
-            if (typeof store?.getState !== "function" || typeof store?.setState !== "function") return;
-            const owns = entry => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode;
-            const entries = store.getState()?.alerts;
-            if (!Array.isArray(entries) || !entries.some(owns)) return;
-            store.setState(state => {
-                if (!Array.isArray(state.alerts)) return state;
-                const remaining = state.alerts.filter(entry => !owns(entry));
-                return remaining.length === state.alerts.length ? state : { alerts: remaining };
-            });
-        });
-        optional(() => {
-            const entries = alerts.useAlertStore?.getState?.()?.alerts;
-            if (Array.isArray(entries) && !entries.some(entry => entry?.key === attempt.panelKey || entry?.node === attempt.panelNode))
-                attempt.hostReleased = true;
-        });
-        releaseProfile();
-    }
     function close(hide = true) {
         clearTimeout(attempt.timer);
         const current = live();
         if (current) activeSheet = undefined;
-        hidePanel();
+        attempt.closed = true;
         if (!current) return;
-        if (hide) {
-            if (attempt.panel) dismissPanelHost();
-            else optional(() => host?.hideActionSheet?.(key));
-        }
+        if (hide) optional(() => host?.hideActionSheet?.(key));
     }
     function presented() {
         if (live() && !attempt.fallback) {
@@ -328,9 +221,8 @@ export function openServerInfo(id, load) {
         if (!live() || attempt.fallback) return;
         attempt.fallback = true;
         clearTimeout(attempt.timer);
-        hidePanel();
-        if (attempt.panel) dismissPanelHost();
-        else optional(() => host?.hideActionSheet?.(key));
+        attempt.closed = true;
+        optional(() => host?.hideActionSheet?.(key));
         if (error) optional(() => console.warn("[InfoCommands] Using native server info fallback", error));
         Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then(data => {
             if (!live()) return;
@@ -359,34 +251,6 @@ export function openServerInfo(id, load) {
         componentDidCatch(error) { fallback(error); }
         render() { return this.state.failed ? null : this.props.children; }
     } : null;
-    if (vendetta.host?.id === "valenced") {
-        const alerts = nativeAlerts();
-        if (alerts && RN.Modal) {
-            function ManagedServerInfoModal() {
-                const visible = React.useSyncExternalStore(subscribePanel, panelVisible, panelVisible);
-                if (!visible || !live() || attempt.fallback) return null;
-                attempt.contentReleased = false;
-                const content = React.createElement(ServerInfoModal, {
-                    guildId: id, onClose: () => close(), onPresented: presented, onDismiss: dismissed,
-                    onUnmount: contentUnmounted,
-                    onCopyServerId: value => { if (live() && value === id) copy(id); },
-                    onOpenProfile: requestProfile,
-                });
-                return Boundary ? React.createElement(Boundary, null, content) : content;
-            }
-            attempt.panel = alerts;
-            attempt.panelKey = `${key}.panel.${epoch}.${++panelSequence}`;
-            attempt.panelNode = React.createElement(ManagedServerInfoModal);
-            attempt.timer = setTimeout(() => fallback(), 2500);
-            try {
-                const result = alerts.openAlert(attempt.panelKey, attempt.panelNode, hostDismissed, { dismissable: true });
-                Promise.resolve(result).catch(fallback);
-                return;
-            } catch (error) { fallback(error); return; }
-        }
-        fallback();
-        return;
-    }
     function ManagedServerInfoSheet(props) {
         React.useEffect(() => () => {
             dismissed();
@@ -411,10 +275,11 @@ export function openServerInfo(id, load) {
 }
 
 export function disposeServerMenu() {
+    valencedPage?.dispose();
+    valencedPage = undefined;
     activeSheet?.close();
     clearTimeout(menuTimer);
     menuTimer = undefined;
-    cancelPendingProfile();
     running = false;
     generation++;
     for (const unpatch of dynamicPatches.splice(0).reverse()) optional(() => unpatch());

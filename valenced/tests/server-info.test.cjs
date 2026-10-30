@@ -3,34 +3,34 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, GUILD, FRIEND, ACCOUNT } = require('../../revenge-next/tests/next-harness.cjs');
-const { installServerPanelHost, trackNativeWindows, installProfileSheetHost } = require('./server-info-fixture.cjs');
+const { installNavigationHost } = require('../../revenge-next/tests/navigation-fixture.cjs');
+const { trackNativeWindows, installProfileSheetHost } = require('./server-info-fixture.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
 const h = React.createElement;
 
 async function scenario(t, options = {}) {
-    const w = createWorld(options), renders = [], host = installServerPanelHost(w, options.panelHost);
-    w.hostRoot = await mount(h(host.Root));
-    w.panelNodes = host.nodes;
-    w.panelHost = host;
-    async function mount(element) {
+    const w = createWorld(options), renders = [];
+    w.pageHost = installNavigationHost(w, { loadSettingsOnOpen: !!options.loadSettingsOnOpen });
+    w.mount = async element => {
         let ui; await Renderer.act(async () => { ui = Renderer.create(element); });
         renders.push(ui); return ui;
-    }
-    w.openPanel = async () => {
+    };
+    w.hostRoot = await w.mount(h(w.pageHost.Root));
+    w.openPage = async () => {
         const item = w.loaded.get('info-commands') ?? await w.start('info-commands');
-        const settings = await mount(h(item.options.SettingsComponent, { api: item.api }));
-        await Renderer.act(async () => button(settings, 'Open current server info').props.onPress());
-        const modal = w.hostRoot.root.findByType('Modal');
-        await Renderer.act(async () => modal.props.onShow());
+        const settings = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
+        await Renderer.act(async () => { button(settings, 'Open current server info').props.onPress(); await w.advance(0); });
         return w.hostRoot;
     };
     t.after(async () => {
         for (const item of [...w.loaded.values()].reverse()) await Renderer.act(async () => w.stop(item));
-        assert.equal(host.nodes.size, 0, 'no custom panel remains mounted');
         for (const ui of renders.reverse()) await Renderer.act(async () => ui.unmount());
+        assert.equal(w.registeredScreens.size, 0, 'native route unregistered');
+        assert.equal(w.pageHost.subscribers.size, 0, 'navigation subscriptions removed');
         assert.equal(w.timers.size, 0);
         assert.equal(w.pathWaiters.size, 0);
         assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
+        assert.deepEqual(w.pageHost.unhandled, []);
         assert.deepEqual(w.errors, []);
     });
     return w;
@@ -41,250 +41,220 @@ function button(ui, label) {
     assert.ok(nodes.length, label); return nodes[0];
 }
 const contents = ui => JSON.stringify(ui.toJSON());
-const nativeDialogs = w => w.alerts.filter(alert => typeof alert[1] === 'string');
+const profiles = w => w.calls.filter(call => call[0] === 'profileOpened');
 
-test('InfoCommands shows the requested banner, icon and grouped server rows before a stalled request completes', async t => {
+test('Server Info never creates an alert host or a custom native Modal window', async t => {
+    const w = await scenario(t);
+    // Beta6 only removed the alert's React node; that is not proof the native
+    // host released input. Forbid that presentation path altogether.
+    Object.defineProperty(w.RN, 'Modal', { configurable: true, get() { throw new Error('Server Info must use its native navigator route'); } });
+    w.U.discord.actions.AlertActionCreators.openAlert = () => { throw new Error('No Server Info alert host'); };
+    w.RN.Alert.alert = () => { throw new Error('No Server Info OS dialog'); };
+    const ui = await w.openPage();
+    assert.ok(ui.root.findAll(node => node.props.testID === 'info-commands-server-page').length);
+    assert.match(contents(ui), /Test Guild/);
+    assert.equal(w.alerts.length, 0);
+    assert.equal(w.pageHost.roots.at(-1).name, 'settings', 'route belongs to SettingsNavigator');
+});
+
+test('Server Info shows its banner, icon, counts and owner while requests stall', async t => {
     const w = await scenario(t, { curatedOnly: true, http: () => new Promise(() => {}) });
-    // The old lazy-sheet path cannot present anything on this device.
-    w.sheets.openLazy = () => {};
-    // Discord's own table rows require contexts that a new Android Modal root
-    // need not provide. The panel must use its own RN rows instead.
-    function NativeRow() { throw new Error('Missing Discord gesture root'); }
-    NativeRow.TrailingText = () => null;
-    w.U.discord.design.Design.TableRow = NativeRow;
-    w.U.discord.design.Design.TableRowGroup = () => { throw new Error('Missing Discord sheet context'); };
+    w.sheets.openLazy = () => { throw new Error('Server Info must not use the invisible lazy-sheet path'); };
+    w.U.discord.design.Design.TableRow = () => { throw new Error('No private sheet contexts'); };
     Object.assign(w.guilds[GUILD], { icon: 'server-icon', banner: 'a_server-banner', memberCount: 1264,
         onlineCount: 125, roles: { one: {}, two: {} }, premiumTier: 3, premiumSubscriptionCount: 24 });
-    const ui = await w.openPanel(), text = contents(ui);
+    const ui = await w.openPage(), text = contents(ui);
     for (const label of ['Test Guild', 'Overview', 'Members', 'Online', 'Roles', 'Channels', 'Boost Level', 'Server', 'Owner', 'Created', 'ID', 'Friends in Server'])
         assert.ok(text.includes(label), label);
     for (const value of ['1,264', '125', 'Level 3', '24 boosts', GUILD]) assert.ok(text.includes(value), value);
     const images = ui.root.findAll(node => node.type === 'Image').map(node => node.props.source.uri);
     assert.ok(images.some(uri => uri.includes('banners/' + GUILD + '/a_server-banner.gif')));
     assert.ok(images.some(uri => uri.includes('icons/' + GUILD + '/server-icon.png')));
-    const panel = ui.root.findAll(node => node.type === 'View' && node.props.testID === 'info-commands-server-panel')[0];
-    assert.ok(panel.props.style.height > 500 && panel.props.style.height < 900);
-    assert.equal(panel.props.style.borderTopLeftRadius, 24);
     assert.equal(ui.root.findByType('ScrollView').props.style.flex, 1);
-    assert.equal(nativeDialogs(w).length, 0, 'no white Android details dialog');
+    assert.notEqual(ui.root.findByType('ScrollView').props.scrollEnabled, false);
     await Renderer.act(async () => button(ui, 'ID').props.onPress());
     assert.equal(w.clipboard.at(-1), GUILD);
     await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
-    assert.equal(w.panelNodes.size, 0);
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
 });
 
-for (const theme of ['dark', 'light']) test('InfoCommands panel respects ' + theme + ' appearance and fits a short window', async t => {
-    const w = await scenario(t);
-    w.stores.ThemeStore.theme = theme;
+for (const theme of ['dark', 'light']) test('Server Info keeps ' + theme + ' appearance on a short native screen', async t => {
+    const w = await scenario(t); w.stores.ThemeStore.theme = theme;
     w.RN.useWindowDimensions = () => ({ width: 800, height: 400 });
-    const ui = await w.openPanel();
-    const panel = ui.root.findAll(node => node.type === 'View' && node.props.testID === 'info-commands-server-panel')[0];
-    assert.equal(panel.props.style.backgroundColor, theme === 'light' ? '#ffffff' : '#242429');
-    assert.ok(panel.props.style.height > 200 && panel.props.style.height < 400);
-    assert.equal(ui.root.findByType('Modal').props.transparent, true);
+    const ui = await w.openPage();
+    const page = ui.root.findAll(node => node.type === 'View' && node.props.testID === 'info-commands-server-page')[0];
+    assert.equal(page.props.style.backgroundColor, theme === 'light' ? '#ffffff' : '#242429');
+    assert.equal(page.props.style.flex, 1);
+    assert.equal(ui.root.findAllByType('Modal').length, 0);
 });
 
-test('InfoCommands closes the panel before opening its owner through the cold profile resolver', async t => {
-    const w = await scenario(t), cold = installColdProfileModule(w);
-    const ui = await w.openPanel();
+for (const dismiss of ['X', 'Android Back']) test('Owner profile ' + dismiss + ' returns to usable Server Info and then Discord', async t => {
+    const w = await scenario(t), windows = trackNativeWindows(w), cold = installColdProfileModule(w);
+    const native = installProfileSheetHost(w), profileUI = await w.mount(h(native.Root));
+    const ui = await w.openPage();
+    assert.equal(windows.size, 0, 'Server Info creates no native dialog window');
     await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    assert.equal(w.panelNodes.size, 0);
-    assert.equal(cold.initializedFactories(), 0, 'wait for the modal to dismiss');
-    await Renderer.act(async () => w.advance(180));
-    const opened = w.calls.find(call => call[0] === 'profileOpened');
-    assert.equal(opened[1].userId, ACCOUNT);
-    assert.equal(opened[1].guildId, GUILD);
-    assert.equal(opened[2], 'stack');
+    assert.equal(profiles(w).length, 1);
+    assert.equal(profiles(w)[0][1].userId, ACCOUNT);
+    assert.equal(profiles(w)[0][1].guildId, GUILD);
+    assert.equal(profiles(w)[0][2], 'stack');
     assert.equal(cold.initializedFactories(), 1);
     assert.equal(cold.unrelatedFactories(), 0);
-});
-
-test('InfoCommands friend rows display cached members and open that friend, not the owner', async t => {
-    const w = await scenario(t), cold = installColdProfileModule(w);
-    w.stores.GuildMemberStore.getMember = (guild, user) => guild === GUILD && user === FRIEND ? { nick: 'Server friend' } : undefined;
-    const ui = await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Server friend (Test Friend)').props.onPress());
-    await Renderer.act(async () => w.advance(180));
-    const opened = w.calls.find(call => call[0] === 'profileOpened');
-    assert.equal(opened[1].userId, FRIEND);
-    assert.equal(opened[1].guildId, GUILD);
-    assert.equal(cold.unrelatedFactories(), 0);
-});
-
-for (const action of ['back', 'backdrop']) test('InfoCommands closes on ' + action + ' and can reopen without stacking panels', async t => {
-    const w = await scenario(t), ui = await w.openPanel();
-    await Renderer.act(async () => action === 'back'
-        ? ui.root.findByType('Modal').props.onRequestClose()
-        : button(ui, 'Dismiss server info').props.onPress());
-    assert.equal(w.panelNodes.size, 0);
-    await w.openPanel();
-    assert.equal(w.panelNodes.size, 1);
-    const item = w.loaded.get('info-commands');
-    await Renderer.act(async () => w.stop(item));
-    assert.equal(w.panelNodes.size, 0);
-    assert.equal(w.timers.size, 0);
-});
-
-test('InfoCommands cancels an owner action queued before the plugin stops', async t => {
-    const w = await scenario(t), cold = installColdProfileModule(w);
-    const ui = await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    await Renderer.act(async () => w.stop(w.loaded.get('info-commands')));
-    await Renderer.act(async () => w.advance(1000));
-    assert.equal(cold.initializedFactories(), 0);
-    assert.equal(w.calls.some(call => call[0] === 'profileOpened'), false);
-});
-
-test('InfoCommands stops already-open copy and profile actions when disabled', async t => {
-    const w = await scenario(t), cold = installColdProfileModule(w);
-    const ui = await w.openPanel();
-    const copy = button(ui, 'ID').props.onPress, owner = button(ui, 'Owner').props.onPress;
-    await Renderer.act(async () => w.stop(w.loaded.get('info-commands')));
-    await Renderer.act(async () => { copy(); owner(); await w.advance(1000); });
-    assert.equal(w.clipboard.length, 0);
-    assert.equal(cold.initializedFactories(), 0);
-    assert.equal(w.panelNodes.size, 0);
-});
-
-test('InfoCommands keeps an unavailable-server error inside the themed panel', async t => {
-    const w = await scenario(t, { http: () => ({ body: null }) });
-    delete w.guilds[GUILD];
-    const ui = await w.openPanel();
-    assert.match(contents(ui), /Server details are unavailable/);
-    assert.equal(nativeDialogs(w).length, 0);
-    assert.ok(button(ui, 'Close server info'));
-});
-
-for (const mode of ['retain', 'throw']) test('InfoCommands Close text closes a panel when native dismissal can ' + mode, async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: mode } });
-    const ui = await w.openPanel();
-    const actions = w.U.discord.actions.AlertActionCreators;
-    const unrelated = h(w.RN.Text, null, 'Another plugin alert');
-    await Renderer.act(async () => actions.openAlert('unrelated.plugin.alert', unrelated));
-    const closeText = ui.root.findAll(node => node.type === 'Text' && node.children.includes('Close'))[0];
-    assert.equal(typeof closeText.props.onPress, 'function', 'the text itself is pressable');
-    const close = closeText.props.onPress;
-    await Renderer.act(async () => close());
-    assert.equal(ui.root.findAllByType('Modal').length, 0);
-    assert.equal(w.panelNodes.size, 1, 'only the unrelated alert remains');
-    assert.equal(w.panelNodes.get('unrelated.plugin.alert').content, unrelated);
-    assert.equal(w.timers.size, 0, 'the closed panel has no data timers');
-    assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
-    await Renderer.act(async () => w.panelHost.clear());
-    await w.openPanel();
-    await Renderer.act(async () => close());
-    assert.equal(ui.root.findAllByType('Modal').length, 1, 'the old Close callback cannot dismiss a new panel');
-    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
-    assert.equal(w.panelNodes.size, 0);
-});
-
-for (const action of ['close', 'back', 'backdrop']) test('InfoCommands ' + action + ' hides immediately before delayed native removal', async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
-    const ui = await w.openPanel();
-    const close = action === 'back' ? ui.root.findByType('Modal').props.onRequestClose
-        : button(ui, action === 'close' ? 'Close server info' : 'Dismiss server info').props.onPress;
-    await Renderer.act(async () => close());
-    assert.equal(ui.root.findAllByType('Modal').length, 0, 'the modal is gone before the host removes its entry');
-    assert.equal(w.timers.size, 0);
-    assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
-    await w.openPanel();
-    assert.equal(w.panelNodes.size, 2, 'the old and reopened panels have distinct host keys');
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    assert.equal(ui.root.findAllByType('Modal').length, 1, 'an old native dismissal cannot close the reopened panel');
-    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    assert.equal(w.panelNodes.size, 0);
-});
-
-for (const dismiss of ['X', 'Android Back']) test('InfoCommands leaves no blocking windows after the owner profile closes with ' + dismiss, async t => {
-    const w = await scenario(t), windows = trackNativeWindows(w), cold = installColdProfileModule(w);
-    const profileHost = installProfileSheetHost(w);
-    let profileUI;
-    await Renderer.act(async () => { profileUI = Renderer.create(h(profileHost.Root)); });
-    t.after(async () => { await Renderer.act(async () => profileUI.unmount()); });
-    const snapshots = [];
-    const original = cold.namespace.default;
-    cold.namespace.default = function (...args) {
-        snapshots.push({ nativeWindows: windows.size, alertHosts: w.panelNodes.size });
-        return original.apply(this, args);
-    };
-    const ui = await w.openPanel();
-    assert.equal(windows.size, 1);
-    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    await Renderer.act(async () => w.advance(1000));
-    assert.equal(snapshots.length, 1);
-    assert.deepEqual(snapshots[0], { nativeWindows: 0, alertHosts: 0 }, 'profile opens only after both blocking surfaces have gone');
-    assert.equal(profileHost.sheets.size, 1);
-    assert.equal(windows.size, 1, 'only the native profile window is open');
+    assert.equal(windows.size, 1, 'only Discord native profile is on top');
+    assert.match(contents(ui), /Test Guild/, 'ordinary Server Info route stays underneath');
     await Renderer.act(async () => dismiss === 'X'
         ? button(profileUI, 'Close native profile').props.onPress()
         : profileUI.root.findByType('Modal').props.onRequestClose());
-    assert.equal(profileHost.sheets.size, 0);
-    assert.equal(windows.size, 0, 'no invisible native window can absorb home-screen presses');
-    assert.equal(w.panelNodes.size, 0, 'no hosting alert remains underneath the profile');
-    await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
-    await Renderer.act(async () => w.advance(1000));
+    assert.equal(native.sheets.size, 0);
+    assert.equal(windows.size, 0, 'no native window remains to intercept touches');
+    assert.notEqual(ui.root.findByType('ScrollView').props.scrollEnabled, false);
+    await Renderer.act(async () => button(ui, 'ID').props.onPress());
+    assert.equal(w.clipboard.at(-1), GUILD, 'the screen accepts a press after closing the profile');
+    await Renderer.act(async () => w.navigation.goBack());
+    await Renderer.act(async () => button(ui, 'Discord test control').props.onPress());
+    assert.equal(w.pageHost.taps(), 1);
+    assert.equal(w.alerts.length, 0);
 });
 
-test('InfoCommands waits for a delayed alert host before opening the owner profile', async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
-    const cold = installColdProfileModule(w), ui = await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    await Renderer.act(async () => w.advance(1000));
-    assert.equal(cold.initializedFactories(), 0, 'a fixed delay cannot establish that the host has closed');
-    assert.equal(w.panelNodes.size, 1);
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    await Renderer.act(async () => w.advance(0));
-    assert.equal(cold.initializedFactories(), 1);
-    assert.equal(w.panelNodes.size, 0);
+test('Friend profiles use the same ordinary screen and preserve the exact user', async t => {
+    const w = await scenario(t); installColdProfileModule(w);
+    w.stores.GuildMemberStore.getMember = (guild, user) => guild === GUILD && user === FRIEND ? { nick: 'Server friend' } : undefined;
+    const ui = await w.openPage();
+    await Renderer.act(async () => button(ui, 'Server friend (Test Friend)').props.onPress());
+    assert.equal(profiles(w)[0][1].userId, FRIEND);
+    assert.equal(profiles(w)[0][1].guildId, GUILD);
+    assert.ok(button(ui, 'Close server info'));
 });
 
-test('InfoCommands does not open a profile after the alert dismissal times out', async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
-    const cold = installColdProfileModule(w), ui = await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    await Renderer.act(async () => w.advance(3000));
+for (const exit of ['Close', 'Android Back']) test('Server Info ' + exit + ' releases data and invalidates old buttons', async t => {
+    const w = await scenario(t); installColdProfileModule(w);
+    const ui = await w.openPage();
+    const owner = button(ui, 'Owner').props.onPress, copy = button(ui, 'ID').props.onPress;
+    await Renderer.act(async () => exit === 'Close' ? button(ui, 'Close server info').props.onPress() : w.navigation.goBack());
+    await Renderer.act(async () => { owner(); copy(); await w.advance(1000); });
+    assert.equal(profiles(w).length, 0); assert.equal(w.clipboard.length, 0);
+    assert.equal(w.timers.size, 0);
+    assert.equal(Object.values(w.stores).reduce((n, store) => n + store.listeners.size, 0), 0);
+    await w.openPage(); assert.ok(button(ui, 'Owner'));
+});
+
+test('Duplicate owner taps open one native profile without closing or stacking Server Info', async t => {
+    const w = await scenario(t); installColdProfileModule(w);
+    const ui = await w.openPage(), owner = button(ui, 'Owner').props.onPress;
+    await Renderer.act(async () => { owner(); owner(); });
+    assert.equal(profiles(w).length, 1);
+    assert.equal(w.pageHost.stack.filter(route => route.params?.__infoCommandsPage).length, 1);
+});
+
+test('Stopping InfoCommands closes its focused native route and cancels stale controls', async t => {
+    const w = await scenario(t), cold = installColdProfileModule(w), ui = await w.openPage();
+    const owner = button(ui, 'Owner').props.onPress;
+    await Renderer.act(async () => w.stop(w.loaded.get('info-commands')));
+    await Renderer.act(async () => { owner(); await w.advance(1000); });
     assert.equal(cold.initializedFactories(), 0);
-    assert.ok(w.toasts.some(text => /still closing/.test(text)));
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    await Renderer.act(async () => w.advance(1000));
-    assert.equal(cold.initializedFactories(), 0, 'a late host callback cannot revive an expired owner tap');
+    assert.equal(w.registeredScreens.size, 0);
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
 });
 
-test('InfoCommands cancels a waiting owner tap when the signed-in account changes', async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
-    const cold = installColdProfileModule(w), ui = await w.openPanel();
-    await Renderer.act(async () => button(ui, 'Owner').props.onPress());
+test('Closing an inactive Server Info route never pops another Discord screen', async t => {
+    const w = await scenario(t), ui = await w.openPage();
+    const close = button(ui, 'Close server info').props.onPress;
+    await Renderer.act(async () => w.navigation.navigate('UnrelatedProfile'));
+    await Renderer.act(async () => { close(); await w.stop(w.loaded.get('info-commands')); });
+    assert.equal(w.navigation.getCurrentRoute().name, 'UnrelatedProfile');
+});
+
+test('Changing the signed-in account closes and invalidates the Server Info screen', async t => {
+    const w = await scenario(t), cold = installColdProfileModule(w), ui = await w.openPage();
+    const owner = button(ui, 'Owner').props.onPress;
     await Renderer.act(async () => w.setAccount(FRIEND));
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    await Renderer.act(async () => w.advance(3000));
+    await Renderer.act(async () => owner());
     assert.equal(cold.initializedFactories(), 0);
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+});
+
+test('Server Info loads the cold SettingsNavigator before navigating to its own route', async t => {
+    const w = await scenario(t, { loadSettingsOnOpen: true }); w.setSettingsLoaded(false);
+    const ui = await w.openPage(); assert.ok(button(ui, 'Owner'));
+    assert.equal(w.pageHost.roots.at(-1).name, 'settings');
+});
+
+test('Back during cold Settings loading cancels late Server Info navigation', async t => {
+    const w = await scenario(t); w.setSettingsLoaded(false);
+    await w.openPage();
+    assert.equal(w.navigation.getCurrentRoute().name, 'SettingsOverview');
+    await Renderer.act(async () => w.navigation.goBack());
+    await Renderer.act(async () => { w.setSettingsLoaded(true); await w.advance(9000); });
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+    assert.equal(w.registeredScreens.size, 0);
     assert.equal(w.toasts.length, 0);
 });
 
-test('InfoCommands repeated owner taps queue one profile and a new panel cancels the old tap', async t => {
-    const w = await scenario(t, { panelHost: { dismissMode: 'defer', exposeStore: false } });
-    const cold = installColdProfileModule(w), ui = await w.openPanel();
-    const owner = button(ui, 'Owner').props.onPress;
-    await Renderer.act(async () => { owner(); owner(); });
-    await w.openPanel();
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    await Renderer.act(async () => w.advance(1000));
-    assert.equal(cold.initializedFactories(), 0);
-    assert.equal(ui.root.findAllByType('Modal').length, 1, 'the reopened panel remains usable');
-    await Renderer.act(async () => { button(ui, 'Owner').props.onPress(); });
-    await Renderer.act(async () => w.panelHost.flushDismissals());
-    await Renderer.act(async () => w.advance(0));
-    assert.equal(w.calls.filter(call => call[0] === 'profileOpened').length, 1);
+test('Unavailable native routing shows feedback without opening another popup', async t => {
+    const w = await scenario(t); delete w.U.discord.modules.settings.registerSettingsItem;
+    await w.openPage();
+    assert.ok(w.toasts.some(text => /native screen navigation/.test(text)));
+    assert.equal(w.alerts.length, 0); assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
 });
 
-test('InfoCommands can release a profile when InteractionManager is unavailable', async t => {
+test('An unpresented native screen times out without a modal or a late reopen', async t => {
+    const w = await scenario(t); w.navigation.navigate = () => {};
+    await w.openPage();
+    await Renderer.act(async () => w.advance(9000));
+    assert.ok(w.toasts.some(text => /could not open/.test(text)));
+    assert.equal(w.alerts.length, 0); assert.equal(w.timers.size, 0);
+});
+
+test('Unavailable guild errors stay inside the ordinary Server Info screen', async t => {
+    const w = await scenario(t, { http: () => ({ body: null }) }); delete w.guilds[GUILD];
+    const ui = await w.openPage();
+    assert.match(contents(ui), /Server details are unavailable/);
+    assert.ok(button(ui, 'Close server info')); assert.equal(w.alerts.length, 0);
+});
+
+test('Server Info waits for the root navigator and ignores repeated ready events', async t => {
+    const w = await scenario(t), readyListeners = new Set(), addListener = w.navigation.addListener;
+    let ready = false;
+    w.navigation.isReady = () => ready;
+    w.navigation.addListener = (event, callback) => event === 'ready'
+        ? (readyListeners.add(callback), () => readyListeners.delete(callback)) : addListener(event, callback);
+    const ui = await w.openPage();
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+    await Renderer.act(async () => { ready = true; for (const callback of [...readyListeners]) callback(); await w.advance(0); });
+    assert.ok(button(ui, 'Owner'));
+    await Renderer.act(async () => { for (const callback of [...readyListeners]) callback(); await w.advance(0); });
+    assert.equal(w.pageHost.stack.filter(route => route.params?.__infoCommandsPage).length, 1);
+    await Renderer.act(async () => button(ui, 'Close server info').props.onPress());
+    assert.equal(readyListeners.size, 0);
+});
+
+test('Stopping before native navigation is ready cancels registration and opening', async t => {
+    const w = await scenario(t), readyListeners = new Set(), addListener = w.navigation.addListener;
+    w.navigation.isReady = () => false;
+    w.navigation.addListener = (event, callback) => event === 'ready'
+        ? (readyListeners.add(callback), () => readyListeners.delete(callback)) : addListener(event, callback);
+    await w.openPage();
+    await Renderer.act(async () => w.stop(w.loaded.get('info-commands')));
+    await Renderer.act(async () => { for (const callback of [...readyListeners]) callback(); await w.advance(9000); });
+    assert.equal(readyListeners.size, 0); assert.equal(w.registeredScreens.size, 0);
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+});
+
+test('Native route registration failures remain visible without opening an alert', async t => {
+    const w = await scenario(t);
+    w.U.discord.modules.settings.registerSettingsItem = () => { throw new Error('Native settings unavailable'); };
+    await w.openPage();
+    assert.ok(w.toasts.some(text => /could not register/.test(text)));
+    assert.equal(w.alerts.length, 0); assert.equal(w.timers.size, 0);
+});
+
+test('A rejecting native profile opener leaves the ordinary Server Info page usable', async t => {
     const w = await scenario(t), cold = installColdProfileModule(w);
-    delete w.RN.InteractionManager;
-    const ui = await w.openPanel();
+    cold.namespace.default = () => { throw new Error('Native profile refused'); };
+    const ui = await w.openPage();
     await Renderer.act(async () => button(ui, 'Owner').props.onPress());
-    assert.equal(cold.initializedFactories(), 0, 'do not open inside the React unmount commit');
-    await Renderer.act(async () => w.advance(0));
-    assert.equal(cold.initializedFactories(), 1);
+    assert.ok(w.toasts.some(text => /Unable to open profile/.test(text)));
+    await Renderer.act(async () => button(ui, 'ID').props.onPress());
+    assert.equal(w.clipboard.at(-1), GUILD);
+    assert.equal(w.alerts.length, 0); assert.equal(ui.root.findAllByType('Modal').length, 0);
 });

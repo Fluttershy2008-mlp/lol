@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const { createWorld, React, Renderer, CHANNEL, FRIEND, GUILD } = require('../../revenge-next/tests/next-harness.cjs');
 const { createLegacyAdapter } = require('../runtime.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
-const { installServerPanelHost } = require('./server-info-fixture.cjs');
+const { installNavigationHost } = require('../../revenge-next/tests/navigation-fixture.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const h = React.createElement;
 
@@ -215,9 +215,9 @@ test('AutoText types a full prepared multiline message through the imported comp
     assert.equal(sends, 0);
 });
 
-test('InfoCommands opens the themed panel from an unnamed late-loaded server menu', async t => {
+test('InfoCommands opens its native screen from an unnamed late-loaded server menu', async t => {
     const w = scenario(t, { curatedOnly: true, http: () => new Promise(() => {}) });
-    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
+    const host = installNavigationHost(w), panel = await w.mount(h(host.Root));
     // A successful openLazy invocation can still leave no visible sheet on a device.
     w.sheets.openLazy = () => {};
     await w.start('info-commands');
@@ -229,7 +229,7 @@ test('InfoCommands opens the themed panel from an unnamed late-loaded server men
     assert.ok(info);
     assert.equal(original.length, 1);
     await Renderer.act(async () => { info.action(); await w.advance(180); });
-    await Renderer.act(async () => panel.root.findByType('Modal').props.onShow());
+    assert.equal(panel.root.findAllByType('Modal').length, 0);
     assert.match(JSON.stringify(panel.toJSON()), /Test Guild/);
     assert.match(JSON.stringify(panel.toJSON()), new RegExp(GUILD));
     assert.equal(w.alerts.some(alert => typeof alert[1] === 'string'), false);
@@ -237,14 +237,14 @@ test('InfoCommands opens the themed panel from an unnamed late-loaded server men
     assert.equal(w.clipboard.at(-1), GUILD);
     await Renderer.act(async () => button(panel, 'Close server info').props.onPress());
     await Renderer.act(async () => { info.action(); await w.advance(180); });
-    assert.equal(host.nodes.size, 1);
+    assert.equal(host.stack.filter(route => route.params?.__infoCommandsPage).length, 1);
 });
 
 test('InfoCommands settings offer a working current-server details button', async t => {
     const w = scenario(t), item = await w.start('info-commands');
-    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
+    const host = installNavigationHost(w), panel = await w.mount(h(host.Root));
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
-    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    await Renderer.act(async () => { button(ui, 'Open current server info').props.onPress(); await w.advance(0); });
     assert.match(JSON.stringify(panel.toJSON()), /Test Guild/);
     assert.ok(button(panel, 'ID'));
     assert.ok(button(panel, 'Close server info'));
@@ -279,18 +279,14 @@ test('stopping InfoCommands cancels pending path subscriptions and button action
 
 test('the Owner row loads an anonymous default profile opener on the first tap', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
-    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
+    const host = installNavigationHost(w), panel = await w.mount(h(host.Root));
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
-    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    await Renderer.act(async () => { button(ui, 'Open current server info').props.onPress(); await w.advance(0); });
     const owner = button(panel, 'Owner');
     assert.ok(owner);
     assert.equal(cold.initializedFactories(), 0);
-    await Renderer.act(async () => {
-        owner.props.onPress(); await w.advance(180);
-        assert.equal(cold.initializedFactories(), 0, 'React has not committed the panel unmount yet');
-    });
-    await Renderer.act(async () => w.advance(0));
+    await Renderer.act(async () => owner.props.onPress());
     const opened = w.calls.filter(c => c[0] === 'profileOpened');
     assert.equal(opened.length, 1);
     assert.equal(opened[0][1].userId, w.accountId());
@@ -340,26 +336,22 @@ test('Valid User native result dialog opens a profile through the same resolver'
 
 test('a loaded default profile module opens even when its function has an unrelated name', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
-    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
+    const host = installNavigationHost(w), panel = await w.mount(h(host.Root));
     w.addModule(cold.namespace, 'modules/user_profile/native/showUserProfileActionSheet.tsx');
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
-    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
-    await Renderer.act(async () => {
-        button(panel, 'Owner').props.onPress(); await w.advance(180);
-        assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 0, 'wait for the panel unmount commit');
-    });
-    await Renderer.act(async () => w.advance(0));
+    await Renderer.act(async () => { button(ui, 'Open current server info').props.onPress(); await w.advance(0); });
+    await Renderer.act(async () => button(panel, 'Owner').props.onPress());
     assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 1);
     assert.equal(cold.initializedFactories(), 0);
 });
 
 test('an owner-profile action from a stopped plugin cannot initialize or open a profile', async t => {
     const w = scenario(t), cold = installColdProfileModule(w);
-    const host = installServerPanelHost(w), panel = await w.mount(h(host.Root));
+    const host = installNavigationHost(w), panel = await w.mount(h(host.Root));
     const item = await w.start('info-commands');
     const ui = await w.mount(h(item.options.SettingsComponent, { api: item.api }));
-    await Renderer.act(async () => button(ui, 'Open current server info').props.onPress());
+    await Renderer.act(async () => { button(ui, 'Open current server info').props.onPress(); await w.advance(0); });
     const onPress = button(panel, 'Owner').props.onPress;
     await Renderer.act(async () => w.stop(item));
     await Renderer.act(async () => { onPress(); await w.advance(180); });

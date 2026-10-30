@@ -48,8 +48,8 @@ function PanelRow(props: any) {
     borderBottomColor: color("BACKGROUND_MODIFIER_ACCENT", "rgba(127,127,127,0.12)") } }, React.createElement(TableRow, props));
 }
 PanelRow.TrailingText = TrailingText;
-// A native Modal has its own Android root. Plain RN rows keep its actions usable
-// without depending on Discord's gesture-handler root or sheet contexts.
+// Plain RN rows work on the native navigator screen without depending on
+// Discord's private sheet contexts.
 export const panelDesign = { Text, TableRow: PanelRow, TableRowGroup };
 const nativeRow = nativeDesign("TableRow") ?? optional(() => vendetta.metro.findByProps("TableRow")?.TableRow);
 const NativeGroup = nativeDesign("TableRowGroup") ?? optional(() => vendetta.metro.findByProps("TableRowGroup")?.TableRowGroup);
