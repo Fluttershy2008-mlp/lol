@@ -1,26 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 import { AccountError, createClient, createController } from './core.mjs';
 import { createModuleResolver } from './modules.mjs';
-import { createNativeWebView } from './native-webview.mjs';
-import { webViewRuntimeClient } from './webview-loader.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
-import { makeQrHtml, parseQrMessage, allowedQrNavigation, qrErrorMessage, qrStatusMessage, QR_BASE_URL } from './qr-html.mjs';
 
 export function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
-    const installedVersion = V.plugin.version ?? V.plugin.manifest?.version ?? 'unknown';
     const LoginDialog = createLoginDialog(React, RN);
-    // Valenced passes its native lookup through the compatibility adapter.
-    // No Valenced global exists in an external plugin's lexical scope.
-    const qrClient = () => V.host?.getQrRuntimeClient?.() ?? webViewRuntimeClient();
-    const resolver = createModuleResolver(V.metro, { getClient: qrClient });
-    const nativeWebView = createNativeWebView(React, RN, host, qrClient);
+    const resolver = createModuleResolver(V.metro);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
-    const disposers = [], qrStops = new Set();
-    let qrCounter = 0, qrOpen = 0;
+    const disposers = [];
     let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
     const pendingFrames = new Map();
     const byProps = resolver.byProps;
@@ -40,7 +31,7 @@ export function createPlugin(V, host = globalThis) {
         clearTimer(refreshTimer);
         const instance = controller;
         refreshTimer = setTimer(() => {
-            if (active && controller === instance && !qrOpen) void instance.refreshSaved().catch(() => {});
+            if (active && controller === instance) void instance.refreshSaved().catch(() => {});
         }, 1500);
     }
     function openSettings() {
@@ -90,23 +81,13 @@ export function createPlugin(V, host = globalThis) {
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
-        const [qrStatus, setQrStatus] = React.useState('connecting');
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
-        const qrSession = React.useRef(null), qrRef = React.useRef(null), qrBlockedUntil = React.useRef(0);
-        function stopQr() {
-            if (qrSession.current) qrOpen = Math.max(0, qrOpen - 1);
-            qrSession.current = null;
-            try { qrRef.current?.injectJavaScript?.('window.stopMoreAltsQr && window.stopMoreAltsQr(); true;'); } catch {}
-            qrRef.current = null;
-        }
         React.useEffect(() => {
             // Legacy loaders initialize compatibility features when the manager is opened.
             if (!resolver.loadedOnly && active && !optionalReady) initializeOptional();
             scheduleRefresh();
-            qrStops.add(stopQr);
-            return () => { stopQr(); qrStops.delete(stopQr); };
         }, [instance]);
         React.useEffect(() => {
             mounted.current = true;
@@ -114,8 +95,6 @@ export function createPlugin(V, host = globalThis) {
             return () => { mounted.current = false; unsubscribe?.(); if (authenticating.current) instance?.cancelLogin(); };
         }, [instance]);
         const osScheme = RN.useColorScheme?.();
-        const screen = RN.useWindowDimensions?.();
-        const qrWidth = Math.max(200, Math.min(264, (screen?.width || 390) - 80));
         let theme;
         try { theme = byStore('ThemeStore')?.theme; } catch {}
         const light = theme ? theme === 'light' : osScheme === 'light';
@@ -141,7 +120,7 @@ export function createPlugin(V, host = globalThis) {
                 storage.settings = { ...storage.settings, [key]: value }; redraw(x => x + 1); scheduleRefresh();
             } }));
         const clearAuth = () => { setLogin(''); setPassword(''); setCode(''); authenticating.current = false; };
-        const cancel = () => { stopQr(); instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
+        const cancel = () => { instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
         const stillHere = () => mounted.current && active && controller === instance;
         async function run(action, success) {
             if (localLock.current || instance.busy) return;
@@ -154,69 +133,11 @@ export function createPlugin(V, host = globalThis) {
         function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
-            stopQr(); clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
-            stopQr(); clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         });
-        function startQr() {
-            if (!stillHere() || instance.busy || localLock.current) return;
-            if (Date.now() < qrBlockedUntil.current) {
-                setError(qrErrorMessage('rate-limit', (qrBlockedUntil.current - Date.now()) / 1000)); return;
-            }
-            let WebView;
-            try { WebView = nativeWebView.load() ?? resolver.webView(); } catch {}
-            if (!stillHere()) return;
-            if (!WebView) {
-                const reason = [nativeWebView.reason(), resolver.webViewFailure()].filter(Boolean).join('/');
-                setError('QR sign-in is unavailable: this Discord build does not expose the WebView module required for QR login. Use email/password or Discord’s normal sign-in instead.'
-                    + ` (More Alts ${installedVersion}; MA-QR-${reason || 'BROWSER'})`);
-                return;
-            }
-            stopQr(); instance.cancelLogin();
-            setPassword(''); setCode(''); setError(''); setNotice(''); authenticating.current = true;
-            setQrStatus('connecting');
-            const id = `${Date.now().toString(36)}-${(++qrCounter).toString(36)}`;
-            qrBlockedUntil.current = Date.now() + 3000;
-            qrSession.current = { id, WebView, source: { html: makeQrHtml(id), baseUrl: QR_BASE_URL }, consumed: false };
-            qrOpen++;
-            setPage('qr'); redraw(x => x + 1);
-        }
-        const qr = qrSession.current;
-        const qrContent = page === 'qr' && qr ? h(RN.View, { style: { alignItems: 'center', marginBottom: 16 } },
-            h(qr.WebView, {
-                key: qr.id, ref: node => { if (qrSession.current === qr) qrRef.current = node; }, source: qr.source,
-                originWhitelist: ['*'], onShouldStartLoadWithRequest: request => allowedQrNavigation(request.url),
-                javaScriptEnabled: true, domStorageEnabled: false, sharedCookiesEnabled: false, thirdPartyCookiesEnabled: false,
-                cacheEnabled: false, allowFileAccess: false, allowFileAccessFromFileURLs: false, allowUniversalAccessFromFileURLs: false,
-                mixedContentMode: 'never', setSupportMultipleWindows: false, javaScriptCanOpenWindowsAutomatically: false,
-                scrollEnabled: false, overScrollMode: 'never', showsHorizontalScrollIndicator: false, showsVerticalScrollIndicator: false,
-                accessibilityLabel: 'Discord sign-in QR code',
-                style: { backgroundColor: '#ffffff', width: qrWidth, height: qrWidth, borderRadius: 8 },
-                containerStyle: { flex: 0, width: qrWidth, height: qrWidth, borderRadius: 8, overflow: 'hidden' },
-                onOpenWindow: () => {},
-                onError: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
-                onRenderProcessGone: () => { if (stillHere() && qrSession.current === qr) { stopQr(); setError(qrErrorMessage('connection')); redraw(x => x + 1); } },
-                onMessage: event => {
-                    if (!stillHere() || qrSession.current !== qr || qr.consumed) return;
-                    const data = parseQrMessage(event, qr.id);
-                    if (!data) return;
-                    if (data.type === 'status') { setQrStatus(data.status); return; }
-                    if (data.type === 'error') {
-                        qr.consumed = true;
-                        setQrStatus('error');
-                        if (data.code === 'rate-limit') qrBlockedUntil.current = Date.now() + data.retryAfter * 1000;
-                        setError(qrErrorMessage(data.code, data.retryAfter)); return;
-                    }
-                    if (data.type === 'complete') {
-                        if (localLock.current || instance.busy) { setError('Another account action is finishing. Refresh this code and try again.'); return; }
-                        qr.consumed = true;
-                        void run(() => instance.acceptQrLogin(data.token, data.userId), handleLogin);
-                    }
-                }
-            }),
-            h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: colors.text, textAlign: 'center', fontSize: 14, lineHeight: 21, marginBottom: 10 } }, qrStatusMessage(qrStatus)),
-            text('Only approve the code you generated here.', { color: colors.muted, textAlign: 'center', fontSize: 12 })) : null;
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
@@ -253,18 +174,11 @@ export function createPlugin(V, host = globalThis) {
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
-            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', qrMode: page === 'qr', qrContent, qrKey: qr?.id,
-                onQrRenderError: () => {
-                    if (!stillHere() || qrSession.current !== qr) return;
-                    resolver.rejectWebView(qr?.WebView);
-                    nativeWebView.reject(qr?.WebView);
-                    stopQr(); instance.cancelLogin(); authenticating.current = false;
-                    setError('The QR login view could not be displayed. Refresh the code or use email and password.'); redraw(x => x + 1);
-                }, onQrLogin: startQr, onRefreshQr: startQr, light, busy,
+            h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
                 onClose: cancel, onBack: () => {
-                    if (page !== 'mfa' && page !== 'qr') { cancel(); return; }
-                    stopQr(); instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');
+                    if (page !== 'mfa') { cancel(); return; }
+                    instance.cancelLogin(); setPassword(''); setCode(''); setError(''); setPage('login');
                 },
                 onForgotPassword: forgotPassword, onNativeLogin: nativeLoginHelp,
                 onSubmit: () => {
@@ -326,7 +240,6 @@ export function createPlugin(V, host = globalThis) {
     }
     function onLoad() {
         if (active) return;
-        nativeWebView.reset();
         controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher });
         active = true; optionalReady = false;
         const generation = ++epoch;
@@ -361,8 +274,6 @@ export function createPlugin(V, host = globalThis) {
         try { idleTask?.cancel?.(); } catch {} idleTask = undefined;
         for (const [timer, resolve] of pendingFrames) { clearTimer(timer); resolve(); } pendingFrames.clear();
         controller?.stop();
-        for (const stop of qrStops) { try { stop(); } catch {} } qrStops.clear();
-        nativeWebView.dispose();
         for (const dispose of disposers.splice(0).reverse()) { try { dispose?.(); } catch {} }
         resolver.clear();
     }
