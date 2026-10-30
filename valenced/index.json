@@ -680,8 +680,8 @@
         },
         "1.0.0-beta11": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-beta11.zip",
-          "sha256": "8750715ff52adb91645085f29ef225425ce615f92820d4340152eaa61fa3858c",
-          "size": 68709,
+          "sha256": "6820a6976f024d986a9d3004adcee218a5fb3a839cf4d5b3293e781a1892d9d3",
+          "size": 68136,
           "dependencies": {
             "valenced.api": {
               "version": ">=1 <2"
