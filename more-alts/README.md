@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.10
+# More Alts! for Revenge — 3.1.11
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,10 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## View-only WebView fallback (3.1.11 / Valenced beta11 / Next beta12)
+
+The QR login plugin now probes the Android RNCWebView native *view* even when its separate native *module* is inaccessible. If the view exists, a narrow, CSP-restricted HTML QR view uses callable message callbacks and direct view commands. If the view is missing too, the plugin still reports an unavailable QR login. This fallback has simulated tests but still needs physical-device verification. The plugin never substitutes a static, nonfunctional QR code.
 
 ## Valenced native-module lookup (3.1.10 / Valenced beta10 / Next beta11)
 
