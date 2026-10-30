@@ -70,7 +70,7 @@
     },
     "dev.fluttershy2008.more-alts": {
       "path": "more-alts/index.js",
-      "sha256": "cbd0cd1e29e3785e94603d1f3d7e336859b75c5152f5a18a40ee282e4bc41385",
+      "sha256": "54d563bc33b4bf3c8e9c02094790aa916292b2519214d0881b1f1e101a6962b7",
       "originalVersion": "3.1.11",
       "kind": "compatibility-preview",
       "sourceRef": "main"
