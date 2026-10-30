@@ -44,7 +44,7 @@ function scenario(t, options = {}) {
 }
 
 test('More Alts stable12 has no bundled QR login or WebView runtime', () => {
-    const source = fs.readFileSync(path.resolve(__dirname, '..', '.build', 'plugins', 'more-alts', 'index.js'), 'utf8');
+    const source = fs.readFileSync(path.resolve(__dirname, '..', '..', target, '.build', 'plugins', 'more-alts', 'index.js'), 'utf8');
     assert.doesNotMatch(source, /startRemoteAuth|createNativeWebView|Log in with QR Code|Refresh QR code|qrSession|Welcome back!/);
     assert.match(source, /Add Account/);
 });
