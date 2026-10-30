@@ -81,6 +81,8 @@ export function createPlugin(V, host = globalThis) {
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
+        const [expiredAccountId, setExpiredAccountId] = React.useState(null);
+        const [reauthId, setReauthId] = React.useState(null);
         const [localBusy, setLocalBusy] = React.useState(false);
         const mounted = React.useRef(true), authenticating = React.useRef(false), localLock = React.useRef(false);
         const instance = controller;
@@ -120,28 +122,47 @@ export function createPlugin(V, host = globalThis) {
                 storage.settings = { ...storage.settings, [key]: value }; redraw(x => x + 1); scheduleRefresh();
             } }));
         const clearAuth = () => { setLogin(''); setPassword(''); setCode(''); authenticating.current = false; };
-        const cancel = () => { instance.cancelLogin(); clearAuth(); setPage('accounts'); setError(''); setNotice(''); };
+        const cancel = () => { instance.cancelLogin(); clearAuth(); setReauthId(null); setPage('accounts'); setError(''); setNotice(''); };
         const stillHere = () => mounted.current && active && controller === instance;
-        async function run(action, success) {
+        async function run(action, success, onError) {
             if (localLock.current || instance.busy) return;
             localLock.current = true; setLocalBusy(true); setError(''); setNotice('');
             try { const result = await action(); if (stillHere()) success?.(result); }
             catch (reason) {
-                if (stillHere() && reason?.code !== 'cancelled') setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
+                if (stillHere() && reason?.code !== 'cancelled') {
+                    onError?.(reason);
+                    setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
+                }
             } finally { localLock.current = false; if (stillHere()) setLocalBusy(false); }
         }
         function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
-            clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            const target = reauthId;
+            const refreshedTarget = target && target === result.user.id;
+            if (refreshedTarget) setExpiredAccountId(null);
+            clearAuth(); setReauthId(null); setPage('accounts');
+            if (target && !refreshedTarget) {
+                const account = instance.accounts.find(item => item.id === target);
+                setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
+            } else {
+                setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
+            }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
             clearAuth(); setPage('accounts'); setNotice(`${result.updated ? 'Updated' : 'Saved'} ${result.user.username}.`);
         });
+        function beginReauth(account) {
+            clearAuth(); setError(''); setNotice('');
+            setReauthId(account.id); setPage('login');
+        }
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
-                    if (active && controller === instance && instance.remove(account.id) && mounted.current) setNotice(`Removed ${account.username}.`);
+                    if (active && controller === instance && instance.remove(account.id) && mounted.current) {
+                        if (expiredAccountId === account.id) setExpiredAccountId(null);
+                        setNotice(`Removed ${account.username}.`);
+                    }
                 } }
             ]);
         }
@@ -153,7 +174,7 @@ export function createPlugin(V, host = globalThis) {
             notice ? text(notice, { fontWeight: '600' }) : null,
             busy ? h(RN.ActivityIndicator, { color: '#8993ff', style: { marginBottom: 12 } }) : null];
         contents.push(button('Save current account', saveCurrent),
-            button('Add another account', () => { setPage('login'); setError(''); setNotice(''); }, true),
+            button('Add another account', () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); }, true),
             input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
             text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
         contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
@@ -161,7 +182,13 @@ export function createPlugin(V, host = globalThis) {
                 account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
-            currentId !== account.id ? button('Switch account', () => run(() => instance.switchTo(account.id), result => setNotice(`Switched to ${result.user.username}.`))) : null,
+            currentId !== account.id ? button('Switch account', () =>
+                run(() => instance.switchTo(account.id), result => {
+                    setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
+                }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); })) : null,
+            expiredAccountId === account.id ? text('Discord rejected this saved session. Sign in again to update this account without removing it.',
+                { color: colors.error, fontSize: 13 }) : null,
+            expiredAccountId === account.id ? button('Re-sign in', () => beginReauth(account), true) : null,
             button('Remove saved account', () => remove(account), true))));
         if (!matches.length) contents.push(text(query ? 'No matching accounts.' : 'Save your current account to get started.', { color: colors.muted }));
         contents.push(button('Import accounts from old More Alts', () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)), true),
@@ -175,6 +202,7 @@ export function createPlugin(V, host = globalThis) {
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
+                reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,
                 onClose: cancel, onBack: () => {
                     if (page !== 'mfa') { cancel(); return; }
