@@ -3,11 +3,14 @@ import { AccountError, createClient, createController } from './core.mjs';
 import { createModuleResolver } from './modules.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
+import { createAccountSwitcher } from './account-switcher.mjs';
 
 export function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
     const LoginDialog = createLoginDialog(React, RN);
+    const AccountSwitcher = createAccountSwitcher(React, RN);
+    const hasQuickSwitcher = V.host?.id === 'valenced';
     const resolver = createModuleResolver(V.metro);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
@@ -79,6 +82,7 @@ export function createPlugin(V, host = globalThis) {
     function Settings() {
         const [, redraw] = React.useState(0);
         const [page, setPage] = React.useState('accounts');
+        const [view, setView] = React.useState(hasQuickSwitcher ? 'switcher' : 'accounts');
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
@@ -159,6 +163,10 @@ export function createPlugin(V, host = globalThis) {
             clearAuth(); setError(''); setNotice('');
             setReauthId(account.id); setPage('login');
         }
+        const switchAccount = account => run(() => instance.switchTo(account.id), result => {
+            setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
+        }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); });
+        const addAccount = () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); };
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
@@ -176,8 +184,9 @@ export function createPlugin(V, host = globalThis) {
             error ? text(error, { color: colors.error }) : null,
             notice ? text(notice, { fontWeight: '600' }) : null,
             busy ? h(RN.ActivityIndicator, { color: '#8993ff', style: { marginBottom: 12 } }) : null];
+        if (hasQuickSwitcher) contents.unshift(button('Back to account switcher', () => setView('switcher'), true));
         contents.push(button('Save current account', saveCurrent),
-            button('Add another account', () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); }, true),
+            button('Add another account', addAccount, true),
             input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
             text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
         contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
@@ -186,10 +195,7 @@ export function createPlugin(V, host = globalThis) {
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
             Number.isFinite(account.updatedAt) ? text(`Last saved: ${new Date(account.updatedAt).toLocaleString()}`, { color: colors.muted, fontSize: 12 }) : null,
-            currentId !== account.id ? button('Switch account', () =>
-                run(() => instance.switchTo(account.id), result => {
-                    setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
-                }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); })) : null,
+            currentId !== account.id ? button('Switch account', () => switchAccount(account)) : null,
             expiredAccountId === account.id ? text('Discord rejected this saved session. Sign in again to update this account without removing it.',
                 { color: colors.error, fontSize: 13 }) : null,
             expiredAccountId === account.id ? button('Re-sign in', () => beginReauth(account), true) : null,
@@ -204,7 +210,10 @@ export function createPlugin(V, host = globalThis) {
             text('Saved sessions stay in Revenge’s local plugin storage. Passwords and verification codes are never stored. Signing out or changing a password can expire a saved session.', { color: colors.muted }));
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
-                importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
+                importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' },
+                ...(view === 'switcher' ? [h(AccountSwitcher, { accounts: instance.accounts, currentUser: getSession()?.user,
+                    busy, light, error, notice, expiredAccountId, onSwitch: switchAccount, onSaveCurrent: saveCurrent,
+                    onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,

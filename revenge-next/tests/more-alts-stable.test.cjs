@@ -31,7 +31,7 @@ function scenario(t, options = {}) {
         assert.deepEqual(section.section.settings, section.core);
         assert.deepEqual(w.errors, []);
     });
-    w.openManager = async (initial = options.initial ?? {}) => {
+    w.openManager = async (initial = options.initial ?? {}, quick = false) => {
         const item = await w.start('more-alts', initial);
         const Page = isValenced
             ? w.registeredScreens.get('dev.fluttershy2008.more-alts.valenced-settings').screen.getComponent()
@@ -39,6 +39,7 @@ function scenario(t, options = {}) {
         let ui;
         await Renderer.act(async () => { ui = Renderer.create(React.createElement(Page, { api: item.api })); });
         renders.push(ui);
+        if (isValenced && !quick) await act(() => getButton(ui, 'Manage accounts').props.onPress());
         return { ui, item };
     };
     return w;
@@ -226,4 +227,90 @@ test('a silently discarded native write shows a save failure, retains accounts, 
     assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
     assert.equal(disk.accounts[id].token, 'fake-test-session-token-only');
     assert.deepEqual(Object.keys(disk.accounts), [id]);
+});
+
+test('Valenced settings opens the compact switcher and labels an unsaved current account', { skip: !isValenced }, async t => {
+    const w = scenario(t, { fetch: async () => Response.json(w.users[w.accountId()]) });
+    const { ui, item } = await w.openManager(undefined, true);
+    const descriptor = w.registeredScreens.get('dev.fluttershy2008.more-alts.valenced-settings');
+    assert.equal(descriptor.useTitle(), 'Switch accounts');
+    assert.match(JSON.stringify(ui.toJSON()), /Switch accounts/);
+    assert.match(JSON.stringify(ui.toJSON()), /Current account · Not saved/);
+    assert.equal(getButton(ui, '@test-owner, current account').props.disabled, true);
+    assert.equal(getButton(ui, '@test-owner, current account').props.accessibilityState.selected, true);
+    assert.deepEqual(item.api.jsonStorage.cache.accounts, {});
+    assert.equal(w.calls.some(call => call[0] === 'fetch'), false);
+    await act(() => getButton(ui, 'Manage accounts').props.onPress());
+    assert.ok(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Search saved accounts').length);
+    await act(() => getButton(ui, 'Back to account switcher').props.onPress());
+    assert.equal(ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Search saved accounts').length, 0);
+    assert.ok(getButton(ui, 'Add another account'));
+    await act(() => getButton(ui, 'Save current account').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Current account · Not saved/);
+    assert.equal(item.api.jsonStorage.cache.accounts[w.accountId()].token, 'fake-test-session-token-only');
+});
+
+test('Valenced picker verifies one tap, blocks duplicate switches, and marks the active account', { skip: !isValenced }, async t => {
+    const other = { id: '100000000000000099', username: 'alternate-account', global_name: 'Alternate Account' };
+    const targetToken = 'fixture-quick-switcher-target-session';
+    let releaseTarget, switches = 0;
+    const w = scenario(t, { fetch: async (_url, init) => init.headers.Authorization === targetToken
+        ? new Promise(resolve => { releaseTarget = () => resolve(Response.json(other)); })
+        : Response.json(w.users[w.accountId()]) });
+    const id = w.accountId();
+    w.users[other.id] = other;
+    w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = token => {
+        switches++; w.stores.AuthenticationStore.getToken = () => token; w.setAccount(other.id);
+    };
+    const { ui, item } = await w.openManager({ accounts: {
+        [id]: { ...w.users[id], token: 'fake-test-session-token-only' },
+        [other.id]: { ...other, token: targetToken },
+    }, accountOrder: [id, other.id] }, true);
+    let pending;
+    await act(() => { pending = getButton(ui, 'Switch to @alternate-account').props.onPress(); });
+    assert.equal(getButton(ui, 'Switch to @alternate-account').props.disabled, true);
+    await act(() => getButton(ui, 'Switch to @alternate-account').props.onPress());
+    assert.equal(w.calls.filter(call => call[0] === 'fetch').length, 1);
+    await act(async () => { releaseTarget(); await pending; });
+    assert.equal(switches, 1);
+    assert.equal(w.accountId(), other.id);
+    assert.equal(getButton(ui, '@alternate-account, current account').props.accessibilityState.selected, true);
+    assert.equal(getButton(ui, '@alternate-account, current account').props.disabled, true);
+    assert.ok(getButton(ui, 'Switch to @test-owner'));
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, 'fake-test-session-token-only');
+    assert.equal(item.api.jsonStorage.cache.accounts[other.id].token, targetToken);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /fixture-quick-switcher-target-session|fake-test-session-token-only/);
+});
+
+test('Valenced picker retains expired accounts and opens their sign-in recovery', { skip: !isValenced }, async t => {
+    const id = '100000000000000099', token = 'fixture-expired-quick-picker-session';
+    const w = scenario(t, { fetch: async () => new Response('{}', { status: 401 }) });
+    const { ui, item } = await w.openManager({ accounts: { [id]: { id, username: 'expired-account', token } }, accountOrder: [id] }, true);
+    await act(() => getButton(ui, 'Switch to @expired-account').props.onPress());
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, token);
+    assert.equal(w.calls.some(call => call[0] === 'switchAccount'), false);
+    assert.match(JSON.stringify(ui.toJSON()), /Sign in again to refresh this account/);
+    await act(() => getButton(ui, 'Re-sign in').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /Update saved account/);
+    await act(() => getButton(ui, 'Close add account').props.onPress());
+    assert.ok(getButton(ui, 'Switch to @expired-account'));
+    assert.ok(getButton(ui, 'Manage accounts'));
+});
+
+test('Valenced picker adds an account through verified sign-in and returns to the account list', { skip: !isValenced }, async t => {
+    const account = { id: '100000000000000099', username: 'new-alternate' };
+    const token = 'fixture-added-quick-picker-account-session';
+    const w = scenario(t, { fetch: async url => Response.json(url.endsWith('/auth/login') ? { token } : account) });
+    const { ui, item } = await w.openManager(undefined, true);
+    await act(() => getButton(ui, 'Add another account').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('fixture@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-private-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
+    assert.ok(getButton(ui, 'Switch to @new-alternate'));
+    assert.equal(item.api.jsonStorage.cache.accounts[account.id].token, token);
+    assert.doesNotMatch(JSON.stringify(item.api.jsonStorage.cache), /fixture-private-password/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /QR code|Log in with QR Code|fixture-added-quick-picker-account-session/);
 });

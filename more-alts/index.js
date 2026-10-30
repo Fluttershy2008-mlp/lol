@@ -769,10 +769,79 @@ function createLoginDialog(React, RN) {
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+function createAccountSwitcher(React, RN) {
+    const h = React.createElement;
+    return function AccountSwitcher({ accounts, currentUser, busy, light, error, notice, expiredAccountId,
+        onSwitch, onSaveCurrent, onAddAccount, onManage, onReauth }) {
+        const c = light
+            ? { card: '#ffffff', text: '#18191c', muted: '#515460', line: '#d7dae3', selected: '#e9ecff', danger: '#a11932' }
+            : { card: '#2c2e36', text: '#f3f4f7', muted: '#bec0cb', line: '#454853', selected: '#31364d', danger: '#ffb0b9' };
+        const text = (value, style = {}, props = {}) => h(RN.Text,
+            { style: { color: c.text, fontSize: 15, lineHeight: 21, ...style }, ...props }, value);
+        const currentId = currentUser?.id;
+        const savedCurrent = accounts.some(account => account.id === currentId);
+        const rows = [...accounts];
+        if (validId(currentId) && !savedCurrent && typeof currentUser.username === 'string') rows.unshift({
+            id: currentId, username: currentUser.username,
+            displayName: currentUser.global_name || currentUser.globalName || currentUser.username,
+            avatar: currentUser.avatar,
+        });
+        rows.sort((a, b) => (a.id === currentId ? -1 : b.id === currentId ? 1 : 0));
+        const action = (title, onPress, primary = false, disabled = false) => h(RN.TouchableOpacity, {
+            accessibilityRole: 'button', accessibilityLabel: title, onPress, disabled: busy || disabled,
+            accessibilityState: { disabled: busy || disabled },
+            style: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 13, marginTop: 12, borderRadius: 10,
+                backgroundColor: primary ? '#4d59cd' : c.card, opacity: busy || disabled ? 0.5 : 1 },
+        }, text(title, { color: primary ? '#ffffff' : c.text, fontWeight: '700', textAlign: 'center' }));
+        return h(RN.View, { testID: 'more-alts-account-switcher' },
+            text('Switch accounts', { fontSize: 26, fontWeight: '800', lineHeight: 32, marginBottom: 8 }),
+            text('Choose the account you want to use.', { color: c.muted, marginBottom: 20 }),
+            error ? text(error, { color: c.danger, marginBottom: 12 }, { accessibilityRole: 'alert' }) : null,
+            notice ? text(notice, { marginBottom: 12 }, { accessibilityLiveRegion: 'polite' }) : null,
+            busy ? h(RN.ActivityIndicator, { color: '#8993ff', accessibilityLabel: 'Updating accounts', style: { marginBottom: 12 } }) : null,
+            rows.length ? h(RN.View, { style: { backgroundColor: c.card, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: c.line } },
+                ...rows.map((account, index) => {
+                    const selected = currentId === account.id;
+                    const expired = expiredAccountId === account.id;
+                    const label = selected ? `@${account.username}, current account` : `Switch to @${account.username}`;
+                    const avatar = validId(account.id) && typeof account.avatar === 'string' && /^[a-zA-Z0-9_]+$/.test(account.avatar);
+                    return h(RN.View, { key: account.id, style: { borderTopWidth: index ? 1 : 0, borderTopColor: c.line } },
+                        h(RN.TouchableOpacity, {
+                            testID: `more-alts-account-${account.id}`, accessibilityRole: 'button', accessibilityLabel: label,
+                            accessibilityState: { selected, disabled: busy || selected }, disabled: busy || selected,
+                            onPress: () => onSwitch(account),
+                            style: { flexDirection: 'row', alignItems: 'center', minHeight: 76, padding: 14,
+                                backgroundColor: selected ? c.selected : c.card, opacity: busy ? 0.6 : 1 },
+                        },
+                        avatar ? h(RN.Image, { accessible: false, source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` },
+                            style: { width: 40, height: 40, borderRadius: 20, marginRight: 12 } })
+                            : h(RN.View, { accessible: false, style: { width: 40, height: 40, borderRadius: 20, marginRight: 12,
+                                backgroundColor: '#4d59cd', alignItems: 'center', justifyContent: 'center' } },
+                                text((account.displayName || account.username || '?').slice(0, 1).toUpperCase(), { color: '#ffffff', fontSize: 19, fontWeight: '700' })),
+                        h(RN.View, { style: { flex: 1, minWidth: 0, paddingRight: 12 } },
+                            text(account.displayName || account.username, { fontWeight: '700', fontSize: 16 }, { numberOfLines: 1 }),
+                            text(`@${account.username}`, { color: c.muted, fontSize: 13, lineHeight: 19 }, { numberOfLines: 1 }),
+                            selected ? text(savedCurrent ? 'Current account' : 'Current account · Not saved', { color: c.muted, fontSize: 12, lineHeight: 18 }) : null,
+                            expired ? text('Sign in again to refresh this account', { color: c.danger, fontSize: 12, lineHeight: 18 }) : null),
+                        selected ? text('✓', { color: light ? '#197b4d' : '#66d6a0', fontSize: 24, fontWeight: '700' }, { accessible: false }) : null),
+                        expired ? h(RN.View, { style: { paddingHorizontal: 14, paddingBottom: 14 } },
+                            action('Re-sign in', () => onReauth(account))) : null);
+                })) : text('Save your current account or add an account to get started.', { color: c.muted, marginBottom: 12 }),
+            action('Add another account', onAddAccount, true),
+            action('Save current account', onSaveCurrent, false, !validId(currentId)),
+            action('Manage accounts', onManage),
+            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
+    };
+}
+
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
 function createPlugin(V, host = globalThis) {
     const { React, ReactNative: RN } = V.metro.common;
     const h = React.createElement, storage = V.plugin.storage;
     const LoginDialog = createLoginDialog(React, RN);
+    const AccountSwitcher = createAccountSwitcher(React, RN);
+    const hasQuickSwitcher = V.host?.id === 'valenced';
     const resolver = createModuleResolver(V.metro);
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
@@ -844,6 +913,7 @@ function createPlugin(V, host = globalThis) {
     function Settings() {
         const [, redraw] = React.useState(0);
         const [page, setPage] = React.useState('accounts');
+        const [view, setView] = React.useState(hasQuickSwitcher ? 'switcher' : 'accounts');
         const [login, setLogin] = React.useState(''), [password, setPassword] = React.useState('');
         const [code, setCode] = React.useState(''), [query, setQuery] = React.useState('');
         const [notice, setNotice] = React.useState(''), [error, setError] = React.useState('');
@@ -924,6 +994,10 @@ function createPlugin(V, host = globalThis) {
             clearAuth(); setError(''); setNotice('');
             setReauthId(account.id); setPage('login');
         }
+        const switchAccount = account => run(() => instance.switchTo(account.id), result => {
+            setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
+        }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); });
+        const addAccount = () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); };
         function remove(account) {
             RN.Alert.alert('Remove saved account?', `Remove ${account.username} from More Alts? This only removes its saved session here.`, [
                 { text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => {
@@ -941,8 +1015,9 @@ function createPlugin(V, host = globalThis) {
             error ? text(error, { color: colors.error }) : null,
             notice ? text(notice, { fontWeight: '600' }) : null,
             busy ? h(RN.ActivityIndicator, { color: '#8993ff', style: { marginBottom: 12 } }) : null];
+        if (hasQuickSwitcher) contents.unshift(button('Back to account switcher', () => setView('switcher'), true));
         contents.push(button('Save current account', saveCurrent),
-            button('Add another account', () => { clearAuth(); setReauthId(null); setPage('login'); setError(''); setNotice(''); }, true),
+            button('Add another account', addAccount, true),
             input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
             text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
         contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
@@ -951,10 +1026,7 @@ function createPlugin(V, host = globalThis) {
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
             Number.isFinite(account.updatedAt) ? text(`Last saved: ${new Date(account.updatedAt).toLocaleString()}`, { color: colors.muted, fontSize: 12 }) : null,
-            currentId !== account.id ? button('Switch account', () =>
-                run(() => instance.switchTo(account.id), result => {
-                    setExpiredAccountId(null); setNotice(`Switched to ${result.user.username}.`);
-                }, reason => { if (reason?.code === 'expired') setExpiredAccountId(account.id); })) : null,
+            currentId !== account.id ? button('Switch account', () => switchAccount(account)) : null,
             expiredAccountId === account.id ? text('Discord rejected this saved session. Sign in again to update this account without removing it.',
                 { color: colors.error, fontSize: 13 }) : null,
             expiredAccountId === account.id ? button('Re-sign in', () => beginReauth(account), true) : null,
@@ -969,7 +1041,10 @@ function createPlugin(V, host = globalThis) {
             text('Saved sessions stay in Revenge’s local plugin storage. Passwords and verification codes are never stored. Signing out or changing a password can expire a saved session.', { color: colors.muted }));
         return h(RN.KeyboardAvoidingView, { style: { flex: 1, backgroundColor: colors.bg }, behavior: RN.Platform?.OS === 'ios' ? 'padding' : undefined },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
-                importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' }, ...contents),
+                importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' },
+                ...(view === 'switcher' ? [h(AccountSwitcher, { accounts: instance.accounts, currentUser: getSession()?.user,
+                    busy, light, error, notice, expiredAccountId, onSwitch: switchAccount, onSaveCurrent: saveCurrent,
+                    onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
                 login, password, code, error, onLoginChange: setLogin, onPasswordChange: setPassword, onCodeChange: setCode,

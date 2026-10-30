@@ -88,15 +88,15 @@
     },
     "dev.fluttershy2008.more-alts": {
       "path": "more-alts/index.js",
-      "sha256": "98ac06ca295e2804d8c96300b480e19704054f9c6c04558a05f736fa52bcc653",
-      "originalVersion": "3.1.14",
+      "sha256": "373b6d66a13a22a8b5a0e88745b0f8c15d755924ff567ae1e2238c63b668185f",
+      "originalVersion": "3.1.15",
       "kind": "compatibility-stable",
       "sourceRef": "main",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
         "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
         "section": "VALENCED",
-        "title": "More Alts!"
+        "title": "Switch accounts"
       }
     },
     "dev.fluttershy2008.nitro-auto-claim": {

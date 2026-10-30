@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.14
+# More Alts! for Revenge — 3.1.15
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,12 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable15: account switcher in Valenced settings
+
+Open **Settings → Valenced → Switch accounts** for a compact account picker. Tap a saved account to switch; the current account appears first with a checkmark. **Add another account** uses the existing sign-in and two-factor dialog. **Save current account** retains stable14's verified file persistence. **Manage accounts** opens the full manager for removal, search, importing and preferences, with a button back to the picker. An unsaved current account is labelled clearly and is not silently added. Expired accounts offer **Re-sign in** without deleting their saved entry.
+
+Update More Alts! to **1.0.0-stable15**, then restart Discord. Existing accounts and settings are retained, and QR login stays removed. The Valenced shortcut uses its native settings API; it remains available through the plugin's settings button if direct settings registration is unavailable. Classic **3.1.15** and Next **stable15** retain the full account manager as their default screen. Automated tests use simulated Discord sessions; a physical-device check is still required for the installed Discord build.
 
 ## Stable14: verified account saving (3.1.14 / Valenced stable14 / Next stable14)
 

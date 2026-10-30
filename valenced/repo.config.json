@@ -12,7 +12,7 @@
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
-    "more-alts": "1.0.0-stable14",
+    "more-alts": "1.0.0-stable15",
     "server-leaver": "1.0.0-beta6",
     "copy-user-id": "1.0.0-beta3",
     "addon-list": "1.0.0-beta3",
@@ -48,7 +48,7 @@
       "description": "Shows your total Discord friend count, a searchable friends list, and profile buttons. Opens directly from the Valenced settings section."
     },
     "more-alts": {
-      "title": "More Alts!",
+      "title": "Switch accounts",
       "icon": "UserIcon"
     },
     "server-leaver": {
@@ -75,8 +75,8 @@
   },
   "channels": {
     "dev.fluttershy2008.more-alts": {
-      "latest": "1.0.0-stable14",
-      "stable": "1.0.0-stable14",
+      "latest": "1.0.0-stable15",
+      "stable": "1.0.0-stable15",
       "beta": "1.0.0-beta11"
     }
   }

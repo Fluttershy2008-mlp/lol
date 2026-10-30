@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const here = new URL('./', import.meta.url);
-const parts = await Promise.all(['core', 'modules', 'shortcut', 'login-dialog', 'plugin'].map(async name =>
+const parts = await Promise.all(['core', 'modules', 'shortcut', 'login-dialog', 'account-switcher', 'plugin'].map(async name =>
     (await readFile(new URL(`src/${name}.mjs`, here), 'utf8'))
         .replace(/^import .* from '\.\/.*';\n/gm, '').replace(/^export /gm, '')));
 const bundle = `(() => {\n'use strict';\n${parts.join('\n')}\nreturn createPlugin(vendetta);\n})()\n`;

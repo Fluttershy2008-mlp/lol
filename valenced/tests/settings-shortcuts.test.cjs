@@ -7,7 +7,7 @@ const { installSettingsSection } = require('./settings-fixture.cjs');
 const h = React.createElement;
 const plugins = [
     ['custom-rpc', 'CustomRPC'], ['friends-list', 'Friends List'],
-    ['more-alts', 'More Alts!'], ['server-leaver', 'Server Leaver'],
+    ['more-alts', 'Switch accounts'], ['server-leaver', 'Server Leaver'],
     ['blocked-user-list', 'Blocked User List'],
 ];
 
