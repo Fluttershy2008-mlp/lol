@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.11
+# More Alts! for Revenge — 3.1.12
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,10 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable12: native Add Account without QR (3.1.12 / Valenced stable12 / Revenge Next stable12)
+
+The QR login and Discord web-style account panel were removed after repeated unavailable-native-WebView reports. Add Account now uses a smaller native dialog for email/password and Discord two-factor verification, plus a shortcut explaining how to sign in through Discord's normal account menu. There is no QR button or QR code placeholder. Account storage and switching remain unchanged, and existing saved accounts are retained when updating without clearing plugin data. Only More Alts! is labelled stable12; the other repository plugins remain on their previous versions. Package tests cover the login and absence of QR UI, but physical-device testing is not guaranteed.
 
 ## View-only WebView fallback (3.1.11 / Valenced beta11 / Next beta12)
 
