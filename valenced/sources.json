@@ -169,12 +169,6 @@
       "originalVersion": "1.0.4",
       "kind": "compatibility-preview"
     },
-    "dev.fluttershy2008.fluttershy-theme": {
-      "path": "Fluttershy_Pink_Yellow_Theme.json",
-      "sha256": "9220c2cde3f90a81669a29eca5fb7b8c8e544aa97bf6923e284a930c0e1085ae",
-      "originalVersion": "2.0.1",
-      "kind": "native-theme"
-    },
     "dev.fluttershy2008.rainbow-dash-theme": {
       "path": "Rainbow_Dash_Sonic_Rainboom.json",
       "sha256": "70134b0c4c43496288e796158a969305cd08516d42898dd29aa66ca3892c1838",
@@ -197,6 +191,12 @@
       "path": "valenced/themes/altitude/index.js",
       "sha256": "288a5d5e7e20b81609d0438aeebaf503bb46160ad1fb1b3a2435037365d94a6e",
       "originalVersion": "1.0.0-beta4",
+      "kind": "native-theme"
+    },
+    "dev.fluttershy2008.fluttershy-theme": {
+      "path": "valenced/themes/fluttershy/index.js",
+      "sha256": "111f2d42d18b90b05d5aca19211cd1f6f5bf25fc2701ccbbe1959bca9652f574",
+      "originalVersion": "1.0.0-beta2",
       "kind": "native-theme"
     }
   }

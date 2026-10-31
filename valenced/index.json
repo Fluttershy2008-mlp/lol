@@ -425,14 +425,30 @@
               "version": ">=1 <2"
             }
           }
+        },
+        "1.0.0-beta2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.fluttershy-theme@1.0.0-beta2.zip",
+          "sha256": "893799f353f920761b354dec576bfd4b7fa6bd49721d12420d57c050ebe5c0f9",
+          "size": 215598,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta1",
-        "beta": "1.0.0-beta1"
+        "latest": "1.0.0-beta2",
+        "beta": "1.0.0-beta2"
       },
       "name": "Fluttershy - Pink & Yellow (Valenced)",
-      "description": "Valenced preview. Fluttershy pink-and-yellow colours with transparent chat layers and a matching G4 wallpaper. The Fluttershy Chat Background companion supports newer Discord chat renderers.",
+      "description": "Fluttershy pink-and-yellow colours with a centred Fluttershy collage across chat and main screens. Wallpaper included for offline use, with proportional scaling and readable surfaces.",
       "author": "Fluttershy2008",
       "icon": "PaintPaletteIcon"
     },

@@ -57,6 +57,8 @@ All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8**
 
 Five native theme plugins are included: Altitude (High and Low), Fluttershy, Rainbow Dash, Sunset Shimmer and Tokyo Nights. Keep **Valenced Community Plugins** available so the `valenced.api.themes` dependency can be installed.
 
+**Fluttershy 1.0.0-beta2** includes the supplied Fluttershy collage inside the plugin, using Valenced's centred, proportional screen fill across chat and main screens. Refresh this repository, update the existing Fluttershy theme and fully restart Discord. Select the theme background if a custom wallpaper override is active. The original pink-and-yellow palette is preserved. [Fluttershy background and setup](themes/fluttershy/README.md).
+
 `message-logger-v2` duplicates Message Logger. The root Classic bundle duplicates Save as Sticker. The three Classic background companions are replaced by their native themes. No duplicate plugin installation is needed.
 
 ## Requested fixes

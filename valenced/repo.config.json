@@ -66,10 +66,10 @@
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
   },
   "nativeThemes": {
-    "altitude-theme": "valenced/themes/altitude"
+    "altitude-theme": "valenced/themes/altitude",
+    "fluttershy-theme": "valenced/themes/fluttershy"
   },
   "themes": {
-    "fluttershy-theme": "Fluttershy_Pink_Yellow_Theme.json",
     "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
     "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
     "tokyo-nights-theme": "Tokyo_Nights_Theme.json"

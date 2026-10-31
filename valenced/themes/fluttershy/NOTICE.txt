@@ -1,0 +1,14 @@
+Theme source: https://github.com/Fluttershy2008-mlp/lol/blob/7beaf1ac7573310e393a7ddfaa35317155b24180/Fluttershy_Pink_Yellow_Theme.json
+Colours and background use Valenced's Themes API. No Classic wallpaper companion is required.
+Font packs are separate and are not included in this colour theme package.
+
+Wallpaper: user-supplied Fluttershy collage, bundled unchanged in assets/backgrounds/fluttershy-collage.jpg.
+Valenced update: 1.0.0-beta2. Original palette, plugin ID, group ID and theme ID preserved.
+Uses the Themes API screen-aligned, centred cover renderer; aspect ratio is preserved.
+Narrower or wider screens can crop the outer edges. The image is never stretched or tiled.
+The Themes API handles screen rotation and window resizing; no custom image hooks are installed.
+Theme background defaults: image opacity 1, surface dimming 0.65, blur 0.
+Validation: package integrity, unchanged wallpaper bytes, palette and registration comparison,
+and deterministic build verified locally. Physical Android verification remains pending.
+After updating, fully restart Discord and select Fluttershy - Pink & Yellow.
+If a custom background was previously selected, set Themes > Background to the theme background.
