@@ -2,12 +2,13 @@
 
 # Fluttershy's Valenced plugins
 
-**Quick Delete 1.0.0:** tap a message to open Delete Message and Remove Embeds,
-then choose either action without confirmation. Its settings also offer immediate
-one-tap deletion, separate native confirmation switches, moderation permissions
-and success feedback. DMs and server channels are supported. Refresh the repository,
-install **Quick Delete**, enable it and reopen the chat. Holds still open Discord's
-full message menu. [Details and validation](plugins/quick-delete/README.md).
+**Quick Delete 1.1.0:** its settings now appear directly in **Settings → Valenced →
+Quick Delete**. Tap a message and choose **Reply** to open Discord's normal reply
+bar and keyboard while keeping your draft. Reply also works on other people's
+messages without deletion permission. Delete Message and Remove Embeds still
+skip confirmation, and optional one-tap deletion is preserved. Refresh the
+repository, update **Quick Delete** and reopen the chat. Saved preferences and
+the plugin ID are retained. [Details and validation](plugins/quick-delete/README.md).
 
 **SaveAsSticker 1.0.0-beta8, ExpressionCloner 1.0.0-beta4 and ViewIcons 1.0.0-beta3:** start silently when Valenced opens or restarts. The plugins stay enabled, and action confirmations and error messages remain available. Refresh the repository, update these three plugins, then fully close and reopen Discord.
 

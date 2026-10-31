@@ -1088,14 +1088,27 @@
               "version": "*"
             }
           }
+        },
+        "1.1.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.quick-delete@1.1.0.zip",
+          "sha256": "e7996fe333b545ae1570d09e291b4118baa8b4fe41f516b6a0d7b08aa5a311e0",
+          "size": 12296,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0",
-        "beta": "1.0.0"
+        "latest": "1.1.0",
+        "beta": "1.1.0"
       },
       "name": "Quick Delete",
-      "description": "Tap a message for Delete Message and Remove Embeds, without confirmation. Includes optional one-tap deletion and separate controls for each action.",
+      "description": "Tap a message to Reply, Delete Message or Remove Embeds. Native reply bar, optional one-tap deletion and a Quick Delete entry in Valenced settings.",
       "author": "fluttershy_simper67 <753962426407452713>",
       "icon": "TrashIcon"
     },

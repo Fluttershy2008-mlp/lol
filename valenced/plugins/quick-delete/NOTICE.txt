@@ -1,4 +1,4 @@
-Quick Delete 1.0.0 is an original Valenced-native plugin.
+Quick Delete 1.1.0 is an original Valenced-native plugin.
 Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/quick-delete
 
 Valenced API reference: Valenced/valenced revision 17008ad2eb170da4b7aaca35ad8154bb09a60a8a.
@@ -8,6 +8,13 @@ also supports builds whose params getter cannot be replaced.
 Confirmation identifiers were checked against the native message menu and the
 public QuickDelete implementation in Purple-EyeZ/RevengePlugins; no code is copied.
 
+Native settings registration was checked against Valenced 4fb12ba (1.2.4).
+Reply calls Discord's modules/replies/native/replyToMessage.tsx or the native
+PendingReplyActionCreators fallback with the same action-sheet source and
+mention defaults. Active composer lookup uses utils/native/ChatInputUtils.tsx.
+Reference: https://github.com/Wumpus-Central/discord-mobile-datamining/tree/c8275f9989c8572f5d441e162c7109b9c6497068/discord_app/modules/replies
+
 Automated tests cover lifecycle, permission checks, native message events,
-localized prompts, duplicate requests, failures, cancellation and settings.
+localized prompts, duplicate requests, failures, cancellation, reply drafts,
+current-chat keyboard focus and the native Valenced settings entry.
 Physical Android interaction has not been tested in this environment.

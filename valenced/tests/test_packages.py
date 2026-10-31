@@ -100,10 +100,13 @@ class ValencedPackages(unittest.TestCase):
                     self.assertEqual(zlib.adler32(dex[12:]) & 0xffffffff, struct.unpack_from("<I", dex, 8)[0])
                     self.assertIn(native["class"].replace(".", "/").encode(), dex)
 
-    def test_shortcut_helper_is_bundled_only_with_the_five_requested_plugins(self):
+    def test_shortcut_helper_is_bundled_only_with_configured_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())
         wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver", "blocked-user-list"}
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
+        native = {slug for slug, entry in config.get("nativePlugins", {}).items()
+                  if isinstance(entry, dict) and entry.get("settingsShortcut")}
+        self.assertEqual(native, {"quick-delete"})
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         digest = hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest()
@@ -115,6 +118,10 @@ class ValencedPackages(unittest.TestCase):
             if slug in wanted:
                 self.assertEqual(version, config["pluginVersions"][slug])
                 self.assertIn("withValencedSettingsShortcut(createValencedPlugin(", script)
+                self.assertEqual(sources[plugin_id]["settingsShortcut"]["sha256"], digest)
+                self.assertEqual(sources[plugin_id]["settingsShortcut"]["section"], "VALENCED")
+            elif slug in native:
+                self.assertIn("withValencedSettingsShortcut(nativeOptions.default,", script)
                 self.assertEqual(sources[plugin_id]["settingsShortcut"]["sha256"], digest)
                 self.assertEqual(sources[plugin_id]["settingsShortcut"]["section"], "VALENCED")
             else:

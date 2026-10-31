@@ -3,6 +3,7 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, ACCOUNT, FRIEND, CHANNEL } = require('../../revenge-next/tests/next-harness.cjs');
+const { installSettingsSection } = require('./settings-fixture.cjs');
 const ID = '900000000000000001';
 const HANDLERS = 'modules/messages/native/MessagesHandlers.tsx';
 const ACTIONS = 'actions/MessageActionCreators.tsx';
@@ -14,10 +15,27 @@ function fixture(t, opts = {}) {
     w.messages[0].author = w.users[ACCOUNT];
     w.messages[0].type = 0; w.messages[0].embeds = [{ type: 'link' }];
     w.stores.PermissionStore.can = () => opts.permission ?? false;
+    w.selected = CHANNEL; w.stores.SelectedChannelStore.getChannelId = () => w.selected;
     w.actions = { sendMessage() {},
         async deleteMessage(...args) { assert.equal(this, w.actions); w.calls.push(['delete', ...args]); return opts.remove ? opts.remove() : { status: 204 }; },
         async suppressEmbeds(...args) { assert.equal(this, w.actions); w.calls.push(['embeds', ...args]); return { status: 200 }; } };
     if (!opts.coldActions) w.addModule({ default: w.actions }, ACTIONS);
+    if (opts.reply) {
+        w.draft = 'Keep my draft';
+        w.replyAllowed = true;
+        w.input = { openSystemKeyboard() { w.calls.push(['keyboard']); } };
+        w.pendingReply = { createPendingReply(value) { w.calls.push(['pendingReply', value]); }, deletePendingReply() {} };
+        w.addModule(w.pendingReply, 'modules/replies/PendingReplyActionCreators.tsx');
+        w.addModule({ getBestActiveInputForChannelId(id) { w.calls.push(['findInput', id]); return id === CHANNEL ? w.input : undefined; } }, 'utils/native/ChatInputUtils.tsx');
+        w.addModule({ canReplyToMessage: () => w.replyAllowed, useCanReplyToMessage() { throw Error('Do not call a React hook from a click'); } }, 'modules/replies/canReplyToMessage.tsx');
+        w.actions.endEditMessage = id => w.calls.push(['endEdit', id]);
+        if (opts.reply === 'native') w.addModule({ default: function a(value) {
+            w.calls.push(['nativeReply', value]);
+            if (opts.replyError) throw Error('Reply failed');
+            w.pendingReply.createPendingReply(value);
+            value.chatInputRef?.current?.openSystemKeyboard();
+        } }, 'modules/replies/native/replyToMessage.tsx');
+    }
     w.alertsModule = { openLazy() {}, show(value) { w.calls.push(['nativePrompt', value]); return 'prompt'; } };
     w.addModule(w.alertsModule);
     const text = { MWMcg7: 'Borrar mensaje', xwMqD7: 'Eliminar mensaje', AMvpS4: '¿Eliminar este mensaje?',
@@ -37,7 +55,7 @@ function fixture(t, opts = {}) {
     w.rows = ui => ui.root.findAllByType('ActionSheetRow');
     w.choose = async (ui, label) => {
         const row = w.rows(ui).find(row => row.props.label === label); assert.ok(row, label);
-        await Renderer.act(async () => { row.props.onPress(); await settle(); });
+        await Renderer.act(async () => { row.props.onPress(); await w.advance(0); await settle(); });
     };
     w.prompt = (kind, onConfirm = () => w.calls.push(['confirmed', kind])) => ({
         title: text[kind === 'delete' ? 'MWMcg7' : 'VL1KOk'],
@@ -275,4 +293,133 @@ test('settings render, save booleans with replacement and restart without duplic
     await Renderer.act(async () => w.stop(item));
     item = await w.start('quick-delete', item.writes.at(-1));
     w.tap(); await settle(); assert.equal(w.sends().length, 2);
+});
+
+for (const reply of ['native', 'pending']) test(reply + ' Reply opens Discord’s reply bar and current keyboard without sending or changing the draft', async t => {
+    const w = fixture(t, { reply }); w.messages[0].author = w.users[FRIEND];
+    await w.start('quick-delete'); w.tap(); const ui = await w.sheet();
+    assert.deepEqual(w.rows(ui).map(row => row.props.label), ['Reply', 'Cancel'], 'no deletion permission is needed to reply');
+    await w.choose(ui, 'Reply');
+    const replies = w.calls.filter(call => call[0] === 'pendingReply');
+    assert.equal(replies.length, 1);
+    const options = replies[0][1];
+    assert.equal(options.message, w.messages[0]); assert.equal(options.channel, w.channels[CHANNEL]);
+    assert.equal(w.calls.filter(call => call[0] === 'keyboard').length, 1);
+    assert.deepEqual(w.calls.find(call => call[0] === 'findInput'), ['findInput', CHANNEL]);
+    assert.equal(w.draft, 'Keep my draft'); assert.deepEqual(w.sends(), []);
+    assert.equal(w.calls.some(call => ['sendMessage', 'http'].includes(call[0])), false);
+    if (reply === 'native') {
+        const native = w.calls.find(call => call[0] === 'nativeReply')[1];
+        assert.equal(native.actionSource, 'action_sheet'); assert.equal(native.invertible, false);
+        assert.equal(native.chatInputRef.current, w.input);
+    } else {
+        assert.equal(options.source, 'action_sheet'); assert.equal(options.shouldMention, true);
+        assert.deepEqual(w.calls.find(call => call[0] === 'endEdit'), ['endEdit', CHANNEL]);
+    }
+});
+
+test('own-message menu includes Reply, Delete and Remove Embeds; the quick-reply switch hides only Reply', async t => {
+    const w = fixture(t, { reply: 'native' }); let item = await w.start('quick-delete');
+    w.tap(); assert.deepEqual(w.rows(await w.sheet()).map(row => row.props.label), ['Reply', 'Delete Message', 'Remove Embeds', 'Cancel']);
+    await w.stop(item); item = await w.start('quick-delete', { quickReply: false });
+    w.tap(); assert.deepEqual(w.rows(await w.sheet()).map(row => row.props.label), ['Delete Message', 'Remove Embeds', 'Cancel']);
+    w.messages[0].author = w.users[FRIEND]; assert.equal(w.tap(), 'native tap');
+});
+
+test('pending Reply uses Discord’s no-mention default for DMs and your own messages', async t => {
+    const w = fixture(t, { reply: 'pending' }); await w.start('quick-delete');
+    w.tap(); await w.choose(await w.sheet(), 'Reply');
+    assert.equal(w.calls.filter(call => call[0] === 'pendingReply').at(-1)[1].shouldMention, false);
+    w.messages[0].author = w.users[FRIEND]; w.channels[CHANNEL].type = 1; w.channels[CHANNEL].isDM = () => true;
+    w.tap(); await w.choose(await w.sheet(), 'Reply');
+    assert.equal(w.calls.filter(call => call[0] === 'pendingReply').at(-1)[1].shouldMention, false);
+});
+
+test('one-tap delete retains permission checks while other people’s messages can open Reply', async t => {
+    const w = fixture(t, { reply: 'native' }); await w.start('quick-delete', { directDelete: true });
+    w.messages[0].author = w.users[FRIEND]; w.tap();
+    await w.choose(await w.sheet(), 'Reply'); assert.equal(w.sends().length, 0);
+    w.messages[0].author = w.users[ACCOUNT]; w.tap(); await settle(); assert.equal(w.sends().length, 1);
+});
+
+test('native Reply eligibility is checked again after opening the sheet', async t => {
+    const w = fixture(t, { reply: 'native' }); w.messages[0].author = w.users[FRIEND];
+    await w.start('quick-delete'); w.tap(); const ui = await w.sheet();
+    w.replyAllowed = false; await w.choose(ui, 'Reply');
+    assert.equal(w.calls.some(call => call[0] === 'nativeReply'), false);
+    assert.ok(w.toasts.includes('You cannot reply to this message right now.'));
+    assert.equal(w.tap(), 'native tap');
+});
+
+test('ephemeral messages never gain Reply even when the native eligibility helper is permissive', async t => {
+    const w = fixture(t, { reply: 'native' }); w.messages[0].author = w.users[FRIEND]; w.messages[0].flags = 64;
+    await w.start('quick-delete'); assert.equal(w.tap(), 'native tap');
+});
+
+for (const change of ['account', 'channel', 'stop', 'missing message']) test('queued Reply is cancelled after ' + change, async t => {
+    const w = fixture(t, { reply: 'native' }); const item = await w.start('quick-delete');
+    w.tap(); const ui = await w.sheet(), row = w.rows(ui).find(row => row.props.label === 'Reply');
+    row.props.onPress();
+    if (change === 'account') w.setAccount(FRIEND);
+    if (change === 'channel') w.selected = '300000000000000002';
+    if (change === 'stop') await w.stop(item);
+    if (change === 'missing message') w.messages.splice(0);
+    await w.advance(0); await settle();
+    assert.equal(w.calls.some(call => call[0] === 'nativeReply' || call[0] === 'keyboard'), false);
+    assert.deepEqual(w.sends(), []);
+    if (change !== 'missing message') assert.deepEqual(w.toasts, []);
+});
+
+test('duplicate Reply presses enqueue only one native action and native errors are not retried through the fallback', async t => {
+    const w = fixture(t, { reply: 'native', replyError: true }); await w.start('quick-delete');
+    w.tap(); const row = w.rows(await w.sheet()).find(row => row.props.label === 'Reply');
+    row.props.onPress(); row.props.onPress(); await w.advance(0); await settle();
+    assert.equal(w.calls.filter(call => call[0] === 'nativeReply').length, 1);
+    assert.equal(w.calls.filter(call => call[0] === 'pendingReply').length, 0);
+    assert.ok(w.toasts.includes('Could not open Reply. Try again.'));
+});
+
+test('pending-reply-only modules can enable Reply after startup without initializing a destructive action module', async t => {
+    const w = fixture(t, { coldActions: true }); w.messages[0].author = w.users[FRIEND];
+    await w.start('quick-delete'); assert.equal(w.tap(), 'native tap');
+    w.stores.PermissionStore.can = () => true;
+    w.addModule({ createPendingReply: value => w.calls.push(['pendingReply', value]), deletePendingReply() {} }, 'modules/replies/PendingReplyActionCreators.tsx');
+    w.tap(); const ui = await w.sheet(); assert.deepEqual(w.rows(ui).map(row => row.props.label), ['Reply', 'Cancel']);
+    await w.choose(ui, 'Reply'); assert.equal(w.calls.filter(call => call[0] === 'pendingReply').length, 1);
+    assert.deepEqual(w.sends(), []);
+});
+
+test('fallback Reply rejects server channels without Send Messages and Read Message History permission', async t => {
+    const w = fixture(t); w.messages[0].author = w.users[FRIEND];
+    w.addModule({ createPendingReply() { throw Error('No permission'); }, deletePendingReply() {} });
+    await w.start('quick-delete'); assert.equal(w.tap(), 'native tap');
+    w.stores.PermissionStore.can = flag => flag === 2048n; assert.equal(w.tap(), 'native tap');
+    w.stores.PermissionStore.can = flag => flag === 65536n; assert.equal(w.tap(), 'native tap');
+});
+
+test('Quick Delete registers directly under Valenced, renders the same settings, and removes only its own entry', async t => {
+    const w = fixture(t), registry = installSettingsSection(w);
+    const item = await w.start('quick-delete', { directDelete: false, feedback: false });
+    const key = 'dev.fluttershy2008.quick-delete.valenced-settings';
+    assert.ok(registry.section.settings.includes(key));
+    const route = w.registeredScreens.get(key), Page = route.screen.getComponent();
+    let ui; await Renderer.act(async () => { ui = Renderer.create(React.createElement(Page)); });
+    t.after(async () => Renderer.act(async () => ui.unmount()));
+    assert.match(JSON.stringify(ui.toJSON()), /Quick Reply/);
+    const toggle = ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Quick Reply');
+    await Renderer.act(async () => { toggle.props.onValueChange(false); await settle(); });
+    assert.equal(item.writes.at(-1).quickReply, false); assert.equal(item.writes.at(-1).feedback, false);
+    await Renderer.act(async () => w.stop(item));
+    assert.deepEqual(registry.section.settings, registry.core); assert.equal(w.registeredScreens.has(key), false);
+    assert.match(JSON.stringify(ui.toJSON()), /Reopen Quick Delete from Valenced settings/);
+});
+
+test('Quick Delete waits for native Settings and cancels late registration after stopping', async t => {
+    const w = fixture(t), registry = installSettingsSection(w); w.setSettingsLoaded(false);
+    const item = await w.start('quick-delete'); assert.deepEqual(registry.section.settings, registry.core);
+    await w.stop(item); w.setSettingsLoaded(true); await settle();
+    assert.deepEqual(registry.section.settings, registry.core); assert.equal(w.registeredScreens.size, 0);
+    const restarted = await w.start('quick-delete');
+    assert.equal(registry.section.settings.filter(x => x.includes('quick-delete')).length, 1);
+    await w.stop(restarted); assert.deepEqual(registry.section.settings, registry.core);
 });

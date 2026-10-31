@@ -2,9 +2,9 @@
   "format": 1,
   "id": "dev.fluttershy2008.quick-delete",
   "name": "Quick Delete",
-  "description": "Tap a message for Delete Message and Remove Embeds, without confirmation. Includes optional one-tap deletion and separate controls for each action.",
+  "description": "Tap a message to Reply, Delete Message or Remove Embeds. Native reply bar, optional one-tap deletion and a Quick Delete entry in Valenced settings.",
   "author": "fluttershy_simper67 <753962426407452713>",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "icon": "TrashIcon",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },

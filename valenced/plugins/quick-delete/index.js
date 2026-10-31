@@ -1,6 +1,6 @@
 (() => {
     'use strict';
-    const DEFAULTS = { tapActions: true, directDelete: false, skipDelete: true, skipEmbeds: true, moderation: true, feedback: true };
+    const DEFAULTS = { tapActions: true, directDelete: false, quickReply: true, skipDelete: true, skipEmbeds: true, moderation: true, feedback: true };
     const SHEET = 'dev.fluttershy2008.quick-delete.actions';
     const HANDLERS_PATH = 'modules/messages/native/MessagesHandlers.tsx';
     const MESSAGE_ACTIONS_PATH = 'actions/MessageActionCreators.tsx';
@@ -16,6 +16,8 @@
         if (!session?.active) return;
         session.active = false;
         if (current === session) current = undefined;
+        for (const job of session.replyJobs.values()) { job.cancelled = true; optional(() => job.cancel?.()); }
+        session.replyJobs.clear();
         optional(() => session.sheets?.hideActionSheet(SHEET));
         for (const remove of session.removers.splice(0).reverse()) optional(remove);
         session.pending.clear(); session.recent.clear();
@@ -27,7 +29,7 @@
         const U = api.unscoped, { React, ReactNative: RN } = U.react;
         const F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const S = U.discord.flux.Stores, h = React.createElement;
-        const session = { active: true, removers: [], pending: new Set(), recent: new Map(),
+        const session = { active: true, removers: [], pending: new Set(), recent: new Map(), replyJobs: new Map(),
             settings: settingsOf(api.jsonStorage?.cache), account: null, taps: 0, status: 'Open a chat to connect tap actions.', hooks: 0 };
         current = session;
         api.cleanup(() => stopSession(session));
@@ -54,7 +56,7 @@
             const remove = optional(() => paths?.getModuleWithImportedPath(path, value => { if (live()) callback(value); }));
             if (typeof remove === 'function') session.removers.push(remove);
         }
-        let actions, intl;
+        let actions, intl, nativeReply, pendingReply, inputUtils, canReplyMessage;
         const acceptActions = value => {
             const candidate = typeof value?.default?.deleteMessage === 'function' ? value.default : value;
             if (typeof candidate?.deleteMessage === 'function') actions = candidate;
@@ -62,6 +64,31 @@
         watchPath(MESSAGE_ACTIONS_PATH, acceptActions);
         watchProps(['deleteMessage', 'sendMessage'], acceptActions);
         watchProps(['intl', 't'], value => { intl = value; });
+        function acceptReply(value) {
+            for (const key of ['default', 'replyToMessage', 'longPressMessageHandleReply'])
+                if (typeof value?.[key] === 'function') { nativeReply = { holder: value, key }; return; }
+        }
+        watchPath('modules/replies/native/replyToMessage.tsx', acceptReply);
+        for (const name of ['longPressMessageHandleReply', 'replyToMessage']) {
+            const remove = optional(() => F.getModules(F.filters.withName(name), value => { if (live()) acceptReply(value); }, { returnNamespace: true }));
+            if (typeof remove === 'function') session.removers.push(remove);
+        }
+        const acceptPending = value => {
+            const candidate = value?.default?.createPendingReply ? value.default : value;
+            if (typeof candidate?.createPendingReply === 'function') pendingReply = candidate;
+        };
+        watchPath('modules/replies/PendingReplyActionCreators.tsx', acceptPending);
+        watchProps(['createPendingReply', 'deletePendingReply'], acceptPending);
+        const acceptInput = value => {
+            const candidate = value?.default?.getBestActiveInputForChannelId ? value.default : value;
+            if (typeof candidate?.getBestActiveInputForChannelId === 'function') inputUtils = candidate;
+        };
+        watchPath('utils/native/ChatInputUtils.tsx', acceptInput);
+        watchProps(['getBestActiveInputForChannelId'], acceptInput);
+        watchPath('modules/replies/canReplyToMessage.tsx', value => {
+            if (typeof value?.canReplyToMessage === 'function') canReplyMessage = value;
+        });
+        watchProps(['canReplyToMessage', 'useCanReplyToMessage'], value => { canReplyMessage = value; });
         const translated = key => optional(() => intl?.t?.[key] == null ? undefined : intl.intl.string(intl.t[key]));
         const exact = (value, keys) => typeof value === 'string' && keys.some(key => {
             const match = translated(key); return typeof match === 'string' && match.length && value === match;
@@ -72,6 +99,15 @@
             const flag = optional(() => U.discord.common.constants.Constants.Permissions.MANAGE_MESSAGES) ?? 8192n;
             return optional(() => S.PermissionStore.can(flag, channel)) === true;
         }
+        function replyAllowed(message, channel, flags) {
+            if (!session.settings.quickReply || !(nativeReply || pendingReply) || flags & 64n) return false;
+            if (canReplyMessage) return optional(() => canReplyMessage.canReplyToMessage(channel, message)) === true;
+            if (optional(() => channel.isSystemDM?.()) || optional(() => channel.isArchivedThread?.())) return false;
+            if ([1, 3].includes(channel.type) || optional(() => channel.isPrivate?.())) return true;
+            const permissions = optional(() => U.discord.common.constants.Constants.Permissions) ?? {};
+            const send = optional(() => channel.isThread?.()) ? permissions.SEND_MESSAGES_IN_THREADS ?? 274877906944n : permissions.SEND_MESSAGES ?? 2048n;
+            return optional(() => S.PermissionStore.can(send, channel) && S.PermissionStore.can(permissions.READ_MESSAGE_HISTORY ?? 65536n, channel)) === true;
+        }
         function resolve(ref) {
             if (!live() || !ref || ref.accountId !== account() || !validId(ref.channelId) || !validId(ref.messageId)) return;
             const message = optional(() => S.MessageStore.getMessage(ref.channelId, ref.messageId));
@@ -81,10 +117,11 @@
             // Keep boost notices, automod, thread starters and other special message taps native.
             if (![0, 19, 20, 23].includes(message.type ?? 0)) return;
             const own = message.author?.id === ref.accountId;
-            if (!own && !manage(channel)) return;
+            const canDelete = own || manage(channel);
             const flags = optional(() => BigInt(message.flags ?? 0)) ?? 0n;
             const embedCount = message.embeds?.length ?? message.embeds?.size ?? 0;
-            return { message, channel, canDelete: true, canEmbed: embedCount > 0 && !(flags & 4n) };
+            return { message, channel, canDelete, canEmbed: canDelete && embedCount > 0 && !(flags & 4n),
+                canReply: replyAllowed(message, channel, flags) };
         }
         function refFor(message, channelId) {
             const ref = { channelId: message?.channel_id ?? message?.channelId ?? channelId, messageId: message?.id, accountId: account() };
@@ -104,7 +141,7 @@
         }
         async function run(kind, ref) {
             const target = resolve(ref);
-            if (!target || (kind === 'embed' && !target.canEmbed)) { notify('This message is no longer available, or you do not have permission.'); return false; }
+            if (!target || !target.canDelete || (kind === 'embed' && !target.canEmbed)) { notify('This message is no longer available, or you do not have permission.'); return false; }
             const method = kind === 'delete' ? 'deleteMessage' : 'suppressEmbeds';
             if (typeof actions?.[method] !== 'function') { notify('Discord message actions are unavailable. Reopen the chat and try again.'); return false; }
             const key = [ref.accountId, ref.channelId, ref.messageId].join(':');
@@ -125,16 +162,65 @@
         }
         session.sheets = optional(() => U.discord.actions.ActionSheetActionCreators) ?? byProps('openLazy', 'hideActionSheet');
         function closeQuick() { optional(() => session.sheets?.hideActionSheet(SHEET)); }
-        function showQuick(ref) {
+        function queueReply(ref, handler) {
+            if (!live()) return;
+            const key = [ref.accountId, ref.channelId, ref.messageId].join(':');
+            if (session.replyJobs.has(key)) return;
+            const job = { cancelled: false };
+            session.replyJobs.set(key, job);
+            const begin = () => {
+                session.replyJobs.delete(key);
+                if (job.cancelled || !live() || ref.accountId !== account()
+                    || optional(() => S.SelectedChannelStore.getChannelId()) !== ref.channelId) return;
+                const target = resolve(ref);
+                if (!target?.canReply) { notify('You cannot reply to this message right now.'); return; }
+                const input = optional(() => inputUtils?.getBestActiveInputForChannelId(ref.channelId));
+                // Resolve the input at click time so channel navigation cannot focus a stale composer.
+                const chatInputRef = input ? { current: input } : optional(() => handler?.params?.chatInputRef);
+                try {
+                    let result;
+                    if (nativeReply) result = Reflect.apply(nativeReply.holder[nativeReply.key], nativeReply.holder, [{
+                        message: target.message, channel: target.channel, chatInputRef,
+                        actionSource: 'action_sheet', invertible: false,
+                    }]);
+                    else {
+                        // Same pending-reply action and mention defaults as Discord's Reply row.
+                        actions?.endEditMessage?.(ref.channelId);
+                        result = pendingReply.createPendingReply({ message: target.message, channel: target.channel,
+                            shouldMention: !(optional(() => target.channel.isDM?.()) ?? target.channel.type === 1)
+                                && target.message.author?.id !== ref.accountId,
+                            source: 'action_sheet' });
+                        optional(() => chatInputRef?.current?.openSystemKeyboard());
+                    }
+                    session.status = 'Reply ready in Discord’s message bar.'; changed();
+                    if (result?.catch) result.catch(() => {
+                        if (live() && ref.accountId === account()) notify('Could not open Reply. Try again.');
+                    });
+                } catch { if (live() && ref.accountId === account()) notify('Could not open Reply. Try again.'); }
+            };
+            if (typeof RN.InteractionManager?.runAfterInteractions === 'function') {
+                const work = RN.InteractionManager.runAfterInteractions(begin);
+                job.cancel = () => work?.cancel?.();
+            } else {
+                const timer = setTimeout(begin, 0); job.cancel = () => clearTimeout(timer);
+            }
+        }
+        function showQuick(ref, handler) {
             const target = resolve(ref), Design = optional(() => U.discord.design.Design);
             const Sheet = Design?.ActionSheet, Row = Design?.ActionSheetRow;
             if (!target || typeof session.sheets?.openLazy !== 'function' || !Sheet || !Row) return false;
+            const allowDelete = target.canDelete && typeof actions?.deleteMessage === 'function';
+            const allowEmbed = target.canEmbed && typeof actions?.suppressEmbeds === 'function';
+            if (!(allowDelete || allowEmbed || target.canReply)) return false;
             function QuickActions() {
                 if (!live() || !resolve(ref)) return null;
                 const choose = kind => () => { if (!live()) return; closeQuick(); void run(kind, ref); };
-                const rows = [h(Row, { key: 'delete', label: 'Delete Message', variant: 'danger',
-                    accessibilityLabel: 'Delete message without confirmation', onPress: choose('delete') })];
-                if (target.canEmbed) rows.push(h(Row, { key: 'embed', label: 'Remove Embeds',
+                const rows = [];
+                if (target.canReply) rows.push(h(Row, { key: 'reply', label: 'Reply',
+                    accessibilityLabel: 'Reply to message', onPress: () => { closeQuick(); queueReply(ref, handler); } }));
+                if (allowDelete) rows.push(h(Row, { key: 'delete', label: 'Delete Message', variant: 'danger',
+                    accessibilityLabel: 'Delete message without confirmation', onPress: choose('delete') }));
+                if (allowEmbed) rows.push(h(Row, { key: 'embed', label: 'Remove Embeds',
                     accessibilityLabel: 'Remove message embeds without confirmation', onPress: choose('embed') }));
                 rows.push(h(Row, { key: 'cancel', label: 'Cancel', onPress: closeQuick }));
                 const children = Row.Group ? h(Row.Group, null, rows) : rows;
@@ -146,11 +232,11 @@
         function tap(event, handler) {
             if (!live() || !session.settings.tapActions || optional(() => handler?.isModalOrActionsheetObstructing?.())) return false;
             const ref = eventRef(event, handler);
-            if (!ref || !actions) return false;
+            if (!ref) return false;
             session.taps++; session.status = 'Tap actions connected.';
-            // Direct mode is explicitly selectable; the default tap opens the two actions.
-            if (session.settings.directDelete) { void run('delete', ref); return true; }
-            return showQuick(ref);
+            // One-tap deletion still requires deletion permission. Reply-only messages open the menu.
+            if (session.settings.directDelete && resolve(ref)?.canDelete && typeof actions?.deleteMessage === 'function') { void run('delete', ref); return true; }
+            return showQuick(ref, handler);
         }
         const patchedHandlers = new WeakSet(), patchedClasses = new WeakSet();
         function patchHandler(handler) {
@@ -231,7 +317,7 @@
                 if (!live() || typeof options?.onConfirm !== 'function') return Reflect.apply(original, this, args);
                 const title = options.title ?? options.children?.props?.title;
                 const isDelete = session.settings.skipDelete && exact(title, ['MWMcg7', 'xwMqD7'])
-                    && exact(options.body, ['AMvpS4']) && !!refFor(preview(options.children));
+                    && exact(options.body, ['AMvpS4']) && !!resolve(refFor(preview(options.children)))?.canDelete;
                 const isEmbed = session.settings.skipEmbeds && exact(title, ['VL1KOk']) && exact(options.body, ['vXZ+Fo']);
                 if (!isDelete && !isEmbed) return Reflect.apply(original, this, args);
                 // Preserve the native, permission-checked callback, including its receiver.
@@ -286,15 +372,16 @@
             h(RN.Switch, { accessibilityLabel: title, value: values[key], onValueChange: value => save(key, value) }));
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, paddingBottom: 40 } },
             h(RN.Text, { style: { color: fg, fontSize: 26, fontWeight: '700', marginBottom: 8 } }, 'Quick Delete'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginBottom: 20 } }, 'Tap a message, then choose Delete Message or Remove Embeds. No confirmation. Hold a message for the full Discord menu.'),
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginBottom: 20 } }, 'Tap a message to Reply, Delete Message or Remove Embeds. Delete and Remove Embeds need no confirmation. Hold a message for the full Discord menu.'),
             toggle('tapActions', 'Tap for quick actions', 'Open the compact message actions by tapping the message text or its empty area.'),
-            toggle('directDelete', 'One-tap delete', 'Delete immediately when you tap an eligible message. Turn this off to show Delete and Remove Embeds.'),
+            toggle('directDelete', 'One-tap delete', 'Delete immediately when you tap a message you can delete. Turn this off to show Reply, Delete and Remove Embeds.'),
+            toggle('quickReply', 'Quick Reply', 'Show Reply in the tap menu. Opens Discord’s reply bar and keyboard so you can type your reply.'),
             toggle('moderation', 'Include moderation actions', 'Also work on server messages you have Manage Messages permission to delete.'),
             toggle('skipDelete', 'Skip Delete confirmation', 'Skip the native Delete Message confirmation from the full message menu.'),
             toggle('skipEmbeds', 'Skip Remove Embeds confirmation', 'Skip the native Remove Embeds confirmation from the full message menu.'),
             toggle('feedback', 'Success feedback', 'Show a short toast after a successful action. Errors are always shown.'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 8 } }, 'Remove Embeds keeps the message text and attachments. Deleting a message removes it for everyone. Only messages your account can manage are eligible.'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.0.0'));
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 8 } }, 'Reply opens Discord’s normal reply bar and keeps your draft. Remove Embeds keeps the text and attachments. Deleting a message removes it for everyone and requires permission.'),
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.1.0'));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start,
         stop() { stopSession(current); }, SettingsComponent } };

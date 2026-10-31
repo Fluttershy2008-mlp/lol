@@ -272,8 +272,9 @@ def build(check=False):
         }
         entries.append((slug, manifest, files))
 
-    for slug, relative in config.get("nativePlugins", {}).items():
-        directory = ROOT / relative
+    for slug, entry in config.get("nativePlugins", {}).items():
+        native_config = {"path": entry} if isinstance(entry, str) else entry
+        directory = ROOT / native_config["path"]
         manifest = json.loads((directory / "manifest.json").read_text())
         files = {name: (directory / name).read_bytes()
                  for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt", "README.md")}
@@ -283,6 +284,17 @@ def build(check=False):
             "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
             "originalVersion": manifest["version"], "kind": "native-plugin",
         }
+        shortcut = native_config.get("settingsShortcut")
+        if shortcut:
+            shortcut_meta = {"id": manifest["id"], "title": shortcut["title"], "icon": shortcut["icon"]}
+            files["index.js"] = ("(() => {\n" + shortcut_runtime + "\nconst nativeOptions = "
+                + source_path.read_text().rstrip().rstrip(";") + ";\nreturn { default: withValencedSettingsShortcut(nativeOptions.default, "
+                + json.dumps(shortcut_meta, ensure_ascii=False) + ") };\n})()\n")
+            source_info[manifest["id"]]["settingsShortcut"] = {
+                "path": "valenced/settings-shortcut.cjs",
+                "sha256": hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest(),
+                "section": "VALENCED", "title": shortcut["title"],
+            }
         entries.append((slug, manifest, files))
 
     for slug, manifest, files in entries:
