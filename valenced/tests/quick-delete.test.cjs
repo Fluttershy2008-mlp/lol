@@ -64,7 +64,7 @@ function fixture(t, opts = {}) {
     });
     t.after(async () => {
         for (const ui of renderers.reverse()) await Renderer.act(async () => ui.unmount());
-        for (const item of [...w.loaded.values()].reverse()) await w.stop(item);
+        for (const item of [...w.loaded.values()].reverse()) await Renderer.act(async () => w.stop(item));
         assert.equal(React.createElement, createElement, 'React factory restored');
         assert.equal(w.pathWaiters.size, 0); assert.equal(w.moduleWaiters.size, 0);
         assert.equal(w.stores.UserStore.listeners.size, 0);
@@ -405,8 +405,8 @@ test('Quick Delete registers directly under Valenced, renders the same settings,
     const route = w.registeredScreens.get(key), Page = route.screen.getComponent();
     let ui; await Renderer.act(async () => { ui = Renderer.create(React.createElement(Page)); });
     t.after(async () => Renderer.act(async () => ui.unmount()));
-    assert.match(JSON.stringify(ui.toJSON()), /Quick Reply/);
-    const toggle = ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Quick Reply');
+    assert.match(JSON.stringify(ui.toJSON()), /One-tap reply/);
+    const toggle = ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Reply in tap menu');
     await Renderer.act(async () => { toggle.props.onValueChange(false); await settle(); });
     assert.equal(item.writes.at(-1).quickReply, false); assert.equal(item.writes.at(-1).feedback, false);
     await Renderer.act(async () => w.stop(item));
@@ -422,4 +422,97 @@ test('Quick Delete waits for native Settings and cancels late registration after
     const restarted = await w.start('quick-delete');
     assert.equal(registry.section.settings.filter(x => x.includes('quick-delete')).length, 1);
     await w.stop(restarted); assert.deepEqual(registry.section.settings, registry.core);
+});
+
+for (const reply of ['native', 'pending']) test('one-tap reply opens ' + reply + ' Reply and keyboard directly without any menu or deletion', async t => {
+    const w = fixture(t, { reply });
+    await w.start('quick-delete', { directReply: true });
+    w.tap(); assert.equal(w.openedSheets.length, 0);
+    await w.advance(0); await settle();
+    assert.equal(w.calls.filter(call => call[0] === 'pendingReply').length, 1);
+    assert.equal(w.calls.filter(call => call[0] === 'keyboard').length, 1);
+    assert.equal(w.draft, 'Keep my draft'); assert.deepEqual(w.sends(), []);
+});
+
+test('one-tap reply works on other people’s messages without moderation permission and when the menu Reply row is off', async t => {
+    const w = fixture(t, { reply: 'native' }); w.messages[0].author = w.users[FRIEND];
+    await w.start('quick-delete', { directReply: true, quickReply: false, moderation: false });
+    w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(call => call[0] === 'nativeReply').length, 1);
+    assert.equal(w.openedSheets.length, 0); assert.deepEqual(w.sends(), []);
+});
+
+test('one-tap reply never falls through to delete when replying is unavailable', async t => {
+    const w = fixture(t, { reply: 'native' }); w.replyAllowed = false;
+    await w.start('quick-delete', { directReply: true, directDelete: true });
+    assert.equal(w.tap(), 'native tap'); await w.advance(0);
+    assert.equal(w.openedSheets.length, 0); assert.deepEqual(w.sends(), []);
+    assert.equal(w.calls.filter(call => call[0] === 'nativeReply').length, 0);
+});
+
+test('conflicting saved one-tap modes resolve to reply and the UI shows deletion off', async t => {
+    const w = fixture(t, { reply: 'native' }); const item = await w.start('quick-delete', { directReply: true, directDelete: true });
+    const ui = await w.render(item); t.after(async () => Renderer.act(async () => ui.unmount()));
+    const controls = () => ui.root.findAllByType('Switch');
+    assert.equal(controls().find(n => n.props.accessibilityLabel === 'One-tap reply').props.value, true);
+    assert.equal(controls().find(n => n.props.accessibilityLabel === 'One-tap delete').props.value, false);
+    await Renderer.act(async () => { w.tap(); await w.advance(0); });
+    assert.equal(w.calls.filter(call => call[0] === 'nativeReply').length, 1); assert.deepEqual(w.sends(), []);
+});
+
+test('One-tap reply and One-tap delete switches save mutually exclusive modes and enable message taps', async t => {
+    const w = fixture(t, { reply: 'native' }); const item = await w.start('quick-delete', { directDelete: true, tapActions: false, feedback: false });
+    const ui = await w.render(item); t.after(async () => Renderer.act(async () => ui.unmount()));
+    const control = label => ui.root.findAllByType('Switch').find(n => n.props.accessibilityLabel === label);
+    await Renderer.act(async () => { control('One-tap reply').props.onValueChange(true); await settle(); });
+    assert.equal(control('One-tap delete').props.value, false);
+    assert.equal(control('One-tap reply').props.value, true);
+    assert.equal(control('Tap for quick actions').props.value, true);
+    assert.equal(item.writes.at(-1).directReply, true); assert.equal(item.writes.at(-1).directDelete, false);
+    assert.equal(item.writes.at(-1).feedback, false);
+    await Renderer.act(async () => { w.tap(); await w.advance(0); });
+    assert.equal(w.calls.filter(call => call[0] === 'nativeReply').length, 1); assert.deepEqual(w.sends(), []);
+    await Renderer.act(async () => { control('One-tap delete').props.onValueChange(true); await settle(); });
+    assert.equal(control('One-tap reply').props.value, false);
+    assert.equal(item.writes.at(-1).directReply, false); assert.equal(item.writes.at(-1).directDelete, true);
+    await Renderer.act(async () => { w.tap(); await settle(); });
+    assert.equal(w.sends().length, 1);
+});
+
+test('turning one-tap reply off restores the quick menu and the saved choice survives restart', async t => {
+    const w = fixture(t, { reply: 'native' }); let item = await w.start('quick-delete', { directReply: true });
+    const ui = await w.render(item); t.after(async () => Renderer.act(async () => ui.unmount()));
+    const toggle = ui.root.findAllByType('Switch').find(n => n.props.accessibilityLabel === 'One-tap reply');
+    await Renderer.act(async () => { toggle.props.onValueChange(false); await settle(); });
+    const saved = item.writes.at(-1);
+    assert.equal(saved.directReply, false); assert.equal(saved.directDelete, false);
+    await Renderer.act(async () => { w.tap(); }); assert.equal(w.openedSheets.length, 1);
+    await Renderer.act(async () => w.stop(item));
+    item = await w.start('quick-delete', saved); w.tap(); assert.equal(w.openedSheets.length, 2);
+});
+
+test('a disabled tap switch preserves Discord’s normal tap even with one-tap reply saved', async t => {
+    const w = fixture(t, { reply: 'native' }); await w.start('quick-delete', { directReply: true, tapActions: false });
+    assert.equal(w.tap(), 'native tap'); await w.advance(0);
+    assert.equal(w.calls.some(c => c[0] === 'nativeReply'), false); assert.deepEqual(w.sends(), []);
+});
+
+test('rapid repeated one-tap replies queue one action and stop cancels pending keyboard focus', async t => {
+    const w = fixture(t, { reply: 'native' }); const item = await w.start('quick-delete', { directReply: true });
+    w.tap(); w.tap(); w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    w.tap(); await w.stop(item); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1); assert.deepEqual(w.sends(), []);
+});
+
+test('switching from one-tap reply to delete cancels an already queued direct reply', async t => {
+    const w = fixture(t, { reply: 'native' }); const item = await w.start('quick-delete', { directReply: true });
+    const ui = await w.render(item); t.after(async () => Renderer.act(async () => ui.unmount()));
+    await Renderer.act(async () => {
+        w.tap();
+        ui.root.findAllByType('Switch').find(n => n.props.accessibilityLabel === 'One-tap delete').props.onValueChange(true);
+        await w.advance(0); await settle();
+    });
+    assert.equal(w.calls.some(c => c[0] === 'nativeReply'), false); assert.deepEqual(w.sends(), []);
 });

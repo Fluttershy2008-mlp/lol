@@ -1,4 +1,4 @@
-Quick Delete 1.1.0 is an original Valenced-native plugin.
+Quick Delete 1.2.0 is an original Valenced-native plugin.
 Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/quick-delete
 
 Valenced API reference: Valenced/valenced revision 17008ad2eb170da4b7aaca35ad8154bb09a60a8a.
@@ -17,4 +17,6 @@ Reference: https://github.com/Wumpus-Central/discord-mobile-datamining/tree/c827
 Automated tests cover lifecycle, permission checks, native message events,
 localized prompts, duplicate requests, failures, cancellation, reply drafts,
 current-chat keyboard focus and the native Valenced settings entry.
+The direct reply and direct delete settings are mutually exclusive; conflicting
+saved values prefer reply. Existing saved preferences and package ID are retained.
 Physical Android interaction has not been tested in this environment.

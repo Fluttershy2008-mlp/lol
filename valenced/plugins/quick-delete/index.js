@@ -1,13 +1,18 @@
 (() => {
     'use strict';
-    const DEFAULTS = { tapActions: true, directDelete: false, quickReply: true, skipDelete: true, skipEmbeds: true, moderation: true, feedback: true };
+    const DEFAULTS = { tapActions: true, directDelete: false, directReply: false, quickReply: true, skipDelete: true, skipEmbeds: true, moderation: true, feedback: true };
     const SHEET = 'dev.fluttershy2008.quick-delete.actions';
     const HANDLERS_PATH = 'modules/messages/native/MessagesHandlers.tsx';
     const MESSAGE_ACTIONS_PATH = 'actions/MessageActionCreators.tsx';
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const validId = value => typeof value === 'string' && /^\d{1,20}$/.test(value);
-    const settingsOf = value => Object.fromEntries(Object.entries(DEFAULTS).map(([key, fallback]) =>
-        [key, typeof value?.[key] === 'boolean' ? value[key] : fallback]));
+    const settingsOf = value => {
+        const next = Object.fromEntries(Object.entries(DEFAULTS).map(([key, fallback]) =>
+            [key, typeof value?.[key] === 'boolean' ? value[key] : fallback]));
+        // Conflicting imported settings always prefer the non-destructive reply mode.
+        if (next.directReply) next.directDelete = false;
+        return next;
+    };
     let current, writes = Promise.resolve();
     const listeners = new Set();
     const changed = () => { for (const fn of [...listeners]) optional(fn); };
@@ -100,7 +105,7 @@
             return optional(() => S.PermissionStore.can(flag, channel)) === true;
         }
         function replyAllowed(message, channel, flags) {
-            if (!session.settings.quickReply || !(nativeReply || pendingReply) || flags & 64n) return false;
+            if (!(session.settings.quickReply || session.settings.directReply) || !(nativeReply || pendingReply) || flags & 64n) return false;
             if (canReplyMessage) return optional(() => canReplyMessage.canReplyToMessage(channel, message)) === true;
             if (optional(() => channel.isSystemDM?.()) || optional(() => channel.isArchivedThread?.())) return false;
             if ([1, 3].includes(channel.type) || optional(() => channel.isPrivate?.())) return true;
@@ -162,7 +167,7 @@
         }
         session.sheets = optional(() => U.discord.actions.ActionSheetActionCreators) ?? byProps('openLazy', 'hideActionSheet');
         function closeQuick() { optional(() => session.sheets?.hideActionSheet(SHEET)); }
-        function queueReply(ref, handler) {
+        function queueReply(ref, handler, direct = false) {
             if (!live()) return;
             const key = [ref.accountId, ref.channelId, ref.messageId].join(':');
             if (session.replyJobs.has(key)) return;
@@ -172,6 +177,7 @@
                 session.replyJobs.delete(key);
                 if (job.cancelled || !live() || ref.accountId !== account()
                     || optional(() => S.SelectedChannelStore.getChannelId()) !== ref.channelId) return;
+                if (direct && (!session.settings.directReply || !session.settings.tapActions)) return;
                 const target = resolve(ref);
                 if (!target?.canReply) { notify('You cannot reply to this message right now.'); return; }
                 const input = optional(() => inputUtils?.getBestActiveInputForChannelId(ref.channelId));
@@ -216,7 +222,7 @@
                 if (!live() || !resolve(ref)) return null;
                 const choose = kind => () => { if (!live()) return; closeQuick(); void run(kind, ref); };
                 const rows = [];
-                if (target.canReply) rows.push(h(Row, { key: 'reply', label: 'Reply',
+                if (session.settings.quickReply && target.canReply) rows.push(h(Row, { key: 'reply', label: 'Reply',
                     accessibilityLabel: 'Reply to message', onPress: () => { closeQuick(); queueReply(ref, handler); } }));
                 if (allowDelete) rows.push(h(Row, { key: 'delete', label: 'Delete Message', variant: 'danger',
                     accessibilityLabel: 'Delete message without confirmation', onPress: choose('delete') }));
@@ -234,6 +240,11 @@
             const ref = eventRef(event, handler);
             if (!ref) return false;
             session.taps++; session.status = 'Tap actions connected.';
+            if (session.settings.directReply) {
+                if (!resolve(ref)?.canReply) return false;
+                queueReply(ref, handler, true);
+                return true;
+            }
             // One-tap deletion still requires deletion permission. Reply-only messages open the menu.
             if (session.settings.directDelete && resolve(ref)?.canDelete && typeof actions?.deleteMessage === 'function') { void run('delete', ref); return true; }
             return showQuick(ref, handler);
@@ -359,7 +370,10 @@
         const fg = light ? '#18191C' : '#F2F3F5', muted = light ? '#4E5058' : '#B5BAC1', card = light ? '#F2F3F5' : '#2B2D31';
         function save(key, value) {
             if (!session?.active || current !== session) return;
-            session.settings = { ...session.settings, [key]: value }; changed();
+            const updates = { [key]: value };
+            if (value && key === 'directReply') { updates.directDelete = false; updates.tapActions = true; }
+            if (value && key === 'directDelete') { updates.directReply = false; updates.tapActions = true; }
+            session.settings = settingsOf({ ...session.settings, ...updates }); changed();
             const next = { ...session.settings };
             writes = writes.catch(() => {}).then(() => api.jsonStorage.set(next, true)).catch(() => {
                 optional(() => RN.ToastAndroid?.show('Could not save Quick Delete settings.', 0));
@@ -372,16 +386,17 @@
             h(RN.Switch, { accessibilityLabel: title, value: values[key], onValueChange: value => save(key, value) }));
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, paddingBottom: 40 } },
             h(RN.Text, { style: { color: fg, fontSize: 26, fontWeight: '700', marginBottom: 8 } }, 'Quick Delete'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginBottom: 20 } }, 'Tap a message to Reply, Delete Message or Remove Embeds. Delete and Remove Embeds need no confirmation. Hold a message for the full Discord menu.'),
-            toggle('tapActions', 'Tap for quick actions', 'Open the compact message actions by tapping the message text or its empty area.'),
-            toggle('directDelete', 'One-tap delete', 'Delete immediately when you tap a message you can delete. Turn this off to show Reply, Delete and Remove Embeds.'),
-            toggle('quickReply', 'Quick Reply', 'Show Reply in the tap menu. Opens Discord’s reply bar and keyboard so you can type your reply.'),
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginBottom: 20 } }, 'Choose what a message tap does: show quick actions, reply immediately or delete immediately. Hold a message for the full Discord menu.'),
+            toggle('tapActions', 'Tap for quick actions', 'Enable message taps. Use the quick menu or the selected one-tap option.'),
+            toggle('directDelete', 'One-tap delete', 'Delete a message immediately when you tap it. Switches off one-tap reply.'),
+            toggle('directReply', 'One-tap reply', 'Tap a message to open Discord’s reply bar and keyboard immediately. Switches off one-tap delete.'),
+            toggle('quickReply', 'Reply in tap menu', 'Show Reply in the quick menu when both one-tap options are off.'),
             toggle('moderation', 'Include moderation actions', 'Also work on server messages you have Manage Messages permission to delete.'),
             toggle('skipDelete', 'Skip Delete confirmation', 'Skip the native Delete Message confirmation from the full message menu.'),
             toggle('skipEmbeds', 'Skip Remove Embeds confirmation', 'Skip the native Remove Embeds confirmation from the full message menu.'),
             toggle('feedback', 'Success feedback', 'Show a short toast after a successful action. Errors are always shown.'),
             h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 8 } }, 'Reply opens Discord’s normal reply bar and keeps your draft. Remove Embeds keeps the text and attachments. Deleting a message removes it for everyone and requires permission.'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.1.0'));
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.2.0'));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start,
         stop() { stopSession(current); }, SettingsComponent } };
