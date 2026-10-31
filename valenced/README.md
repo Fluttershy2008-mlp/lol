@@ -2,13 +2,14 @@
 
 # Fluttershy's Valenced plugins
 
-**Quick Delete 1.2.0:** adds a separate **One-tap reply** switch at **Settings →
-Valenced → Quick Delete**, directly below One-tap delete. Turn it on to open
-Discord's reply bar and keyboard by tapping the message itself. It automatically
-switches off One-tap delete; choosing delete switches reply off. The previous
-Quick Reply switch is now labelled **Reply in tap menu**. Saved preferences,
-drafts and the plugin ID are retained. Refresh the repository, update **Quick
-Delete** and enable One-tap reply. [Details and validation](plugins/quick-delete/README.md).
+**Quick Delete 1.2.1 fixes reply triggering:** one-tap reply no longer waits for
+Android's interaction-idle queue, and the first tap can open Reply before its
+native helper modules have loaded. Menu Reply gets a bounded wait; composer
+lookup handles native ref objects and the current channel's captured input.
+Refresh the repository, update **Quick Delete**, then **fully close and reopen
+Valenced** to replace cached chat callbacks. Keep **Settings → Valenced → Quick
+Delete → One-tap reply** enabled. Existing preferences, drafts and deletion
+permissions are retained. [Details and validation](plugins/quick-delete/README.md).
 
 **SaveAsSticker 1.0.0-beta8, ExpressionCloner 1.0.0-beta4 and ViewIcons 1.0.0-beta3:** start silently when Valenced opens or restarts. The plugins stay enabled, and action confirmations and error messages remain available. Refresh the repository, update these three plugins, then fully close and reopen Discord.
 

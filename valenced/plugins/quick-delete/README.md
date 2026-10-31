@@ -1,5 +1,12 @@
 # Quick Delete
 
+**1.2.1 reply fix:** direct taps no longer wait for Android's interaction-idle
+queue. Reply from the quick menu has a bounded wait, and the first reply can
+open through Discord's normal pending-reply events while its helper modules
+are still unloaded. Keyboard lookup also accepts native ref objects and the
+current channel's captured composer. After updating, fully close and reopen
+Valenced so existing chat views use the new tap callback.
+
 **One-tap reply** opens Discord's reply bar and the current keyboard as soon as
 you tap a message. Enable it at **Settings → Valenced → Quick Delete → One-tap
 reply**. It switches off One-tap delete and enables message taps. Turning
@@ -44,7 +51,7 @@ actions after disabling the plugin.
 ## Install
 
 Refresh `https://fluttershy2008-mlp.github.io/lol/valenced/index.json`, find
-**Quick Delete**, update it to **1.2.0** and reopen the chat. Find its settings
+**Quick Delete**, update it to **1.2.1** and fully close and reopen Valenced. Find its settings
 directly at **Settings → Valenced → Quick Delete**, alongside Server Leaver and
 Friends List. Its Plugins-page settings button remains available. Saved settings
 and the plugin ID are retained. One-tap reply starts off; Reply in tap menu
@@ -62,4 +69,8 @@ identity, keyboard focus, unchanged drafts, permission changes, cancellation,
 settings registration and coexistence with the other Valenced entries. One-tap
 reply checks cover direct keyboard opening, mutually exclusive modes, conflicting
 saved values, master switch, restart, duplicate taps and cancellation on mode changes.
-The new direct one-tap interaction still requires handset verification.
+Three regression cases fail against 1.2.0 and pass against 1.2.1: stalled Android
+idle scheduling for direct and menu replies, and the first tap before native
+reply helpers load. Extra checks cover the composer fallback, one execution
+after a late idle callback, cancellation and the existing deletion permissions.
+The repaired interaction still requires handset verification.

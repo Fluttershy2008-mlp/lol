@@ -11,6 +11,13 @@ const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve()
 
 function fixture(t, opts = {}) {
     const w = createWorld(), renderers = [];
+    if (opts.idleBlocked) {
+        w.idleWork = new Set();
+        w.RN.InteractionManager.runAfterInteractions = fn => {
+            w.calls.push(['idleWait']); w.idleWork.add(fn);
+            return { cancel: () => w.idleWork.delete(fn) };
+        };
+    }
     const createElement = React.createElement;
     w.messages[0].author = w.users[ACCOUNT];
     w.messages[0].type = 0; w.messages[0].embeds = [{ type: 'link' }];
@@ -25,11 +32,11 @@ function fixture(t, opts = {}) {
         w.replyAllowed = true;
         w.input = { openSystemKeyboard() { w.calls.push(['keyboard']); } };
         w.pendingReply = { createPendingReply(value) { w.calls.push(['pendingReply', value]); }, deletePendingReply() {} };
-        w.addModule(w.pendingReply, 'modules/replies/PendingReplyActionCreators.tsx');
-        w.addModule({ getBestActiveInputForChannelId(id) { w.calls.push(['findInput', id]); return id === CHANNEL ? w.input : undefined; } }, 'utils/native/ChatInputUtils.tsx');
+        if (!opts.coldReplies) w.addModule(w.pendingReply, 'modules/replies/PendingReplyActionCreators.tsx');
+        if (!opts.noInputUtils) w.addModule({ getBestActiveInputForChannelId(id) { w.calls.push(['findInput', id]); return id === CHANNEL ? w.input : undefined; } }, 'utils/native/ChatInputUtils.tsx');
         w.addModule({ canReplyToMessage: () => w.replyAllowed, useCanReplyToMessage() { throw Error('Do not call a React hook from a click'); } }, 'modules/replies/canReplyToMessage.tsx');
         w.actions.endEditMessage = id => w.calls.push(['endEdit', id]);
-        if (opts.reply === 'native') w.addModule({ default: function a(value) {
+        if (opts.reply === 'native' && !opts.coldReplies) w.addModule({ default: function a(value) {
             w.calls.push(['nativeReply', value]);
             if (opts.replyError) throw Error('Reply failed');
             w.pendingReply.createPendingReply(value);
@@ -113,15 +120,18 @@ test('server moderation requires current Manage Messages permission', async t =>
 
 test('moderation can be disabled while own-message actions remain available', async t => {
     const w = fixture(t, { permission: true }); await w.start('quick-delete', { moderation: false });
-    w.messages[0].author = w.users[FRIEND]; assert.equal(w.tap(), 'native tap');
-    w.messages[0].author = w.users[ACCOUNT]; w.tap(); assert.equal(w.openedSheets.length, 1);
+    w.messages[0].author = w.users[FRIEND]; w.tap();
+    assert.deepEqual(w.rows(await w.sheet()).map(row => row.props.label), ['Reply', 'Cancel']);
+    w.messages[0].author = w.users[ACCOUNT]; w.tap();
+    assert.ok(w.rows(await w.sheet()).some(row => row.props.label === 'Delete Message'));
 });
 
-test('other people’s DMs stay native even when the permission store is permissive', async t => {
+test('other people’s DMs expose Reply without deletion even when the permission store is permissive', async t => {
     const w = fixture(t, { permission: true }); delete w.channels[CHANNEL].guild_id; delete w.channels[CHANNEL].guildId;
     w.channels[CHANNEL].type = 1; w.channels[CHANNEL].isDM = () => true;
     w.messages[0].author = w.users[FRIEND]; await w.start('quick-delete');
-    assert.equal(w.tap(), 'native tap'); assert.equal(w.openedSheets.length, 0);
+    w.tap(); assert.deepEqual(w.rows(await w.sheet()).map(row => row.props.label), ['Reply', 'Cancel']);
+    assert.deepEqual(w.sends(), []);
 });
 
 test('one-tap mode deletes directly, without opening either sheet or confirmation', async t => {
@@ -515,4 +525,93 @@ test('switching from one-tap reply to delete cancels an already queued direct re
         await w.advance(0); await settle();
     });
     assert.equal(w.calls.some(c => c[0] === 'nativeReply'), false); assert.deepEqual(w.sends(), []);
+});
+
+test('regression: one-tap reply works while Android never releases InteractionManager', async t => {
+    const w = fixture(t, { reply: 'native', idleBlocked: true });
+    await w.start('quick-delete', { directReply: true }); w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'idleWait').length, 0, 'direct taps do not depend on an idle callback');
+    assert.deepEqual(w.sends(), []);
+});
+
+test('regression: first reply opens with both native reply helpers still unloaded', async t => {
+    const w = fixture(t, { reply: 'pending', coldReplies: true, coldActions: true });
+    await w.start('quick-delete', { directReply: true }); w.tap(); await w.advance(0);
+    const events = w.calls.filter(c => c[0] === 'dispatch').map(c => c[1]);
+    const replies = events.filter(e => e.type === 'CREATE_PENDING_REPLY');
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].channel, w.channels[CHANNEL]); assert.equal(replies[0].message, w.messages[0]);
+    assert.equal(replies[0].shouldMention, false);
+    assert.ok(events.some(e => e.type === 'MESSAGE_END_EDIT' && e.channelId === CHANNEL));
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1);
+    assert.equal(w.draft, 'Keep my draft'); assert.deepEqual(w.sends(), []);
+    assert.equal(w.openedSheets.length, 0);
+});
+
+test('regression: menu Reply has a bounded fallback when Android keeps the idle queue blocked', async t => {
+    const w = fixture(t, { reply: 'native', idleBlocked: true });
+    await w.start('quick-delete'); w.tap(); const ui = await w.sheet(); await w.choose(ui, 'Reply');
+    await w.advance(150);
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    assert.equal(w.idleWork.size, 0, 'the stalled work is released after the fallback runs');
+    assert.equal(w.timers.size, 0);
+});
+
+test('Reply focuses the channel’s captured native composer when the lookup utility is still unloaded', async t => {
+    const w = fixture(t, { reply: 'pending', coldReplies: true, noInputUtils: true });
+    await w.start('quick-delete', { directReply: true });
+    const inputRef = { current: w.input };
+    const composer = React.createElement('NativeComposer', { channel: w.channels[CHANNEL], chatInputRef: inputRef });
+    assert.equal(composer.props.chatInputRef, inputRef, 'the composer reference is preserved');
+    w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'dispatch' && c[1].type === 'CREATE_PENDING_REPLY').length, 1);
+    assert.deepEqual(w.sends(), []);
+});
+
+test('a late idle callback cannot repeat a reply already opened by the bounded fallback', async t => {
+    const w = fixture(t, { reply: 'native', idleBlocked: true });
+    await w.start('quick-delete'); w.tap(); await w.choose(await w.sheet(), 'Reply');
+    const late = [...w.idleWork]; await w.advance(150);
+    for (const fn of late) fn();
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1);
+});
+
+test('stopping before a menu fallback timer fires removes both the timer and idle work', async t => {
+    const w = fixture(t, { reply: 'native', idleBlocked: true });
+    const item = await w.start('quick-delete'); w.tap(); await w.choose(await w.sheet(), 'Reply');
+    await w.stop(item); await w.advance(150);
+    assert.equal(w.idleWork.size, 0); assert.equal(w.timers.size, 0);
+    assert.equal(w.calls.some(c => c[0] === 'nativeReply'), false);
+});
+
+test('late-loaded native helpers replace the cold-start fallback without issuing a second reply', async t => {
+    const w = fixture(t, { reply: 'pending', coldReplies: true });
+    await w.start('quick-delete', { directReply: true }); w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'dispatch' && c[1].type === 'CREATE_PENDING_REPLY').length, 1);
+    w.addModule(w.pendingReply, 'modules/replies/PendingReplyActionCreators.tsx');
+    assert.equal(w.calls.filter(c => c[0] === 'pendingReply').length, 0);
+    w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'pendingReply').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'dispatch' && c[1].type === 'CREATE_PENDING_REPLY').length, 1);
+});
+
+test('the cold-start fallback still respects reply permissions and cannot delete instead', async t => {
+    const w = fixture(t, { reply: 'pending', coldReplies: true }); w.replyAllowed = false;
+    await w.start('quick-delete', { directReply: true }); w.tap(); await w.advance(0);
+    assert.equal(w.calls.some(c => c[0] === 'dispatch' && c[1].type === 'CREATE_PENDING_REPLY'), false);
+    assert.ok(w.toasts.includes('Reply is unavailable for this message.'));
+    assert.deepEqual(w.sends(), []);
+});
+
+test('Reply also focuses a composer lookup that returns a ref object instead of the input instance', async t => {
+    const w = fixture(t, { reply: 'native' });
+    const utility = w.modules.find(m => m?.getBestActiveInputForChannelId);
+    utility.getBestActiveInputForChannelId = () => ({ current: w.input });
+    await w.start('quick-delete', { directReply: true }); w.tap(); await w.advance(0);
+    assert.equal(w.calls.filter(c => c[0] === 'nativeReply').length, 1);
+    assert.equal(w.calls.filter(c => c[0] === 'keyboard').length, 1);
 });

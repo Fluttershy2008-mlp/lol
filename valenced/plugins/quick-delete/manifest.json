@@ -4,7 +4,7 @@
   "name": "Quick Delete",
   "description": "Choose one-tap reply, one-tap delete or a quick action menu. Native reply bar and keyboard, instant embed removal and a Quick Delete entry in Valenced settings.",
   "author": "fluttershy_simper67 <753962426407452713>",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "icon": "TrashIcon",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },

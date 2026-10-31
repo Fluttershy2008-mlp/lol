@@ -1,4 +1,4 @@
-Quick Delete 1.2.0 is an original Valenced-native plugin.
+Quick Delete 1.2.1 is an original Valenced-native plugin.
 Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/quick-delete
 
 Valenced API reference: Valenced/valenced revision 17008ad2eb170da4b7aaca35ad8154bb09a60a8a.
@@ -19,4 +19,8 @@ localized prompts, duplicate requests, failures, cancellation, reply drafts,
 current-chat keyboard focus and the native Valenced settings entry.
 The direct reply and direct delete settings are mutually exclusive; conflicting
 saved values prefer reply. Existing saved preferences and package ID are retained.
+Reply scheduling now has no idle dependency for direct taps and a bounded wait
+for menu taps. Cold-start fallback uses the native CREATE_PENDING_REPLY and
+MESSAGE_END_EDIT events. Three new regression checks fail on 1.2.0 and pass on
+the repaired build; native composer capture is scoped to channel and account.
 Physical Android interaction has not been tested in this environment.

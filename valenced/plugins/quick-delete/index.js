@@ -23,6 +23,7 @@
         if (current === session) current = undefined;
         for (const job of session.replyJobs.values()) { job.cancelled = true; optional(() => job.cancel?.()); }
         session.replyJobs.clear();
+        session.composers.clear();
         optional(() => session.sheets?.hideActionSheet(SHEET));
         for (const remove of session.removers.splice(0).reverse()) optional(remove);
         session.pending.clear(); session.recent.clear();
@@ -34,12 +35,13 @@
         const U = api.unscoped, { React, ReactNative: RN } = U.react;
         const F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const S = U.discord.flux.Stores, h = React.createElement;
-        const session = { active: true, removers: [], pending: new Set(), recent: new Map(), replyJobs: new Map(),
+        const session = { active: true, removers: [], pending: new Set(), recent: new Map(), replyJobs: new Map(), composers: new Map(),
             settings: settingsOf(api.jsonStorage?.cache), account: null, taps: 0, status: 'Open a chat to connect tap actions.', hooks: 0 };
         current = session;
         api.cleanup(() => stopSession(session));
         const live = () => session.active && current === session;
         const byProps = (...keys) => optional(() => F.lookupModule(F.filters.withProps(...keys), { initialize: false })[0]);
+        const dispatcher = optional(() => U.discord.common.flux.Dispatcher) ?? byProps('dispatch', 'subscribe');
         const account = () => optional(() => S.UserStore.getCurrentUser()?.id);
         session.account = account();
         function notify(text, success = false) {
@@ -85,11 +87,13 @@
         watchPath('modules/replies/PendingReplyActionCreators.tsx', acceptPending);
         watchProps(['createPendingReply', 'deletePendingReply'], acceptPending);
         const acceptInput = value => {
-            const candidate = value?.default?.getBestActiveInputForChannelId ? value.default : value;
-            if (typeof candidate?.getBestActiveInputForChannelId === 'function') inputUtils = candidate;
+            for (const candidate of [value?.default, value])
+                if (typeof candidate?.getBestActiveInputForChannelId === 'function'
+                    || !inputUtils && typeof candidate?.getBestActiveInput === 'function') { inputUtils = candidate; return; }
         };
         watchPath('utils/native/ChatInputUtils.tsx', acceptInput);
         watchProps(['getBestActiveInputForChannelId'], acceptInput);
+        watchProps(['getBestActiveInput'], acceptInput);
         watchPath('modules/replies/canReplyToMessage.tsx', value => {
             if (typeof value?.canReplyToMessage === 'function') canReplyMessage = value;
         });
@@ -105,7 +109,8 @@
             return optional(() => S.PermissionStore.can(flag, channel)) === true;
         }
         function replyAllowed(message, channel, flags) {
-            if (!(session.settings.quickReply || session.settings.directReply) || !(nativeReply || pendingReply) || flags & 64n) return false;
+            if (!(session.settings.quickReply || session.settings.directReply)
+                || !(nativeReply || pendingReply || typeof dispatcher?.dispatch === 'function') || flags & 64n) return false;
             if (canReplyMessage) return optional(() => canReplyMessage.canReplyToMessage(channel, message)) === true;
             if (optional(() => channel.isSystemDM?.()) || optional(() => channel.isArchivedThread?.())) return false;
             if ([1, 3].includes(channel.type) || optional(() => channel.isPrivate?.())) return true;
@@ -167,22 +172,39 @@
         }
         session.sheets = optional(() => U.discord.actions.ActionSheetActionCreators) ?? byProps('openLazy', 'hideActionSheet');
         function closeQuick() { optional(() => session.sheets?.hideActionSheet(SHEET)); }
+        function replyInput(ref, handler) {
+            const asRef = value => typeof value?.current?.openSystemKeyboard === 'function' ? value
+                : typeof value?.openSystemKeyboard === 'function' ? { current: value } : undefined;
+            const currentInput = asRef(optional(() => inputUtils?.getBestActiveInputForChannelId?.(ref.channelId)));
+            if (currentInput) return currentInput;
+            const nativeRef = asRef(optional(() => handler?.params?.chatInputRef));
+            if (nativeRef) return nativeRef;
+            const saved = session.composers.get(ref.channelId);
+            if (saved?.accountId === account()) {
+                const captured = asRef(saved.ref);
+                if (captured) return captured;
+            }
+            const best = optional(() => inputUtils?.getBestActiveInput?.());
+            if ((best?.channelId ?? best?.props?.channel?.id) === ref.channelId) return asRef(best);
+        }
         function queueReply(ref, handler, direct = false) {
             if (!live()) return;
             const key = [ref.accountId, ref.channelId, ref.messageId].join(':');
             if (session.replyJobs.has(key)) return;
-            const job = { cancelled: false };
+            const job = { cancelled: false, started: false };
             session.replyJobs.set(key, job);
             const begin = () => {
+                if (job.cancelled || job.started) return;
+                job.started = true;
+                job.cancel?.();
                 session.replyJobs.delete(key);
                 if (job.cancelled || !live() || ref.accountId !== account()
                     || optional(() => S.SelectedChannelStore.getChannelId()) !== ref.channelId) return;
                 if (direct && (!session.settings.directReply || !session.settings.tapActions)) return;
                 const target = resolve(ref);
                 if (!target?.canReply) { notify('You cannot reply to this message right now.'); return; }
-                const input = optional(() => inputUtils?.getBestActiveInputForChannelId(ref.channelId));
                 // Resolve the input at click time so channel navigation cannot focus a stale composer.
-                const chatInputRef = input ? { current: input } : optional(() => handler?.params?.chatInputRef);
+                const chatInputRef = replyInput(ref, handler);
                 try {
                     let result;
                     if (nativeReply) result = Reflect.apply(nativeReply.holder[nativeReply.key], nativeReply.holder, [{
@@ -190,12 +212,16 @@
                         actionSource: 'action_sheet', invertible: false,
                     }]);
                     else {
-                        // Same pending-reply action and mention defaults as Discord's Reply row.
-                        actions?.endEditMessage?.(ref.channelId);
-                        result = pendingReply.createPendingReply({ message: target.message, channel: target.channel,
+                        // The native helpers can still be unloaded on the first tap. Their
+                        // Flux events are available through Valenced without loading Metro factories.
+                        if (typeof actions?.endEditMessage === 'function') actions.endEditMessage(ref.channelId);
+                        else dispatcher.dispatch({ type: 'MESSAGE_END_EDIT', channelId: ref.channelId });
+                        const payload = { message: target.message, channel: target.channel,
                             shouldMention: !(optional(() => target.channel.isDM?.()) ?? target.channel.type === 1)
                                 && target.message.author?.id !== ref.accountId,
-                            source: 'action_sheet' });
+                            source: 'action_sheet' };
+                        result = pendingReply ? pendingReply.createPendingReply(payload)
+                            : dispatcher.dispatch({ type: 'CREATE_PENDING_REPLY', ...payload });
                         optional(() => chatInputRef?.current?.openSystemKeyboard());
                     }
                     session.status = 'Reply ready in Discord’s message bar.'; changed();
@@ -204,11 +230,14 @@
                     });
                 } catch { if (live() && ref.accountId === account()) notify('Could not open Reply. Try again.'); }
             };
-            if (typeof RN.InteractionManager?.runAfterInteractions === 'function') {
-                const work = RN.InteractionManager.runAfterInteractions(begin);
-                job.cancel = () => work?.cancel?.();
-            } else {
-                const timer = setTimeout(begin, 0); job.cancel = () => clearTimeout(timer);
+            // Direct taps must not wait for animation/gesture interaction handles to drain.
+            // Menu actions get a bounded idle wait so a retained handle cannot swallow Reply.
+            let work;
+            const timer = setTimeout(begin, direct ? 0 : 120);
+            job.cancel = () => { clearTimeout(timer); work?.cancel?.(); };
+            if (!direct && typeof RN.InteractionManager?.runAfterInteractions === 'function') {
+                work = optional(() => RN.InteractionManager.runAfterInteractions(begin));
+                if (job.started) work?.cancel?.();
             }
         }
         function showQuick(ref, handler) {
@@ -241,7 +270,7 @@
             if (!ref) return false;
             session.taps++; session.status = 'Tap actions connected.';
             if (session.settings.directReply) {
-                if (!resolve(ref)?.canReply) return false;
+                if (!resolve(ref)?.canReply) { notify('Reply is unavailable for this message.'); return false; }
                 queueReply(ref, handler, true);
                 return true;
             }
@@ -282,6 +311,13 @@
         const wrappedTaps = new WeakMap();
         function wrapElement(element) {
             const props = element?.props;
+            if (live() && props?.chatInputRef && typeof props.chatInputRef === 'object') {
+                const channelId = props.channel?.id ?? props.channelId;
+                if (validId(channelId)) {
+                    session.composers.set(channelId, { ref: props.chatInputRef, accountId: account() });
+                    if (session.composers.size > 8) session.composers.delete(session.composers.keys().next().value);
+                }
+            }
             if (!live() || typeof props?.onTapMessage !== 'function' || typeof props.onLongPressMessage !== 'function') return element;
             const original = props.onTapMessage;
             let wrapped = wrappedTaps.get(original);
@@ -342,7 +378,7 @@
         const userChanged = () => {
             if (!live()) return;
             if (session.account !== account()) {
-                session.account = account(); closeQuick(); session.recent.clear();
+                session.account = account(); closeQuick(); session.recent.clear(); session.composers.clear();
             }
         };
         optional(() => {
@@ -396,7 +432,7 @@
             toggle('skipEmbeds', 'Skip Remove Embeds confirmation', 'Skip the native Remove Embeds confirmation from the full message menu.'),
             toggle('feedback', 'Success feedback', 'Show a short toast after a successful action. Errors are always shown.'),
             h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 8 } }, 'Reply opens Discord’s normal reply bar and keeps your draft. Remove Embeds keeps the text and attachments. Deleting a message removes it for everyone and requires permission.'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.2.0'));
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.2.1'));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start,
         stop() { stopSession(current); }, SettingsComponent } };

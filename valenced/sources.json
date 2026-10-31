@@ -201,8 +201,8 @@
     },
     "dev.fluttershy2008.quick-delete": {
       "path": "valenced/plugins/quick-delete/index.js",
-      "sha256": "81e4a7ea8112548f1eb30f1a7930ad37dcb3a3b529f04b03a679ca6cdcf25532",
-      "originalVersion": "1.2.0",
+      "sha256": "d1331414a47d0519163d23b2d06efb2c75772025cb47805f320934e0ec465cb6",
+      "originalVersion": "1.2.1",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
