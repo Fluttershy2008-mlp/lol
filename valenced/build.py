@@ -272,6 +272,19 @@ def build(check=False):
         }
         entries.append((slug, manifest, files))
 
+    for slug, relative in config.get("nativePlugins", {}).items():
+        directory = ROOT / relative
+        manifest = json.loads((directory / "manifest.json").read_text())
+        files = {name: (directory / name).read_bytes()
+                 for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt", "README.md")}
+        source_path = directory / "index.js"
+        source_info[manifest["id"]] = {
+            "path": source_path.relative_to(ROOT).as_posix(),
+            "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            "originalVersion": manifest["version"], "kind": "native-plugin",
+        }
+        entries.append((slug, manifest, files))
+
     for slug, manifest, files in entries:
         validate_manifest(manifest)
         write(HERE / ".build" / "plugins" / slug / "manifest.json", dump(manifest), False)

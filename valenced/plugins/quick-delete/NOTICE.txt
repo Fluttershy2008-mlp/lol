@@ -1,0 +1,13 @@
+Quick Delete 1.0.0 is an original Valenced-native plugin.
+Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/quick-delete
+
+Valenced API reference: Valenced/valenced revision 17008ad2eb170da4b7aaca35ad8154bb09a60a8a.
+The MessagesHandlers.params integration follows Valenced's community
+message-link-preview plugin's native chat integration. Native-view tap wrapping
+also supports builds whose params getter cannot be replaced.
+Confirmation identifiers were checked against the native message menu and the
+public QuickDelete implementation in Purple-EyeZ/RevengePlugins; no code is copied.
+
+Automated tests cover lifecycle, permission checks, native message events,
+localized prompts, duplicate requests, failures, cancellation and settings.
+Physical Android interaction has not been tested in this environment.

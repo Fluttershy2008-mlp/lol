@@ -1074,6 +1074,31 @@
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "PencilIcon"
     },
+    "dev.fluttershy2008.quick-delete": {
+      "versions": {
+        "1.0.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.quick-delete@1.0.0.zip",
+          "sha256": "41deea959c90315e8841cde736eb78a05d32c439fef2ab1e53e0adebd90ce0d4",
+          "size": 8803,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0",
+        "beta": "1.0.0"
+      },
+      "name": "Quick Delete",
+      "description": "Tap a message for Delete Message and Remove Embeds, without confirmation. Includes optional one-tap deletion and separate controls for each action.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "TrashIcon"
+    },
     "dev.fluttershy2008.rainbow-dash-theme": {
       "versions": {
         "1.0.0-beta1": {

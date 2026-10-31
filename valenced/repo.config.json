@@ -65,6 +65,9 @@
     "rainbow-dash-background": "Replaced by the native Rainbow Dash theme package.",
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
   },
+  "nativePlugins": {
+    "quick-delete": "valenced/plugins/quick-delete"
+  },
   "nativeThemes": {
     "altitude-theme": "valenced/themes/altitude",
     "fluttershy-theme": "valenced/themes/fluttershy"

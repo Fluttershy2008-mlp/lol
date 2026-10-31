@@ -18,7 +18,7 @@ class ValencedPackages(unittest.TestCase):
     def test_index_matches_every_download_and_host_dependency(self):
         index = json.loads((HERE / "index.json").read_text())
         self.assertEqual(index["format"], 1)
-        self.assertEqual(len(index["plugins"]), 26)
+        self.assertEqual(len(index["plugins"]), 27)
         for plugin_id, plugin in index["plugins"].items():
             self.assertIn(plugin["channels"]["latest"], plugin["versions"])
             for version, entry in plugin["versions"].items():
