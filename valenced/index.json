@@ -441,14 +441,30 @@
               "version": ">=1 <2"
             }
           }
+        },
+        "1.0.0-beta3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.fluttershy-theme@1.0.0-beta3.zip",
+          "sha256": "c2cd26aebe423fa40d5eb0c2a820f16032ba0f5ca7e2afc5eea7ba35a71a9290",
+          "size": 216196,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta2",
-        "beta": "1.0.0-beta2"
+        "latest": "1.0.0-beta3",
+        "beta": "1.0.0-beta3"
       },
       "name": "Fluttershy - Pink & Yellow (Valenced)",
-      "description": "Fluttershy pink-and-yellow colours with a centred Fluttershy collage across chat and main screens. Wallpaper included for offline use, with proportional scaling and readable surfaces.",
+      "description": "Fluttershy pink-and-yellow colours with a softer centred collage, dark plum navigation and clearer labels. Wallpaper included for offline use.",
       "author": "Fluttershy2008",
       "icon": "PaintPaletteIcon"
     },

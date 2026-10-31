@@ -195,8 +195,8 @@
     },
     "dev.fluttershy2008.fluttershy-theme": {
       "path": "valenced/themes/fluttershy/index.js",
-      "sha256": "111f2d42d18b90b05d5aca19211cd1f6f5bf25fc2701ccbbe1959bca9652f574",
-      "originalVersion": "1.0.0-beta2",
+      "sha256": "050d0e3346355ecb7156a5daa0d0f93c9facde207918c1219e9ff2a22753b030",
+      "originalVersion": "1.0.0-beta3",
       "kind": "native-theme"
     }
   }

@@ -1,14 +1,18 @@
-Theme source: https://github.com/Fluttershy2008-mlp/lol/blob/7beaf1ac7573310e393a7ddfaa35317155b24180/Fluttershy_Pink_Yellow_Theme.json
-Colours and background use Valenced's Themes API. No Classic wallpaper companion is required.
-Font packs are separate and are not included in this colour theme package.
+Fluttershy - Pink & Yellow (Valenced), version 1.0.0-beta3.
+Theme colours adapted from the original Fluttershy theme by Fluttershy2008.
+Wallpaper: user's supplied Fluttershy collage, bundled unchanged.
 
-Wallpaper: user-supplied Fluttershy collage, bundled unchanged in assets/backgrounds/fluttershy-collage.jpg.
-Valenced update: 1.0.0-beta2. Original palette, plugin ID, group ID and theme ID preserved.
-Uses the Themes API screen-aligned, centred cover renderer; aspect ratio is preserved.
-Narrower or wider screens can crop the outer edges. The image is never stretched or tiled.
-The Themes API handles screen rotation and window resizing; no custom image hooks are installed.
-Theme background defaults: image opacity 1, surface dimming 0.65, blur 0.
-Validation: package integrity, unchanged wallpaper bytes, palette and registration comparison,
-and deterministic build verified locally. Physical Android verification remains pending.
-After updating, fully restart Discord and select Fluttershy - Pink & Yellow.
-If a custom background was previously selected, set Themes > Background to the theme background.
+This update softens the existing wallpaper through the Themes API (opacity 0.65,
+blur 2), increases surface dimming to 0.86, supplies the dark plum surface colour,
+and adds modern text, channel and icon tokens. Input fields and popups are opaque.
+The existing plugin, group and theme IDs are preserved. No extra companion is needed.
+The screen-aligned cover renderer retains the source aspect ratio and may crop edges.
+No global image, touch, navigation or React hooks are installed by this theme.
+
+After updating, fully restart Discord. If background sliders were customised,
+reset Background to the theme defaults to apply the softer appearance.
+
+Validation covers registration, wallpaper byte identity, deterministic packaging,
+catalogue hashes, preservation of previous releases and unrelated entries, and
+the contrast of modern labels over the darkest/brightest sidebar surfaces.
+No physical Android test was available.
