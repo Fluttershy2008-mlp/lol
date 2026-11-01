@@ -1,0 +1,10 @@
+{
+  "minAndroidApi": 28,
+  "entryPoint": "dev.fluttershy2008.longvideo.LongVideo",
+  "sources": {
+    "source/native/dev/fluttershy2008/longvideo/Budget.java": "70e01a3dd706dfc57a44c621a0a38eea7b4310d127448e4d2cca24e348a9d558",
+    "source/native/dev/fluttershy2008/longvideo/LongVideo.java": "76472d6aefd994881544a9a12a61ac208fc846e8a8c5ecd61338ad571df48d9a",
+    "source/native/dev/fluttershy2008/longvideo/Transcoder.java": "3782f2e9d36ba7c3d2d6f3905b064478e6b865c573a9ac58213b8c008d25d9f4"
+  },
+  "sha256": "d487b932688d6add0e16cb64bf04789b2fca610181f87f0fa1f44925de679591"
+}

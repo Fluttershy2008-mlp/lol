@@ -1,0 +1,8 @@
+Long Video Share 1.0.0-beta1
+Original plugin by fluttershy_simper67 <753962426407452713>.
+Source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/long-video-share
+Android-only native plugin using public Android media APIs and Valenced's bridge.
+No third-party video codec or SDK implementation is bundled. Compile-only API
+declarations are excluded from plugin.jar. Uses Kotlin/Xposed/Valenced already
+provided by the host. Hardware conversion has not been verified on a physical phone.
+Compression cannot override Discord's server-side upload limits.

@@ -2,6 +2,13 @@
 
 # Fluttershy's Valenced plugins
 
+**Long Video Share 1.0.0-beta1:** compress a long video locally on Android to a
+chosen upload-size target, save an MP4, then attach it using Discord's **+** button.
+Includes progress, cancellation, size retries and a hosted-link field. Refresh
+this repository, install **Long Video Share**, fully restart Valenced, and open
+**Settings → Valenced → Long Video Share**. File-size limits still apply and
+compression reduces quality. [Usage, requirements and validation](plugins/long-video-share/README.md).
+
 **Quick Delete 1.2.1 fixes reply triggering:** one-tap reply no longer waits for
 Android's interaction-idle queue, and the first tap can open Reply before its
 native helper modules have loaded. Menu Reply gets a bounded wait; composer

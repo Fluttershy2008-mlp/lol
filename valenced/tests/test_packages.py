@@ -18,7 +18,7 @@ class ValencedPackages(unittest.TestCase):
     def test_index_matches_every_download_and_host_dependency(self):
         index = json.loads((HERE / "index.json").read_text())
         self.assertEqual(index["format"], 1)
-        self.assertEqual(len(index["plugins"]), 28)
+        self.assertEqual(len(index["plugins"]), 29)
         for plugin_id, plugin in index["plugins"].items():
             self.assertIn(plugin["channels"]["latest"], plugin["versions"])
             for version, entry in plugin["versions"].items():
@@ -106,7 +106,7 @@ class ValencedPackages(unittest.TestCase):
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         native = {slug for slug, entry in config.get("nativePlugins", {}).items()
                   if isinstance(entry, dict) and entry.get("settingsShortcut")}
-        self.assertEqual(native, {"quick-delete", "auto-quest"})
+        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share"})
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         digest = hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest()
@@ -126,6 +126,24 @@ class ValencedPackages(unittest.TestCase):
                 self.assertEqual(sources[plugin_id]["settingsShortcut"]["section"], "VALENCED")
             else:
                 self.assertNotIn("withValencedSettingsShortcut", script)
+
+    def test_native_plugin_payloads_are_included_and_valid(self):
+        config = json.loads((HERE / "repo.config.json").read_text())
+        for slug, entry in config.get("nativePlugins", {}).items():
+            directory = ROOT / (entry if isinstance(entry, str) else entry["path"])
+            manifest = json.loads((directory / "manifest.json").read_text())
+            native = manifest.get("dist", {}).get("android")
+            if not native:
+                continue
+            with zipfile.ZipFile(HERE / "pool" / f"{manifest['id']}@{manifest['version']}.zip") as package:
+                payload = package.read(native["path"])
+            self.assertEqual(payload, (directory / native["path"]).read_bytes())
+            with zipfile.ZipFile(__import__('io').BytesIO(payload)) as jar:
+                dex = jar.read("classes.dex")
+            self.assertEqual(dex[:8], b"dex\n035\0")
+            self.assertEqual(hashlib.sha1(dex[32:]).digest(), dex[12:32])
+            self.assertEqual(zlib.adler32(dex[12:]) & 0xffffffff, struct.unpack_from("<I", dex, 8)[0])
+            self.assertIn(native["class"].replace(".", "/").encode(), dex)
 
 
 if __name__ == "__main__":

@@ -66,6 +66,10 @@
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
   },
   "nativePlugins": {
+    "long-video-share": {
+      "path": "valenced/plugins/long-video-share",
+      "settingsShortcut": { "title": "Long Video Share", "icon": "VideoIcon" }
+    },
     "auto-quest": {
       "path": "valenced/plugins/auto-quest",
       "settingsShortcut": { "title": "Auto Quest", "icon": "GiftIcon" }

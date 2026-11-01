@@ -11,6 +11,7 @@ const plugins = [
     ['blocked-user-list', 'Blocked User List'],
     ['quick-delete', 'Quick Delete'],
     ['auto-quest', 'Auto Quest'],
+    ['long-video-share', 'Long Video Share'],
 ];
 
 function scenario(t) {
