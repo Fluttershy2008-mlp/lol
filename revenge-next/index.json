@@ -1160,9 +1160,9 @@
         }
       },
       "channels": {
-        "latest": "1.0.0-stable17",
+        "latest": "1.0.0-stable18",
         "beta": "1.0.0-beta12",
-        "stable": "1.0.0-stable17"
+        "stable": "1.0.0-stable18"
       },
       "name": "More Alts! (Revenge Next)",
       "description": "Save and switch Discord accounts with verified session storage, SMS verification, authenticator/backup codes and native account management. No QR login.",
