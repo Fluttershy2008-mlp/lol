@@ -231,6 +231,58 @@ test('a silently discarded native write shows a save failure, retains accounts, 
     assert.deepEqual(Object.keys(disk.accounts), [id]);
 });
 
+test('native login success saves a renewed session even while AuthenticationStore still has the old one', async t => {
+    const fresh = 'fixture-native-login-success-fresh-session';
+    const w = scenario(t, { fetch: async (_url, init) => init.headers.Authorization === fresh
+        ? Response.json(w.users[w.accountId()]) : Response.json({}, { status: 401 }) });
+    const id = w.accountId();
+    const { ui, item } = await w.openManager({ accounts: {
+        [id]: { ...w.users[id], token: 'fixture-old-persisted-account-session' },
+    }, accountOrder: [id] });
+    await act(() => w.advance(2000));
+    assert.equal(w.subscriptions.get('LOGIN_SUCCESS')?.size, 1);
+    await act(() => w.dispatcher.dispatch({ type: 'LOGIN_SUCCESS', token: fresh }));
+    await act(() => getButton(ui, 'Save current account').props.onPress());
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, fresh);
+    assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /fixture-native-login-success-fresh-session/);
+    await act(() => w.dispatcher.dispatch({ type: 'LOGOUT' }));
+    await act(() => getButton(ui, 'Save current account').props.onPress());
+    assert.match(JSON.stringify(ui.toJSON()), /could not verify the active session/);
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, fresh);
+    await act(() => w.stop(item));
+    assert.equal(w.subscriptions.get('LOGIN_SUCCESS')?.size, 0);
+    assert.equal(w.subscriptions.get('LOGOUT')?.size, 0);
+});
+
+test('Apex full auth action is preferred and its renewed token survives a packaged round trip', async t => {
+    const targetId = '100000000000000099';
+    const targetToken = 'fixture-packaged-target-old-session';
+    const renewed = 'fixture-packaged-target-renewed-session';
+    const originalToken = 'fake-test-session-token-only';
+    const switches = [];
+    const w = scenario(t, { fetch: async (_url, init) => Response.json(w.users[
+        init.headers.Authorization === originalToken ? id : targetId]) });
+    const id = w.accountId();
+    w.users[targetId] = { id: targetId, username: 'roundtrip-account' };
+    w.modules.unshift({ switchAccountToken() { throw new Error('must not select the partial wrapper'); } });
+    w.modules.push({ login() {}, logout() { throw new Error('must never log out'); }, switchAccountToken(token) {
+        switches.push(token);
+        w.stores.AuthenticationStore.getToken = () => token === originalToken ? originalToken : renewed;
+        w.setAccount(token === originalToken ? id : targetId);
+    } });
+    const { ui, item } = await w.openManager({ accounts: {
+        [targetId]: { ...w.users[targetId], token: targetToken },
+    }, accountOrder: [targetId] });
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), targetId);
+    assert.equal(item.api.jsonStorage.cache.accounts[targetId].token, renewed);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), id);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.deepEqual(switches, [targetToken, originalToken, renewed]);
+});
+
 test('Valenced settings opens the compact switcher and labels an unsaved current account', { skip: !isValenced }, async t => {
     const w = scenario(t, { fetch: async () => Response.json(w.users[w.accountId()]) });
     const { ui, item } = await w.openManager(undefined, true);

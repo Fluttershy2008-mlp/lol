@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.17
+# More Alts! for Revenge — 3.1.18
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,14 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable18: saved-session switching and native token renewal
+
+Uses the full `login`/`logout`/`switchAccountToken` authentication module used by Apex MoreAlts, with the single-action lookup retained for builds that only expose that action. Successful native login events supply a fresh session candidate when AuthenticationStore is still stale. Every candidate is verified against Discord and the active account before it can replace a saved record. Event listeners and temporary candidates are cleared on unload; logout clears the temporary candidate.
+
+Switch confirmation accepts a renewed native token after checking its owner and writes that renewed token back using the existing disk readback. Selecting an already active account also refreshes its saved session instead of returning without saving. A failure verifying the outgoing active account identifies that account separately from an expired target. Existing accounts, SMS/MFA and the no-QR interface remain intact.
+
+Update to **1.0.0-stable18** in Valenced and restart Discord. Open **Valenced → Switch accounts → Save current account** while your chats are loaded, then switch to the other account. Saving the active account updates that account only. Sessions already revoked by Discord still require signing into the affected account. Classic is **3.1.18**. Regression tests cover stale getters, native login events, ownership mismatches, durable writes and renewed-token switching away and back. Tests use synthetic sessions; a physical Android login has not been verified.
 
 ## Stable17: login context and SMS request status
 

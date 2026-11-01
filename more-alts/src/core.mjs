@@ -130,6 +130,8 @@ export function createController({ storage, client, getSession, getSwitcher, per
     const notify = () => { for (const listener of listeners) { try { listener(); } catch {} } };
     const assertActive = epoch => { if (stopped || epoch !== generation) fail('cancelled', 'Cancelled.'); };
     const sameSession = (a, b) => a?.token === b?.token && a?.user?.id === b?.user?.id;
+    const sessionTokens = session => [...new Set([session?.token, ...(session?.tokens || [])].filter(validToken))];
+    const stillOwns = (session, token) => getSession()?.user?.id === session?.user?.id && sessionTokens(getSession()).includes(token);
     async function exclusive(fn) {
         if (stopped) fail('cancelled', 'Plugin disabled.');
         if (busy) fail('busy', 'Another account action is still in progress.');
@@ -169,16 +171,22 @@ export function createController({ storage, client, getSession, getSwitcher, per
     }
     async function saveSession(epoch, session = getSession()) {
         if (!session?.user || !validToken(session.token)) fail('no-session', 'Discord has not finished signing in. Try again after your chats load.');
-        let user;
-        try { user = await inspectToken(session.token, epoch); }
-        catch (error) {
-            if (error?.code === 'expired') fail('expired-current',
-                'Discord could not verify your current session. Sign in through Discord, then use Save current account again.');
-            throw error;
+        let user, token, mismatch = false;
+        // A successful native login can precede AuthenticationStore's update.
+        // Verify candidates against Discord; never attach a token by position
+        // or by assuming that UserStore has already caught up.
+        for (const candidate of sessionTokens(session)) {
+            try {
+                const verified = await inspectToken(candidate, epoch);
+                if (verified.id !== session.user.id) { mismatch = true; continue; }
+                user = verified; token = candidate; break;
+            } catch (error) { if (error?.code !== 'expired') throw error; }
         }
-        if (user.id !== session.user.id || !sameSession(session, getSession())) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
-        const result = await saveVerifiedAccount(user, session.token, epoch);
-        refreshKey = `${user.id}:${session.token}`; notify(); return result;
+        if (!user && !mismatch) fail('expired-current',
+            `Discord could not verify the active session for @${session.user.username}. Wait for your chats to load, then use Save current account. If this continues, complete Discord’s normal sign-in.`);
+        if (!user || !stillOwns(session, token)) fail('session-changed', 'The active account changed. Wait for Discord to finish loading, then try again.');
+        const result = await saveVerifiedAccount(user, token, epoch);
+        refreshKey = `${user.id}:${sessionTokens(session).join(':')}`; notify(); return result;
     }
     async function completeLogin(data, epoch) {
         assertActive(epoch);
@@ -287,7 +295,10 @@ export function createController({ storage, client, getSession, getSwitcher, per
             return exclusive(async epoch => {
                 const account = storage.accounts[id], original = getSession();
                 if (!account) fail('missing', 'This account is no longer saved.');
-                if (original?.user?.id === id) return { user: original.user, already: true };
+                if (original?.user?.id === id) {
+                    const result = await saveSession(epoch, original);
+                    return { user: result.user, already: true };
+                }
                 const switcher = getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
                 let target;
@@ -309,12 +320,26 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 try { Promise.resolve(switcher(savedToken)).catch(() => { rejected = true; }); }
                 catch { rejected = true; }
                 const deadline = now() + switchTimeoutMs;
+                const checkedSessions = new Set();
                 while (now() < deadline) {
                     assertActive(epoch);
                     const session = getSession();
-                    if (session?.user?.id === id && session.token === savedToken) {
-                        await saveVerifiedAccount(target, savedToken, epoch); refreshKey = `${id}:${savedToken}`; notify();
-                        return { user: target };
+                    if (session?.user?.id === id && sessionTokens(session).some(token => token !== original?.token)) {
+                        if (session.token === savedToken) {
+                            await saveVerifiedAccount(target, savedToken, epoch);
+                            refreshKey = `${id}:${sessionTokens(session).join(':')}`; notify();
+                            return { user: target };
+                        }
+                        // Native switching may renew a session. Confirm the
+                        // new token's owner before retaining it for next time.
+                        const key = sessionTokens(session).join(':');
+                        if (!checkedSessions.has(key)) {
+                            checkedSessions.add(key);
+                            try { return await saveSession(epoch, session); }
+                            catch (error) {
+                                if (!['expired-current', 'session-changed'].includes(error?.code)) throw error;
+                            }
+                        }
                     }
                     if (rejected) fail('switch-failed', 'Discord could not switch accounts. Your previous account is saved so you can select it again.');
                     await delay();
@@ -327,10 +352,11 @@ export function createController({ storage, client, getSession, getSwitcher, per
             let session;
             try { session = getSession(); } catch { return; }
             if (!session?.user || !validToken(session.token) || !storage.accounts[session.user.id]) return;
-            const key = `${session.user.id}:${session.token}`;
+            const tokens = sessionTokens(session);
+            const key = `${session.user.id}:${tokens.join(':')}`;
             if (refreshKey === key) return;
             // An unchanged, already saved session needs no startup HTTP request.
-            if (storage.accounts[session.user.id].token === session.token) { refreshKey = key; return; }
+            if (tokens.length === 1 && storage.accounts[session.user.id].token === session.token) { refreshKey = key; return; }
             // One background attempt per observed session. Manual Save can retry.
             refreshKey = key;
             try { await exclusive(epoch => saveSession(epoch, session)); } catch {}

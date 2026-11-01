@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-import { AccountError, createClient, createController } from './core.mjs';
+import { AccountError, createClient, createController, validToken } from './core.mjs';
 import { createModuleResolver } from './modules.mjs';
 import { registerSettingsShortcut } from './shortcut.mjs';
 import { createLoginDialog } from './login-dialog.mjs';
@@ -15,7 +15,7 @@ export function createPlugin(V, host = globalThis) {
     const setTimer = (fn, ms) => (host.setTimeout || setTimeout)(fn, ms);
     const clearTimer = id => (host.clearTimeout || clearTimeout)(id);
     const disposers = [];
-    let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0;
+    let active = false, controller, refreshTimer, initTimer, idleTask, nativeReady = false, optionalReady = false, epoch = 0, recentLogin;
     const pendingFrames = new Map();
     const countdownTimers = new Set();
     const byProps = resolver.byProps;
@@ -23,12 +23,21 @@ export function createPlugin(V, host = globalThis) {
     const toast = text => { try { V.ui?.toasts?.showToast(text); } catch {} };
     const log = text => { try { V.logger?.warn?.(`[More Alts] ${text}`); } catch {} };
     function getSession() {
-        try { return { user: byStore('UserStore')?.getCurrentUser?.(),
-            token: byStore('AuthenticationStore')?.getToken?.() ?? byProps('getToken')?.getToken?.() }; }
+        try {
+            const user = byStore('UserStore')?.getCurrentUser?.();
+            const read = source => { try { return source?.getToken?.(); } catch {} };
+            const tokens = [...new Set([
+                recentLogin && (!recentLogin.userId || recentLogin.userId === user?.id) ? recentLogin.token : undefined,
+                read(byStore('AuthenticationStore')), read(byProps('getToken'))
+            ].filter(validToken))];
+            return { user, token: tokens[0], tokens };
+        }
         catch { return {}; }
     }
     function getSwitcher() {
-        const auth = byProps('switchAccountToken');
+        // Apex uses the full auth action module. A single-property match can
+        // select an account-menu wrapper rather than Discord's actual action.
+        const auth = byProps('login', 'logout', 'switchAccountToken') ?? byProps('switchAccountToken');
         return typeof auth?.switchAccountToken === 'function' ? token => auth.switchAccountToken(token) : undefined;
     }
     function scheduleRefresh() {
@@ -275,6 +284,20 @@ export function createPlugin(V, host = globalThis) {
             } catch {}
         });
         try {
+            const dispatcher = V.metro.common.FluxDispatcher ?? byProps('dispatch', 'subscribe', 'unsubscribe');
+            if (typeof dispatcher?.subscribe === 'function' && typeof dispatcher?.unsubscribe === 'function') {
+                const onLogin = event => {
+                    if (validToken(event?.token)) recentLogin = { token: event.token, userId: event.user?.id ?? event.userId };
+                    scheduleRefresh();
+                };
+                const onLogout = () => { recentLogin = undefined; };
+                dispatcher.subscribe('LOGIN_SUCCESS', onLogin);
+                disposers.push(() => dispatcher.unsubscribe('LOGIN_SUCCESS', onLogin));
+                dispatcher.subscribe('LOGOUT', onLogout);
+                disposers.push(() => dispatcher.unsubscribe('LOGOUT', onLogout));
+            }
+        } catch {}
+        try {
             const subscription = RN.AppState?.addEventListener?.('change', state => { if (state === 'active') scheduleRefresh(); });
             if (subscription?.remove) disposers.push(() => subscription.remove());
         } catch {}
@@ -305,6 +328,7 @@ export function createPlugin(V, host = globalThis) {
     }
     function onLoad() {
         if (active) return;
+        recentLogin = undefined;
         controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher,
             persistStorage: typeof V.plugin.persistStorage === 'function' ? (value, isCurrent) => V.plugin.persistStorage(value, isCurrent) : undefined });
         active = true; optionalReady = false;
@@ -335,7 +359,7 @@ export function createPlugin(V, host = globalThis) {
         }, 1500);
     }
     function onUnload() {
-        active = false; epoch++; optionalReady = false; nativeReady = false;
+        active = false; epoch++; optionalReady = false; nativeReady = false; recentLogin = undefined;
         clearTimer(refreshTimer); clearTimer(initTimer); initTimer = undefined;
         for (const timer of countdownTimers) clearTimer(timer); countdownTimers.clear();
         try { idleTask?.cancel?.(); } catch {} idleTask = undefined;

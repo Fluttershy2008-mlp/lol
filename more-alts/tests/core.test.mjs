@@ -367,6 +367,50 @@ test('switch validates the target, saves the outgoing account, then calls native
     assert.equal(h.storage.accounts[a.id].token, ta);
     assert.deepEqual(h.calls.map(([, init]) => init.headers.Authorization), [tb, ta]);
 });
+test('save recovers a fresh native session when a stale getter returns 401', async () => {
+    const fresh = 'fixture-fresh-current-token-from-native-login';
+    const h = harness({ fetcher: async (_url, init) => init.headers.Authorization === ta ? response({}, 401) : response(a) });
+    h.setSession({ user: a, token: ta, tokens: [ta, fresh] });
+    await h.controller.saveCurrent();
+    assert.equal(h.storage.accounts[a.id].token, fresh);
+    assert.deepEqual(h.calls.map(([, init]) => init.headers.Authorization), [ta, fresh]);
+});
+test('candidate tokens belonging to another account cannot replace the current account', async () => {
+    const h = harness({ fetcher: async () => response(b) });
+    h.setSession({ user: a, token: ta, tokens: [ta, tb] });
+    await assert.rejects(h.controller.saveCurrent(), isCode('session-changed'));
+    assert.deepEqual(h.storage.accounts, {});
+});
+test('selecting the already active account repairs its stale saved session', async () => {
+    const h = harness(); saveAccount(h.storage, a, 'fixture-old-saved-current-account');
+    assert.equal((await h.controller.switchTo(a.id)).already, true);
+    assert.equal(h.storage.accounts[a.id].token, ta);
+    assert.deepEqual(h.switched, []);
+});
+test('native token renewal is verified, saved, and usable after switching away and back', async () => {
+    const renewed = 'fixture-native-renewed-second-account-session';
+    const h = harness({ switcher: (token, setSession) => setSession({ user: token === ta ? a : b, token: token === ta ? ta : renewed }) });
+    saveAccount(h.storage, b, tb);
+    await h.controller.switchTo(b.id);
+    assert.equal(h.storage.accounts[b.id].token, renewed);
+    await h.controller.switchTo(a.id);
+    await h.controller.switchTo(b.id);
+    assert.deepEqual(h.switched, [tb, ta, renewed]);
+    assert.equal(h.storage.accounts[a.id].token, ta);
+});
+test('an old primary getter during native switching cannot hide the verified target candidate', async () => {
+    const h = harness({ switcher: (_token, setSession) => setSession({ user: b, token: ta, tokens: [ta, tb] }) });
+    saveAccount(h.storage, b, tb);
+    assert.equal((await h.controller.switchTo(b.id)).user.id, b.id);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+});
+test('native token renewal for the wrong user never becomes a successful switch', async () => {
+    const h = harness({ fetcher: async (_url, init) => response(init.headers.Authorization === tb ? b : a),
+        switcher: (_token, setSession) => setSession({ user: b, token: 'fixture-wrong-owner-rotated-session' }) });
+    saveAccount(h.storage, b, tb);
+    await assert.rejects(h.controller.switchTo(b.id), isCode('switch-timeout'));
+    assert.equal(h.storage.accounts[b.id].token, tb);
+});
 test('expired target is rejected before native switch or logout', async () => {
     const h = harness({ fetcher: async () => response({}, 401) }); saveAccount(h.storage, b, tb);
     await assert.rejects(h.controller.switchTo(b.id), isCode('expired'));

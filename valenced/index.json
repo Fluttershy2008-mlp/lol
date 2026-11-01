@@ -1035,6 +1035,19 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-stable18": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.0.0-stable18.zip",
+          "sha256": "a39ed8b47c4754d48e8f0d4cd39edcdafd11fa107d00f33988f019e8317a8627",
+          "size": 48744,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
