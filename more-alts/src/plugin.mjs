@@ -27,12 +27,13 @@ export function createPlugin(V, host = globalThis) {
             const user = byStore('UserStore')?.getCurrentUser?.();
             const authentication = byStore('AuthenticationStore');
             const read = source => { try { return source?.getToken?.(); } catch {} };
+            const authToken = [read(authentication), read(byProps('getToken'))].find(validToken);
             const tokens = [...new Set([
                 recentLogin && (!recentLogin.userId || recentLogin.userId === user?.id) ? recentLogin.token : undefined,
                 read(authentication), read(byProps('getToken'))
             ].filter(validToken))];
             const flag = (source, name) => { try { return typeof source?.[name] === 'function' ? source[name]() : undefined; } catch {} };
-            return { user, token: tokens[0], tokens, authenticated: flag(authentication, 'isAuthenticated'),
+            return { user, token: tokens[0], tokens, authToken, authenticated: flag(authentication, 'isAuthenticated'),
                 connected: flag(byStore('ConnectionStore'), 'isConnected') };
         }
         catch { return {}; }
@@ -42,6 +43,13 @@ export function createPlugin(V, host = globalThis) {
         // select an account-menu wrapper rather than Discord's actual action.
         const auth = byProps('login', 'logout', 'switchAccountToken') ?? byProps('switchAccountToken');
         return typeof auth?.switchAccountToken === 'function' ? token => auth.switchAccountToken(token) : undefined;
+    }
+    function getNativeAccounts() {
+        try { return byStore('MultiAccountStore')?.getUsers?.() ?? []; } catch { return []; }
+    }
+    function getNativeSwitcher() {
+        const actions = byProps('switchAccount', 'removeAccount') ?? byProps('switchAccount');
+        return typeof actions?.switchAccount === 'function' ? id => actions.switchAccount(id) : undefined;
     }
     function scheduleRefresh() {
         if (!active || !optionalReady || !storage.settings.refreshSavedSessions || !storage.accountOrder.length) return;
@@ -214,18 +222,19 @@ export function createPlugin(V, host = globalThis) {
         contents.push(button('Save current account', saveCurrent),
             button('Add another account', addAccount, true),
             input('Search saved accounts', query, setQuery, { placeholder: 'Username, display name or user ID' }),
-            text(`${instance.accounts.length} saved account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
+            text(`${instance.accounts.length} account${instance.accounts.length === 1 ? '' : 's'}`, { fontWeight: '700' }));
         contents.push(...matches.map(account => h(RN.View, { key: account.id, style: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 } },
             h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 } },
                 account.avatar && /^[a-zA-Z0-9_]+$/.test(account.avatar) ? h(RN.Image, { source: { uri: `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png?size=128` }, style: { width: 42, height: 42, borderRadius: 21, marginRight: 12 } }) : null,
                 h(RN.View, { style: { flex: 1 } }, text(account.displayName, { fontWeight: '700', fontSize: 17, marginBottom: 2 }),
                     text(`@${account.username}${currentId === account.id ? ' · Current account' : ''}`, { color: colors.muted, marginBottom: 0 }))),
             Number.isFinite(account.updatedAt) ? text(`Last saved: ${new Date(account.updatedAt).toLocaleString()}`, { color: colors.muted, fontSize: 12 }) : null,
+            account.isNative ? text('Signed in through Discord', { color: colors.muted, fontSize: 12 }) : null,
             currentId !== account.id ? button('Switch account', () => switchAccount(account)) : null,
             expiredAccountId === account.id ? text('Discord rejected this saved session. Sign in again to update this account without removing it.',
                 { color: colors.error, fontSize: 13 }) : null,
             expiredAccountId === account.id ? button('Re-sign in', () => beginReauth(account), true) : null,
-            button('Remove saved account', () => remove(account), true))));
+            account.saved ? button('Remove saved account', () => remove(account), true) : null)));
         if (!matches.length) contents.push(text(query ? 'No matching accounts.' : 'Save your current account to get started.', { color: colors.muted }));
         contents.push(button('Import accounts from old More Alts', () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)), true),
             text('For import, keep the original Apex More Alts installed but disabled.', { color: colors.muted }),
@@ -294,6 +303,13 @@ export function createPlugin(V, host = globalThis) {
             } catch {}
         });
         try {
+            const store = byStore('MultiAccountStore');
+            const changed = () => { controller?.refreshNative(); scheduleRefresh(); };
+            if (typeof store?.addChangeListener === 'function' && typeof store?.removeChangeListener === 'function') {
+                store.addChangeListener(changed); disposers.push(() => store.removeChangeListener(changed));
+            }
+        } catch {}
+        try {
             const dispatcher = V.metro.common.FluxDispatcher ?? byProps('dispatch', 'subscribe', 'unsubscribe');
             if (typeof dispatcher?.subscribe === 'function' && typeof dispatcher?.unsubscribe === 'function') {
                 const onLogin = event => {
@@ -340,6 +356,7 @@ export function createPlugin(V, host = globalThis) {
         if (active) return;
         recentLogin = undefined;
         controller = createController({ storage, client: createClient({ fetcher: (...args) => host.fetch(...args) }), getSession, getSwitcher,
+            getNativeAccounts, getNativeSwitcher,
             persistStorage: typeof V.plugin.persistStorage === 'function' ? (value, isCurrent) => V.plugin.persistStorage(value, isCurrent) : undefined });
         active = true; optionalReady = false;
         const generation = ++epoch;
@@ -355,6 +372,7 @@ export function createPlugin(V, host = globalThis) {
                     ['props', 'getCanUseMultiAccountMobile'], ['store', 'UserStore'],
                     ['store', 'AuthenticationStore'], ['props', 'getToken'],
                     ['store', 'ConnectionStore'],
+                    ['store', 'MultiAccountStore'],
                     ['props', 'SETTING_RENDERER_CONFIG'], ['props', 'getAncestors', 'isBlocked'],
                     ['store', 'ThemeStore'], ['props', 'getBuiltInCommands']
                 ], yieldFrame, isActive).then(() => {

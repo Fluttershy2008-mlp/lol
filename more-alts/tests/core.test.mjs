@@ -9,18 +9,22 @@ const tb = 'fixture-session-two-not-a-real-token';
 const response = (data, status = 200, header) => ({ ok: status >= 200 && status < 300, status, json: async () => data, headers: { get: () => header } });
 function harness(options = {}) {
     const calls = [], storage = options.storage || {};
-    let session = { user: a, token: ta }, switched = [];
+    let session = { user: a, token: ta }, switched = [], nativeSwitched = [];
     const fetcher = options.fetcher || (async (url, init) => response(init.headers.Authorization === ta ? a : b));
     const client = createClient({ fetcher: async (...args) => { calls.push(args); return fetcher(...args); },
         getFingerprint: options.getFingerprint || (async () => 'fixture-core-login-fingerprint'),
         timeoutMs: options.timeoutMs || 100, now: options.now });
     const controller = createController({ storage, client, getSession: () => session, persistStorage: options.persistStorage,
+        getNativeAccounts: () => typeof options.nativeAccounts === 'function' ? options.nativeAccounts() : options.nativeAccounts || [],
+        getNativeSwitcher: () => options.nativeSwitcher ? id => {
+            nativeSwitched.push(id); return options.nativeSwitcher(id, next => { session = next; });
+        } : undefined,
         getSwitcher: () => options.unsupported ? undefined : token => {
             switched.push(token);
             if (options.switcher) return options.switcher(token, next => { session = next; });
             session = { user: token === ta ? a : b, token };
         }, switchTimeoutMs: 30, pollMs: 1, now: options.now });
-    return { controller, storage, calls, client, switched, get session() { return session; }, setSession(next) { session = next; } };
+    return { controller, storage, calls, client, switched, nativeSwitched, get session() { return session; }, setSession(next) { session = next; } };
 }
 const isCode = code => error => error instanceof AccountError && error.code === code;
 
@@ -506,7 +510,7 @@ test('a native switch failure after successful re-sign-in cannot be reported as 
         : init.headers.Authorization === ta ? a : b), switcher: () => { throw new Error('private native error'); } });
     await h.controller.login('x', 'y', b.id);
     await assert.rejects(h.controller.switchTo(b.id), error => isCode('switch-failed')(error)
-        && error.message.includes('MA19-NATIVE') && !error.message.includes('private'));
+        && error.message.includes('MA20-TOKEN') && !error.message.includes('private'));
     assert.equal(h.storage.accounts[b.id].token, tb);
 });
 test('an optimistic target identity without an authenticated connection cannot confirm a switch', async () => {
@@ -524,6 +528,72 @@ test('native switch resolution alone does not produce a false success', async ()
     const h = harness({ switcher: () => Promise.resolve() }); saveAccount(h.storage, b, tb);
     await assert.rejects(h.controller.switchTo(b.id), isCode('switch-timeout'));
     assert.ok(h.storage.accounts[a.id]); assert.ok(h.storage.accounts[b.id]); assert.equal(h.controller.busy, false);
+});
+test('Discord-managed accounts switch by exact ID despite an expired custom session', async () => {
+    const live = 'fixture-native-live-login-session';
+    const h = harness({ nativeAccounts: [a, { ...b, pushSyncToken: 'fixture-push-not-an-auth-token' }],
+        fetcher: async (_url, init) => {
+            assert.equal(init.headers.Authorization, ta, 'never probe the expired target or a native push token');
+            return response(a);
+        }, nativeSwitcher: (id, setSession) => {
+            assert.equal(id, b.id);
+            setSession({ user: b, token: live, authToken: live, authenticated: true, connected: true });
+        } });
+    saveAccount(h.storage, b, 'fixture-expired-custom-session');
+    assert.equal((await h.controller.switchTo(b.id)).native, true);
+    assert.deepEqual(h.nativeSwitched, [b.id]); assert.deepEqual(h.switched, []);
+    assert.equal(h.calls.length, 0, 'native-to-native switching must not depend on standalone token probes');
+    assert.equal(h.storage.accounts[b.id].token, live);
+    assert.ok(!JSON.stringify(h.controller.accounts).includes('fixture-push-not-an-auth-token'));
+});
+test('native-only profiles are listed without fake login tokens and can switch in either direction', async () => {
+    const h = harness({ nativeAccounts: { first: a, second: { ...b, pushSyncToken: 'not-a-login' }, bad: { id: '__proto__', username: 'bad' } },
+        nativeSwitcher: (id, setSession) => setSession({ user: id === a.id ? a : b, token: id === a.id ? ta : tb }) });
+    assert.deepEqual(h.controller.accounts.map(x => [x.id, x.saved, x.isNative, x.token]), [[a.id, false, true, undefined], [b.id, false, true, undefined]]);
+    await h.controller.switchTo(b.id); await h.controller.switchTo(a.id);
+    assert.deepEqual(h.nativeSwitched, [b.id, a.id]);
+    assert.deepEqual(h.switched, []);
+});
+test('registered outgoing accounts remain available when the standalone current-session probe fails', async () => {
+    const h = harness({ nativeAccounts: [a, b], fetcher: async () => response({}, 401),
+        nativeSwitcher: (_id, setSession) => setSession({ user: b, token: tb }) });
+    saveAccount(h.storage, a, ta);
+    await h.controller.switchTo(b.id);
+    assert.equal(h.storage.accounts[a.id].token, ta);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+    assert.deepEqual(h.nativeSwitched, [b.id]);
+});
+test('a rejected native ID path can recover through a freshly verified re-sign-in token', async () => {
+    const h = harness({ nativeAccounts: [a, b], nativeSwitcher: () => { throw new Error('private native error'); },
+        fetcher: async (url, init) => response(url.endsWith('/auth/login') ? { token: tb } : init.headers.Authorization === ta ? a : b) });
+    await assert.rejects(h.controller.switchTo(b.id), error => isCode('expired')(error) && error.message.includes('MA20-ID'));
+    await h.controller.login('b@example.invalid', 'fixture-password', b.id);
+    await h.controller.switchTo(b.id);
+    assert.deepEqual(h.nativeSwitched, [b.id]); assert.deepEqual(h.switched, [tb]);
+});
+test('optimistic identity changes cannot hide a native action rejection', async () => {
+    const h = harness({ nativeAccounts: [a, b], nativeSwitcher: (_id, setSession) => {
+        setSession({ user: b, token: tb }); return Promise.reject(new Error('private rejection'));
+    } });
+    await assert.rejects(h.controller.switchTo(b.id), isCode('expired'));
+    assert.equal(h.storage.accounts[b.id], undefined);
+});
+test('pending native actions and disconnected identities cannot be reported as switched', async () => {
+    for (const pending of [true, false]) {
+        const h = harness({ nativeAccounts: [a, b], nativeSwitcher: (_id, setSession) => {
+            setSession({ user: b, token: tb, connected: !pending ? false : true });
+            return pending ? new Promise(() => {}) : undefined;
+        } });
+        await assert.rejects(h.controller.switchTo(b.id), isCode('switch-timeout'));
+        assert.equal(h.storage.accounts[b.id], undefined);
+    }
+});
+test('native credentials can remain managed by Discord when no live token is exposed', async () => {
+    const h = harness({ nativeAccounts: [a, b], nativeSwitcher: (_id, setSession) =>
+        setSession({ user: b, authenticated: true, connected: true }) });
+    assert.equal((await h.controller.switchTo(b.id)).native, true);
+    assert.equal(h.storage.accounts[b.id], undefined);
+    assert.equal(h.controller.accounts.find(x => x.id === b.id).isNative, true);
 });
 test('async native switch rejection retains both accounts', async () => {
     const h = harness({ switcher: () => Promise.reject(new Error('native internal token')) }); saveAccount(h.storage, b, tb);

@@ -189,7 +189,7 @@ for (const rejectNative of [false, true]) test(`re-sign-in after MFA ${rejectNat
     assert.equal(profileChecks, 1);
     if (rejectNative) {
         assert.equal(w.accountId(), currentId);
-        assert.match(JSON.stringify(ui.toJSON()), /MA19-NATIVE/);
+        assert.match(JSON.stringify(ui.toJSON()), /MA20-TOKEN/);
         assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Saved @mfa-selected-account|Switching accounts…|private native session/);
     } else {
         assert.equal(w.accountId(), id);
@@ -338,6 +338,41 @@ test('Apex full auth action is preferred and its renewed token survives a packag
     assert.equal(w.accountId(), id);
     await act(() => getButton(ui, 'Switch account').props.onPress());
     assert.deepEqual(switches, [targetToken, originalToken, renewed]);
+});
+
+for (const nativeOnly of [false, true]) test(`Discord native ID switching ${nativeOnly ? 'lists an account without a plugin login' : 'overrides an expired plugin login'} and repairs its saved session`, async t => {
+    const id = '100000000000000099', old = 'fixture-expired-custom-session-not-used', live = 'fixture-discord-managed-live-session';
+    const push = 'fixture-native-push-registration-not-a-login';
+    const switches = [], listeners = new Set();
+    const w = scenario(t, { fetch: async (_url, init) => {
+        assert.equal(init.headers.Authorization, 'fake-test-session-token-only');
+        return Response.json(w.users[currentId]);
+    } });
+    const currentId = w.accountId();
+    w.users[id] = { id, username: 'native-managed-account' };
+    const store = { getName: () => 'MultiAccountStore', getUsers: () => [w.users[currentId], { ...w.users[id], pushSyncToken: push }],
+        addChangeListener: fn => listeners.add(fn), removeChangeListener: fn => listeners.delete(fn) };
+    w.modules.push(store, { removeAccount() { throw new Error('must never revoke native accounts'); }, switchAccount(targetId) {
+        assert.ok([id, currentId].includes(targetId), 'native switching takes a user ID, never a saved token or push registration');
+        switches.push(targetId);
+        w.stores.AuthenticationStore.getToken = () => targetId === id ? live : 'fake-test-session-token-only';
+        w.setAccount(targetId);
+    } });
+    w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = () => { throw new Error('must not use stale custom login'); };
+    const { ui, item } = await w.openManager(nativeOnly ? {} : { accounts: { [id]: { ...w.users[id], token: old } }, accountOrder: [id] });
+    assert.match(JSON.stringify(ui.toJSON()), /Signed in through Discord/);
+    assert.doesNotMatch(JSON.stringify(ui.toJSON()), new RegExp(`${old}|${live}|${push}`));
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), id);
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, live);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), currentId);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.deepEqual(switches, [id, currentId, id]);
+    await act(() => w.advance(2000));
+    assert.equal(listeners.size, 1);
+    await act(() => w.stop(item));
+    assert.equal(listeners.size, 0);
 });
 
 test('Valenced settings opens the compact switcher and labels an unsaved current account', { skip: !isValenced }, async t => {

@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.19
+# More Alts! for Revenge — 3.1.20
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,18 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable20: Discord-managed account switching
+
+Reviewed the complete More Alts implementation in [Rosie's Valenced-Plugins](https://code.is-your.app/SheWhoReignsSupreme/valenced-plugins/src/branch/main/plugins/more-alts) at commit `0e4a47195e669278f0bdf60609ab043497933baf`, including account actions, account/add/settings UI, native-switcher and tab patches, storage/types, manifest, and Android vault/notification code. Its separate `MultiAccountStore.getUsers()` and `switchAccount(...)` path identified a route absent from this plugin's earlier versions.
+
+The account list now merges public profiles already registered with Discord. Rows labelled **Signed in through Discord** use Discord's `switchAccount(account.id)` action when available, before considering a custom saved token. An expired custom token therefore cannot block that native route. Unlike the reference's token-or-ID selection, the native action receives the exact account ID, including when the same account also has a custom saved token. Push notification registrations are never treated as login credentials or copied into plugin storage.
+
+Success requires the native action to settle successfully and the expected account to load with acceptable authentication/connection state. A resolved action or optimistic user-ID change alone does not count. The canonical live authentication-store token is saved with readback once available; otherwise explicitly authenticated, connected native accounts can remain managed by Discord without inventing a token. An outgoing profile-probe rejection does not block a native-to-native switch when Discord still registers that outgoing account. Its old saved record is retained. Failed native actions offer re-sign-in; freshly verified sign-ins can recover through the token route without retrying the rejected native action in the same plugin session.
+
+Removing a plugin-saved copy leaves Discord's registered account intact. Native-only rows have no Remove saved account button. Existing credential/MFA login, storage readback and no-QR UI remain. The reference's separate Android vault and notification hooks are not required for this account-ID route and are not bundled here.
+
+Update to **1.0.0-stable20**, restart Discord, and select an account labelled **Signed in through Discord**. Other accounts retain the verified session-based flow. Tests cover expired plugin sessions with valid native registrations, native-only profiles, account-ID arguments, live token refresh, switching back, source probe rejection, native rejection, pending/optimistic actions, disconnected accounts and listener cleanup. These are simulated client flows, not a physical-device validation.
 
 ## Stable19: successful re-sign-in continues into the requested switch
 

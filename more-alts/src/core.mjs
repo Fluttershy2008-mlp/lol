@@ -128,7 +128,8 @@ export function createClient({ fetcher, getFingerprint, now = Date.now, timeoutM
     }
     return { request, prepareLogin, cancel, stop() { stopped = true; cancel(); } };
 }
-export function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
+export function createController({ storage, client, getSession, getSwitcher, getNativeAccounts = () => [], getNativeSwitcher = () => undefined,
+    persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
     let stopped = false, busy = false, generation = 0, challenge, refreshKey, expectedLoginId;
     // Keep the exact verified, durably saved session briefly. Re-sign-in must
@@ -137,6 +138,23 @@ export function createController({ storage, client, getSession, getSwitcher, per
     // an assertion that Discord cannot revoke a session: native confirmation
     // remains mandatory on every switch.
     const verifiedSessions = new Map();
+    const rejectedNativeAccounts = new Set();
+    function nativeAccounts() {
+        try {
+            const users = getNativeAccounts();
+            return [...new Map((Array.isArray(users) ? users : Object.values(users || {}))
+                .filter(user => validId(user?.id) && typeof user.username === 'string' && !user.bot)
+                .map(user => [user.id, { id: user.id, username: user.username,
+                    discriminator: String(user.discriminator ?? '0'),
+                    displayName: user.global_name || user.globalName || user.username,
+                    avatar: typeof user.avatar === 'string' ? user.avatar : null, isNative: true }])).values()];
+        } catch { return []; }
+    }
+    function allAccounts() {
+        const entries = new Map(storage.accountOrder.map(id => [id, storage.accounts[id]]).filter(([, account]) => account));
+        for (const user of nativeAccounts()) entries.set(user.id, { ...entries.get(user.id), ...user });
+        return [...entries.values()].map(account => ({ ...account, saved: !!storage.accounts[account.id] }));
+    }
     const recentVerified = id => {
         const saved = verifiedSessions.get(id);
         if (saved && now() - saved.at >= 0 && now() - saved.at < 60000) return saved;
@@ -244,7 +262,8 @@ export function createController({ storage, client, getSession, getSwitcher, per
         subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         get busy() { return busy; },
         get verification() { return verificationState(); },
-        get accounts() { return storage.accountOrder.map(id => storage.accounts[id]).filter(Boolean); },
+        get accounts() { return allAccounts(); },
+        refreshNative() { if (!stopped) notify(); },
         saveCurrent() { return exclusive(epoch => saveSession(epoch)); },
         login(login, password, expectedUserId) {
             return exclusive(async epoch => {
@@ -317,22 +336,29 @@ export function createController({ storage, client, getSession, getSwitcher, per
             return exclusive(async epoch => {
                 let account = storage.accounts[id];
                 const original = getSession();
-                if (!account) fail('missing', 'This account is no longer saved.');
+                const registered = nativeAccounts(), nativeUser = registered.find(user => user.id === id);
+                account ??= nativeUser;
+                if (!account) fail('missing', 'This account is no longer saved or signed in through Discord.');
                 if (original?.user?.id === id) {
+                    if (!storage.accounts[id]) return { user: original.user, already: true };
                     const result = await saveSession(epoch, original);
                     return { user: result.user, already: true };
                 }
-                const switcher = getSwitcher();
+                const nativeSwitcher = nativeUser && !rejectedNativeAccounts.has(id) ? getNativeSwitcher() : undefined;
+                const nativeRoute = typeof nativeSwitcher === 'function';
+                const switcher = nativeRoute ? nativeSwitcher : getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
+                if (!nativeRoute && !validToken(account.token)) fail('expired',
+                    `Discord’s account switch action is unavailable for @${account.username}. Choose Re-sign in to save a new session.`);
                 const fresh = recentVerified(id);
-                if (fresh && fresh.token !== account.token) {
+                if (!nativeRoute && fresh && fresh.token !== account.token) {
                     // A read from an older native cache must not replace the
                     // session whose successful write we just acknowledged.
                     await saveVerifiedAccount(fresh.user, fresh.token, epoch);
                     account = storage.accounts[id];
                 }
                 let target;
-                try { target = fresh?.token === account.token ? fresh.user : await inspectToken(account.token, epoch); }
+                try { target = nativeRoute ? nativeUser : fresh?.token === account.token ? fresh.user : await inspectToken(account.token, epoch); }
                 catch (error) {
                     if (error?.code === 'expired') fail('expired',
                         `Saved session for @${account.username} needs to be renewed. Choose Re-sign in for this account.`);
@@ -340,21 +366,51 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 }
                 if (target.id !== id) fail('mismatch', 'This saved session belongs to a different account. Remove it and sign in again.');
                 if (!sameSession(original, getSession())) fail('session-changed', 'Your active account changed. Try again.');
-                if (original?.user && validToken(original.token)) await saveSession(epoch, original);
+                // A registered outgoing account remains available through
+                // Discord's own credentials. Preserve its existing plugin
+                // record rather than requiring an unrelated HTTP probe or
+                // writing a session whose ownership was not newly checked.
+                const nativeOwnsOutgoing = nativeRoute && registered.some(user => user.id === original?.user?.id);
+                if (!nativeOwnsOutgoing && original?.user && validToken(original.token)) await saveSession(epoch, original);
                 assertActive(epoch);
                 const savedToken = account.token;
                 if (!sameSession(original, getSession())) fail('session-changed', 'Your active account changed. Try again.');
                 // Attach a rejection handler immediately, but do not trust a resolved
                 // native action as proof of a completed login. Observe the real session.
-                let rejected = false;
-                try { Promise.resolve(switcher(savedToken)).catch(() => { rejected = true; }); }
-                catch { rejected = true; }
+                let rejected = false, settled = false;
+                try { Promise.resolve(switcher(nativeRoute ? id : savedToken)).then(result => {
+                    settled = true; if (result === false) rejected = true;
+                }, () => { settled = true; rejected = true; }); }
+                catch { settled = true; rejected = true; }
+                await Promise.resolve();
                 const deadline = now() + switchTimeoutMs;
                 const checkedSessions = new Set();
                 while (now() < deadline) {
                     assertActive(epoch);
                     const session = getSession();
-                    if (session?.user?.id === id && session.authenticated !== false && session.connected !== false
+                    if (rejected) {
+                        verifiedSessions.delete(id);
+                        if (nativeRoute) {
+                            rejectedNativeAccounts.add(id);
+                            fail('expired', `Discord could not switch its registered account @${account.username}. Choose Re-sign in to save a new session. (MA20-ID)`);
+                        }
+                        fail('switch-failed', `Discord’s account switch action failed for @${account.username}. Both saved accounts are retained. (MA20-TOKEN)`);
+                    }
+                    if (settled && nativeRoute && session?.user?.id === id
+                        && session.authenticated !== false && session.connected !== false) {
+                        // Use the live auth store, never pushSyncToken, the
+                        // target ID, or a LOGIN_SUCCESS candidate for another
+                        // account. Discord itself owns the native credential.
+                        const liveToken = session.authToken ?? session.token;
+                        if (validToken(liveToken) && liveToken !== (original?.authToken ?? original?.token)) {
+                            await saveVerifiedAccount(session.user, liveToken, epoch);
+                            refreshKey = `${id}:${sessionTokens(session).join(':')}`; notify();
+                            return { user: session.user, native: true };
+                        }
+                        if (!validToken(liveToken) && session.authenticated === true && session.connected === true)
+                            return { user: session.user, native: true };
+                    }
+                    if (settled && !nativeRoute && session?.user?.id === id && session.authenticated !== false && session.connected !== false
                         && sessionTokens(session).some(token => token !== original?.token)) {
                         if (session.token === savedToken) {
                             await saveVerifiedAccount(target, savedToken, epoch);
@@ -372,14 +428,10 @@ export function createController({ storage, client, getSession, getSwitcher, per
                             }
                         }
                     }
-                    if (rejected) {
-                        verifiedSessions.delete(id);
-                        fail('switch-failed', `Discord’s account switch action failed for @${account.username}. Both saved accounts are retained. (MA19-NATIVE)`);
-                    }
                     await delay();
                 }
                 verifiedSessions.delete(id);
-                fail('switch-timeout', `Discord did not finish loading @${account.username}. Check which account is active before retrying; both saved accounts are retained. (MA19-CONFIRM)`);
+                fail('switch-timeout', `Discord did not finish loading @${account.username}. Check which account is active before retrying; both saved accounts are retained. (${nativeRoute ? 'MA20-ID-CONFIRM' : 'MA20-TOKEN-CONFIRM'})`);
             });
         },
         async refreshSaved() {
@@ -400,6 +452,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
             if (busy || stopped) return false;
             const accounts = { ...storage.accounts }; delete accounts[id]; storage.accounts = accounts;
             verifiedSessions.delete(id);
+            rejectedNativeAccounts.delete(id);
             storage.accountOrder = storage.accountOrder.filter(value => value !== id); notify(); return true;
         },
         importAccounts(legacy) {
@@ -408,7 +461,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
         },
         cancelLogin() { challenge = undefined; expectedLoginId = undefined; generation++; client.cancel(); },
         stop() {
-            stopped = true; challenge = undefined; expectedLoginId = undefined; verifiedSessions.clear(); generation++; client.stop();
+            stopped = true; challenge = undefined; expectedLoginId = undefined; verifiedSessions.clear(); rejectedNativeAccounts.clear(); generation++; client.stop();
             for (const item of delays) { clearTimeout(item.timer); item.resolve(); } delays.clear(); listeners.clear();
         }
     };

@@ -11,7 +11,7 @@ export function createAccountSwitcher(React, RN) {
         const text = (value, style = {}, props = {}) => h(RN.Text,
             { style: { color: c.text, fontSize: 15, lineHeight: 21, ...style }, ...props }, value);
         const currentId = currentUser?.id;
-        const savedCurrent = accounts.some(account => account.id === currentId);
+        const savedCurrent = accounts.some(account => account.id === currentId && account.saved !== false);
         const rows = [...accounts];
         if (validId(currentId) && !savedCurrent && typeof currentUser.username === 'string') rows.unshift({
             id: currentId, username: currentUser.username,
@@ -53,7 +53,8 @@ export function createAccountSwitcher(React, RN) {
                         h(RN.View, { style: { flex: 1, minWidth: 0, paddingRight: 12 } },
                             text(account.displayName || account.username, { fontWeight: '700', fontSize: 16 }, { numberOfLines: 1 }),
                             text(`@${account.username}`, { color: c.muted, fontSize: 13, lineHeight: 19 }, { numberOfLines: 1 }),
-                            selected ? text(savedCurrent ? 'Current account' : 'Current account · Not saved', { color: c.muted, fontSize: 12, lineHeight: 18 }) : null,
+                            selected ? text(savedCurrent ? 'Current account' : account.isNative ? 'Current account · Signed in through Discord' : 'Current account · Not saved', { color: c.muted, fontSize: 12, lineHeight: 18 }) : null,
+                            !selected && account.isNative ? text('Signed in through Discord', { color: c.muted, fontSize: 12, lineHeight: 18 }) : null,
                             expired ? text('Sign in again to refresh this account', { color: c.danger, fontSize: 12, lineHeight: 18 }) : null),
                         selected ? text('✓', { color: light ? '#197b4d' : '#66d6a0', fontSize: 24, fontWeight: '700' }, { accessible: false }) : null),
                         expired ? h(RN.View, { style: { paddingHorizontal: 14, paddingBottom: 14 } },
@@ -62,6 +63,6 @@ export function createAccountSwitcher(React, RN) {
             action('Add another account', onAddAccount, true),
             action('Save current account', onSaveCurrent, false, !validId(currentId)),
             action('Manage accounts', onManage),
-            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!${version ? ' ' + version : ''}`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
+            text(`${accounts.length} account${accounts.length === 1 ? '' : 's'} · More Alts!${version ? ' ' + version : ''}`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
     };
 }

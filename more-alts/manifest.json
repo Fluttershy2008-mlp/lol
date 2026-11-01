@@ -1,7 +1,7 @@
 {
   "name": "More Alts!",
   "description": "Save and switch Discord accounts with verified session storage, SMS verification, authenticator/backup codes and native account management. No QR login.",
-  "version": "3.1.19",
+  "version": "3.1.20",
   "authors": [
     {
       "name": "Win8.1VMUser",
@@ -22,5 +22,5 @@
   "vendetta": {
     "icon": "UserIcon"
   },
-  "hash": "164da2b663276f4d09ba27be46611825daca01b1c4ee186a3b448a012a83ce84"
+  "hash": "4a577b3f76292a4ef3d8cde4e544534521fcc936fdf5241e7696840613dc61bf"
 }

@@ -1,3 +1,11 @@
+Native-account discovery and switching integration informed by Rosie's More Alts
+in SheWhoReignsSupreme/Valenced-Plugins (GPL-3.0), reviewed at commit
+0e4a47195e669278f0bdf60609ab043497933baf:
+https://code.is-your.app/SheWhoReignsSupreme/valenced-plugins/src/branch/main/plugins/more-alts
+The local native-ID integration is implemented in this project's GPL-3.0-or-later
+controller and adapter. Rosie's Android vault and notification binary are not
+included. This project retains its GPL license in LICENSE.
+
 Bundled QR encoder: qrcode-generator by Kazuhiko Arase (MIT).
 
 MIT License
