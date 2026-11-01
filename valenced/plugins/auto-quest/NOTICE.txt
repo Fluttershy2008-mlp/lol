@@ -1,4 +1,4 @@
-Auto Quest 1.2.0 — Valenced compatibility fork, modified 2026-11-01.
+Auto Quest 1.2.1 — Valenced compatibility fork, modified 2026-11-01.
 Original Auto Quest 1.1.1 by Rosie (SheWhoReignsSupreme).
 Upstream: https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins
 Source revision: 0e4a47195e669278f0bdf60609ab043497933baf
@@ -7,6 +7,8 @@ Modifications by Fluttershy2008-mlp / fluttershy_simper67:
 Self-contained native Valenced runtime/settings, lazy QuestStore and nested HTTP
 discovery, schema compatibility, lifecycle cancellation, response validation,
 rate-limit handling, notification deduplication and guarded video navigation.
+Version 1.2.1 gives each accepted video quest an independent runner, timer,
+request state and cancellation, so multiple quests progress simultaneously.
 Distributed under GPL-3.0-only; see LICENSE.
 Corresponding modified source, tests and deterministic packaging script:
 https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/auto-quest

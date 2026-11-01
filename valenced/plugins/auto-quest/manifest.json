@@ -2,10 +2,10 @@
   "format": 1,
   "id": "dev.fluttershy2008.auto-quest",
   "name": "Auto Quest",
-  "description": "Complete accepted video quests with live progress, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
+  "description": "Complete multiple accepted video quests at the same time, with separate progress timers, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
   "author": "Rosie",
   "contributors": ["fluttershy_simper67 <753962426407452713>"],
-  "version": "1.2.0",
+  "version": "1.2.1",
   "icon": "GiftIcon",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },

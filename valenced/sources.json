@@ -201,8 +201,8 @@
     },
     "dev.fluttershy2008.auto-quest": {
       "path": "valenced/plugins/auto-quest/index.js",
-      "sha256": "b0a330087d8031efe391f91d9fa392fe8eb07656041c4dff97e9aed0f4876d65",
-      "originalVersion": "1.2.0",
+      "sha256": "1a86ce69dfe437e25b955908d0c88eb9ffeaedca0dc57bc35420024fe896e167",
+      "originalVersion": "1.2.1",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",

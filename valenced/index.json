@@ -151,14 +151,27 @@
               "version": "*"
             }
           }
+        },
+        "1.2.1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.auto-quest@1.2.1.zip",
+          "sha256": "4cc611d55e73c696898e172681c11c220221bd7814fbbf346fac42f1edd52a3f",
+          "size": 22424,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.2.0",
-        "beta": "1.2.0"
+        "latest": "1.2.1",
+        "beta": "1.2.1"
       },
       "name": "Auto Quest",
-      "description": "Complete accepted video quests with live progress, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
+      "description": "Complete multiple accepted video quests at the same time, with separate progress timers, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
       "author": "Rosie",
       "contributors": [
         "fluttershy_simper67 <753962426407452713>"

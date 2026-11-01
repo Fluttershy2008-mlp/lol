@@ -46,7 +46,7 @@
     function stopSession(session) {
         if (!session?.active) return;
         session.active = false;
-        session.cancelRunner?.();
+        session.cancelRunners?.();
         for (const timer of session.timers) clearTimeout(timer);
         session.timers.clear();
         for (const remove of session.removers.splice(0).reverse()) optional(remove);
@@ -61,7 +61,7 @@
         const session = { active: true, ready: false, timers: new Set(), removers: [], store: undefined, http: undefined,
             settings: settingsOf(api.jsonStorage?.cache), statuses: new Map(), halted: new Set(), noticed: new Set(),
             confirmed: new Set(), staleQuests: new Set(),
-            account: optional(() => S.UserStore.getCurrentUser()?.id), runner: undefined, writes: Promise.resolve(),
+            account: optional(() => S.UserStore.getCurrentUser()?.id), runners: new Map(), writes: Promise.resolve(),
             foreground: !RN.AppState?.currentState || RN.AppState.currentState === 'active',
             status: 'Connecting to Discord Quests…', scanTimer: undefined, probeTimer: undefined };
         current = session;
@@ -88,15 +88,17 @@
         const usable = () => live() && session.ready && session.settings.enabled && session.foreground
             && !!session.account && session.account === account();
 
-        function cancelRunner() {
-            const job = session.runner;
+        function cancelRunner(job) {
             if (!job) return;
             job.cancelled = true;
             job.cancelWait?.(); job.cancelRequest?.(); clear(job.exitTimer);
-            session.runner = undefined;
+            if (session.runners.get(job.id) === job) session.runners.delete(job.id);
         }
-        session.cancelRunner = cancelRunner;
-        const valid = job => usable() && !job.cancelled && session.runner === job
+        function cancelRunners() {
+            for (const job of [...session.runners.values()]) cancelRunner(job);
+        }
+        session.cancelRunners = cancelRunners;
+        const valid = job => usable() && !job.cancelled && session.runners.get(job.id) === job
             && job.account === account() && eligible(fresh(job.id));
         function wait(job, ms) {
             return new Promise(resolve => {
@@ -124,12 +126,10 @@
         function post(job, timestamp) {
             return new Promise((resolve, reject) => {
                 let settled = false;
-                const lease = {};
                 const finish = (fn, value) => {
                     if (settled) return;
                     settled = true; clear(timer);
                     if (job.cancelRequest === cancel) job.cancelRequest = undefined;
-                    if (session.inFlight === lease) session.inFlight = undefined;
                     fn(value);
                 };
                 const cancel = () => finish(resolve, CANCELLED);
@@ -137,7 +137,6 @@
                 job.cancelRequest = cancel;
                 const client = session.http;
                 // Authentication belongs to Discord's signed-in client. Do not copy or cache account tokens.
-                session.inFlight = lease;
                 Promise.resolve().then(() => {
                     if (!valid(job)) return CANCELLED;
                     return client.post({ url: '/quests/' + job.id + '/video-progress', body: { timestamp } });
@@ -220,7 +219,7 @@
                 toast('Auto Quest paused: ' + reason + '. Open its settings to retry.');
             } finally {
                 clear(job.exitTimer);
-                if (session.runner === job) session.runner = undefined;
+                if (session.runners.get(job.id) === job) session.runners.delete(job.id);
                 if (live()) queueScan();
             }
         }
@@ -232,16 +231,16 @@
             const id = account();
             if (id === session.account) return;
             session.staleQuests = new Set(quests());
-            cancelRunner(); session.account = id;
+            cancelRunners(); session.account = id;
             session.statuses.clear(); session.noticed.clear(); session.halted.clear(); session.confirmed.clear();
         }
         function scan() {
             if (!live()) return;
             syncAccount();
-            const running = session.runner;
-            if (running && !valid(running)) {
-                if (completed(fresh(running.id))) finishConfirmed(running);
-                cancelRunner();
+            for (const job of [...session.runners.values()]) {
+                if (valid(job)) continue;
+                if (completed(fresh(job.id))) finishConfirmed(job);
+                cancelRunner(job);
             }
             session.status = !session.settings.enabled ? 'Paused in settings.' : !session.foreground ? 'Paused while Valenced is in the background.'
                 : !session.account ? 'Waiting for a signed-in Discord account.' : !session.store ? 'Open Discord Quests once to load your quests.'
@@ -258,14 +257,15 @@
                         + (supported ? '. Accept it in Discord to begin.' : '. Complete this quest in Discord.'));
                 }
             }
-            if (!session.runner && !session.inFlight) {
-                const quest = list.find(q => eligible(q) && !session.halted.has(q.id));
-                if (quest) {
-                    const job = { id: quest.id, quest, account: session.account, cancelled: false };
-                    session.runner = job;
-                    void run(job);
-                }
+            for (const quest of list) {
+                if (!eligible(quest) || session.halted.has(quest.id) || session.runners.has(quest.id)) continue;
+                const job = { id: quest.id, quest, account: session.account, cancelled: false };
+                // Claim this ID before starting: store events cannot create a second runner.
+                session.runners.set(quest.id, job);
+                void run(job);
             }
+            if (session.runners.size) session.status = 'Processing ' + session.runners.size
+                + (session.runners.size === 1 ? ' video quest.' : ' video quests at once.');
             changed();
         }
         function attachStore(value) {
@@ -311,7 +311,7 @@
         const appSubscription = optional(() => RN.AppState?.addEventListener('change', state => {
             if (!live()) return;
             session.foreground = state === 'active';
-            if (!session.foreground) cancelRunner();
+            if (!session.foreground) cancelRunners();
             queueScan();
         }));
         if (appSubscription) session.removers.push(() => appSubscription.remove());
@@ -319,7 +319,7 @@
         session.update = patch => {
             if (!live()) return;
             session.settings = settingsOf({ ...session.settings, ...patch });
-            if (!session.settings.enabled) cancelRunner();
+            if (!session.settings.enabled) cancelRunners();
             const next = { ...session.settings };
             session.writes = session.writes.catch(() => {}).then(() => api.jsonStorage.set(next, true))
                 .catch(() => toast('Auto Quest could not save settings.'));
@@ -347,7 +347,7 @@
         const quests = session?.quests?.() ?? [];
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, paddingBottom: 40 } },
             text('Auto Quest', { fontSize: 26, fontWeight: '700', lineHeight: 32, marginBottom: 8 }),
-            text('Accept a watch-a-video quest in Discord. Keep Valenced open while Auto Quest processes it. Play, stream and console quests are unsupported.', { color: muted, marginBottom: 20 }),
+            text('Accept video quests in Discord. All accepted video quests run at the same time, each with its own progress timer. Keep Valenced open. Play, stream and console quests are unsupported.', { color: muted, marginBottom: 20 }),
             toggle('enabled', 'Auto-complete video quests', 'Changes apply immediately. Switching off cancels active timers.'),
             toggle('notifyNewQuest', 'Notify for new quests', 'One notification per available quest in this account session.'),
             toggle('notifyUnsupported', 'Notify for unsupported quests', 'Also show new quests that require playing, streaming or a console.'),
@@ -367,7 +367,7 @@
                     text(nameOf(quest), { fontWeight: '600' }), text(detail, { color: muted, marginTop: 5 }));
             }),
             !quests.length && text('No quests loaded. Open Discord’s Quests page once, then return here.', { color: muted }),
-            text('Auto Quest 1.2.0 • Original by Rosie • Valenced fixes by fluttershy_simper67', { color: muted, fontSize: 12, marginTop: 20 }));
+            text('Auto Quest 1.2.1 • Original by Rosie • Valenced fixes by fluttershy_simper67', { color: muted, fontSize: 12, marginTop: 20 }));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS, ignoredQuestIds: {} } },
         start, stop() { stopSession(current); }, SettingsComponent } };

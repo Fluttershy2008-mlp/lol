@@ -52,7 +52,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 ## Included
 
-**Auto Quest 1.2.0** and **Quick Delete** are native plugins alongside the compatibility ports and themes below. Auto Quest supports accepted video quests, with live status, immediate pause/resume and a page at **Settings → Valenced → Auto Quest**. Refresh this repository and install **Auto Quest** from Browse Plugins. [Setup, fixes and supported quest types](plugins/auto-quest/README.md).
+**Auto Quest 1.2.1** and **Quick Delete** are native plugins alongside the compatibility ports and themes below. Auto Quest now runs all accepted video quests at the same time, with separate progress timers and immediate pause/resume. See the active count and each quest's progress at **Settings → Valenced → Auto Quest**. Refresh this repository, update **Auto Quest** and fully restart Discord. [Setup, fixes and supported quest types](plugins/auto-quest/README.md).
 
 All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta7**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 

@@ -223,13 +223,162 @@ test('Fetch-like JSON text completion is accepted', async t => {
     assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
 });
 
-test('one quest is processed at a time and store changes cannot create duplicate runners', async t => {
-    const w = fixture(t, { quests: [quest(), quest({ id: '141000000000000002' })],
-        http: async () => ({ status: 200, body: { completed_at: '2026-11-01' } }) });
+test('all accepted video quests progress together without duplicate runners on store changes', async t => {
+    const list = [quest(), quest({ id: '141000000000000002' }), quest({ id: '141000000000000003' })];
+    const w = fixture(t, { quests: [...list, list[1]],
+        http: async (_method, input) => ({ status: 200, body: { completed_at: input.body.timestamp === 14 ? '2026-11-01' : null } }) });
     await w.startQuest(); for (let i = 0; i < 10; i++) w.questStore.emit();
-    await w.tick(7000); assert.equal(w.requests().length, 1);
-    await w.tick(7000); assert.equal(w.requests().length, 2);
-    assert.notEqual(w.requests()[0][2].url, w.requests()[1][2].url);
+    await w.tick(6999); assert.equal(w.requests().length, 0);
+    await w.tick(1); assert.equal(w.requests().length, 3, 'each quest reports its first 7 seconds at the same time');
+    assert.equal(new Set(w.requests().map(x => x[2].url)).size, 3);
+    assert.deepEqual(w.requests().map(x => x[2].body.timestamp), [7, 7, 7]);
+    for (let i = 0; i < 10; i++) w.questStore.emit();
+    await w.tick(7000); assert.equal(w.requests().length, 6);
+    assert.deepEqual(w.requests().slice(3).map(x => x[2].body.timestamp), [14, 14, 14]);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 3);
+    await w.tick(60000); assert.equal(w.requests().length, 6, 'finished runners stay stopped');
+});
+
+test('parallel quests retain their own saved progress, targets and completion times', async t => {
+    const first = quest(), second = quest({ id: '141000000000000002' });
+    first.userStatus.progress.WATCH_VIDEO_ON_MOBILE = { value: 2 };
+    second.config.taskConfigV2.tasks.WATCH_VIDEO_ON_MOBILE.target = 21;
+    second.userStatus.progress.WATCH_VIDEO_ON_MOBILE = { value: 5 };
+    const w = fixture(t, { quests: [first, second], http: async (_method, input) => ({ status: 200,
+        body: { completed_at: input.body.timestamp === (input.url.includes(ID) ? 14 : 21) ? '2026-11-01' : null } }) });
+    await w.startQuest(); await w.tick(7000);
+    assert.deepEqual(w.requests().map(x => x[2].body.timestamp), [9, 12]);
+    await w.tick(5000); assert.equal(w.requests().length, 3);
+    assert.equal(w.requests()[2][2].body.timestamp, 14);
+    await w.tick(2000); assert.equal(w.requests().length, 4);
+    assert.equal(w.requests()[3][2].body.timestamp, 19);
+    await w.tick(2000); assert.equal(w.requests()[4][2].body.timestamp, 21);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+test('a slow in-flight request for one quest does not hold up the other quest', async t => {
+    let finish;
+    const w = fixture(t, { quests: [quest(), quest({ id: '141000000000000002' })],
+        http: (_method, input) => input.url.includes(ID) ? new Promise(resolve => { finish = resolve; })
+            : { status: 200, body: { completed_at: input.body.timestamp === 14 ? '2026-11-01' : null } } });
+    await w.startQuest(); await w.tick(7000); assert.equal(w.requests().length, 2);
+    await w.tick(7000); assert.equal(w.requests().length, 3);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+    finish({ status: 200, body: { completed_at: '2026-11-01' } }); await w.tick(0);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+test('a per-quest rate-limit delay leaves other quest timers running', async t => {
+    let limited = false;
+    const w = fixture(t, { quests: [quest(), quest({ id: '141000000000000002' })], http: (_method, input) => {
+        if (input.url.includes(ID) && !limited) { limited = true; return { status: 429, body: { retry_after: 3 } }; }
+        return { status: 200, body: { completed_at: input.body.timestamp === 14 ? '2026-11-01' : null } };
+    } });
+    await w.startQuest(); await w.tick(7000); assert.equal(w.requests().length, 2);
+    await w.tick(2999); assert.equal(w.requests().length, 2);
+    await w.tick(1); assert.equal(w.requests().length, 3);
+    assert.match(w.requests()[2][2].url, new RegExp(ID));
+    await w.tick(4000); assert.equal(w.requests().length, 4);
+    assert.equal(w.requests()[3][2].body.timestamp, 14);
+    assert.ok(!w.requests()[3][2].url.includes(ID));
+    await w.tick(3000); assert.equal(w.requests().length, 5);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+for (const failure of [403, 408]) test('one quest failing with HTTP ' + failure + ' does not stop the others', async t => {
+    const w = fixture(t, { quests: [quest(), quest({ id: '141000000000000002' })],
+        http: (_method, input) => input.url.includes(ID)
+            ? failure === 408 ? new Promise(() => {}) : { status: failure, body: {} }
+            : { status: 200, body: { completed_at: input.body.timestamp === 14 ? '2026-11-01' : null } } });
+    const item = await w.startQuest(), ui = await w.mount(item);
+    assert.match(w.text(ui), /Processing 2 video quests at once/);
+    await w.tick(7000); await w.tick(7000);
+    assert.equal(w.requests().length, 3);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+    await w.tick(25000); assert.equal(w.requests().length, 3);
+    assert.match(w.text(ui), new RegExp('HTTP ' + failure));
+});
+
+test('accepting another quest while one is running starts a separate timer immediately', async t => {
+    const second = quest({ id: '141000000000000002', userStatus: {} });
+    const w = fixture(t, { quests: [quest(), second], http: (_method, input) => ({ status: 200,
+        body: { completed_at: input.body.timestamp === 14 ? '2026-11-01' : null } }) });
+    await w.startQuest({ notifyNewQuest: false }); await w.tick(3000);
+    second.userStatus.enrolledAt = '2026-11-01'; w.questStore.emit(); await w.tick(0);
+    await w.tick(4000); assert.equal(w.requests().length, 1);
+    assert.ok(w.requests()[0][2].url.includes(ID));
+    await w.tick(3000); assert.equal(w.requests().length, 2);
+    assert.ok(!w.requests()[1][2].url.includes(ID));
+    await w.tick(4000); assert.equal(w.requests()[2][2].body.timestamp, 14);
+    await w.tick(3000); assert.equal(w.requests()[3][2].body.timestamp, 14);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+test('retrying a failed quest preserves the other quest’s running timer and progress', async t => {
+    const second = quest({ id: '141000000000000002' }); second.config.taskConfigV2.tasks.WATCH_VIDEO_ON_MOBILE.target = 28;
+    let failed = false;
+    const w = fixture(t, { quests: [quest(), second], http: (_method, input) => {
+        if (input.url.includes(ID)) {
+            if (!failed) { failed = true; return { status: 403, body: {} }; }
+            return { status: 200, body: { completed_at: '2026-11-01' } };
+        }
+        return { status: 200, body: { completed_at: input.body.timestamp === 28 ? '2026-11-01' : null } };
+    } });
+    const item = await w.startQuest(), ui = await w.mount(item);
+    await w.tick(7000); await w.retry(ui); await w.tick(7000);
+    const other = () => w.requests().filter(x => !x[2].url.includes(ID));
+    assert.deepEqual(other().map(x => x[2].body.timestamp), [7, 14]);
+    await w.tick(7000); await w.tick(7000);
+    assert.deepEqual(other().map(x => x[2].body.timestamp), [7, 14, 21, 28]);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+for (const reason of ['pause', 'background', 'stop', 'account']) test(reason + ' cancels every parallel quest timer', async t => {
+    const list = [quest(), quest({ id: '141000000000000002' }), quest({ id: '141000000000000003' })];
+    const w = fixture(t, { quests: list }), item = await w.startQuest(), ui = await w.mount(item);
+    await w.tick(3000);
+    if (reason === 'pause') await w.toggle(ui, 'Auto-complete video quests', false);
+    if (reason === 'background') for (const fn of w.appListeners) fn('background');
+    if (reason === 'stop') await Renderer.act(async () => w.stop(item));
+    if (reason === 'account') w.setAccount(FRIEND);
+    await w.tick(60000); assert.equal(w.requests().length, 0);
+    assert.deepEqual(w.toasts, []);
+    if (reason === 'pause' || reason === 'background') {
+        if (reason === 'pause') await w.toggle(ui, 'Auto-complete video quests', true);
+        else { for (const fn of w.appListeners) fn('active'); await w.tick(0); }
+        await w.tick(7000); assert.equal(w.requests().length, 3, 'all accepted quests resume');
+    }
+});
+
+for (const reason of ['account', 'stop']) test('all parallel late responses stay cancelled after ' + reason, async t => {
+    const pending = [];
+    const w = fixture(t, { quests: [quest(), quest({ id: '141000000000000002' })],
+        http: () => new Promise(resolve => pending.push(resolve)) });
+    const item = await w.startQuest(); await w.tick(7000); assert.equal(pending.length, 2);
+    if (reason === 'account') w.setAccount(FRIEND);
+    else await w.stop(item);
+    for (const finish of pending) finish({ status: 200, body: { completed_at: '2026-11-01' } });
+    await w.tick(60000); assert.equal(w.requests().length, 2);
+    assert.deepEqual(w.toasts, []);
+});
+
+test('completion or unenrolment cancels only the matching parallel quest', async t => {
+    const first = quest(), second = quest({ id: '141000000000000002' }), third = quest({ id: '141000000000000003' });
+    const w = fixture(t, { quests: [first, second, third], http: () => ({ status: 200, body: { completed_at: '2026-11-01' } }) });
+    await w.startQuest(); await w.tick(3000);
+    first.userStatus.completedAt = '2026-11-01'; delete second.userStatus.enrolledAt;
+    w.questStore.emit(); await w.tick(4000);
+    assert.equal(w.requests().length, 1); assert.ok(w.requests()[0][2].url.includes(third.id));
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+test('parallel auto-exit navigates only for the quest whose video route is open', async t => {
+    const second = quest({ id: '141000000000000002' });
+    const w = fixture(t, { quests: [quest(), second] });
+    w.navigation.getCurrentRoute = () => ({ key: 'second-video', name: 'QuestVideoPlayer', params: { questId: second.id } });
+    w.navigation.canGoBack = () => true;
+    await w.startQuest({ autoExitAds: true }); await w.tick(5000);
+    assert.equal(w.calls.filter(x => x[0] === 'goBack').length, 1);
 });
 
 test('unenrolment and expiry cancel pending progress', async t => {
