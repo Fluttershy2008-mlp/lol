@@ -199,6 +199,18 @@
       "originalVersion": "1.0.0-beta3",
       "kind": "native-theme"
     },
+    "dev.fluttershy2008.auto-quest": {
+      "path": "valenced/plugins/auto-quest/index.js",
+      "sha256": "b0a330087d8031efe391f91d9fa392fe8eb07656041c4dff97e9aed0f4876d65",
+      "originalVersion": "1.2.0",
+      "kind": "native-plugin",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "Auto Quest"
+      }
+    },
     "dev.fluttershy2008.quick-delete": {
       "path": "valenced/plugins/quick-delete/index.js",
       "sha256": "d1331414a47d0519163d23b2d06efb2c75772025cb47805f320934e0ec465cb6",

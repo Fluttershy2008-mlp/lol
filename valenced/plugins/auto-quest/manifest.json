@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.auto-quest",
+  "name": "Auto Quest",
+  "description": "Complete accepted video quests with live progress, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
+  "author": "Rosie",
+  "contributors": ["fluttershy_simper67 <753962426407452713>"],
+  "version": "1.2.0",
+  "icon": "GiftIcon",
+  "dependencies": {
+    "valenced.api": { "version": ">=1 <2" },
+    "discord": { "version": "*" }
+  },
+  "dist": { "script": "index.js" }
+}

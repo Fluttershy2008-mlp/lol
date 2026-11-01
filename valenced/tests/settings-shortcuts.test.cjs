@@ -10,6 +10,7 @@ const plugins = [
     ['more-alts', 'Switch accounts'], ['server-leaver', 'Server Leaver'],
     ['blocked-user-list', 'Blocked User List'],
     ['quick-delete', 'Quick Delete'],
+    ['auto-quest', 'Auto Quest'],
 ];
 
 function scenario(t) {
@@ -56,7 +57,7 @@ for (const [slug, title] of plugins) test(title + ' opens its real settings from
     assert.ok(w.calls.some(call => call[0] === 'refreshSettings'));
 });
 
-test('all six shortcuts coexist with core settings and stop/restart independently', async t => {
+test('all shortcuts coexist with core settings and stop/restart independently', async t => {
     const w = scenario(t), started = [];
     for (const [slug] of plugins) started.push(await w.start(slug));
     assert.equal(w.registry.section.settings.length, w.registry.core.length + plugins.length);

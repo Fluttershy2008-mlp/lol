@@ -66,6 +66,10 @@
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
   },
   "nativePlugins": {
+    "auto-quest": {
+      "path": "valenced/plugins/auto-quest",
+      "settingsShortcut": { "title": "Auto Quest", "icon": "GiftIcon" }
+    },
     "quick-delete": {
       "path": "valenced/plugins/quick-delete",
       "settingsShortcut": { "title": "Quick Delete", "icon": "TrashIcon" }

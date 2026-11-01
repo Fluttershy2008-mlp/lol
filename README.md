@@ -14,6 +14,8 @@ More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta5**, Friends 
 
 **Altitude** is now available for Valenced, including **High Altitude**, **Low Altitude**, clear wallpapers in chat and Settings, and a bundled **Lexend Deca** font pack. [Install and select Altitude](valenced/themes/altitude/README.md).
 
+**Auto Quest 1.2.0** is also available in the Valenced catalogue, with late-loaded module support, live progress, immediate pause controls and completion confirmed by Discord. Open **Settings → Valenced → Auto Quest** after installing it. [Supported quests and setup](valenced/plugins/auto-quest/README.md).
+
 ## Revenge Next
 
 Paste this into **Plugins > Settings > Advanced > Repository URL**:

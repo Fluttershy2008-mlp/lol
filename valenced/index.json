@@ -137,6 +137,34 @@
       ],
       "icon": "PaintPaletteIcon"
     },
+    "dev.fluttershy2008.auto-quest": {
+      "versions": {
+        "1.2.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.auto-quest@1.2.0.zip",
+          "sha256": "8411142e837ca2657ba8b9a157264dd73871eb1a5a6af3a006c31ab9cbdbd66d",
+          "size": 21997,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.2.0",
+        "beta": "1.2.0"
+      },
+      "name": "Auto Quest",
+      "description": "Complete accepted video quests with live progress, immediate pause/resume and confirmed completion. Includes an Auto Quest page in Valenced settings.",
+      "author": "Rosie",
+      "contributors": [
+        "fluttershy_simper67 <753962426407452713>"
+      ],
+      "icon": "GiftIcon"
+    },
     "dev.fluttershy2008.auto-text": {
       "versions": {
         "1.0.0-beta1": {
