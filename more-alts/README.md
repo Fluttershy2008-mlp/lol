@@ -1,4 +1,4 @@
-# More Alts! for Revenge — 3.1.18
+# More Alts! for Revenge — 3.1.19
 
 An updated account manager based on the More Alts! plugin in Apex-Plugins. Includes source, a dependency-free build, tests and the installable Revenge/Vendetta bundle.
 
@@ -13,6 +13,14 @@ https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/more-alts/
 ```
 
 Restart Revenge, then open **Settings → Revenge → More Alts!**. The plugin's settings button and `/morealts` also open the manager. The sidebar shortcut is optional and falls back to the plugin settings button if the current Discord build does not support it.
+
+## Stable19: successful re-sign-in continues into the requested switch
+
+Re-signing into a selected account now saves and immediately switches to that account. Previously the dialog stopped at “Saved successfully”, then a second standalone profile request could reject the same just-verified session before Discord's native switch action ran. The controller retains the exact durably saved, verified session in memory for 60 seconds and reuses that verification for immediate switches and outgoing saves. An older storage/UI record cannot replace it. Every native switch must still load the expected account with the saved session or a verified renewed session; resolving the switch action alone is not success. Native failure and confirmation timeout clear the temporary verification. Entries also expire, clear on unload, and are removed when an account is removed.
+
+Authenticated profile checks explicitly disable HTTP caching and cookie credentials. Re-sign-in verifies the selected account's identity before saving, including after MFA, so entering another account's credentials cannot update the selected row. The compact switcher displays the installed version, and native-action/confirmation failures have distinct error codes without exposing session values.
+
+Update to **1.0.0-stable19**, restart Discord, and check that version in the switcher footer. Choose **Re-sign in** on the affected account and complete its login; the plugin now proceeds directly to that account. You do not need to press Save current account on the original account afterwards. Existing saved accounts and the no-QR interface are retained. Tests reproduce save-success followed by a rejected duplicate profile check, a stale native storage record, successful switching away and back, wrong-account sign-in, expired verification and native switch failures. This reproduces the reported control flow using synthetic responses; the cause of the phone's second HTTP rejection remains unverified.
 
 ## Stable18: saved-session switching and native token renewal
 

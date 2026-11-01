@@ -84,12 +84,17 @@ export function createClient({ fetcher, getFingerprint, now = Date.now, timeoutM
         let timer, entry;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = token;
+        if (path === '/users/@me') {
+            headers['Cache-Control'] = 'no-cache, no-store';
+            headers.Pragma = 'no-cache';
+        }
         if (fingerprint && path.startsWith('/auth/')) headers['X-Fingerprint'] = fingerprint;
         try {
             const response = await Promise.race([
                 Promise.resolve().then(async () => {
                     const raw = await fetcher(`https://discord.com/api/v9${path}`, { method, headers,
-                        body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal });
+                        body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal,
+                        ...(path === '/users/@me' ? { cache: 'no-store', credentials: 'omit' } : {}) });
                     let data;
                     try { data = await raw.json(); } catch { data = {}; }
                     return { ok: raw.ok, status: raw.status, data, retry: raw.headers?.get?.('retry-after') };
@@ -125,7 +130,18 @@ export function createClient({ fetcher, getFingerprint, now = Date.now, timeoutM
 }
 export function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
-    let stopped = false, busy = false, generation = 0, challenge, refreshKey;
+    let stopped = false, busy = false, generation = 0, challenge, refreshKey, expectedLoginId;
+    // Keep the exact verified, durably saved session briefly. Re-sign-in must
+    // not immediately repeat the same profile probe or read an older UI record.
+    // This is memory-only, bounded to one entry per saved account, and is never
+    // an assertion that Discord cannot revoke a session: native confirmation
+    // remains mandatory on every switch.
+    const verifiedSessions = new Map();
+    const recentVerified = id => {
+        const saved = verifiedSessions.get(id);
+        if (saved && now() - saved.at >= 0 && now() - saved.at < 60000) return saved;
+        verifiedSessions.delete(id);
+    };
     const listeners = new Set(), delays = new Set();
     const notify = () => { for (const listener of listeners) { try { listener(); } catch {} } };
     const assertActive = epoch => { if (stopped || epoch !== generation) fail('cancelled', 'Cancelled.'); };
@@ -167,6 +183,7 @@ export function createController({ storage, client, getSession, getSwitcher, per
         assertActive(epoch);
         storage.accounts = committed.accounts;
         storage.accountOrder = committed.accountOrder;
+        verifiedSessions.set(user.id, { user: { ...user }, token, at: now() });
         return result;
     }
     async function saveSession(epoch, session = getSession()) {
@@ -177,7 +194,8 @@ export function createController({ storage, client, getSession, getSwitcher, per
         // or by assuming that UserStore has already caught up.
         for (const candidate of sessionTokens(session)) {
             try {
-                const verified = await inspectToken(candidate, epoch);
+                const fresh = recentVerified(session.user.id);
+                const verified = fresh?.token === candidate ? fresh.user : await inspectToken(candidate, epoch);
                 if (verified.id !== session.user.id) { mismatch = true; continue; }
                 user = verified; token = candidate; break;
             } catch (error) { if (error?.code !== 'expired') throw error; }
@@ -192,7 +210,10 @@ export function createController({ storage, client, getSession, getSwitcher, per
         assertActive(epoch);
         if (validToken(data.token)) {
             const user = await inspectToken(data.token, epoch);
-            const result = await saveVerifiedAccount(user, data.token, epoch); challenge = undefined; notify();
+            if (expectedLoginId && user.id !== expectedLoginId)
+                fail('wrong-account', 'This sign-in belongs to a different account. Enter the email or phone number for the account you selected. Its saved session has not been changed.');
+            const result = await saveVerifiedAccount(user, data.token, epoch);
+            challenge = undefined; expectedLoginId = undefined; notify();
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
@@ -225,9 +246,10 @@ export function createController({ storage, client, getSession, getSwitcher, per
         get verification() { return verificationState(); },
         get accounts() { return storage.accountOrder.map(id => storage.accounts[id]).filter(Boolean); },
         saveCurrent() { return exclusive(epoch => saveSession(epoch)); },
-        login(login, password) {
+        login(login, password, expectedUserId) {
             return exclusive(async epoch => {
                 challenge = undefined;
+                expectedLoginId = validId(expectedUserId) ? expectedUserId : undefined;
                 if (typeof login !== 'string' || !login.trim() || typeof password !== 'string' || !password.length) fail('credentials', 'Enter your email or phone number and password.');
                 await client.prepareLogin(); assertActive(epoch);
                 const data = await client.request('/auth/login', { method: 'POST', body: { login: login.trim(), password, undelete: false } });
@@ -293,7 +315,8 @@ export function createController({ storage, client, getSession, getSwitcher, per
         },
         switchTo(id) {
             return exclusive(async epoch => {
-                const account = storage.accounts[id], original = getSession();
+                let account = storage.accounts[id];
+                const original = getSession();
                 if (!account) fail('missing', 'This account is no longer saved.');
                 if (original?.user?.id === id) {
                     const result = await saveSession(epoch, original);
@@ -301,8 +324,15 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 }
                 const switcher = getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
+                const fresh = recentVerified(id);
+                if (fresh && fresh.token !== account.token) {
+                    // A read from an older native cache must not replace the
+                    // session whose successful write we just acknowledged.
+                    await saveVerifiedAccount(fresh.user, fresh.token, epoch);
+                    account = storage.accounts[id];
+                }
                 let target;
-                try { target = await inspectToken(account.token, epoch); }
+                try { target = fresh?.token === account.token ? fresh.user : await inspectToken(account.token, epoch); }
                 catch (error) {
                     if (error?.code === 'expired') fail('expired',
                         `Saved session for @${account.username} needs to be renewed. Choose Re-sign in for this account.`);
@@ -324,7 +354,8 @@ export function createController({ storage, client, getSession, getSwitcher, per
                 while (now() < deadline) {
                     assertActive(epoch);
                     const session = getSession();
-                    if (session?.user?.id === id && sessionTokens(session).some(token => token !== original?.token)) {
+                    if (session?.user?.id === id && session.authenticated !== false && session.connected !== false
+                        && sessionTokens(session).some(token => token !== original?.token)) {
                         if (session.token === savedToken) {
                             await saveVerifiedAccount(target, savedToken, epoch);
                             refreshKey = `${id}:${sessionTokens(session).join(':')}`; notify();
@@ -341,10 +372,14 @@ export function createController({ storage, client, getSession, getSwitcher, per
                             }
                         }
                     }
-                    if (rejected) fail('switch-failed', 'Discord could not switch accounts. Your previous account is saved so you can select it again.');
+                    if (rejected) {
+                        verifiedSessions.delete(id);
+                        fail('switch-failed', `Discord’s account switch action failed for @${account.username}. Both saved accounts are retained. (MA19-NATIVE)`);
+                    }
                     await delay();
                 }
-                fail('switch-timeout', 'Discord has not confirmed the switch yet. Check which account is active before trying again; both saved accounts are still available.');
+                verifiedSessions.delete(id);
+                fail('switch-timeout', `Discord did not finish loading @${account.username}. Check which account is active before retrying; both saved accounts are retained. (MA19-CONFIRM)`);
             });
         },
         async refreshSaved() {
@@ -364,15 +399,16 @@ export function createController({ storage, client, getSession, getSwitcher, per
         remove(id) {
             if (busy || stopped) return false;
             const accounts = { ...storage.accounts }; delete accounts[id]; storage.accounts = accounts;
+            verifiedSessions.delete(id);
             storage.accountOrder = storage.accountOrder.filter(value => value !== id); notify(); return true;
         },
         importAccounts(legacy) {
             if (busy || stopped) fail('busy', 'Wait for the current action to finish.');
             const result = importLegacy(storage, legacy); notify(); return result;
         },
-        cancelLogin() { challenge = undefined; generation++; client.cancel(); },
+        cancelLogin() { challenge = undefined; expectedLoginId = undefined; generation++; client.cancel(); },
         stop() {
-            stopped = true; challenge = undefined; generation++; client.stop();
+            stopped = true; challenge = undefined; expectedLoginId = undefined; verifiedSessions.clear(); generation++; client.stop();
             for (const item of delays) { clearTimeout(item.timer); item.resolve(); } delays.clear(); listeners.clear();
         }
     };

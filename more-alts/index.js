@@ -283,12 +283,17 @@ function createClient({ fetcher, getFingerprint, now = Date.now, timeoutMs = 200
         let timer, entry;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers.Authorization = token;
+        if (path === '/users/@me') {
+            headers['Cache-Control'] = 'no-cache, no-store';
+            headers.Pragma = 'no-cache';
+        }
         if (fingerprint && path.startsWith('/auth/')) headers['X-Fingerprint'] = fingerprint;
         try {
             const response = await Promise.race([
                 Promise.resolve().then(async () => {
                     const raw = await fetcher(`https://discord.com/api/v9${path}`, { method, headers,
-                        body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal });
+                        body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal,
+                        ...(path === '/users/@me' ? { cache: 'no-store', credentials: 'omit' } : {}) });
                     let data;
                     try { data = await raw.json(); } catch { data = {}; }
                     return { ok: raw.ok, status: raw.status, data, retry: raw.headers?.get?.('retry-after') };
@@ -324,7 +329,18 @@ function createClient({ fetcher, getFingerprint, now = Date.now, timeoutMs = 200
 }
 function createController({ storage, client, getSession, getSwitcher, persistStorage, now = Date.now, switchTimeoutMs = 15000, pollMs = 250 }) {
     normalizeStorage(storage);
-    let stopped = false, busy = false, generation = 0, challenge, refreshKey;
+    let stopped = false, busy = false, generation = 0, challenge, refreshKey, expectedLoginId;
+    // Keep the exact verified, durably saved session briefly. Re-sign-in must
+    // not immediately repeat the same profile probe or read an older UI record.
+    // This is memory-only, bounded to one entry per saved account, and is never
+    // an assertion that Discord cannot revoke a session: native confirmation
+    // remains mandatory on every switch.
+    const verifiedSessions = new Map();
+    const recentVerified = id => {
+        const saved = verifiedSessions.get(id);
+        if (saved && now() - saved.at >= 0 && now() - saved.at < 60000) return saved;
+        verifiedSessions.delete(id);
+    };
     const listeners = new Set(), delays = new Set();
     const notify = () => { for (const listener of listeners) { try { listener(); } catch {} } };
     const assertActive = epoch => { if (stopped || epoch !== generation) fail('cancelled', 'Cancelled.'); };
@@ -366,6 +382,7 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         assertActive(epoch);
         storage.accounts = committed.accounts;
         storage.accountOrder = committed.accountOrder;
+        verifiedSessions.set(user.id, { user: { ...user }, token, at: now() });
         return result;
     }
     async function saveSession(epoch, session = getSession()) {
@@ -376,7 +393,8 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         // or by assuming that UserStore has already caught up.
         for (const candidate of sessionTokens(session)) {
             try {
-                const verified = await inspectToken(candidate, epoch);
+                const fresh = recentVerified(session.user.id);
+                const verified = fresh?.token === candidate ? fresh.user : await inspectToken(candidate, epoch);
                 if (verified.id !== session.user.id) { mismatch = true; continue; }
                 user = verified; token = candidate; break;
             } catch (error) { if (error?.code !== 'expired') throw error; }
@@ -391,7 +409,10 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         assertActive(epoch);
         if (validToken(data.token)) {
             const user = await inspectToken(data.token, epoch);
-            const result = await saveVerifiedAccount(user, data.token, epoch); challenge = undefined; notify();
+            if (expectedLoginId && user.id !== expectedLoginId)
+                fail('wrong-account', 'This sign-in belongs to a different account. Enter the email or phone number for the account you selected. Its saved session has not been changed.');
+            const result = await saveVerifiedAccount(user, data.token, epoch);
+            challenge = undefined; expectedLoginId = undefined; notify();
             return { kind: 'saved', ...result };
         }
         if (data.mfa && typeof data.ticket === 'string' && data.ticket) {
@@ -424,9 +445,10 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         get verification() { return verificationState(); },
         get accounts() { return storage.accountOrder.map(id => storage.accounts[id]).filter(Boolean); },
         saveCurrent() { return exclusive(epoch => saveSession(epoch)); },
-        login(login, password) {
+        login(login, password, expectedUserId) {
             return exclusive(async epoch => {
                 challenge = undefined;
+                expectedLoginId = validId(expectedUserId) ? expectedUserId : undefined;
                 if (typeof login !== 'string' || !login.trim() || typeof password !== 'string' || !password.length) fail('credentials', 'Enter your email or phone number and password.');
                 await client.prepareLogin(); assertActive(epoch);
                 const data = await client.request('/auth/login', { method: 'POST', body: { login: login.trim(), password, undelete: false } });
@@ -492,7 +514,8 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         },
         switchTo(id) {
             return exclusive(async epoch => {
-                const account = storage.accounts[id], original = getSession();
+                let account = storage.accounts[id];
+                const original = getSession();
                 if (!account) fail('missing', 'This account is no longer saved.');
                 if (original?.user?.id === id) {
                     const result = await saveSession(epoch, original);
@@ -500,8 +523,15 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
                 }
                 const switcher = getSwitcher();
                 if (typeof switcher !== 'function') fail('unsupported', 'Account switching is unavailable on this Discord build. Your saved accounts are unchanged.');
+                const fresh = recentVerified(id);
+                if (fresh && fresh.token !== account.token) {
+                    // A read from an older native cache must not replace the
+                    // session whose successful write we just acknowledged.
+                    await saveVerifiedAccount(fresh.user, fresh.token, epoch);
+                    account = storage.accounts[id];
+                }
                 let target;
-                try { target = await inspectToken(account.token, epoch); }
+                try { target = fresh?.token === account.token ? fresh.user : await inspectToken(account.token, epoch); }
                 catch (error) {
                     if (error?.code === 'expired') fail('expired',
                         `Saved session for @${account.username} needs to be renewed. Choose Re-sign in for this account.`);
@@ -523,7 +553,8 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
                 while (now() < deadline) {
                     assertActive(epoch);
                     const session = getSession();
-                    if (session?.user?.id === id && sessionTokens(session).some(token => token !== original?.token)) {
+                    if (session?.user?.id === id && session.authenticated !== false && session.connected !== false
+                        && sessionTokens(session).some(token => token !== original?.token)) {
                         if (session.token === savedToken) {
                             await saveVerifiedAccount(target, savedToken, epoch);
                             refreshKey = `${id}:${sessionTokens(session).join(':')}`; notify();
@@ -540,10 +571,14 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
                             }
                         }
                     }
-                    if (rejected) fail('switch-failed', 'Discord could not switch accounts. Your previous account is saved so you can select it again.');
+                    if (rejected) {
+                        verifiedSessions.delete(id);
+                        fail('switch-failed', `Discord’s account switch action failed for @${account.username}. Both saved accounts are retained. (MA19-NATIVE)`);
+                    }
                     await delay();
                 }
-                fail('switch-timeout', 'Discord has not confirmed the switch yet. Check which account is active before trying again; both saved accounts are still available.');
+                verifiedSessions.delete(id);
+                fail('switch-timeout', `Discord did not finish loading @${account.username}. Check which account is active before retrying; both saved accounts are retained. (MA19-CONFIRM)`);
             });
         },
         async refreshSaved() {
@@ -563,15 +598,16 @@ function createController({ storage, client, getSession, getSwitcher, persistSto
         remove(id) {
             if (busy || stopped) return false;
             const accounts = { ...storage.accounts }; delete accounts[id]; storage.accounts = accounts;
+            verifiedSessions.delete(id);
             storage.accountOrder = storage.accountOrder.filter(value => value !== id); notify(); return true;
         },
         importAccounts(legacy) {
             if (busy || stopped) fail('busy', 'Wait for the current action to finish.');
             const result = importLegacy(storage, legacy); notify(); return result;
         },
-        cancelLogin() { challenge = undefined; generation++; client.cancel(); },
+        cancelLogin() { challenge = undefined; expectedLoginId = undefined; generation++; client.cancel(); },
         stop() {
-            stopped = true; challenge = undefined; generation++; client.stop();
+            stopped = true; challenge = undefined; expectedLoginId = undefined; verifiedSessions.clear(); generation++; client.stop();
             for (const item of delays) { clearTimeout(item.timer); item.resolve(); } delays.clear(); listeners.clear();
         }
     };
@@ -891,7 +927,7 @@ function createLoginDialog(React, RN) {
 
 function createAccountSwitcher(React, RN) {
     const h = React.createElement;
-    return function AccountSwitcher({ accounts, currentUser, busy, light, error, notice, expiredAccountId,
+    return function AccountSwitcher({ accounts, currentUser, busy, light, error, notice, expiredAccountId, version,
         onSwitch, onSaveCurrent, onAddAccount, onManage, onReauth }) {
         const c = light
             ? { card: '#ffffff', text: '#18191c', muted: '#515460', line: '#d7dae3', selected: '#e9ecff', danger: '#a11932' }
@@ -950,7 +986,7 @@ function createAccountSwitcher(React, RN) {
             action('Add another account', onAddAccount, true),
             action('Save current account', onSaveCurrent, false, !validId(currentId)),
             action('Manage accounts', onManage),
-            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
+            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!${version ? ' ' + version : ''}`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
     };
 }
 
@@ -976,12 +1012,15 @@ function createPlugin(V, host = globalThis) {
     function getSession() {
         try {
             const user = byStore('UserStore')?.getCurrentUser?.();
+            const authentication = byStore('AuthenticationStore');
             const read = source => { try { return source?.getToken?.(); } catch {} };
             const tokens = [...new Set([
                 recentLogin && (!recentLogin.userId || recentLogin.userId === user?.id) ? recentLogin.token : undefined,
-                read(byStore('AuthenticationStore')), read(byProps('getToken'))
+                read(authentication), read(byProps('getToken'))
             ].filter(validToken))];
-            return { user, token: tokens[0], tokens };
+            const flag = (source, name) => { try { return typeof source?.[name] === 'function' ? source[name]() : undefined; } catch {} };
+            return { user, token: tokens[0], tokens, authenticated: flag(authentication, 'isAuthenticated'),
+                connected: flag(byStore('ConnectionStore'), 'isConnected') };
         }
         catch { return {}; }
     }
@@ -1100,15 +1139,16 @@ function createPlugin(V, host = globalThis) {
         async function run(action, success, onError) {
             if (localLock.current || instance.busy) return;
             localLock.current = true; setLocalBusy(true); setError(''); setNotice('');
-            try { const result = await action(); if (stillHere()) success?.(result); }
+            try { const result = await action(); if (stillHere()) await success?.(result); }
             catch (reason) {
                 if (stillHere() && reason?.code !== 'cancelled') {
+                    setNotice('');
                     onError?.(reason);
                     setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
                 }
             } finally { localLock.current = false; if (stillHere()) setLocalBusy(false); }
         }
-        function handleLogin(result) {
+        async function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
             const target = reauthId;
@@ -1120,6 +1160,11 @@ function createPlugin(V, host = globalThis) {
                 setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
             } else {
                 setNotice(`Saved @${result.user.username} successfully.`);
+            }
+            if (refreshedTarget) {
+                setNotice(`Saved @${result.user.username}. Switching accounts…`);
+                const switched = await instance.switchTo(target);
+                if (stillHere()) setNotice(`Switched to @${switched.user.username}.`);
             }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
@@ -1180,7 +1225,8 @@ function createPlugin(V, host = globalThis) {
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' },
                 ...(view === 'switcher' ? [h(AccountSwitcher, { accounts: instance.accounts, currentUser: getSession()?.user,
-                    busy, light, error, notice, expiredAccountId, onSwitch: switchAccount, onSaveCurrent: saveCurrent,
+                    busy, light, error, notice, expiredAccountId, version: V.plugin.version || V.plugin.manifest?.version,
+                    onSwitch: switchAccount, onSaveCurrent: saveCurrent,
                     onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
@@ -1211,7 +1257,7 @@ function createPlugin(V, host = globalThis) {
                     if (page === 'mfa') {
                         const typedCode = code; setCode(''); void run(() => instance.submitCode(typedCode), handleLogin);
                     } else {
-                        const typedPassword = password; setPassword(''); void run(() => instance.login(login, typedPassword), handleLogin);
+                        const typedPassword = password; setPassword(''); void run(() => instance.login(login, typedPassword, reauthId), handleLogin);
                     }
                 }
             }));
@@ -1295,6 +1341,7 @@ function createPlugin(V, host = globalThis) {
                 void resolver.prepare([
                     ['props', 'getCanUseMultiAccountMobile'], ['store', 'UserStore'],
                     ['store', 'AuthenticationStore'], ['props', 'getToken'],
+                    ['store', 'ConnectionStore'],
                     ['props', 'SETTING_RENDERER_CONFIG'], ['props', 'getAncestors', 'isBlocked'],
                     ['store', 'ThemeStore'], ['props', 'getBuiltInCommands']
                 ], yieldFrame, isActive).then(() => {

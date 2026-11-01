@@ -25,12 +25,15 @@ export function createPlugin(V, host = globalThis) {
     function getSession() {
         try {
             const user = byStore('UserStore')?.getCurrentUser?.();
+            const authentication = byStore('AuthenticationStore');
             const read = source => { try { return source?.getToken?.(); } catch {} };
             const tokens = [...new Set([
                 recentLogin && (!recentLogin.userId || recentLogin.userId === user?.id) ? recentLogin.token : undefined,
-                read(byStore('AuthenticationStore')), read(byProps('getToken'))
+                read(authentication), read(byProps('getToken'))
             ].filter(validToken))];
-            return { user, token: tokens[0], tokens };
+            const flag = (source, name) => { try { return typeof source?.[name] === 'function' ? source[name]() : undefined; } catch {} };
+            return { user, token: tokens[0], tokens, authenticated: flag(authentication, 'isAuthenticated'),
+                connected: flag(byStore('ConnectionStore'), 'isConnected') };
         }
         catch { return {}; }
     }
@@ -149,15 +152,16 @@ export function createPlugin(V, host = globalThis) {
         async function run(action, success, onError) {
             if (localLock.current || instance.busy) return;
             localLock.current = true; setLocalBusy(true); setError(''); setNotice('');
-            try { const result = await action(); if (stillHere()) success?.(result); }
+            try { const result = await action(); if (stillHere()) await success?.(result); }
             catch (reason) {
                 if (stillHere() && reason?.code !== 'cancelled') {
+                    setNotice('');
                     onError?.(reason);
                     setError(reason instanceof AccountError ? reason.message : 'The action could not be completed. Try again after Discord finishes loading.');
                 }
             } finally { localLock.current = false; if (stillHere()) setLocalBusy(false); }
         }
-        function handleLogin(result) {
+        async function handleLogin(result) {
             setPassword(''); setCode('');
             if (result.kind === 'mfa') { setPage('mfa'); return; }
             const target = reauthId;
@@ -169,6 +173,11 @@ export function createPlugin(V, host = globalThis) {
                 setNotice(`Signed in as @${result.user.username}, but @${account?.username || 'the selected account'} still needs to be signed in again.`);
             } else {
                 setNotice(`Saved @${result.user.username} successfully.`);
+            }
+            if (refreshedTarget) {
+                setNotice(`Saved @${result.user.username}. Switching accounts…`);
+                const switched = await instance.switchTo(target);
+                if (stillHere()) setNotice(`Switched to @${switched.user.username}.`);
             }
         }
         const saveCurrent = () => run(() => instance.saveCurrent(), result => {
@@ -229,7 +238,8 @@ export function createPlugin(V, host = globalThis) {
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 48 },
                 importantForAccessibility: page === 'accounts' ? 'auto' : 'no-hide-descendants', accessibilityElementsHidden: page !== 'accounts' },
                 ...(view === 'switcher' ? [h(AccountSwitcher, { accounts: instance.accounts, currentUser: getSession()?.user,
-                    busy, light, error, notice, expiredAccountId, onSwitch: switchAccount, onSaveCurrent: saveCurrent,
+                    busy, light, error, notice, expiredAccountId, version: V.plugin.version || V.plugin.manifest?.version,
+                    onSwitch: switchAccount, onSaveCurrent: saveCurrent,
                     onAddAccount: addAccount, onManage: () => setView('accounts'), onReauth: beginReauth })] : contents)),
             h(LoginDialog, { visible: page !== 'accounts', mfa: page === 'mfa', light, busy,
                 reauthUsername: reauthId ? instance.accounts.find(account => account.id === reauthId)?.username : undefined,
@@ -260,7 +270,7 @@ export function createPlugin(V, host = globalThis) {
                     if (page === 'mfa') {
                         const typedCode = code; setCode(''); void run(() => instance.submitCode(typedCode), handleLogin);
                     } else {
-                        const typedPassword = password; setPassword(''); void run(() => instance.login(login, typedPassword), handleLogin);
+                        const typedPassword = password; setPassword(''); void run(() => instance.login(login, typedPassword, reauthId), handleLogin);
                     }
                 }
             }));
@@ -344,6 +354,7 @@ export function createPlugin(V, host = globalThis) {
                 void resolver.prepare([
                     ['props', 'getCanUseMultiAccountMobile'], ['store', 'UserStore'],
                     ['store', 'AuthenticationStore'], ['props', 'getToken'],
+                    ['store', 'ConnectionStore'],
                     ['props', 'SETTING_RENDERER_CONFIG'], ['props', 'getAncestors', 'isBlocked'],
                     ['store', 'ThemeStore'], ['props', 'getBuiltInCommands']
                 ], yieldFrame, isActive).then(() => {

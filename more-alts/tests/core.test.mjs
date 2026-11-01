@@ -457,6 +457,65 @@ test('re-authentication updates only the account identity that Discord actually 
     assert.equal(h.storage.accounts[b.id].token, tb);
     assert.equal(h.session.user.id, a.id);
 });
+test('freshly re-signed-in session switches without repeating a profile probe that can reject it', async () => {
+    let targetChecks = 0;
+    const h = harness({ fetcher: async (url, init) => {
+        if (url.endsWith('/auth/login')) return response({ token: tb });
+        if (init.headers.Authorization === tb) return ++targetChecks === 1 ? response(b) : response({}, 401);
+        assert.equal(init.cache, 'no-store');
+        assert.equal(init.credentials, 'omit');
+        assert.equal(init.headers['Cache-Control'], 'no-cache, no-store');
+        return response(a);
+    } });
+    saveAccount(h.storage, b, 'fixture-old-rejected-saved-session');
+    await h.controller.login('account-two@example.invalid', 'fixture-password', b.id);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+    assert.equal((await h.controller.switchTo(b.id)).user.id, b.id);
+    await h.controller.switchTo(a.id);
+    await h.controller.switchTo(b.id);
+    assert.deepEqual(h.switched, [tb, ta, tb]);
+    assert.equal(targetChecks, 1, 'reuse only the profile check that just verified this exact session');
+});
+test('an older storage record cannot override the freshly verified successful login', async () => {
+    const h = harness({ fetcher: async (url, init) => response(url.endsWith('/auth/login')
+        ? { token: tb } : init.headers.Authorization === ta ? a : b) });
+    await h.controller.login('account-two@example.invalid', 'fixture-password', b.id);
+    h.storage.accounts = { ...h.storage.accounts, [b.id]: { ...h.storage.accounts[b.id], token: 'fixture-obsolete-native-cache-record' } };
+    await h.controller.switchTo(b.id);
+    assert.deepEqual(h.switched, [tb]);
+    assert.equal(h.storage.accounts[b.id].token, tb);
+});
+test('expired verification cache cannot suppress a new server rejection', async () => {
+    let time = 1000, checks = 0;
+    const h = harness({ now: () => time, fetcher: async (url, init) => url.endsWith('/auth/login')
+        ? response({ token: tb }) : init.headers.Authorization === tb
+            ? ++checks === 1 ? response(b) : response({}, 401) : response(a) });
+    await h.controller.login('x', 'y', b.id); time += 60001;
+    await assert.rejects(h.controller.switchTo(b.id), isCode('expired'));
+    assert.deepEqual(h.switched, []);
+});
+test('re-signing into the wrong account cannot save it or replace the selected account', async () => {
+    const h = harness({ fetcher: async url => response(url.endsWith('/auth/login') ? { token: ta } : a) });
+    saveAccount(h.storage, b, tb);
+    await assert.rejects(h.controller.login('wrong@example.invalid', 'fixture-password', b.id), isCode('wrong-account'));
+    assert.equal(h.storage.accounts[b.id].token, tb);
+    assert.equal(h.storage.accounts[a.id], undefined);
+});
+test('a native switch failure after successful re-sign-in cannot be reported as success', async () => {
+    const h = harness({ fetcher: async (url, init) => response(url.endsWith('/auth/login') ? { token: tb }
+        : init.headers.Authorization === ta ? a : b), switcher: () => { throw new Error('private native error'); } });
+    await h.controller.login('x', 'y', b.id);
+    await assert.rejects(h.controller.switchTo(b.id), error => isCode('switch-failed')(error)
+        && error.message.includes('MA19-NATIVE') && !error.message.includes('private'));
+    assert.equal(h.storage.accounts[b.id].token, tb);
+});
+test('an optimistic target identity without an authenticated connection cannot confirm a switch', async () => {
+    for (const flags of [{ connected: false }, { authenticated: false }]) {
+        const h = harness({ switcher: (_token, setSession) => setSession({ user: b, token: tb, ...flags }) });
+        saveAccount(h.storage, b, tb);
+        await assert.rejects(h.controller.switchTo(b.id), isCode('switch-timeout'));
+    }
+});
 test('target identity mismatch is rejected before native switch', async () => {
     const h = harness({ fetcher: async () => response(a) }); saveAccount(h.storage, b, tb);
     await assert.rejects(h.controller.switchTo(b.id), isCode('mismatch')); assert.deepEqual(h.switched, []);

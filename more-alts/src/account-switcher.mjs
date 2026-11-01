@@ -3,7 +3,7 @@ import { validId } from './core.mjs';
 
 export function createAccountSwitcher(React, RN) {
     const h = React.createElement;
-    return function AccountSwitcher({ accounts, currentUser, busy, light, error, notice, expiredAccountId,
+    return function AccountSwitcher({ accounts, currentUser, busy, light, error, notice, expiredAccountId, version,
         onSwitch, onSaveCurrent, onAddAccount, onManage, onReauth }) {
         const c = light
             ? { card: '#ffffff', text: '#18191c', muted: '#515460', line: '#d7dae3', selected: '#e9ecff', danger: '#a11932' }
@@ -62,6 +62,6 @@ export function createAccountSwitcher(React, RN) {
             action('Add another account', onAddAccount, true),
             action('Save current account', onSaveCurrent, false, !validId(currentId)),
             action('Manage accounts', onManage),
-            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
+            text(`${accounts.length} saved account${accounts.length === 1 ? '' : 's'} · More Alts!${version ? ' ' + version : ''}`, { color: c.muted, fontSize: 12, marginTop: 16, textAlign: 'center' }));
     };
 }

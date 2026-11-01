@@ -88,8 +88,8 @@
     },
     "dev.fluttershy2008.more-alts": {
       "path": "more-alts/index.js",
-      "sha256": "f66c5e4cac96c60235a8070d74a134767bdc6214eb4f1c05bd7ae23ca5bd75e6",
-      "originalVersion": "3.1.18",
+      "sha256": "164da2b663276f4d09ba27be46611825daca01b1c4ee186a3b448a012a83ce84",
+      "originalVersion": "3.1.19",
       "kind": "compatibility-stable",
       "sourceRef": "main",
       "settingsShortcut": {

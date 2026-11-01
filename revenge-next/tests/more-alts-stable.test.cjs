@@ -87,15 +87,25 @@ test('expired target offers account-specific recovery and keeps both saved accou
     const oldToken = 'fixture-invalid-saved-token-for-second-account';
     const validToken = 'fixture-renewed-saved-token-for-second-account';
     const original = { id, username: 'second-account', token: oldToken };
+    let targetChecks = 0;
     const w = scenario(t, {
         initial: { accounts: { [id]: original }, accountOrder: [id] },
         fetch: async (url, init) => {
             if (url.endsWith('/auth/login')) return new Response(JSON.stringify({ token: validToken }), { status: 200 });
             if (init?.headers?.Authorization === oldToken) return new Response('{}', { status: 401 });
-            if (init?.headers?.Authorization === validToken) return new Response(JSON.stringify({ id, username: 'second-account' }), { status: 200 });
+            if (init?.headers?.Authorization === validToken) return ++targetChecks === 1
+                ? Response.json({ id, username: 'second-account' }) : Response.json({}, { status: 401 });
+            if (init?.headers?.Authorization === 'fake-test-session-token-only') return Response.json(w.users[currentId]);
             throw new Error('Unexpected credentials or URL in saved-account fixture');
         },
     });
+    const currentId = w.accountId();
+    w.users[id] = { id, username: 'second-account' };
+    w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = token => {
+        w.calls.push(['switchAccount', token]);
+        w.stores.AuthenticationStore.getToken = () => token;
+        w.setAccount(token === validToken ? id : currentId);
+    };
     const { ui, item } = await w.openManager();
     await act(() => getButton(ui, 'Switch account').props.onPress());
     const account = item.api.jsonStorage.cache.accounts[id];
@@ -112,6 +122,14 @@ test('expired target offers account-specific recovery and keeps both saved accou
     assert.equal(item.api.jsonStorage.cache.accounts[id].token, validToken);
     assert.equal(ui.root.findAll(n => n.type === 'Modal').length, 0);
     assert.equal(ui.root.findAll(n => n.props?.accessibilityLabel === 'Re-sign in').length, 0);
+    assert.equal(w.accountId(), id, 're-sign-in must complete the requested switch, not stop at saved successfully');
+    assert.equal(targetChecks, 1, 'a freshly verified target must reach the native action without another profile request');
+    assert.match(JSON.stringify(ui.toJSON()), /Switched to @second-account/);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), currentId);
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    assert.equal(w.accountId(), id);
+    assert.equal(targetChecks, 1);
 });
 test('signing into another account does not claim to renew the selected expired account', async t => {
     const id = '100000000000000099', otherId = '100000000000000098';
@@ -135,9 +153,48 @@ test('signing into another account does not claim to renew the selected expired 
     await act(() => field('Password').props.onChangeText('fixture-password'));
     await act(() => getButton(ui, 'Continue').props.onPress());
     assert.equal(item.api.jsonStorage.cache.accounts[id].token, oldToken);
-    assert.equal(item.api.jsonStorage.cache.accounts[otherId].token, newToken);
-    assert.ok(getButton(ui, 'Re-sign in'));
-    assert.match(JSON.stringify(ui.toJSON()), /still needs to be signed in again/);
+    assert.equal(item.api.jsonStorage.cache.accounts[otherId], undefined);
+    assert.ok(ui.root.findAll(n => n.type === 'Modal').length);
+    assert.match(JSON.stringify(ui.toJSON()), /belongs to a different account/);
+    assert.equal(w.calls.some(x => x[0] === 'switchAccount'), false);
+});
+
+for (const rejectNative of [false, true]) test(`re-sign-in after MFA ${rejectNative ? 'reports native failure without a false saved/switching success' : 'completes the selected account switch'}`, async t => {
+    const id = '100000000000000099', old = 'fixture-mfa-reauth-old-session', fresh = 'fixture-mfa-reauth-new-session';
+    let profileChecks = 0;
+    const w = scenario(t, { fetch: async (url, init) => {
+        if (url.endsWith('/auth/login')) return Response.json({ mfa: true, ticket: 'fixture-reauth-ticket', totp: true });
+        if (url.endsWith('/totp')) return Response.json({ token: fresh });
+        if (init.headers.Authorization === old) return Response.json({}, { status: 401 });
+        if (init.headers.Authorization === fresh) return ++profileChecks === 1 ? Response.json(w.users[id]) : Response.json({}, { status: 401 });
+        return Response.json(w.users[currentId]);
+    } });
+    const currentId = w.accountId();
+    w.users[id] = { id, username: 'mfa-selected-account' };
+    w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = token => {
+        if (rejectNative) throw new Error('private native session error');
+        w.stores.AuthenticationStore.getToken = () => token;
+        w.setAccount(id);
+    };
+    const { ui, item } = await w.openManager({ accounts: { [id]: { ...w.users[id], token: old } }, accountOrder: [id] });
+    await act(() => getButton(ui, 'Switch account').props.onPress());
+    await act(() => getButton(ui, 'Re-sign in').props.onPress());
+    const field = label => ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === label)[0];
+    await act(() => field('Email or Phone Number').props.onChangeText('mfa@example.invalid'));
+    await act(() => field('Password').props.onChangeText('fixture-password'));
+    await act(() => getButton(ui, 'Continue').props.onPress());
+    await act(() => field('Verification Code').props.onChangeText('123456'));
+    await act(() => getButton(ui, 'Verify').props.onPress());
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, fresh);
+    assert.equal(profileChecks, 1);
+    if (rejectNative) {
+        assert.equal(w.accountId(), currentId);
+        assert.match(JSON.stringify(ui.toJSON()), /MA19-NATIVE/);
+        assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Saved @mfa-selected-account|Switching accounts…|private native session/);
+    } else {
+        assert.equal(w.accountId(), id);
+        assert.match(JSON.stringify(ui.toJSON()), /Switched to @mfa-selected-account/);
+    }
 });
 
 test('Save current account waits for file readback, saves fresh authentication details, and survives restart', async t => {
