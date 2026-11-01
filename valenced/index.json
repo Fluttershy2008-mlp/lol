@@ -748,11 +748,24 @@
               "version": ">=352.2"
             }
           }
+        },
+        "1.0.0-beta2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.long-video-share@1.0.0-beta2.zip",
+          "sha256": "1d96e752d673747c92f3b390d04b69fa0a390fe800a806dfc6e4ae7205ce21b6",
+          "size": 25741,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta1",
-        "beta": "1.0.0-beta1"
+        "latest": "1.0.0-beta2",
+        "beta": "1.0.0-beta2"
       },
       "name": "Long Video Share",
       "description": "Compress long videos locally to a chosen Discord upload size. Progress, cancellation, size verification, MP4 export and hosted-link sharing. Android only.",

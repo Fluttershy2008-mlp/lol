@@ -201,8 +201,8 @@
     },
     "dev.fluttershy2008.long-video-share": {
       "path": "valenced/plugins/long-video-share/index.js",
-      "sha256": "2b6272391ed082a93198b1054f404cc165532eb68cd5c09f46aca9026001c0df",
-      "originalVersion": "1.0.0-beta1",
+      "sha256": "a3b0a5f7a8191349f077ebab775896acb1394cab767e26bd080389a06610f034",
+      "originalVersion": "1.0.0-beta2",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",

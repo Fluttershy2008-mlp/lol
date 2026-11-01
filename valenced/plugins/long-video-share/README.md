@@ -1,4 +1,12 @@
-# Long Video Share · 1.0.0-beta1
+# Long Video Share · 1.0.0-beta2
+
+**Installation fix:** beta2 corrects the package's dependency declarations to
+Valenced Plugin API **1.x** and Discord **any supported version**. Beta1
+unnecessarily required API 1.2.4 and Discord 352.2, which could block installation
+before the plugin ran. The native bridge and storage APIs used by this plugin
+already exist in earlier Valenced 1.x builds. Both the ZIP manifest and repository
+catalogue now use the corrected requirements. The native video encoder is unchanged.
+Refresh the repository, install beta2, then fully close and reopen Valenced.
 
 Compress a long video on your Android phone, save a smaller MP4, then attach it
 using Discord's normal **+** button. There is no arbitrary 45-minute cut-off in
@@ -34,7 +42,7 @@ shows an inline preview depends on the host and viewers' access.
 
 ## Requirements and limits
 
-- **Android 9/API 28 or newer**, current Valenced with API **1.2.4+**, Discord **352.2+**.
+- **Android 9/API 28 or newer**, Valenced Plugin API **1.x**, and a Discord version supported by that Valenced build.
 - Uses Android **MediaExtractor → MediaCodec → OpenGL ES → MediaMuxer** locally.
   The output is **H.264 MP4**, up to **30 fps**, with the first AAC audio track
   copied unchanged. No additional native library or compression server is needed.

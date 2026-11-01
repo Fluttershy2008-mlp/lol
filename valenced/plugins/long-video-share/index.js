@@ -177,7 +177,7 @@
                 multiline: true, maxLength: 1900, style: inputStyle }),
             button('Copy video link', () => { void copyLink(); }, !link.trim()),
             linkNotice ? text(linkNotice) : null,
-            text('Android · Long Video Share 1.0.0-beta1', { marginTop: 14, fontSize: 12 }));
+            text('Android · Long Video Share 1.0.0-beta2', { marginTop: 14, fontSize: 12 }));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start, stop() { stop(current); }, SettingsComponent } };
 })()

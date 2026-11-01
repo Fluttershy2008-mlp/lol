@@ -2,6 +2,9 @@
 process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const semver = require('semver');
 const { createWorld, Renderer } = require('../../revenge-next/tests/next-harness.cjs');
 const { installSettingsSection } = require('./settings-fixture.cjs');
 const PREFIX = 'dev.fluttershy2008.long-video-share.';
@@ -10,6 +13,26 @@ const selected = { phase: 'selected', name: '45-minute-video.mp4', sourceBytes: 
 const button = (ui, label) => ui.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label);
 const input = (ui, label) => ui.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === label);
 const contents = ui => JSON.stringify(ui.toJSON());
+
+test('the newest install package accepts earlier Valenced 1.x APIs in both manifest and catalogue', () => {
+    const root = path.resolve(__dirname, '..');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/long-video-share/manifest.json'), 'utf8'));
+    const catalogue = JSON.parse(fs.readFileSync(path.join(root, 'index.json'), 'utf8')).plugins[manifest.id];
+    assert.equal(catalogue.channels.latest, manifest.version);
+    const latest = catalogue.versions[catalogue.channels.latest];
+    assert.deepEqual(latest.dependencies, manifest.dependencies);
+    for (const version of ['1.0.0', '1.1.0', '1.2.0', '1.2.1', '1.2.3', '1.2.4', '1.3.0']) {
+        for (const deps of [manifest.dependencies, latest.dependencies])
+            assert.equal(semver.satisfies(version, deps['valenced.api'].version), true, 'Plugin API ' + version + ' can install');
+        const candidates = Object.entries(catalogue.versions)
+            .filter(([, entry]) => semver.satisfies(version, entry.dependencies['valenced.api'].version))
+            .map(([release]) => release).sort(semver.rcompare);
+        assert.equal(candidates[0], manifest.version, 'resolver selects the fixed package for ' + version);
+    }
+    assert.equal(semver.satisfies('0.9.0', manifest.dependencies['valenced.api'].version), false);
+    assert.equal(semver.satisfies('2.0.0', manifest.dependencies['valenced.api'].version), false);
+    assert.equal(manifest.dependencies.discord.version, '*', 'no unused Discord 352.2 dependency');
+});
 
 function fixture(t, initialStatus = selected) {
     const w = createWorld(), renders = []; installSettingsSection(w);

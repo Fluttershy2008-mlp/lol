@@ -2,7 +2,10 @@
 
 # Fluttershy's Valenced plugins
 
-**Long Video Share 1.0.0-beta1:** compress a long video locally on Android to a
+**Long Video Share 1.0.0-beta2:** fixes the install error “No version of Plugin API
+matching >=1.2.4 <2 is available” by correcting the required API to 1.x and removing
+the unnecessary Discord 352.2 minimum. Refresh the repository and install beta2,
+then fully restart Valenced. Compress a long video locally on Android to a
 chosen upload-size target, save an MP4, then attach it using Discord's **+** button.
 Includes progress, cancellation, size retries and a hosted-link field. Refresh
 this repository, install **Long Video Share**, fully restart Valenced, and open
