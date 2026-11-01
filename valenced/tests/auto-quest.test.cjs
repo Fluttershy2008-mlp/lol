@@ -45,6 +45,7 @@ function fixture(t, opts = {}) {
         await settle();
         assert.equal(listeners.size, 0, 'QuestStore listener removed');
         assert.equal(w.stores.UserStore.listeners.size, 0, 'account listener removed');
+        assert.equal(w.stores.ConnectionStore.listeners.size, 0, 'connection listener removed');
         assert.equal(w.appListeners.size, 0); assert.equal(w.timers.size, 0);
         assert.equal(w.moduleWaiters.size, 0); assert.equal(w.pathWaiters.size, 0);
         assert.deepEqual(w.registry.section.settings, w.registry.core);
@@ -199,11 +200,13 @@ test('a thrown rate limit response uses the same bounded retry path', async t =>
     assert.equal(w.requests().length, 2);
 });
 
-test('request timeout pauses, permits manual retry and ignores the old late response', async t => {
+test('request timeout aborts the old attempt, retries automatically and ignores its late response', async t => {
     const pending = [];
     const w = fixture(t, { http: () => new Promise(resolve => pending.push(resolve)) });
     const item = await w.startQuest(), ui = await w.mount(item); await w.tick(7000); await w.tick(25000);
-    assert.match(w.text(ui), /HTTP 408/); await w.retry(ui); await w.tick(7000);
+    assert.match(w.text(ui), /AQ-TIMEOUT.*Retrying in 2s/);
+    assert.equal(w.requests()[0][2].signal.aborted, true);
+    await w.tick(2000);
     assert.equal(w.requests().length, 2);
     pending[0]({ status: 200, body: { completed_at: '2026-11-01' } }); await w.tick(0);
     assert.equal(w.toasts.some(x => x.startsWith('Quest completed:')), false);
@@ -295,8 +298,16 @@ for (const failure of [403, 408]) test('one quest failing with HTTP ' + failure 
     await w.tick(7000); await w.tick(7000);
     assert.equal(w.requests().length, 3);
     assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
-    await w.tick(25000); assert.equal(w.requests().length, 3);
-    assert.match(w.text(ui), new RegExp('HTTP ' + failure));
+    if (failure === 403) {
+        await w.tick(25000); assert.equal(w.requests().length, 3);
+        assert.match(w.text(ui), /HTTP 403/);
+    } else {
+        await w.tick(18000); await w.tick(2000); // first timeout, then its retry
+        await w.tick(25000); await w.tick(5000); // second timeout, then final retry
+        await w.tick(25000);
+        assert.equal(w.requests().length, 5);
+        assert.match(w.text(ui), /AQ-TIMEOUT.*Tap Check again/);
+    }
 });
 
 test('accepting another quest while one is running starts a separate timer immediately', async t => {
@@ -422,4 +433,196 @@ test('settings defaults normalize malformed values and preserve ignored IDs on e
     await w.toggle(ui, 'Notify for new quests', false);
     assert.equal(item.writes.at(-1).enabled, true);
     assert.deepEqual(item.writes.at(-1).ignoredQuestIds, { [ID]: true });
+});
+
+// Models the mobile HTTPUtils response/error fields and AbortSignal contract:
+// discord_common/js/packages/http-utils/HTTPUtils.tsx at ba7734c84fbed39fde47c4aa3fc16e106fe90915
+// Native V8APIError can also retain the HTTP response in .cause.
+for (const shape of ['text', 'nested', 'body-text', 'parsed-body']) test('mobile ' + shape + ' success response confirms completion', async t => {
+    const body = { completed_at: '2026-11-01' };
+    const w = fixture(t, { http: () => shape === 'text' ? { status: 200, body: null, text: JSON.stringify(body) }
+        : shape === 'nested' ? { response: { statusCode: 200, data: JSON.stringify(body) } }
+        : shape === 'body-text' ? { status: 200, body: JSON.stringify(body) }
+        : { status: 200, body, text() { throw new Error('A parsed body must not be read again'); } } });
+    await w.startQuest(); await w.tick(7000);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+    assert.equal(w.requests().length, 1);
+});
+
+for (const wrapper of ['response', 'cause', 'err']) test('native HTTP errors in .' + wrapper + ' preserve status and do not become network errors', async t => {
+    const w = fixture(t, { http: () => Promise.reject({ [wrapper]: { statusCode: 403, body: { message: 'private error text' } } }) });
+    const item = await w.startQuest(), ui = await w.mount(item);
+    await w.tick(7000); await w.tick(60000);
+    assert.equal(w.requests().length, 1, 'permission failures are not retried');
+    assert.match(w.text(ui), /AQ-HTTP-403/);
+    assert.ok(!w.text(ui).includes('private error text'));
+    assert.ok(!w.toasts.join(' ').includes('connection error'));
+});
+
+for (const metadata of ['headers', 'retryAfter', 'cause-text']) test('native ' + metadata + ' rate-limit metadata is honored', async t => {
+    let count = 0;
+    const w = fixture(t, { http: () => {
+        if (++count > 1) return { status: 200, body: { completed_at: '2026-11-01' } };
+        if (metadata === 'headers') throw { response: { statusCode: 429, headers: { 'Retry-After': '3' }, body: {} } };
+        if (metadata === 'retryAfter') throw { status: 429, retryAfter: 3 };
+        throw { cause: { status: 429, text: '{"retry_after":3}' } };
+    } });
+    await w.startQuest(); await w.tick(7000); await w.tick(2999);
+    assert.equal(w.requests().length, 1);
+    await w.tick(1); assert.equal(w.requests().length, 2);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('a temporary native network error retries the same timestamp and recovers without manual action or an error toast', async t => {
+    let count = 0;
+    const w = fixture(t, { http: () => {
+        if (++count === 1) throw Object.assign(new TypeError('Network request failed'), { code: 'ERR_NETWORK' });
+        return { status: 200, body: { completed_at: '2026-11-01' } };
+    } });
+    const item = await w.startQuest(), ui = await w.mount(item);
+    await w.tick(7000); assert.match(w.text(ui), /AQ-NETWORK-ERR_NETWORK.*Retrying in 2s/);
+    assert.deepEqual(w.toasts, []);
+    await w.tick(1999); assert.equal(w.requests().length, 1);
+    await w.tick(1); assert.equal(w.requests().length, 2);
+    assert.deepEqual(w.requests().map(x => x[2].body.timestamp), [7, 7]);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('repeated network failures have a bounded retry budget and safe diagnostic codes', async t => {
+    const secret = 'do-not-display-this-token-or-url';
+    const w = fixture(t, { http: () => Promise.reject(new Error('Network request failed: ' + secret)) });
+    const item = await w.startQuest(), ui = await w.mount(item);
+    await w.tick(7000); await w.tick(2000); await w.tick(5000); await w.tick(60000);
+    assert.equal(w.requests().length, 3);
+    assert.equal(w.toasts.filter(x => x.startsWith('Auto Quest paused:')).length, 1);
+    assert.match(w.text(ui), /AQ-NETWORK.*Tap Check again/);
+    assert.ok(!w.text(ui).includes(secret)); assert.ok(!w.toasts.join(' ').includes(secret));
+});
+
+test('network recovery in one quest leaves other accepted quests running concurrently', async t => {
+    const second = quest({ id: '141000000000000002' }); let first = true;
+    const w = fixture(t, { quests: [quest(), second], http: (_method, input) => {
+        if (input.url.includes(ID) && first) { first = false; throw new Error('Network request failed'); }
+        return { status: 200, body: { completed_at: '2026-11-01' } };
+    } });
+    await w.startQuest(); await w.tick(7000);
+    assert.equal(w.requests().length, 2); assert.equal(w.toasts.length, 1);
+    await w.tick(2000); assert.equal(w.requests().length, 3);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 2);
+});
+
+for (const reason of ['stop', 'pause', 'background', 'account']) test(reason + ' cancels pending network retry timers', async t => {
+    const w = fixture(t, { http: () => Promise.reject(new Error('Network request failed')) });
+    const item = await w.startQuest(), ui = await w.mount(item); await w.tick(7000);
+    if (reason === 'stop') await Renderer.act(async () => w.stop(item));
+    if (reason === 'pause') await w.toggle(ui, 'Auto-complete video quests', false);
+    if (reason === 'background') for (const fn of w.appListeners) fn('background');
+    if (reason === 'account') w.setAccount(FRIEND);
+    await w.tick(60000); assert.equal(w.requests().length, 1); assert.deepEqual(w.toasts, []);
+});
+
+test('Discord reconnection automatically restarts quests whose network retries were exhausted', async t => {
+    let offline = true, connected = true;
+    const w = fixture(t, { http: () => {
+        if (offline) throw new Error('Network request failed');
+        return { status: 200, body: { completed_at: '2026-11-01' } };
+    } });
+    w.stores.ConnectionStore.isConnected = () => connected;
+    await w.startQuest(); await w.tick(7000); await w.tick(2000); await w.tick(5000);
+    assert.equal(w.requests().length, 3);
+    connected = false; w.stores.ConnectionStore.emitChange();
+    offline = false; connected = true; w.stores.ConnectionStore.emitChange(); await w.tick(0); await w.tick(7000);
+    assert.equal(w.requests().length, 4);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('a temporary HTTP service error recovers after backoff, while authentication errors never auto-retry', async t => {
+    let count = 0;
+    const w = fixture(t, { http: () => ++count === 1 ? { status: 503, body: {} }
+        : { status: 200, body: { completed_at: '2026-11-01' } } });
+    await w.startQuest(); await w.tick(7000); await w.tick(2000);
+    assert.equal(w.requests().length, 2); assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('canonical imported HTTP module wins over an unrelated module with HTTP-shaped exports', async t => {
+    const w = fixture(t); let wrong = 0;
+    const good = w.modules.find(x => x.getAPIBaseURL);
+    w.modules.unshift({ getAPIBaseURL() {}, HTTP: { get() {}, del() {}, post() { wrong++; throw new TypeError('Wrong client'); } } });
+    w.addModule(good, '../discord_common/js/packages/http-utils/HTTPUtils.tsx');
+    await w.startQuest(); await w.tick(7000);
+    assert.equal(wrong, 0); assert.equal(w.requests().length, 1);
+});
+
+test('a canonical HTTP module loaded late replaces the initial fallback before any request', async t => {
+    const w = fixture(t, { coldHTTP: true }); let wrong = 0;
+    w.addModule({ HTTP: { get() {}, post() { wrong++; throw new TypeError('Wrong client'); } } });
+    await w.startQuest();
+    w.addModule(w.httpModule, '../discord_common/js/packages/http-utils/HTTPUtils.tsx');
+    await w.tick(7000); assert.equal(wrong, 0); assert.equal(w.requests().length, 1);
+});
+
+test('request cancellation aborts Discord’s native signal and supplies a native deadline', async t => {
+    const w = fixture(t, { http: () => new Promise(() => {}) });
+    const item = await w.startQuest(); await w.tick(7000);
+    const input = w.requests()[0][2];
+    assert.equal(input.signal.aborted, false); assert.equal(input.timeout, 20000);
+    assert.equal(input.retries, 0); assert.equal(input.rejectWithError, false);
+    assert.equal(input.failImmediatelyWhenRateLimited, true);
+    await w.stop(item); assert.equal(input.signal.aborted, true);
+});
+
+test('malformed successful responses are identified as response errors rather than connection failures', async t => {
+    const w = fixture(t, { http: () => ({ status: 200, text: '<html>invalid</html>' }) });
+    const item = await w.startQuest(), ui = await w.mount(item); await w.tick(7000); await w.tick(60000);
+    assert.equal(w.requests().length, 1);
+    assert.match(w.text(ui), /AQ-RESPONSE/); assert.ok(!w.text(ui).includes('AQ-NETWORK'));
+});
+
+test('a real Fetch Response stream is decoded as JSON, without mistaking its body stream for the payload', async t => {
+    const w = fixture(t, { http: () => new Response('{"completed_at":"2026-11-01"}', { status: 200,
+        headers: { 'Content-Type': 'application/json' } }) });
+    await w.startQuest(); await w.tick(7000);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('native JSON parser failures are classified as response errors without repeated POSTs', async t => {
+    const w = fixture(t, { http: () => { throw new SyntaxError('private response text'); } });
+    const item = await w.startQuest(), ui = await w.mount(item); await w.tick(7000); await w.tick(60000);
+    assert.equal(w.requests().length, 1); assert.match(w.text(ui), /AQ-RESPONSE/);
+    assert.ok(!w.text(ui).includes('private response text'));
+});
+
+test('mobile hasErr network results recover even when the bridge resolves instead of rejecting', async t => {
+    let count = 0;
+    const w = fixture(t, { http: () => ++count === 1 ? { ok: false, hasErr: true, err: { code: 'ECONNRESET' } }
+        : { status: 200, body: { completed_at: '2026-11-01' } } });
+    await w.startQuest(); await w.tick(7000); await w.tick(2000);
+    assert.equal(w.requests().length, 2);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
+});
+
+test('an unusable HTTP module is diagnosed without repeated requests or mislabelling it a connection failure', async t => {
+    const w = fixture(t, { coldHTTP: true }); let count = 0;
+    w.addModule({ HTTP: { get() {}, post() { count++; throw new TypeError('private module failure'); } } });
+    const item = await w.startQuest(), ui = await w.mount(item); await w.tick(7000); await w.tick(60000);
+    assert.equal(count, 1); assert.match(w.text(ui), /AQ-CLIENT/);
+    assert.ok(!w.text(ui).includes('AQ-NETWORK')); assert.ok(!w.text(ui).includes('private module failure'));
+});
+
+test('reconnection keeps acknowledged progress when QuestStore is stale instead of replaying an older timestamp', async t => {
+    const q = quest(); q.config.taskConfigV2.tasks.WATCH_VIDEO_ON_MOBILE.target = 28;
+    let count = 0, connected = true;
+    const w = fixture(t, { quests: [q], http: () => {
+        count++;
+        if (count === 1) return { status: 200, body: { completed_at: null } };
+        if (count <= 4) throw new Error('Network request failed');
+        return { status: 200, body: { completed_at: '2026-11-01' } };
+    } });
+    w.stores.ConnectionStore.isConnected = () => connected;
+    await w.startQuest(); await w.tick(7000); await w.tick(7000); await w.tick(2000); await w.tick(5000);
+    assert.deepEqual(w.requests().map(x => x[2].body.timestamp), [7, 14, 14, 14]);
+    connected = false; w.stores.ConnectionStore.emitChange();
+    connected = true; w.stores.ConnectionStore.emitChange(); await w.tick(0); await w.tick(7000);
+    assert.deepEqual(w.requests().map(x => x[2].body.timestamp), [7, 14, 14, 14, 14]);
+    assert.equal(w.toasts.filter(x => x.startsWith('Quest completed:')).length, 1);
 });
