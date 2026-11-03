@@ -108,7 +108,7 @@ test('Nano rejects a result from a different job instead of showing a stale answ
     assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.1.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.2.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -314,7 +314,12 @@ test('AI Send solves the entire written question and sends only the answer once 
     assert.equal(sent[0].receiver,actions);assert.equal(sent[0].args[0],'123');assert.equal(sent[0].args[1].content,'x = 3');
     assert.equal(sent[0].args[1].nonce,'1');assert.equal(sent[0].args[1].attachments,msg.attachments);
     assert.equal(sent[0].args[1].allowedMentions,msg.allowedMentions);assert.equal(sent[0].args[2],options);
-    assert.deepEqual(Array.from(nano[0][1]),['Solve 2x + 3 = 9','DEG',false]);
+    assert.match(nano[0][1][0],/plain, natural chat language/);
+    assert.match(nano[0][1][0],/1–2 short sentences/);
+    assert.match(nano[0][1][0],/No working steps, headings, lists, greetings or extra commentary/);
+    assert.ok(nano[0][1][0].endsWith('\n\nQuestion: Solve 2x + 3 = 9'));
+    assert.equal(nano[0][1][1],'DEG');assert.equal(nano[0][1][2],false);
+    assert.equal(s.question,'Solve 2x + 3 = 9');assert.equal(s.history[0].question,'Solve 2x + 3 = 9');
     assert.equal(nano.filter(c=>c[0].endsWith('.solve')).length,1);assert.equal(s.pendingSend,undefined);h.default.stop();
 });
 test('AI mode computes complete local expressions immediately and bypasses Nano even if offline mode is off', async () => {
@@ -328,7 +333,15 @@ test('AI mode does not partially replace sums inside word problems', async () =>
     h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{if(name.endsWith('.solve'))question=args[0];return {phase:'done',jobId:'one',answer:'8 apples'};}};
     await h.default.start(h.api);h.test.getSession().settings.aiSend=true;const {actions,sent}=connectSender(h);
     await actions.sendMessage('123',{content:'I have 2+2 apples and double them. How many?'});
-    assert.equal(question,'I have 2+2 apples and double them. How many?');assert.equal(sent[0].args[1].content,'8 apples');h.default.stop();
+    assert.ok(question.endsWith('\n\nQuestion: I have 2+2 apples and double them. How many?'));assert.equal(sent[0].args[1].content,'8 apples');h.default.stop();
+});
+test('short reply instructions respect the native input limit without truncating the question', async () => {
+    const h=harness();let nativeCalls=0;
+    h.api.unscoped.modules.native={callNativeMethod:async()=>{nativeCalls++;return {phase:'done',jobId:'one',answer:'1'};}};
+    await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;
+    const {actions,sent}=connectSender(h),question='Solve x+1=2. '+'a'.repeat(5970);
+    await assert.rejects(actions.sendMessage('123',{content:question}),/too long for a short AI reply/);
+    assert.equal(nativeCalls,0);assert.equal(sent.length,0);assert.equal(s.question,question);assert.equal(s.busy,false);h.default.stop();
 });
 test('missing Nano, inference failures and overlong output reject the send without sending raw questions', async () => {
     for(const status of [null,{phase:'error',jobId:'one',error:'Nano unavailable'},{phase:'done',jobId:'one',answer:'x'.repeat(1901)}]){

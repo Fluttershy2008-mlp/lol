@@ -877,11 +877,24 @@
               "version": "*"
             }
           }
+        },
+        "2.1.2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@2.1.2.zip",
+          "sha256": "bcb7b4065db4d7ac2e69bb1897b9d787396477b8a467b3474c876dd85556bf37",
+          "size": 32198,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "2.1.1",
-        "beta": "2.1.1"
+        "latest": "2.1.2",
+        "beta": "2.1.2"
       },
       "name": "Math AI & Scientific Calculator",
       "description": "Tap Σ to toggle automatic AI solve on Discord Send. Key-free Gemini Nano for written questions, offline scientific maths and unit conversions.",

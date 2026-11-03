@@ -4,7 +4,7 @@
   "name": "Math AI & Scientific Calculator",
   "description": "Tap Σ to toggle automatic AI solve on Discord Send. Key-free Gemini Nano for written questions, offline scientific maths and unit conversions.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"

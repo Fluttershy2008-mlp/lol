@@ -225,6 +225,11 @@
         const question = session.question.trim();
         session.error = ''; session.notice = '';
         if (!setup && (!question || question.length > 6000)) { session.error = 'Enter a question from 1 to 6,000 characters.'; changed(); return; }
+        const replyStyle = 'Reply in plain, natural chat language. Give just the answer with units and all solutions, or 1–2 short sentences if needed. No working steps, headings, lists, greetings or extra commentary. If unclear, ask one short question.';
+        const input = !setup && options.shortReply ? replyStyle + '\n\nQuestion: ' + question : question;
+        if (!setup && input.length > 6000) {
+            session.error = 'This question is too long for a short AI reply. Shorten it and try again.'; changed(); return;
+        }
         session.busy = true; session.result = ''; session.nanoMode = setup ? 'setup' : 'solve'; changed();
         let rejectCancel, timer, pollTimer, id;
         const job = { cancelled: false, cancel() {
@@ -237,7 +242,7 @@
         timer = setTimeout(() => job.cancel(), 20 * 60 * 1000);
         try {
             const response = await Promise.race([cancelled, (async () => {
-                let status = await nanoCall(session, setup ? 'setup' : 'solve', setup ? [] : [question, session.settings.angle, options.steps ?? session.settings.steps]);
+                let status = await nanoCall(session, setup ? 'setup' : 'solve', setup ? [] : [input, session.settings.angle, options.steps ?? session.settings.steps]);
                 id = status.jobId;
                 if (job.cancelled || !session.active) { if (id) await nanoCall(session, 'cancel', [id]); throw new Error('Nano operation cancelled.'); }
                 while (session.active && !job.cancelled) {
@@ -305,7 +310,7 @@
         session.pendingSend = pending;
         pending.promise = (async () => {
             try {
-                const answer = await runNano(session, false, { steps: false });
+                const answer = await runNano(session, false, { steps: false, shortReply: true });
                 if (!session.active || current !== session || moved || session.sendEpoch !== epoch || !session.settings.aiSend
                     || session.selected() !== channel || session.user() !== account)
                     throw new Error('AI send cancelled because the chat, account or auto-solve mode changed.');
@@ -645,7 +650,7 @@
             row([text('Math AI', { color: fg, fontSize: 27, fontWeight: '700' }), modal ? button('Close', () => { session.visible = false; changed(); }) : null]),
             text('Calculate offline, or use Gemini Nano on this device for an AI answer. No API key is needed. Review answers before sending.'),
             button(session.settings.aiSend ? 'Auto AI solve: ON' : 'Auto AI solve: OFF', () => save('aiSend', !session.settings.aiSend), false, session.settings.aiSend),
-            text('Tap Σ in chat to turn Auto AI solve on or off. When ON, Discord Send solves your whole question and sends the answer. Simple expressions solve immediately; written questions open Math Nano and send after it returns. Hold Σ to open this calculator. Turn it OFF for normal chat.'),
+            text('Tap Σ in chat to turn Auto AI solve on or off. When ON, Discord Send solves your whole question and sends a short, natural answer without working steps. Simple expressions solve immediately; written questions open Math Nano and send after it returns. Hold Σ to open this calculator. Turn it OFF for normal chat.'),
             row([button(session.settings.inline ? 'Inline Calculator: ON' : 'Inline Calculator: OFF', () => save('inline', !session.settings.inline)),
                 button(session.settings.currency ? 'Currency conversions: ON' : 'Currency conversions: OFF', () => save('currency', !session.settings.currency)),
                 button(session.settings.autoSend ? 'Solve when sending: ON' : 'Solve when sending: OFF', () => save('autoSend', !session.settings.autoSend))]),
