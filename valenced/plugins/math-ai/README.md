@@ -1,5 +1,18 @@
 # Math AI & Scientific Calculator
 
+## Send button fix (2.2.2)
+
+- With Auto AI solve ON, type two simultaneous linear equations in one Discord message, for example:
+  ```text
+  3x + 2y = 16
+  2x - y = 3
+  ```
+  Press the ordinary Discord Send button. The plugin solves them offline and sends `x = 22/7, y = 23/7` without launching Math Nano.
+- Decimal coefficients, variables on either side, and semicolon-separated equations are supported. Unsupported equations and word problems still use the key-free Nano companion.
+- Fix a foreground-switch cancellation: when Android briefly reports an empty selected channel or account while opening the Nano app, the plugin no longer interprets it as switching chats and sends a CANCEL request.
+- If the companion still exits without an answer, the panel now reports that situation more clearly instead of only "Nano operation cancelled". On failure no AI answer or original question is sent.
+- **Install only the updated Valenced plugin ZIP** and fully restart Discord. The existing Math Nano companion APK can remain installed.
+
 Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calculator**, and fully restart Discord.
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
