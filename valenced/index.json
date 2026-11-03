@@ -854,7 +854,7 @@
         },
         "2.1.0": {
           "url": "https://fluttershy2008-mlp.github.io/lol/valenced/pool/dev.fluttershy2008.math-ai@2.1.0.zip",
-          "sha256": "c9a77d47749e559d8627ed4c4d4f17288b48fe380511b8c8e3b9f69674455ae6",
+          "sha256": "cf3fe3b3c3b90edddb95d0e237bc30b3d8168b92748248433299f4c7c260af4e",
           "size": 31074,
           "dependencies": {
             "valenced.api": {
