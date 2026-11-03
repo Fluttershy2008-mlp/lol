@@ -2,9 +2,9 @@
   "format": 1,
   "id": "dev.fluttershy2008.math-ai",
   "name": "Math AI & Scientific Calculator",
-  "description": "Show currency conversions inside the editable chat bar: type 10 MYR to SGD. Includes short Nano AI answers, scientific maths and units.",
+  "description": "Solve simultaneous equations on Discord Send without opening Nano; includes scientific maths, currency and Nano AI.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"
