@@ -230,6 +230,55 @@
             if (session.active) { session.error = 'Could not save settings.'; changed(); }
         });
     }
+
+    // Solve two simple simultaneous linear equations offline before opening Nano.
+    function solveLinearSystem(input) {
+        if (typeof input !== 'string' || input.length > 6000) return null;
+        const lines = input.replace(/[−–]/g, '-').trim().split(/[\n;]+/).map(s => s.trim()).filter(Boolean);
+        if (lines.length !== 2 || !lines.every(s => s.includes('='))) return null;
+        const side = text => {
+            const source = text.replace(/\s+/g, '').replace(/×/g, '*');
+            if (!source || /[^0-9.xy+*-]/.test(source)) return null;
+            const terms = source.replace(/-/g, '+-').split('+').filter(Boolean), sum = [0, 0, 0];
+            if (!terms.length || terms.length > 30) return null;
+            for (const t of terms) {
+                const v = /^(-?)(?:(\d+(?:\.\d+)?|\.\d+)\*?)?([xy])$/.exec(t);
+                if (v) sum[v[3] === 'x' ? 0 : 1] += (v[2] ? Number(v[2]) : 1) * (v[1] ? -1 : 1);
+                else if (/^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(t)) sum[2] += Number(t);
+                else return null;
+            }
+            return sum.every(Number.isFinite) ? sum : null;
+        };
+        const equation = text => {
+            const bits = text.split('=');
+            if (bits.length !== 2) return null;
+            const l = side(bits[0]), r = side(bits[1]);
+            return l && r ? [l[0] - r[0], l[1] - r[1], r[2] - l[2]] : null;
+        };
+        const a = equation(lines[0]), b = equation(lines[1]);
+        if (!a || !b || (!a[0] && !a[1]) || (!b[0] && !b[1])) return null;
+        const det = a[0] * b[1] - b[0] * a[1];
+        if (Math.abs(det) < 1e-12) {
+            const consistent = Math.abs(a[0] * b[2] - b[0] * a[2]) < 1e-10 &&
+                               Math.abs(a[1] * b[2] - b[1] * a[2]) < 1e-10;
+            return consistent ? 'Infinitely many solutions.' : 'No solution (inconsistent equations).';
+        }
+        const value = (numer, denom) => {
+            if (!Number.isFinite(numer / denom)) return null;
+            if (!Number.isSafeInteger(numer) || !Number.isSafeInteger(denom) || Math.abs(numer) > 1e9 || Math.abs(denom) > 1e9)
+                return format(numer / denom);
+            let n = numer, d = denom;
+            if (d < 0) { n = -n; d = -d; }
+            const gcd = (x, y) => { while (y) [x, y] = [y, x % y]; return x; };
+            const g = gcd(Math.abs(n), Math.abs(d));
+            n /= g; d /= g;
+            return d === 1 ? String(n) : n + '/' + d;
+        };
+        const x = value(a[2] * b[1] - b[2] * a[1], det);
+        const y = value(a[0] * b[2] - b[0] * a[2], det);
+        return x === null || y === null ? null : 'x = ' + x + ', y = ' + y;
+    }
+
     const NANO_PREFIX = 'dev.fluttershy2008.math-ai.nano.';
     async function nanoCall(session, action, args = []) {
         const native = session.api.unscoped.modules?.native;
@@ -269,7 +318,7 @@
                 if (job.cancelled || !session.active) { if (id) await nanoCall(session, 'cancel', [id]); throw new Error('Nano operation cancelled.'); }
                 while (session.active && !job.cancelled) {
                     if (status.phase === 'error') throw new Error(status.error || 'Open Math Nano and check the device status.');
-                    if (status.phase === 'cancelled') throw new Error('Nano operation cancelled.');
+                    if (status.phase === 'cancelled') throw new Error('Math Nano returned without an answer. If you did not tap Cancel, the companion may have closed or the request was interrupted.');
                     if (status.phase === 'done') return status;
                     if (!id || status.jobId !== id || status.phase !== 'opening') throw new Error('Nano returned an unexpected job status. Try again.');
                     await new Promise(resolve => { pollTimer = setTimeout(resolve, 500); });
@@ -297,7 +346,19 @@
             session.busy = false; if (session.active && current === session) changed();
         }
     }
-    async function solveAI(session) { return runNano(session, false); }
+    async function solveAI(session) {
+        if (!session?.active || session.busy) return;
+        const question = session.question.trim(), answer = solveLinearSystem(question);
+        if (answer) {
+            session.error = ''; session.notice = 'Solved offline — no Nano app needed.';
+            session.result = answer; session.resultKind = 'Simultaneous equations · offline';
+            session.history.unshift({ question, result: answer });
+            session.history.length = Math.min(10, session.history.length);
+            changed();
+            return answer;
+        }
+        return runNano(session, false);
+    }
     function sendSolved(session, receiver, args, original, conversion = null) {
         args = [...args];
         const message = { ...args[1] }, question = message.content.trim(), channel = args[0], account = session.user();
@@ -319,7 +380,11 @@
         let localAnswer = conversion;
         try {
             if (!localAnswer) localAnswer = inlineAnswer('= ' + question.replace(/^=(?!=)\s*/, ''), session.settings.angle, session.ans);
-        } catch { /* Written questions and equations use Nano. */ }
+        } catch { /* Unsupported expressions can still use Nano. */ }
+        if (!localAnswer) {
+            const answer = solveLinearSystem(question);
+            if (answer) localAnswer = { kind: 'linear-system', text: answer };
+        }
         conversion = localAnswer?.kind === 'currency' ? localAnswer : null;
         if (conversion && !session.settings.currency) return fail(new Error('Currency conversion is off in Math AI settings.'));
         if (localAnswer && localAnswer.kind !== 'currency')
@@ -328,7 +393,13 @@
         const epoch = session.sendEpoch;
         let moved = false;
         const remove = session.subscribeDraft(() => {
-            if (session.selected() !== channel || session.user() !== account) { moved = true; cancel(session); }
+            // Switching to Android's companion activity can temporarily clear
+            // Discord's selected channel/account. Do not treat empty as changed.
+            const selected = session.selected(), user = session.user();
+            if ((selected != null && selected !== '' && selected !== channel) ||
+                (user != null && user !== '' && user !== account)) {
+                moved = true; cancel(session);
+            }
         });
         const pending = { channel, account, content: message.content, nonce: message.nonce };
         session.pendingSend = pending;
