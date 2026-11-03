@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const source = fs.readFileSync(path.join(__dirname, '../plugins/math-ai/index.js'), 'utf8');
 function load(extra = {}) {
     const context = { setTimeout, clearTimeout, setInterval, clearInterval, AbortController, ...extra };
-    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, inlineAnswer, rateRequest, currencyText, Composer, InlinePreview, MathButton, format, settingsOf, endpointOf, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
+    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, endpointOf, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
     return vm.runInNewContext(code, context);
 }
 function harness(extra = {}) {
@@ -100,7 +100,7 @@ test('AI timeout and cancel settle stalled fetch/body and stop clears all sessio
     }
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@1.1.0.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@1.1.1.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -189,4 +189,31 @@ test('Sigma uses Discord action button with a fixed-size image instead of font b
     const tree=h.test.MathButton({api:h.api,session:s}), button=tree.props.children[0];assert.equal(button.type,NativeActionButton);
     const icon=button.props.IconComponent({});assert.equal(icon.props.style[0].width,24);assert.equal(icon.props.style[0].height,24);
     assert.match(icon.props.source.uri,/^data:image\/png;base64,/);h.default.stop();
+});
+test('preview is inside the floating native layout, with an uncapped height and unchanged composer controls', () => {
+    const h=harness(), RN={View:'View'}, {attachPreview,flatStyle}=h.test, el=h.React.createElement;
+    const controls=el('Controls',{key:'fluttershy-math-ai'}),ref={current:null},onLayout=()=>{};
+    const style={position:'absolute',bottom:0,left:0,right:0,flexDirection:'row',alignItems:'center',height:60,maxHeight:120,padding:8,backgroundColor:'#242429',borderRadius:20,overflow:'hidden'};
+    const original=el('View',{ref,onLayout,style},controls), preview=el('Preview',{key:'math-ai-inline-preview'});
+    const result=attachPreview(h.React,RN,original,preview),outer=flatStyle(RN,result.props.style),content=result.props.children[1];
+    assert.equal(result.type,original.type);assert.equal(result.props.ref,ref);assert.equal(result.props.onLayout,onLayout);
+    assert.equal(outer.position,'absolute');assert.equal(outer.bottom,0);assert.equal(outer.flexDirection,'column');
+    assert.equal(outer.height,undefined);assert.equal(outer.maxHeight,undefined);assert.equal(outer.overflow,'visible');
+    assert.equal(result.props.children[0],preview);assert.equal(content.props.children,controls);
+    assert.equal(content.props.style.height,60);assert.equal(content.props.style.maxHeight,120);assert.equal(content.props.style.flexDirection,'row');
+    assert.equal(content.props.style.padding,8);assert.equal(content.props.style.backgroundColor,'#242429');assert.equal(content.props.style.borderRadius,20);
+    assert.equal(content.props.style.position,undefined);assert.equal(content.props.style.flexShrink,0);
+    assert.equal(style.height,60);assert.equal(style.flexDirection,'row');assert.equal(attachPreview(h.React,RN,result,preview),result);
+});
+test('transparent wrappers keep their type and unrelated siblings; unsupported and disabled layouts are left alone', () => {
+    const h=harness(), RN={View:'View'},el=h.React.createElement;
+    const controls=el('Controls',{key:'fluttershy-math-ai'}),native=el('View',{},controls),sibling=el('Unrelated',{});
+    const provider=el('Provider',{value:123},[sibling,native]),preview=el('Preview',{key:'math-ai-inline-preview'});
+    const result=h.test.attachPreview(h.React,RN,provider,preview);
+    assert.equal(result.type,'Provider');assert.equal(result.props.value,123);assert.equal(result.props.children[0],sibling);
+    assert.equal(result.props.children[1].type,'View');assert.equal(result.props.children[1].props.children[0],preview);
+    assert.equal(h.test.attachPreview(h.React,RN,sibling,preview),sibling);
+    const api={unscoped:{react:{React:h.React,ReactNative:RN}}};
+    assert.equal(h.test.Composer({api,session:{active:true,settings:{inline:false}},children:provider}),provider);
+    assert.equal(h.test.Composer({api,session:{active:false,settings:{inline:true}},children:provider}),provider);
 });

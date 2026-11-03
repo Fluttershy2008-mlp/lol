@@ -4,7 +4,7 @@
   "name": "Math AI & Scientific Calculator",
   "description": "Live inline calculator above chat: type = for scientific sums, unit conversions and dated currency rates. Includes optional AI solving and an aligned chat button.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"

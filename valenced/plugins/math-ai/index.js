@@ -307,12 +307,67 @@
         const [, set] = React.useState(0);
         React.useEffect(() => { const fn = () => set(x => x + 1); listeners.add(fn); return () => listeners.delete(fn); }, []);
     }
+    function flatStyle(RN, style) {
+        const resolved = optional(() => RN.StyleSheet.flatten(style));
+        if (resolved && typeof resolved === 'object') return resolved;
+        if (Array.isArray(style)) return Object.assign({}, ...style.map(value => flatStyle(RN, value)));
+        return style && typeof style === 'object' ? style : {};
+    }
+    function hasMathButton(React, node, depth = 0) {
+        if (depth > 24) return false;
+        if (Array.isArray(node)) return node.some(value => hasMathButton(React, value, depth + 1));
+        if (!React.isValidElement(node)) return false;
+        return node.key === 'fluttershy-math-ai' || hasMathButton(React, node.props?.children, depth + 1);
+    }
+    function attachPreview(React, RN, node, preview, depth = 0) {
+        if (depth > 24 || !React.isValidElement(node) || !hasMathButton(React, node)) return node;
+        const props = node.props ?? {}, children = props.children;
+        if ((Array.isArray(children) ? children : [children]).some(child => child?.key === 'math-ai-composer-content')) return node;
+        // Keep Discord's positioning/animation/ref on its own layout root.
+        // An outside sibling is not included in a floating input's height and
+        // can end up under it. Put the preview in the same measured column.
+        const layout = node.type === RN.View || node.type === RN.Animated?.View || props.style !== undefined;
+        if (layout) {
+            const style = flatStyle(RN, props.style), content = {}, outer = {
+                flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start',
+                height: undefined, minHeight: undefined, maxHeight: undefined, overflow: 'visible',
+            };
+            for (const key of ['flexDirection', 'flexWrap', 'alignItems', 'justifyContent', 'alignContent', 'gap', 'rowGap', 'columnGap',
+                'height', 'minHeight', 'maxHeight', 'padding', 'paddingHorizontal', 'paddingVertical', 'paddingTop', 'paddingBottom',
+                'paddingLeft', 'paddingRight', 'paddingStart', 'paddingEnd', 'backgroundColor', 'borderWidth', 'borderTopWidth',
+                'borderBottomWidth', 'borderLeftWidth', 'borderRightWidth', 'borderStartWidth', 'borderEndWidth', 'borderColor',
+                'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'borderRadius', 'borderTopLeftRadius',
+                'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius', 'borderCurve', 'boxShadow', 'elevation',
+                'shadowColor', 'shadowOpacity', 'shadowOffset', 'shadowRadius', 'overflow']) {
+                if (style[key] === undefined) continue;
+                content[key] = style[key];
+                if (key.startsWith('padding') || /Width$|Radius$/.test(key) && key.startsWith('border') || key === 'elevation') outer[key] = 0;
+                else if (key === 'backgroundColor') outer[key] = 'transparent';
+                else if (!['flexDirection', 'alignItems', 'justifyContent', 'height', 'minHeight', 'maxHeight', 'overflow'].includes(key)) outer[key] = undefined;
+            }
+            // The existing controls keep their original direction, padding,
+            // size and capsule styling; only the native root grows by the pill.
+            content.flexShrink = 0;
+            return React.cloneElement(node, { style: [props.style, outer] }, [
+                preview, React.createElement(RN.View, { key: 'math-ai-composer-content', style: content }, children),
+            ]);
+        }
+        const list = Array.isArray(children) ? children : [children];
+        for (let i = 0; i < list.length; i++) {
+            const next = attachPreview(React, RN, list[i], preview, depth + 1);
+            if (next !== list[i]) {
+                const updated = [...list]; updated[i] = next;
+                return React.cloneElement(node, {}, Array.isArray(children) ? updated : next);
+            }
+        }
+        return node;
+    }
     function Composer({ api, session, children }) {
         const { React, ReactNative: RN } = api.unscoped.react;
         useRefresh(React);
         if (!session.active || !session.settings.inline) return children;
-        return React.createElement(RN.View, { style: { alignSelf: 'stretch', flexShrink: 0 } },
-            React.createElement(InlinePreview, { api, session }), children);
+        return attachPreview(React, RN, children,
+            React.createElement(InlinePreview, { key: 'math-ai-inline-preview', api, session }));
     }
     function InlinePreview({ api, session }) {
         const { React, ReactNative: RN } = api.unscoped.react, h = React.createElement;
@@ -358,7 +413,7 @@
             try { await api.unscoped.externals.ReactNativeClipboard.Clipboard.setString(answer.text); if (session.active) setCopied(true); }
             catch { if (session.active) setAnswer({ ...answer, error: 'Could not copy. Long-press the answer or open ∑.' }); }
         }
-        return h(RN.View, { style: { alignItems: 'flex-start', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6 } },
+        return h(RN.View, { pointerEvents: 'box-none', style: { flexShrink: 0, alignSelf: 'stretch', alignItems: 'flex-start', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8 } },
             h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label, accessibilityHint: 'Tap to copy the answer',
                 disabled: !answer.text, onPress: () => { void copy(); },
                 style: { maxWidth: '100%', backgroundColor: card, paddingVertical: 9, paddingHorizontal: 13, borderRadius: 12 } },

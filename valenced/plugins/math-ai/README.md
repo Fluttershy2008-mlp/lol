@@ -4,7 +4,9 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
-## Inline Calculator (1.1.0)
+## Inline Calculator (1.1.1)
+
+Version 1.1.1 fixes the preview being covered by Discord’s floating input. The preview now shares the input’s native layout root, so its height is included above the existing controls. The input keeps its own positioning, animation and capsule styling. No fixed height is imposed on the preview.
 
 Type `=` at the start of your chat draft to show a live answer above the message box. Tap the answer pill to copy it. Normal text and sent messages remain unchanged. Both inline previews and currency lookups have separate ON/OFF controls in Math AI settings.
 
