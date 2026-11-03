@@ -170,12 +170,6 @@
       "originalVersion": "1.0.4",
       "kind": "compatibility-preview"
     },
-    "dev.fluttershy2008.rainbow-dash-theme": {
-      "path": "Rainbow_Dash_Sonic_Rainboom.json",
-      "sha256": "70134b0c4c43496288e796158a969305cd08516d42898dd29aa66ca3892c1838",
-      "originalVersion": "1.4.0",
-      "kind": "native-theme"
-    },
     "dev.fluttershy2008.sunset-shimmer-theme": {
       "path": "Sunset_Shimmer_Theme.json",
       "sha256": "a4e447cb9953c51afa823fb22a1e9069cfccbe07d8ee9082fe2740630f60e9b0",
@@ -198,6 +192,12 @@
       "path": "valenced/themes/fluttershy/index.js",
       "sha256": "050d0e3346355ecb7156a5daa0d0f93c9facde207918c1219e9ff2a22753b030",
       "originalVersion": "1.0.0-beta3",
+      "kind": "native-theme"
+    },
+    "dev.fluttershy2008.rainbow-dash-theme": {
+      "path": "valenced/themes/rainbow-dash/index.js",
+      "sha256": "16c945ce2b0511e885bdf72149c465792e6b9743ef4f44c97bdb9c4dbb0733ff",
+      "originalVersion": "1.1.0",
       "kind": "native-theme"
     },
     "dev.fluttershy2008.long-video-share": {

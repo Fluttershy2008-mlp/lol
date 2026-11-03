@@ -1454,15 +1454,31 @@
               "version": ">=1 <2"
             }
           }
+        },
+        "1.1.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.rainbow-dash-theme@1.1.0.zip",
+          "sha256": "fdaf7fc7c1223948bc9a634158f21c595732343cc3774d4b4f1e7e536859dbd0",
+          "size": 692731,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            },
+            "valenced.api.themes": {
+              "version": ">=1 <2"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta1",
-        "beta": "1.0.0-beta1"
+        "latest": "1.1.0",
+        "beta": "1.1.0"
       },
-      "name": "Rainbow Dash 🌈 Sonic Rainboom (Valenced)",
-      "description": "Valenced preview. Rainbow Dash with dark sky-blue panels, cyan and rainbow accents, and transparent chat backgrounds. Includes current Discord Android channel, card, input and NEUTRAL colour tokens checked against Decord. Static artwork source: https://wallpapersafari.com/w/1A6Dch",
-      "author": "Fluttershy_simper67 <753962426407452713>",
+      "name": "Rainbow Dash · Sonic Collage (Valenced)",
+      "description": "Rainbow Dash collage wallpaper, sky-blue and navy colours, rainbow accents, Clear Chat option and two matching Barlow font packs. All assets bundled offline.",
+      "author": "fluttershy_simper67 <753962426407452713>",
       "icon": "PaintPaletteIcon"
     },
     "dev.fluttershy2008.read-all-notifications": {

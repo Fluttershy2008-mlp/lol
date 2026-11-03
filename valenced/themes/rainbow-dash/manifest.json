@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.rainbow-dash-theme",
+  "name": "Rainbow Dash · Sonic Collage (Valenced)",
+  "description": "Rainbow Dash collage wallpaper, sky-blue and navy colours, rainbow accents, Clear Chat option and two matching Barlow font packs. All assets bundled offline.",
+  "author": "fluttershy_simper67 <753962426407452713>",
+  "version": "1.1.0",
+  "dependencies": {
+    "valenced.api": {
+      "version": ">=1 <2"
+    },
+    "discord": {
+      "version": ">=352.2"
+    },
+    "valenced.api.themes": {
+      "version": ">=1 <2"
+    }
+  },
+  "icon": "PaintPaletteIcon",
+  "dist": {
+    "script": "index.js"
+  }
+}

@@ -99,10 +99,10 @@
   },
   "nativeThemes": {
     "altitude-theme": "valenced/themes/altitude",
-    "fluttershy-theme": "valenced/themes/fluttershy"
+    "fluttershy-theme": "valenced/themes/fluttershy",
+    "rainbow-dash-theme": "valenced/themes/rainbow-dash"
   },
   "themes": {
-    "rainbow-dash-theme": "Rainbow_Dash_Sonic_Rainboom.json",
     "sunset-shimmer-theme": "Sunset_Shimmer_Theme.json",
     "tokyo-nights-theme": "Tokyo_Nights_Theme.json"
   },

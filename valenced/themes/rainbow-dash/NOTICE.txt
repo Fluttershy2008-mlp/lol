@@ -1,0 +1,10 @@
+Rainbow Dash · Sonic Collage for Valenced, version 1.1.0.
+Theme and font-pack configuration by fluttershy_simper67.
+Wallpaper: the user's supplied 111839.jpg, bundled byte-for-byte unchanged.
+Rainbow Dash / My Little Pony characters belong to their respective owners.
+Fonts: unmodified Barlow, Copyright 2017 The Barlow Project Authors.
+https://github.com/google/fonts/tree/main/ofl/barlow
+SIL Open Font License 1.1 included as assets/fonts/OFL.txt.
+The Sonic and Clear packs are themed configurations of Barlow, not an official MLP font.
+Palette interpolation and token coverage adapted from this repository's Altitude port (MIT).
+Uses Valenced Themes API; no native companions or global UI hooks required.
