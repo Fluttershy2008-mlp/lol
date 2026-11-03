@@ -853,7 +853,7 @@
           }
         },
         "2.1.0": {
-          "url": "https://fluttershy2008-mlp.github.io/lol/valenced/pool/dev.fluttershy2008.math-ai@2.1.0.zip",
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@2.1.0.zip",
           "sha256": "cf3fe3b3c3b90edddb95d0e237bc30b3d8168b92748248433299f4c7c260af4e",
           "size": 31074,
           "dependencies": {
