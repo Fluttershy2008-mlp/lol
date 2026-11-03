@@ -557,16 +557,33 @@
     function MathButton({ api, session }) {
         const { React, ReactNative: RN } = api.unscoped.react, h = React.createElement;
         useRefresh(React);
+        const held = React.useRef(false);
         if (!session.active) return null;
         const open = () => { if (!session.busy) session.readDraft(); session.visible = true; RN.Keyboard?.dismiss(); changed(); };
         const toggle = () => saveSettings(session, 'aiSend', !session.settings.aiSend);
         const label = 'Auto AI solve: ' + (session.settings.aiSend ? 'ON' : 'OFF');
-        const IconComponent = ({ style } = {}) => h(RN.Image, { source: { uri: SIGMA_ICON },
-            resizeMode: 'contain', style: [style, { width: 24, height: 24, tintColor: session.settings.aiSend ? '#949CF7' : '#B5BAC1' }] });
+        // Native action buttons can discard onLongPress. The outer Pressable
+        // owns gestures; the native child only supplies the usual chat spacing.
+        const IconComponent = ({ style } = {}) => h(RN.View, {
+            pointerEvents: 'none', style: [{ width: 24, height: 24 }, style,
+                { alignItems: 'center', justifyContent: 'center' }] },
+            h(RN.Image, { source: { uri: SIGMA_ICON }, resizeMode: 'contain',
+                style: { width: 20, height: 20, tintColor: session.settings.aiSend ? '#949CF7' : '#B5BAC1',
+                    // Centre the visible ink within the transparent PNG.
+                    transform: [{ translateX: 0.42 }, { translateY: -0.1 }] } }));
         return h(React.Fragment, null,
-            session.ActionButton ? h(session.ActionButton, { accessibilityLabel: label, accessibilityHint: 'Tap to toggle. Hold to open the calculator.', accessibilityState: { selected: session.settings.aiSend }, active: session.settings.aiSend, IconComponent, onPress: toggle, onLongPress: open })
-                : h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label, accessibilityHint: 'Tap to toggle. Hold to open the calculator.', accessibilityState: { selected: session.settings.aiSend }, onPress: toggle, onLongPress: open,
-                    style: { width: 40, height: 40, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } }, h(IconComponent)),
+            h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label,
+                accessibilityHint: 'Tap to toggle. Hold to open Math AI settings.',
+                accessibilityState: { selected: session.settings.aiSend }, delayLongPress: 350,
+                onPressIn: () => { held.current = false; },
+                onLongPress: () => { held.current = true; open(); },
+                onPress: () => { if (!held.current) toggle(); },
+                style: { alignSelf: 'center', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } },
+                h(RN.View, { pointerEvents: 'none', accessible: false, accessibilityElementsHidden: true,
+                    importantForAccessibility: 'no-hide-descendants' },
+                    session.ActionButton ? h(session.ActionButton, { active: session.settings.aiSend,
+                        IconComponent, onPress: () => {} })
+                        : h(RN.View, { style: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' } }, h(IconComponent)))),
             h(RN.Modal, { visible: session.visible, animationType: 'slide', onRequestClose: () => { session.visible = false; changed(); } },
                 h(RN.SafeAreaView, { style: { flex: 1, backgroundColor: '#1E1F22' } },
                     h(Panel, { api, session, modal: true }))));

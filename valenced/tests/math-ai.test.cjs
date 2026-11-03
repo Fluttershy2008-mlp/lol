@@ -16,7 +16,7 @@ function harness(extra = {}) {
     const draft = { channel: '123', account: '456', text: '2(3+4)' }, inserted = [];
     const React = { createElement: (type, props, ...children) => ({ type, key: props?.key, props: { ...props, children: children.length === 1 ? children[0] : children } }),
         cloneElement: (node, props, children) => ({ ...node, props: { ...node.props, ...props, children } }),
-        isValidElement: node => !!node?.type, useState: value => [value, () => {}], useEffect: () => {} };
+        isValidElement: node => !!node?.type, useState: value => [value, () => {}], useRef: value => ({ current: value }), useEffect: () => {} };
     const api = { cleanup: fn => removers.push(fn), jsonStorage: { loaded: true, cache: {}, set: async v => saved.push(v) },
         unscoped: { react: { React, ReactNative: {} }, modules: { finders: { filters: { withProps: (...props) => props },
             lookupModule: props => props.includes('dispatchToLastSubscribed') ? [{ dispatchToLastSubscribed: (...args) => inserted.push(args) }] : [] } },
@@ -108,7 +108,7 @@ test('Nano rejects a result from a different job instead of showing a stale answ
     assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.0.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.1.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -125,6 +125,7 @@ function mountHooks(h, Component, props) {
     const state=[], effects=[], pending=[]; let cursor=0, dirty=true, tree;
     h.React.useState=initial=>{const at=cursor++;if(!(at in state))state[at]=typeof initial==='function'?initial():initial;
         return [state[at],next=>{const value=typeof next==='function'?next(state[at]):next;if(!Object.is(value,state[at])){state[at]=value;dirty=true;}}];};
+    h.React.useRef=initial=>{const at=cursor++;if(!(at in state))state[at]={current:initial};return state[at];};
     h.React.useEffect=(fn,deps)=>{const at=cursor++;const old=effects[at];if(!old||deps.some((x,i)=>!Object.is(x,old.deps[i])))pending.push(()=>{old?.remove?.();effects[at]={deps,remove:fn()};});};
     return {render(){let count=0;do{if(++count>20)throw Error('Render loop');cursor=0;dirty=false;tree=Component(props);for(const run of pending.splice(0))run();}while(dirty);return tree;},
         unmount(){for(const effect of effects)effect?.remove?.();}};
@@ -191,11 +192,21 @@ test('FX preview is debounced, discards obsolete answers, displays the rate date
     s.settings.currency=false;tree=ui.render();assert.ok(JSON.stringify(tree).includes('Currency lookup is off'));
     ui.unmount();h.default.stop();assert.equal(s.fxJobs.size,0);
 });
-test('Sigma uses Discord action button with a fixed-size image instead of font baseline sizing', async () => {
+test('Sigma keeps native spacing but handles long press even when the native button discards it', async () => {
     const h=harness();await h.default.start(h.api);const s=h.test.getSession();
-    function NativeActionButton(){}h.callbacks.get('modules/chat_input/native/action_buttons/ChatInputActionButton.tsx')({default:NativeActionButton});
-    const tree=h.test.MathButton({api:h.api,session:s}), button=tree.props.children[0];assert.equal(button.type,NativeActionButton);
-    const icon=button.props.IconComponent({});assert.equal(icon.props.style.at(-1).width,24);assert.equal(icon.props.style.at(-1).height,24);
+    const RN=h.api.unscoped.react.ReactNative;RN.Pressable='Pressable';RN.View='View';RN.Image='Image';
+    function NativeActionButton({IconComponent,onPress}) {return h.React.createElement('NativePressable',{onPress},h.React.createElement(IconComponent,{}));}
+    h.callbacks.get('modules/chat_input/native/action_buttons/ChatInputActionButton.tsx')({default:NativeActionButton});
+    const tree=h.test.MathButton({api:h.api,session:s}), button=tree.props.children[0],visual=button.props.children;
+    assert.equal(button.type,'Pressable');assert.equal(visual.props.pointerEvents,'none');assert.equal(visual.props.importantForAccessibility,'no-hide-descendants');
+    const native=visual.props.children;assert.equal(native.type,NativeActionButton);
+    assert.equal(NativeActionButton(native.props).props.onLongPress,undefined);
+    button.props.onPressIn();button.props.onLongPress();assert.equal(s.visible,true);assert.equal(s.question,h.draft.text);
+    button.props.onPress();assert.equal(s.settings.aiSend,false);
+    const nativeStyle={width:24,height:24,marginHorizontal:2},frame=native.props.IconComponent({style:nativeStyle});
+    assert.equal(h.test.flatStyle(RN,frame.props.style).marginHorizontal,2);
+    assert.equal(h.test.flatStyle(RN,frame.props.style).alignItems,'center');
+    const icon=frame.props.children;assert.equal(icon.props.style.width,20);assert.equal(icon.props.style.height,20);
     assert.match(icon.props.source.uri,/^data:image\/png;base64,/);h.default.stop();
 });
 test('preview is inside the floating native layout, with an uncapped height and unchanged composer controls', () => {
@@ -276,12 +287,21 @@ test('Sigma tap toggles and persists AI mode; hold opens the calculator without 
     assert.equal(s.settings.aiSend,false);
     let b=h.test.MathButton({api:h.api,session:s}).props.children[0];
     assert.equal(b.props.accessibilityLabel,'Auto AI solve: OFF');
-    b.props.onPress();assert.equal(s.settings.aiSend,true);assert.equal(s.visible,false);
+    b.props.onPressIn();b.props.onPress();assert.equal(s.settings.aiSend,true);assert.equal(s.visible,false);
     await new Promise(r=>setImmediate(r));assert.equal(h.saved.at(-1).aiSend,true);
     b=h.test.MathButton({api:h.api,session:s}).props.children[0];
     assert.equal(b.props.accessibilityState.selected,true);b.props.onLongPress();
     assert.equal(s.visible,true);assert.equal(s.settings.aiSend,true);assert.equal(s.question,h.draft.text);
-    b.props.onPress();assert.equal(s.settings.aiSend,false);h.default.stop();
+    b.props.onPress();assert.equal(s.settings.aiSend,true);
+    b.props.onPressIn();b.props.onPress();assert.equal(s.settings.aiSend,false);h.default.stop();
+});
+test('release after a long hold never toggles AI mode across the modal rerender', async () => {
+    const h=harness();await h.default.start(h.api);const s=h.test.getSession();
+    const ui=mountHooks(h,h.test.MathButton,{api:h.api,session:s});let b=ui.render().props.children[0];
+    b.props.onPressIn();b.props.onLongPress();assert.equal(s.visible,true);
+    b=ui.render().props.children[0];b.props.onPress();assert.equal(s.settings.aiSend,false);
+    b.props.onPressIn();b.props.onPress();assert.equal(s.settings.aiSend,true);
+    ui.unmount();h.default.stop();
 });
 test('AI Send solves the entire written question and sends only the answer once with metadata intact', async () => {
     const h=harness({fetch:()=>{throw Error('No cloud request');}}),nano=[];

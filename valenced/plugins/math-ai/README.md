@@ -4,6 +4,12 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
+## Sigma hold and alignment fix (2.1.1)
+
+Long-press is handled directly by the plugin instead of relying on Discord's action button to forward it. Hold Sigma for about 350 ms to open the Math AI settings/calculator panel. Releasing after a hold does not toggle auto-solve, including when opening the panel causes a rerender. Tap still toggles auto-solve.
+
+The symbol is now smaller and centred within the native action-button spacing, with a 32 dp centred fallback. Discord's visual button remains inside a non-interactive wrapper so it cannot swallow long presses or expose a second accessibility target.
+
 ## Auto AI solve on Send (2.1.0)
 
 - **Tap Σ** to toggle **Auto AI solve ON/OFF**. Purple means ON; grey means OFF. The choice is saved, starts OFF for existing installs, and is also available in Math AI settings.
@@ -66,7 +72,7 @@ Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!
 Cloud AI configuration and API key fields have been removed. AI solve now uses Gemini Nano on the device through the **Math Nano** companion Android app. This release requires two installs:
 
 1. Install [Math Nano companion 1.0.0 APK](Math_Nano_Companion_v1.0.0.apk) on your phone.
-2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.1.0**, then fully close and reopen Discord to load the native bridge.
+2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.1.1**, then fully close and reopen Discord to load the native bridge.
 3. Open the plugin's **AI setup → Open Nano setup**. The companion checks whether Gemini Nano is ready, downloadable, downloading or unavailable.
 4. If offered, tap **Download / prepare Nano**, keep the screen open and allow the model to finish downloading. The model may be large and needs internet and storage for initial setup.
 5. Return to Valenced. Paste a question into the panel and tap **AI solve**. The companion opens in the foreground, solves locally, and returns the answer to the plugin for review, copying or appending.
