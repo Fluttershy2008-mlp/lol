@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const source = fs.readFileSync(path.join(__dirname, '../plugins/math-ai/index.js'), 'utf8');
 function load(extra = {}) {
     const context = { setTimeout, clearTimeout, setInterval, clearInterval, AbortController, ...extra };
-    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, currencyQuery, currencyLabel, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, runNano, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
+    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, currencyQuery, currencyLabel, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, runNano, solveAI, solveLinearSystem, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
     return vm.runInNewContext(code, context);
 }
 function harness(extra = {}) {
@@ -69,6 +69,26 @@ test('chat button loads the draft, appends only on request and rejects channel/a
     h.default.stop(); assert.equal(mod.default.type,original); assert.equal(h.callbacks.size,0);
     for (const fn of h.removers) fn();
 });
+
+test('simultaneous equations return exact answers without starting Nano', async () => {
+    const { solveLinearSystem } = load().test;
+    assert.equal(solveLinearSystem('3x + 2y = 16\n2x - y = 3'), 'x = 22/7, y = 23/7');
+    assert.equal(solveLinearSystem('x + y = 5; x - y = 1'), 'x = 3, y = 2');
+    assert.equal(solveLinearSystem('x + y = 4\n2x + 2y = 8'), 'Infinitely many solutions.');
+    assert.equal(solveLinearSystem('x + y = 4\n2x + 2y = 9'), 'No solution (inconsistent equations).');
+    for (const invalid of ['2+2', '3x^2+y=12\nx-y=1', '2x+y=3'])
+        assert.equal(solveLinearSystem(invalid), null);
+    const h = harness(), calls = [];
+    h.api.unscoped.modules.native = {callNativeMethod: async (...args) => { calls.push(args); throw Error('Nano should not open'); }};
+    await h.default.start(h.api);
+    const session=h.test.getSession();
+    session.question='3x + 2y = 16\n2x - y = 3';
+    assert.equal(await h.test.solveAI(session), 'x = 22/7, y = 23/7');
+    assert.equal(session.result, 'x = 22/7, y = 23/7');
+    assert.equal(calls.length, 0);
+    h.default.stop();
+});
+
 test('Nano solve uses the native bridge without a key or any cloud AI request', async () => {
     const h=harness({fetch:()=>{throw Error('Cloud inference must not be used');}}),calls=[];
     h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{calls.push([name,args]);return {phase:'done',jobId:'job-1',answer:'x = 3',availability:'ready'};}};
