@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const source = fs.readFileSync(path.join(__dirname, '../plugins/math-ai/index.js'), 'utf8');
 function load(extra = {}) {
     const context = { setTimeout, clearTimeout, setInterval, clearInterval, AbortController, ...extra };
-    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, endpointOf, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
+    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, endpointOf, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
     return vm.runInNewContext(code, context);
 }
 function harness(extra = {}) {
@@ -22,7 +22,10 @@ function harness(extra = {}) {
             lookupModule: props => props.includes('dispatchToLastSubscribed') ? [{ dispatchToLastSubscribed: (...args) => inserted.push(args) }] : [] } },
             discord: { utils: { modules: { finders: { getModuleWithImportedPath: (p, fn) => { callbacks.set(p, fn); return () => callbacks.delete(p); } } } },
                 flux: { Stores: { SelectedChannelStore: { getChannelId: () => draft.channel }, UserStore: { getCurrentUser: () => ({ id: draft.account }) }, DraftStore: { getDraft: () => draft.text } } } },
-            patcher: { after: (holder, key, hook) => { const original = holder[key]; holder[key] = (...args) => hook(original(...args)); const remove = () => { holder[key] = original; }; patches.push(remove); return remove; } } } };
+            patcher: {
+                after: (holder, key, hook) => { const original = holder[key]; holder[key] = (...args) => hook(original(...args)); const remove = () => { holder[key] = original; }; patches.push(remove); return remove; },
+                instead: (holder,key,hook) => {const original=holder[key];holder[key]=function(...args){return hook.call(this,args,original);};return()=>{holder[key]=original;};}
+            } } };
     return { ...load(extra), api, callbacks, removers, saved, patches, draft, inserted, React };
 }
 test('scientific expressions, precedence, real domains, DEG/RAD and precision', () => {
@@ -46,7 +49,7 @@ test('rejects code, invalid domains, malformed expressions and excessive work', 
 });
 test('settings strip keys, questions and answer history; endpoint validation', () => {
     const { settingsOf, endpointOf } = load().test;
-    assert.deepEqual(Object.keys(settingsOf({ key:'secret', question:'private', history:[] })).sort(),['angle','currency','endpoint','inline','model','steps']);
+    assert.deepEqual(Object.keys(settingsOf({ key:'secret', question:'private', history:[] })).sort(),['angle','autoSend','currency','endpoint','inline','model','steps']);
     assert.equal(endpointOf('https://api.openai.com/v1/chat/completions'),'https://api.openai.com/v1/chat/completions');
     for (const url of ['http://host/v1','https://user:pass@host/v1','https://host/path?key=secret','https://host/path#secret','https://host/\\evil']) assert.throws(() => endpointOf(url));
 });
@@ -100,7 +103,7 @@ test('AI timeout and cancel settle stalled fetch/body and stop clears all sessio
     }
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@1.1.1.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@1.2.0.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -109,7 +112,7 @@ test('packaged plugin starts, retains settings access, and saves no API key from
     const nodes=[]; function visit(n){if(Array.isArray(n))n.forEach(visit);else if(n&&typeof n==='object'){nodes.push(n);visit(n.props?.children);}} visit(rendered);
     const saveAngle=nodes.find(n=>n.props?.accessibilityLabel==='RAD'); assert.ok(saveAngle); saveAngle.props.onPress();
     await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['angle','currency','endpoint','inline','model','steps']);
+    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['angle','autoSend','currency','endpoint','inline','model','steps']);
     packaged.default.stop(); for(const fn of h.removers)fn();
 });
 
@@ -216,4 +219,43 @@ test('transparent wrappers keep their type and unrelated siblings; unsupported a
     const api={unscoped:{react:{React:h.React,ReactNative:RN}}};
     assert.equal(h.test.Composer({api,session:{active:true,settings:{inline:false}},children:provider}),provider);
     assert.equal(h.test.Composer({api,session:{active:false,settings:{inline:true}},children:provider}),provider);
+});
+test('normal send calculates whole scientific expressions, basic math in prose, and offline units', () => {
+    const solve=load().test.solveOutgoing;
+    for(const [input,result] of [['2+2','4'],['= 2+2','4'],['2(3+4)','14'],['2^3^2','512'],['5!','120'],
+        ['sin(30)','0.5'],['√(81)','9'],['∛(27)','3'],['3²+2³','17'],['ncr(10,3)','120'],['2π','6.2831853071796'],
+        ['pi/2','1.5707963267949'],['e^0','1'],['τ/2','3.1415926535898'],['= 5 ft in cm','152.4 cm'],['5 ft in cm','152.4 cm'],
+        ['The answer is 2+2!','The answer is 2+2!'],['I got 2+2 today','I got 4 today'],['2+2 and 3*4','4 and 12'],
+        ['Try 8÷2 please','Try 4 please'],['2+2, then 1/0','4, then 1/0']])assert.equal(solve(input),result,input);
+    assert.equal(solve('cos(pi)','RAD'),'-1');assert.equal(solve('ans*2','DEG',7),'14');
+});
+test('send-time solving preserves literal text, dates, mentions, URLs, equations and invalid input', () => {
+    const solve=load().test.solveOutgoing;
+    for(const text of ['hello world','753962426407452713','+65 1234 5678','2026-11-03','10/11/2026','1-2-3','2+2 = 4',
+        '`2+2`','```js\n2+2\n```','```\n2+2','https://example.com/2+2','<@123456789>','[2+2](https://example.com)',
+        'item2+2','2+2cm','£2+2','sqrt(-1)','sqrt(2+2','1/0','2+','5 5+2','= 10 USD to SGD','10 USD to SGD','x+2=3'])
+        assert.equal(solve(text),text,text);
+    assert.equal(solve('Keep `2+2`, but solve 3+4 please'),'Keep `2+2`, but solve 7 please');
+});
+test('send hook forwards exactly one native send with its original receiver, metadata, options and return value', async () => {
+    const h=harness();await h.default.start(h.api);const calls=[],answer=Promise.resolve('sent');
+    const actions={sendMessage(...args){calls.push({receiver:this,args});return answer;},revealMessage(){}};
+    const original=actions.sendMessage;const connect=h.callbacks.get('actions/MessageActionCreators.tsx');connect({default:actions});connect(actions);
+    const msg={content:'2+2',attachments:[{id:'one'}],allowedMentions:{parse:[]},nonce:'123'},options={tts:false};
+    assert.equal(actions.sendMessage('123',msg,options),answer);assert.equal(calls.length,1);assert.equal(calls[0].receiver,actions);
+    assert.equal(calls[0].args[1].content,'4');assert.equal(msg.content,'2+2');assert.equal(calls[0].args[1].attachments,msg.attachments);
+    assert.equal(calls[0].args[1].allowedMentions,msg.allowedMentions);assert.equal(calls[0].args[2],options);
+    const s=h.test.getSession();assert.equal(s.sendReady,true);s.settings.autoSend=false;
+    actions.sendMessage('123',msg,options);assert.equal(calls[1].args[1],msg);s.settings.autoSend=true;
+    const ordinary={content:'hello'};actions.sendMessage('123',ordinary);assert.equal(calls[2].args[1],ordinary);
+    h.default.stop();assert.equal(actions.sendMessage,original);actions.sendMessage('123',msg);assert.equal(calls[3].args[1],msg);
+});
+test('expanded scientific keys include roots, powers, inverse/hyperbolic trig, logs and sign change', async () => {
+    const h=harness();await h.default.start(h.api);const s=h.test.getSession();
+    const panel=h.default.SettingsComponent({api:h.api});const tree=panel.type(panel.props),nodes=flat(tree);
+    for(const label of ['x²','x³','xʸ','√','∛','ⁿ√','sin⁻¹','sinh','asinh','log₂','10ˣ','eˣ','1/x','nCr','nPr','τ','±','EE'])
+        assert.ok(nodes.some(n=>n.props?.accessibilityLabel===label),label);
+    s.question='3';nodes.find(n=>n.props?.accessibilityLabel==='x²').props.onPress();assert.equal(s.question,'3²');
+    nodes.find(n=>n.props?.accessibilityLabel==='±').props.onPress();assert.equal(s.question,'-(3²)');
+    assert.equal(h.test.calculate(s.question),-9);assert.equal(h.test.calculate('asinh(0)+acosh(1)+atanh(0)'),0);h.default.stop();
 });

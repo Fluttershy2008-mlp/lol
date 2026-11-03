@@ -1,6 +1,6 @@
 **More Alts! stable13:** Added account-specific **Re-sign in** when Discord rejects a saved session. Password and two-factor authentication errors are now explained separately, and the plugin never deletes an expired account automatically. Only More Alts! is promoted to stable13; all other plugin versions remain unchanged. QR login stays removed. Keep your plugin data when updating.
 
-**Math AI & Scientific Calculator 1.1.1**: fixes the inline preview being covered by the floating chat box. type `= 5x5`, `= 5 ft in cm` or `= 10 USD to SGD` for a live answer above chat. The ∑ icon now matches native button sizing. For the full panel, paste a problem into the chat box, tap **∑**, then choose **Calculate** or **AI solve**. Includes offline scientific functions, DEG/RAD, working steps, copy and draft insertion. AI requires your own API key in AI setup. Also available in **Settings → Valenced → Math AI**. [Setup and examples](plugins/math-ai/README.md).
+**Math AI & Scientific Calculator 1.2.0**: type `2+2` and press Discord’s normal Send button to send `4`. Solve when sending is enabled by default, with its own toggle. The scientific keypad now includes more powers, roots, trig, logs, combinatorics and symbol options. Inline previews, units and dated currency conversions remain available. [Setup and examples](plugins/math-ai/README.md).
 
 # Fluttershy's Valenced plugins
 

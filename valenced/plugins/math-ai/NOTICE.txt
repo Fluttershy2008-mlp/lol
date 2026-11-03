@@ -10,3 +10,7 @@ No physical Android device testing has been performed.
 Inline currency rates: Frankfurter v2 public API (https://frankfurter.dev/).
 Only currency codes are sent. Displayed dates describe the published rates.
 The sigma icon is an original geometric image drawn for this plugin.
+
+Version 1.2.0 adds independently implemented offline send-time solving inspired
+by mlemception Math. Basic arithmetic fragments in prose and whole scientific
+expressions are supported; literals and invalid expressions are preserved.

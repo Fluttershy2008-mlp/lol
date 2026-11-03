@@ -4,11 +4,21 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
-## Inline Calculator (1.1.1)
+## Solve when sending (1.2.0)
+
+Type `2+2` in the normal chat box and press Discord’s usual Send button: your message is sent as `4`. No leading `=` or extra calculator button is needed. **Solve when sending** is ON by default and can be turned off independently of inline previews in Math AI settings.
+
+Scientific examples: `sin(30)` → `0.5` in DEG, `2^3^2` → `512`, `5!` → `120`, `3²+2³` → `17`, `sqrt(81)` → `9`, and `5 ft in cm` → `152.4 cm`. Simple arithmetic embedded in text also works, e.g. `I got 2+2 today` → `I got 4 today`.
+
+The scientific panel now has extra keys for square/cube/general powers, square/cube/nth roots, inverse and hyperbolic trig (including asinh/acosh/atanh), log₂/log₁₀/ln, 10ˣ/eˣ, reciprocal, absolute value, factorial, nCr/nPr, remainder, floor/ceil/round, π/τ/e, scientific exponent EE, ANS and sign change. Functions use parentheses; binary functions such as `root(3,27)` and `ncr(10,3)` need a comma.
+
+Send-time solving is synchronous and offline. It never calls AI or an exchange-rate service, never starts another send, and preserves attachments, mentions and send options. Plain numbers, dates, code, links, mentions, equations, unsupported or invalid expressions are kept. Currency conversions stay in the preview; copy their dated result when needed. Disabling or stopping the plugin restores ordinary sending.
+
+## Inline Calculator
 
 Version 1.1.1 fixes the preview being covered by Discord’s floating input. The preview now shares the input’s native layout root, so its height is included above the existing controls. The input keeps its own positioning, animation and capsule styling. No fixed height is imposed on the preview.
 
-Type `=` at the start of your chat draft to show a live answer above the message box. Tap the answer pill to copy it. Normal text and sent messages remain unchanged. Both inline previews and currency lookups have separate ON/OFF controls in Math AI settings.
+Type `=` at the start of your chat draft to show a live answer above the message box. Tap the answer pill to copy it. Normal text stays unchanged; Solve when sending rewrites recognised maths only when you press Send. Both inline previews and currency lookups have separate ON/OFF controls in Math AI settings.
 
 - `= 5x5` → `= 25`
 - `= 12 * 4.5` → `= 54`
@@ -48,7 +58,7 @@ AI answers can be wrong: review assumptions, units and working. Choose whether t
 
 ## Compatibility and validation
 
-Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. No automatic send-time arithmetic rewrite is installed.
+Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. Automatic send-time solving is controlled by the separate Solve when sending switch.
 
 Automated tests cover live draft previews, unit and currency conversions, cache/cancellation behaviour, native icon sizing, the parser, AI request/response/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. Physical Samsung/Android testing and live paid AI requests have not been performed.
 

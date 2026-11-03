@@ -1,7 +1,7 @@
 (() => {
     'use strict';
     const SIGMA_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAEpUlEQVR4nO2dzW4cRRDH/7XrjZGTB8ohBHEKkjFC8ABceAdOyDlx8EvAlQOKYhuJG8Rw4CF4Aq4kIvZ+/Dh0dXb9gWd3ZpzuWddPGlmWPa2equ7pf1X3dEtBEARBEARBEATBe8X6KggYSxr1VV7FzM1sUboSQU906gGASZKZATyT9FjSQtvZE/Jz/WZmr4BRHz1hp+2NbvyRpBHwk6SDrpUZCEeSXkkaKzmlE60dIMnMbA68UDL+vI8KVcxU0kTS6z4LbeUAYOzG/0TJ+FMva9xn5Spkop5fr20Ly/c91bLV96ao7hN9eDMM34G2Dsit/kzJAduoet4LrQzn7/+xmf2ipSKYtSiKAV690qnlAiNJ3yoZf0ebV9AGdE10B729tQxd6QW/A59L+lHSAy9znXFhIelvSY80DPmaG9m/fRbaeQAFds3sHDiU9FzSuaTdhtsWSg/0laQXkvb895oHdJTqd25m56Ur8w7AgAnwEDglccHtLIA58BZ4XPoZStJLiwPM80FjSS8l7StFxrcFZrlL/yHpYy3Hj6pfR2bW+0DcC8DIrzFw4i181tAT8t9P/b5RTvAFLXBVJGAPeOPGnTc4Ib+uToEdv8IJbVlpyfvewucbOOHYy5iUfo5BQxoLtOIESAPvOk448HvDCV3IBnQnvHYD3+aEBTD1a3+1jKAlwK7/PHQjv23oBVmezlacsO0p7ruDdjFCHjNmwBMvp8vE0f0GVzSkwTk7oUmeTv3nGctBPTKubSFihPIQMUJ5iBihPESMUB4iRigPESOUhYgRykPECOUhYoTyEDFCeYgYoTz0EyOEMuoC3WKET70nhRO6wOYxQn5V/YOPBcR40B5ujhGaxoOZO+qZlzGIXlClfva1NzMzeyPpC6Vlj+j2NUMLpRV5H/nvVT7bVaqtpC/0emBmF5J+UFro1bQoqs5FU0OE64po0TAYZ+k6qFdQleD5HeDJimHXMf6ffl+1Pfsq1VXUjbfwFvydlp+DNqmakaS/SAoqFFAbXP3kvNC6ybnc+k+AXSIv1A43fs7pbJKehpQ/2vNyquvVg4BlBHy8gfHfTdDknlP6OQbJivEP1jR+HpBjdqwrXM795JxOU+7ngpQnivnhLnBd6zfJTVjmhQ793qbv0YKb4Gatv8kkzENSvigUz6ZweRryzI06vWbuy1yahvRywvibQnetHxPxbSG0flkIrV8OQuuXg9D65SC0fjkIrV8OQuuXg9D65SC0flkIrV8OQuuXg9D6rejl8x7S5n35A7qXurzb4P8xV9qJ8MjMfgYeSTofgBPqOj+Adlo//9/3petfmj7OD8jXr5I+1HIvuFtvVdrw+0jShf9/XvtT6/LCOzk/oLUDWJ4fIK2/Ud82cGRm3wATM5t2LayP8wOOlYyf99ffhJnqbfFXqf78gDaD59C+8a36/ICgBRHuF6aP8wNyGUN5l1dFl/MDRn5+wInSuzFvyF16f/97c34Anrf5UskJYy23rt/Gq7rzAwAWkhZm9hnp06Cnkr6W9EFfFayIOs8PuIrndLZxcK/z/IAMaRZraLq+OHfRA7Z6Drfa8wOCIAiCIAiCIBgM/wHBRUp2UjlY0wAAAABJRU5ErkJggg==';
-    const DEFAULTS = { angle: 'DEG', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4.1-mini', steps: true, inline: true, currency: true };
+    const DEFAULTS = { angle: 'DEG', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4.1-mini', steps: true, inline: true, currency: true, autoSend: true };
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const listeners = new Set();
     let current, writes = Promise.resolve();
@@ -12,7 +12,7 @@
         if (typeof source !== 'string' || !source.trim()) throw new Error('Enter an expression first.');
         if (source.length > 2000) throw new Error('Expression is too long (maximum 2,000 characters).');
         const text = source.toLowerCase().replace(/(\d|\)|!|%)\s*x\s*(?=[\d.(])/g, '$1*').replace(/[×·]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-')
-            .replace(/π/g, 'pi').replace(/√/g, 'sqrt').replace(/²/g, '^2').replace(/³/g, '^3').replace(/\*\*/g, '^');
+            .replace(/π/g, 'pi').replace(/τ/g, 'tau').replace(/∛/g, 'cbrt').replace(/√/g, 'sqrt').replace(/²/g, '^2').replace(/³/g, '^3').replace(/\*\*/g, '^');
         const tokens = []; let at = 0, depth = 0, i = 0;
         while (at < text.length) {
             if (/\s/.test(text[at])) { at++; continue; }
@@ -32,7 +32,7 @@
         const unary = { sin: n => Math.sin(toRad(n)), cos: n => Math.cos(toRad(n)),
             tan: n => { if (Math.abs(Math.cos(toRad(n))) < 1e-14) throw new Error('tan is undefined at this angle.'); return Math.tan(toRad(n)); },
             asin: n => fromRad(Math.asin(n)), acos: n => fromRad(Math.acos(n)), atan: n => fromRad(Math.atan(n)),
-            sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh, sqrt: Math.sqrt, cbrt: Math.cbrt,
+            sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh, asinh: Math.asinh, acosh: Math.acosh, atanh: Math.atanh, sqrt: Math.sqrt, cbrt: Math.cbrt,
             ln: Math.log, log: Math.log10, log10: Math.log10, log2: Math.log2, exp: Math.exp,
             abs: Math.abs, floor: Math.floor, ceil: Math.ceil, round: Math.round, fact: factorial };
         const binary = { pow: Math.pow, mod: (a, b) => a % b, root: (n, x) => { if (!n) throw new Error('Root degree cannot be zero.'); return x < 0 && Number.isInteger(n) && Math.abs(n % 2) === 1 ? -Math.pow(-x, 1 / n) : Math.pow(x, 1 / n); },
@@ -44,6 +44,7 @@
                 const t = tokens[i++];
                 if (t && /^(?:\d|\.)/.test(t)) return finite(Number(t));
                 if (t === 'pi') return Math.PI;
+                if (t === 'tau') return 2 * Math.PI;
                 if (t === 'e') return Math.E;
                 if (t === 'ans') return finite(ans);
                 if (Object.hasOwn(unary, t ?? '') || Object.hasOwn(binary, t ?? '')) {
@@ -79,6 +80,42 @@
         return value;
     }
     const format = n => String(Number(n.toPrecision(14)));
+    function solveOutgoing(content, angle = 'DEG', ans = 0) {
+        if (typeof content !== 'string' || !content.trim() || content.length > 6000) return content;
+        const text = content.trim(), explicit = /^=(?!=)/.test(text), query = explicit ? text.replace(/^=\s*/, '') : text;
+        // A bare number/ID, date, phone number, equation, code or URL is not an
+        // instruction to calculate. Scientific expressions are tried whole.
+        const dateLike = /^\+?\d{1,4}(?:[-/]\d{1,4}){2,}$/;
+        const mathLike = /[\d)!%][ \t]*[+\-*/÷×^x][ \t]*(?:[+\-]?[\d.(]|[a-zτπ√∛])/i.test(query)
+            || /(?:[a-z]+\(|[√∛]|\d[!%²³]|\d[ \t]*(?:π|τ|\bpi\b|\btau\b)|(?:\b(?:pi|tau|ans|e)|[πτ])[ \t]*[+\-*/÷×^]|\s+(?:to|in)\s+)/i.test(query);
+        const mathWords = new Set('sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt ln log log10 log2 exp abs floor ceil round fact pow mod root ncr npr pi tau e ans'.split(' '));
+        const wholeExpression = mathLike && /^[\da-z\s.+\-*/÷×^()!%,πτ√∛²³−–]+$/i.test(query)
+            && (query.match(/[a-z]+\d*/gi) ?? []).every(word => mathWords.has(word.toLowerCase()));
+        if ((explicit || mathLike) && !/[`<>@#:$£€]|https?:\/\//i.test(query)
+            && (explicit || !dateLike.test(query.replace(/[ \t]/g, ''))) && !/\d[ \t]+\d/.test(query)) {
+            try {
+                const result = inlineAnswer('= ' + query, angle, ans);
+                if (result && result.kind !== 'currency') return result.text;
+            } catch { /* Invalid math is sent unchanged, never blocked. */ }
+        }
+        if (explicit || wholeExpression) return content;
+        // Basic arithmetic can also appear inside prose, like the original
+        // Math plugin. Preserve literal spans and require clear boundaries.
+        const literals = /```[\s\S]*?(?:```|$)|`[^`\n]*(?:`|$)|https?:\/\/\S+|<[^>\n]+>|!?\[[^\]\n]*\]\([^\)\n]*\)/g;
+        const numbers = /[+\-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[ \t]*[+\-*/÷×][ \t]*[+\-]?(?:\d+(?:\.\d+)?|\.\d+))+/g;
+        const replace = plain => plain.replace(numbers, (match, offset) => {
+            const left = plain[offset - 1] ?? '', right = plain[offset + match.length] ?? '';
+            if (/[\p{L}\p{N}_.,:/\\#@$€£%=+\-*/÷×^~]/u.test(left)
+                || /[\p{L}\p{N}_:/\\#@$€£%=+\-*/÷×^~!°]/u.test(right)
+                || /^[ \t]*=/.test(plain.slice(offset + match.length)) || dateLike.test(match.replace(/[ \t]/g, ''))) return match;
+            try { return format(calculate(match, angle, ans)); } catch { return match; }
+        });
+        let result = '', cursor = 0;
+        for (const literal of content.matchAll(literals)) {
+            result += replace(content.slice(cursor, literal.index)) + literal[0]; cursor = literal.index + literal[0].length;
+        }
+        return result + replace(content.slice(cursor));
+    }
     // Linear SI conversions plus affine temperature scales. Currency rates are
     // fetched separately; no exchange-rate numbers are bundled in the plugin.
     const UNITS = Object.create(null);
@@ -161,7 +198,7 @@
     function settingsOf(value) {
         return { angle: value?.angle === 'RAD' ? 'RAD' : 'DEG', endpoint: typeof value?.endpoint === 'string' ? value.endpoint.slice(0, 500) : DEFAULTS.endpoint,
             model: typeof value?.model === 'string' ? value.model.slice(0, 100) : DEFAULTS.model, steps: value?.steps !== false,
-            inline: value?.inline !== false, currency: value?.currency !== false };
+            inline: value?.inline !== false, currency: value?.currency !== false, autoSend: value?.autoSend !== false };
     }
     function endpointOf(value) {
         const s = value.trim();
@@ -243,7 +280,7 @@
         const U = api.unscoped, F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const session = { api, active: true, settings: settingsOf(api.jsonStorage.cache), key: '', question: '', result: '', resultKind: '',
             error: '', notice: '', ans: 0, history: [], visible: false, busy: false, removers: [], account: null, channel: null,
-            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null };
+            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null, sendReady: false };
         current = session; api.cleanup(() => stop(session));
         const data = api.jsonStorage.loaded ? api.jsonStorage.cache : await api.jsonStorage.get();
         if (!session.active) return;
@@ -288,6 +325,25 @@
             if (typeof remove === 'function') session.removers.push(remove);
         };
         const patched = new WeakSet();
+        const sending = new WeakSet();
+        const acceptSending = mod => {
+            for (const actions of [mod?.default, mod]) {
+                if (!actions || typeof actions.sendMessage !== 'function' || sending.has(actions)) continue;
+                sending.add(actions);
+                session.removers.push(U.patcher.instead(actions, 'sendMessage', function(args, original) {
+                    if (!session.active || !session.settings.autoSend || typeof args[1]?.content !== 'string')
+                        return Reflect.apply(original, this, args);
+                    const content = solveOutgoing(args[1].content, session.settings.angle, session.ans);
+                    const next = content === args[1].content ? args : [args[0], { ...args[1], content }, ...args.slice(2)];
+                    return Reflect.apply(original, this, next);
+                }));
+                session.sendReady = true; changed();
+            }
+        };
+        watch('actions/MessageActionCreators.tsx', acceptSending);
+        acceptSending(byProps('sendMessage', 'revealMessage'));
+        const removeSendWatcher = optional(() => F.getModules(F.filters.withProps('sendMessage', 'revealMessage'), value => { if (session.active) acceptSending(value); }));
+        if (typeof removeSendWatcher === 'function') session.removers.push(removeSendWatcher);
         watch('modules/chat_input/native/action_buttons/ChatInputActionButton.tsx', mod => { session.ActionButton = mod.default; changed(); });
         watch('modules/chat_input/native/ChatInput.tsx', mod => {
             let holder = mod.default, key = 'type';
@@ -477,20 +533,35 @@
             catch { session.error = 'Clipboard unavailable. Long-press the answer to copy it.'; }
             if (session.active) changed();
         }
-        const keys = [ ['7','8','9','÷','('], ['4','5','6','×',')'], ['1','2','3','-','^'], ['0','.','π','+','%'],
-            ['sin(','cos(','tan(','sqrt(','!'], ['asin(','acos(','atan(','ln(','log('], ['e','ans','ncr(','npr(',','] ];
+        const keys = [
+            [['7','7'],['8','8'],['9','9'],['÷','÷'],['(','(']],
+            [['4','4'],['5','5'],['6','6'],['×','×'],[')',')']],
+            [['1','1'],['2','2'],['3','3'],['−','-'],['xʸ','^']],
+            [['0','0'],['.','.'],['π','π'],['+','+'],['%','%']],
+            [['x²','²'],['x³','³'],['√','sqrt('],['∛','cbrt('],['ⁿ√','root(']],
+            [['sin','sin('],['cos','cos('],['tan','tan('],['ln','ln('],['log₁₀','log(']],
+            [['sin⁻¹','asin('],['cos⁻¹','acos('],['tan⁻¹','atan('],['log₂','log2('],['n!','!']],
+            [['sinh','sinh('],['cosh','cosh('],['tanh','tanh('],['10ˣ','10^('],['eˣ','exp(']],
+            [['asinh','asinh('],['acosh','acosh('],['atanh','atanh('],['|x|','abs('],['1/x','1/(']],
+            [['nCr','ncr('],['nPr','npr('],['mod','mod('],['τ','τ'],[',',',']],
+            [['floor','floor('],['ceil','ceil('],['round','round('],['e','e'],['ANS','ans']],
+            [['EE','e'],['±',null]],
+        ];
         return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 50 } },
             row([text('Math AI', { color: fg, fontSize: 27, fontWeight: '700' }), modal ? button('Close', () => { session.visible = false; changed(); }) : null]),
             text('Paste a question, then choose Calculate or AI solve. Answers appear here before you send them.'),
             row([button(session.settings.inline ? 'Inline Calculator: ON' : 'Inline Calculator: OFF', () => save('inline', !session.settings.inline)),
-                button(session.settings.currency ? 'Currency conversions: ON' : 'Currency conversions: OFF', () => save('currency', !session.settings.currency))]),
+                button(session.settings.currency ? 'Currency conversions: ON' : 'Currency conversions: OFF', () => save('currency', !session.settings.currency)),
+                button(session.settings.autoSend ? 'Solve when sending: ON' : 'Solve when sending: OFF', () => save('autoSend', !session.settings.autoSend))]),
+            text('Send 2+2 using Discord’s normal send button and your message becomes 4. Scientific expressions and offline unit conversions also work. This switch is independent of the inline preview and needs no AI key.'),
+            session.settings.autoSend && !session.sendReady ? text('Open a chat or fully restart Discord to connect automatic solving.') : null,
             text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Currency examples: = 10 USD to AUD or = 10 USD to SGD. Currency pairs use Frankfurter online; rates have a date and may differ from bank rates. Tap a result to copy it.'),
             input('Math question or expression', session.question, edit, { multiline: true, maxLength: 6000, editable: !session.busy, textAlignVertical: 'top', style: { minHeight: 90, padding: 12, borderRadius: 9, backgroundColor: card, color: fg, fontSize: 17, marginBottom: 10 } }),
             row([button('Load chat draft', () => session.readDraft(), session.busy), button('Paste question', () => { void paste(); }, session.busy),
                 button('Clear', () => edit(''), session.busy), button('⌫', () => edit(session.question.slice(0, -1)), session.busy)]),
             row(['DEG', 'RAD'].map(mode => button(mode, () => save('angle', mode), session.busy, session.settings.angle === mode))),
             ...keys.map((keys, i) => h(RN.View, { key: 'keys-' + i, style: { flexDirection: 'row', flexWrap: 'wrap' } },
-                keys.map(key => button(key, () => edit((session.question + key).slice(0, 6000)), session.busy)))),
+                keys.map(([label, value]) => button(label, () => edit((value === null ? session.question.trim() ? '-(' + session.question + ')' : '-' : session.question + value).slice(0, 6000)), session.busy)))),
             row([button('Calculate', calc, session.busy || !session.question.trim(), true),
                 button(session.busy ? 'Solving…' : 'AI solve', () => { void solveAI(session); }, session.busy || !session.question.trim(), true),
                 session.busy ? button('Cancel AI', () => cancel(session)) : null]),
