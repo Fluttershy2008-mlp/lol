@@ -247,6 +247,12 @@
         "section": "VALENCED",
         "title": "Math AI"
       }
+    },
+    "dev.fluttershy2008.double-tap-edit": {
+      "path": "valenced/plugins/double-tap-edit/index.js",
+      "sha256": "2cf759ea615f5fe1541037a1631b58813ddee36a472ed2c3bcf7650edbaef73a",
+      "originalVersion": "1.0.0",
+      "kind": "native-plugin"
     }
   }
 }

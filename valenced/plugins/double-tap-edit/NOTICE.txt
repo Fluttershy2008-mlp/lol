@@ -1,0 +1,4 @@
+Double Tap Edit 1.0.0
+Created for fluttershy_simper67.
+Uses the Valenced plugin API and Discord's native startEditMessage action.
+No Discord message content is sent to an external service.

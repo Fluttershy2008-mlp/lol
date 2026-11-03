@@ -95,6 +95,9 @@
         "title": "Math AI",
         "icon": "ScienceIcon"
       }
+    },
+    "double-tap-edit": {
+      "path": "valenced/plugins/double-tap-edit"
     }
   },
   "nativeThemes": {

@@ -398,6 +398,31 @@
         "Vencord contributors [original CustomRPC]"
       ]
     },
+    "dev.fluttershy2008.double-tap-edit": {
+      "versions": {
+        "1.0.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.double-tap-edit@1.0.0.zip",
+          "sha256": "c47a82beffbe9f02f820bfa282b05544d6b2cd78e83b2e5db84bd9a949eb8b84",
+          "size": 5702,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0",
+        "beta": "1.0.0"
+      },
+      "name": "Double Tap Edit",
+      "description": "Double-tap your own message to open Discord’s normal text editor. Supports servers and DMs, with adjustable double-tap speed.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "PencilIcon"
+    },
     "dev.fluttershy2008.expression-cloner": {
       "versions": {
         "1.0.0-beta1": {
