@@ -1745,6 +1745,31 @@
       "author": "Fluttershy2008-mlp",
       "icon": "ic_sticker_24px"
     },
+    "dev.fluttershy2008.scrollbar": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.scrollbar@1.0.0-beta1.zip",
+          "sha256": "f2f7ae279b95e1233dba5898bdf2cac191c034210c015edb39009bfe85f2abfe",
+          "size": 5619,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Scrollbar",
+      "description": "Optional draggable side scrollbar for Discord message histories and other long lists. Position, thickness, colour and direction settings.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "ListIcon"
+    },
     "dev.fluttershy2008.server-leaver": {
       "versions": {
         "1.0.0-beta1": {
