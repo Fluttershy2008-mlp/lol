@@ -250,8 +250,8 @@
     },
     "dev.fluttershy2008.double-tap-edit": {
       "path": "valenced/plugins/double-tap-edit/index.js",
-      "sha256": "b34129f112436b2bde0dca1fa5838cc0ad26b19134d22dc4990f2a8c75629dc5",
-      "originalVersion": "1.0.1",
+      "sha256": "f3b8fa8d8d3e0fb835ed8ed328480c955cd747edb4a4ae271124cd4b165014d0",
+      "originalVersion": "1.1.0",
       "kind": "native-plugin"
     }
   }

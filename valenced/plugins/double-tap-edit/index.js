@@ -3,8 +3,7 @@
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const validId = value => typeof value === 'string' && /^\d{1,20}$/.test(value);
     const GESTURE = Symbol.for('dev.fluttershy2008.message-taps.v1');
-    const settingsOf = value => ({ enabled: value?.enabled !== false,
-        interval: [250, 350, 500].includes(value?.interval) ? value.interval : 350 });
+    const settingsOf = value => ({ enabled: value?.enabled !== false });
     let current;
     function stop(session) {
         if (!session?.active) return;
@@ -18,15 +17,12 @@
         const U = api.unscoped, { React, ReactNative: RN } = U.react;
         const F = U.modules.finders, S = U.discord.flux.Stores;
         const paths = U.discord.utils?.modules?.finders;
-        const session = { active: true, removers: [], settings: settingsOf(api.jsonStorage?.cache), pending: null, lastEdit: null };
+        const session = { active: true, removers: [], settings: settingsOf(api.jsonStorage?.cache), lastEdit: null };
         current = session;
         const live = () => current === session && session.active;
         const account = () => optional(() => S.UserStore.getCurrentUser()?.id);
         const selected = () => optional(() => S.SelectedChannelStore.getChannelId());
-        session.cancel = () => {
-            if (session.pending) clearTimeout(session.pending.timer);
-            session.pending = null;
-        };
+        session.cancel = () => { session.lastEdit = null; };
         api.cleanup(() => stop(session));
         const byProps = (...keys) => optional(() => F.lookupModule(F.filters.withProps(...keys), { initialize: false })[0]);
         function watchProps(keys, accept) {
@@ -110,24 +106,9 @@
             if (optional(() => handler?.isModalOrActionsheetObstructing?.())) { session.cancel(); return forward(); }
             const ref = eventRef(event);
             if (!ref) { session.cancel(); return forward(); }
-            optional(() => event?.persist?.());
             const key = keyOf(ref), now = Date.now();
-            if (session.lastEdit && keyOf(session.lastEdit) === key && now - session.lastEdit.at < session.settings.interval) return;
-            const previous = session.pending;
-            if (previous && previous.key === key && now - previous.at <= session.settings.interval) {
-                session.cancel(); edit(ref, handler); return;
-            }
-            if (previous) {
-                session.cancel();
-                if (resolve(previous.ref)) previous.forward();
-            }
-            const pending = { key, ref, at: now, forward };
-            pending.timer = setTimeout(() => {
-                if (session.pending !== pending) return;
-                session.pending = null;
-                if (resolve(ref)) forward();
-            }, session.settings.interval);
-            session.pending = pending;
+            if (session.lastEdit && keyOf(session.lastEdit) === key && now - session.lastEdit.at < 350) return;
+            edit(ref, handler);
         }
         const wrappers = new WeakMap();
         function wrapTap(original) {
@@ -242,19 +223,15 @@
             const next = settingsOf({ ...values, ...update });
             setValues(next);
             if (current?.active) { current.cancel(); current.settings = next; }
-            void api.jsonStorage.set(next, true).catch(() => optional(() => RN.ToastAndroid?.show('Could not save Double Tap Edit settings.', 0)));
+            void api.jsonStorage.set(next, true).catch(() => optional(() => RN.ToastAndroid?.show('Could not save Tap To Edit settings.', 0)));
         }
         return h(RN.ScrollView, { contentContainerStyle: { padding: 20, gap: 16 } },
-            h(RN.Text, { style: { color, fontSize: 24, fontWeight: '700' } }, 'Double Tap Edit'),
-            h(RN.Text, { style: { color, lineHeight: 21 } }, 'Double-tap the text of your own message to edit it. Tap Send when finished. Works in servers and DMs.'),
-            h(RN.Switch, { accessibilityLabel: 'Enable double-tap editing', value: values.enabled, onValueChange: enabled => save({ enabled }) }),
-            h(RN.Text, { style: { color } }, 'Double-tap speed'),
-            ...[250, 350, 500].map(interval => h(RN.Pressable, { key: interval, accessibilityRole: 'radio', accessibilityState: { checked: interval === values.interval },
-                onPress: () => save({ interval }), style: { padding: 14, borderWidth: 1, borderColor: color, borderRadius: 8 } },
-                h(RN.Text, { style: { color } }, ({ 250: 'Fast', 350: 'Normal', 500: 'Relaxed' })[interval] + (interval === values.interval ? ' ✓' : '')))),
-            h(RN.Text, { style: { color, lineHeight: 21 } }, 'Works with Quick Delete 1.2.2 or newer: keep “Tap for quick actions” enabled. A single tap opens Quick Actions after the double-tap interval; a double-tap opens the editor. Update both plugins and fully restart Discord.'));
+            h(RN.Text, { style: { color, fontSize: 24, fontWeight: '700' } }, 'Tap To Edit'),
+            h(RN.Text, { style: { color, lineHeight: 21 } }, 'Tap your own message once to open Editing Message. Tap Send when finished. Works in servers and DMs.'),
+            h(RN.Switch, { accessibilityLabel: 'Enable one-tap editing', value: values.enabled, onValueChange: enabled => save({ enabled }) }),
+            h(RN.Text, { style: { color, lineHeight: 21 } }, 'Keep Quick Delete 1.2.2 or newer enabled: your own text messages open the editor, while other messages use Quick Actions. Hold a message for Discord’s full menu.'));
     }
-    return { default: { jsonStorage: { load: true, default: { enabled: true, interval: 350 } }, start,
+    return { default: { jsonStorage: { load: true, default: { enabled: true } }, start,
         stop() { stop(current); }, SettingsComponent } };
 })()
 

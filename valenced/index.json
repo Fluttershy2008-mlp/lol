@@ -425,14 +425,27 @@
               "version": "*"
             }
           }
+        },
+        "1.1.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.double-tap-edit@1.1.0.zip",
+          "sha256": "8c0ed5bdbf032ae482e97bfb80cb75f203d724c180ae3d7be6778e7f4aca27a2",
+          "size": 6391,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.1",
-        "beta": "1.0.1"
+        "latest": "1.1.0",
+        "beta": "1.1.0"
       },
-      "name": "Double Tap Edit",
-      "description": "Double-tap your own message to open Discord’s normal text editor. Supports servers and DMs, with adjustable double-tap speed.",
+      "name": "Tap To Edit",
+      "description": "Tap your own message once to open Discord’s Editing Message composer. Supports servers and DMs, alongside Quick Actions on other messages.",
       "author": "fluttershy_simper67 <753962426407452713>",
       "icon": "PencilIcon"
     },

@@ -1,10 +1,10 @@
 {
   "format": 1,
   "id": "dev.fluttershy2008.double-tap-edit",
-  "name": "Double Tap Edit",
-  "description": "Double-tap your own message to open Discord’s normal text editor. Supports servers and DMs, with adjustable double-tap speed.",
+  "name": "Tap To Edit",
+  "description": "Tap your own message once to open Discord’s Editing Message composer. Supports servers and DMs, alongside Quick Actions on other messages.",
   "author": "fluttershy_simper67 <753962426407452713>",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "icon": "PencilIcon",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
