@@ -1,7 +1,7 @@
 (() => {
     'use strict';
     const SIGMA_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAEpUlEQVR4nO2dzW4cRRDH/7XrjZGTB8ohBHEKkjFC8ABceAdOyDlx8EvAlQOKYhuJG8Rw4CF4Aq4kIvZ+/Dh0dXb9gWd3ZpzuWddPGlmWPa2equ7pf1X3dEtBEARBEARBEATBe8X6KggYSxr1VV7FzM1sUboSQU906gGASZKZATyT9FjSQtvZE/Jz/WZmr4BRHz1hp+2NbvyRpBHwk6SDrpUZCEeSXkkaKzmlE60dIMnMbA68UDL+vI8KVcxU0kTS6z4LbeUAYOzG/0TJ+FMva9xn5Spkop5fr20Ly/c91bLV96ao7hN9eDMM34G2Dsit/kzJAduoet4LrQzn7/+xmf2ipSKYtSiKAV690qnlAiNJ3yoZf0ebV9AGdE10B729tQxd6QW/A59L+lHSAy9znXFhIelvSY80DPmaG9m/fRbaeQAFds3sHDiU9FzSuaTdhtsWSg/0laQXkvb895oHdJTqd25m56Ur8w7AgAnwEDglccHtLIA58BZ4XPoZStJLiwPM80FjSS8l7StFxrcFZrlL/yHpYy3Hj6pfR2bW+0DcC8DIrzFw4i181tAT8t9P/b5RTvAFLXBVJGAPeOPGnTc4Ib+uToEdv8IJbVlpyfvewucbOOHYy5iUfo5BQxoLtOIESAPvOk448HvDCV3IBnQnvHYD3+aEBTD1a3+1jKAlwK7/PHQjv23oBVmezlacsO0p7ruDdjFCHjNmwBMvp8vE0f0GVzSkwTk7oUmeTv3nGctBPTKubSFihPIQMUJ5iBihPESMUB4iRigPESOUhYgRykPECOUhYoTyEDFCeYgYoTz0EyOEMuoC3WKET70nhRO6wOYxQn5V/YOPBcR40B5ujhGaxoOZO+qZlzGIXlClfva1NzMzeyPpC6Vlj+j2NUMLpRV5H/nvVT7bVaqtpC/0emBmF5J+UFro1bQoqs5FU0OE64po0TAYZ+k6qFdQleD5HeDJimHXMf6ffl+1Pfsq1VXUjbfwFvydlp+DNqmakaS/SAoqFFAbXP3kvNC6ybnc+k+AXSIv1A43fs7pbJKehpQ/2vNyquvVg4BlBHy8gfHfTdDknlP6OQbJivEP1jR+HpBjdqwrXM795JxOU+7ngpQnivnhLnBd6zfJTVjmhQ793qbv0YKb4Gatv8kkzENSvigUz6ZweRryzI06vWbuy1yahvRywvibQnetHxPxbSG0flkIrV8OQuuXg9D65SC0fjkIrV8OQuuXg9D65SC0flkIrV8OQuuXg9D6rejl8x7S5n35A7qXurzb4P8xV9qJ8MjMfgYeSTofgBPqOj+Adlo//9/3petfmj7OD8jXr5I+1HIvuFtvVdrw+0jShf9/XvtT6/LCOzk/oLUDWJ4fIK2/Ud82cGRm3wATM5t2LayP8wOOlYyf99ffhJnqbfFXqf78gDaD59C+8a36/ICgBRHuF6aP8wNyGUN5l1dFl/MDRn5+wInSuzFvyF16f/97c34Anrf5UskJYy23rt/Gq7rzAwAWkhZm9hnp06Cnkr6W9EFfFayIOs8PuIrndLZxcK/z/IAMaRZraLq+OHfRA7Z6Drfa8wOCIAiCIAiCIBgM/wHBRUp2UjlY0wAAAABJRU5ErkJggg==';
-    const DEFAULTS = { angle: 'DEG', steps: true, inline: true, currency: true, autoSend: true };
+    const DEFAULTS = { angle: 'DEG', steps: true, inline: true, currency: true, autoSend: true, aiSend: false };
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const listeners = new Set();
     let current, writes = Promise.resolve();
@@ -197,7 +197,16 @@
     }
     function settingsOf(value) {
         return { angle: value?.angle === 'RAD' ? 'RAD' : 'DEG', steps: value?.steps !== false,
-            inline: value?.inline !== false, currency: value?.currency !== false, autoSend: value?.autoSend !== false };
+            inline: value?.inline !== false, currency: value?.currency !== false, autoSend: value?.autoSend !== false, aiSend: value?.aiSend === true };
+    }
+    function saveSettings(session, key, value) {
+        if (!session.active) return;
+        if (key === 'aiSend' && value !== session.settings.aiSend) { session.sendEpoch++; cancel(session); }
+        session.settings = settingsOf({ ...session.settings, [key]: value }); changed();
+        const next = { ...session.settings };
+        writes = writes.catch(() => {}).then(() => session.api.jsonStorage.set(next, true)).catch(() => {
+            if (session.active) { session.error = 'Could not save settings.'; changed(); }
+        });
     }
     const NANO_PREFIX = 'dev.fluttershy2008.math-ai.nano.';
     async function nanoCall(session, action, args = []) {
@@ -211,7 +220,7 @@
         return value;
     }
     function cancel(session) { session?.request?.cancel(); }
-    async function runNano(session, setup = false) {
+    async function runNano(session, setup = false, options = {}) {
         if (!session?.active || session.busy) return;
         const question = session.question.trim();
         session.error = ''; session.notice = '';
@@ -228,7 +237,7 @@
         timer = setTimeout(() => job.cancel(), 20 * 60 * 1000);
         try {
             const response = await Promise.race([cancelled, (async () => {
-                let status = await nanoCall(session, setup ? 'setup' : 'solve', setup ? [] : [question, session.settings.angle, session.settings.steps]);
+                let status = await nanoCall(session, setup ? 'setup' : 'solve', setup ? [] : [question, session.settings.angle, options.steps ?? session.settings.steps]);
                 id = status.jobId;
                 if (job.cancelled || !session.active) { if (id) await nanoCall(session, 'cancel', [id]); throw new Error('Nano operation cancelled.'); }
                 while (session.active && !job.cancelled) {
@@ -250,6 +259,7 @@
                     if (typeof response.answer !== 'string' || !response.answer.trim() || response.answer.length > 16000) throw new Error('Nano returned no usable answer. Try a shorter question.');
                     session.result = response.answer.trim(); session.resultKind = 'Gemini Nano · on-device answer · check the working';
                     session.history.unshift({ question, result: session.result }); session.history.length = Math.min(10, session.history.length);
+                    return session.result;
                 }
             }
         } catch (error) { if (session.active && current === session) session.error = error.message || 'Could not finish the Nano operation.'; }
@@ -261,6 +271,60 @@
         }
     }
     async function solveAI(session) { return runNano(session, false); }
+    function sendSolved(session, receiver, args, original) {
+        args = [...args];
+        const message = { ...args[1] }, question = message.content.trim(), channel = args[0], account = session.user();
+        const fail = error => {
+            if (session.active) { session.error = error.message; session.visible = true; changed(); }
+            return Promise.reject(error);
+        };
+        if (session.pendingSend) {
+            const pending = session.pendingSend;
+            if (pending.channel === channel && pending.account === account && pending.content === message.content
+                && pending.nonce === message.nonce) return pending.promise;
+            return fail(new Error('An AI answer is already being prepared. Wait or cancel it first.'));
+        }
+        if (session.busy) return fail(new Error('Finish or cancel the current Nano operation before sending.'));
+        if (!question || question.length > 6000 || !account || !channel || session.selected() !== channel)
+            return fail(new Error('Open the original chat and enter a question from 1 to 6,000 characters.'));
+        // The explicit Sigma mode solves the entire question, never a partial
+        // arithmetic fragment inside a written problem.
+        let localAnswer;
+        try {
+            localAnswer = inlineAnswer('= ' + question.replace(/^=(?!=)\s*/, ''), session.settings.angle, session.ans);
+        } catch { /* Written questions and equations use Nano. */ }
+        if (localAnswer && localAnswer.kind !== 'currency')
+            return Reflect.apply(original, receiver, [channel, { ...message, content: localAnswer.text }, ...args.slice(2)]);
+        session.channel = channel; session.account = account; session.question = question;
+        const epoch = session.sendEpoch;
+        let moved = false;
+        const remove = session.subscribeDraft(() => {
+            if (session.selected() !== channel || session.user() !== account) { moved = true; cancel(session); }
+        });
+        const pending = { channel, account, content: message.content, nonce: message.nonce };
+        session.pendingSend = pending;
+        pending.promise = (async () => {
+            try {
+                const answer = await runNano(session, false, { steps: false });
+                if (!session.active || current !== session || moved || session.sendEpoch !== epoch || !session.settings.aiSend
+                    || session.selected() !== channel || session.user() !== account)
+                    throw new Error('AI send cancelled because the chat, account or auto-solve mode changed.');
+                if (!answer) throw new Error(session.error || 'AI solve was cancelled. Nothing was sent.');
+                if (answer.length > 1900) throw new Error('The AI answer is too long to send. Copy it from the calculator panel.');
+                session.notice = 'Sending AI answer…'; changed();
+                // Call the captured sender once with the captured chat and metadata.
+                const sent = await Reflect.apply(original, receiver, [channel, { ...message, content: answer }, ...args.slice(2)]);
+                if (session.active) { session.notice = 'AI answer sent.'; changed(); }
+                return sent;
+            } catch (error) {
+                if (session.active && current === session) { session.error = error.message || 'Could not send the AI answer.'; session.visible = true; changed(); }
+                throw error;
+            } finally {
+                remove(); if (session.pendingSend === pending) session.pendingSend = undefined;
+            }
+        })();
+        return pending.promise;
+    }
     function stop(session) {
         if (!session?.active) return;
         session.active = false; session.visible = false; cancel(session);
@@ -291,7 +355,7 @@
         const U = api.unscoped, F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const session = { api, active: true, settings: settingsOf(api.jsonStorage.cache), nanoAvailability: 'unknown', nanoMode: '', question: '', result: '', resultKind: '',
             error: '', notice: '', ans: 0, history: [], visible: false, busy: false, removers: [], account: null, channel: null,
-            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null, sendReady: false };
+            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null, sendReady: false, sendEpoch: 0 };
         current = session; api.cleanup(() => stop(session));
         const data = api.jsonStorage.loaded ? api.jsonStorage.cache : await api.jsonStorage.get();
         if (!session.active) return;
@@ -342,8 +406,10 @@
                 if (!actions || typeof actions.sendMessage !== 'function' || sending.has(actions)) continue;
                 sending.add(actions);
                 session.removers.push(U.patcher.instead(actions, 'sendMessage', function(args, original) {
-                    if (!session.active || !session.settings.autoSend || typeof args[1]?.content !== 'string')
+                    if (!session.active || typeof args[1]?.content !== 'string')
                         return Reflect.apply(original, this, args);
+                    if (session.settings.aiSend && args[1].content.trim()) return sendSolved(session, this, args, original);
+                    if (!session.settings.autoSend) return Reflect.apply(original, this, args);
                     const content = solveOutgoing(args[1].content, session.settings.angle, session.ans);
                     const next = content === args[1].content ? args : [args[0], { ...args[1], content }, ...args.slice(2)];
                     return Reflect.apply(original, this, next);
@@ -493,11 +559,13 @@
         useRefresh(React);
         if (!session.active) return null;
         const open = () => { if (!session.busy) session.readDraft(); session.visible = true; RN.Keyboard?.dismiss(); changed(); };
+        const toggle = () => saveSettings(session, 'aiSend', !session.settings.aiSend);
+        const label = 'Auto AI solve: ' + (session.settings.aiSend ? 'ON' : 'OFF');
         const IconComponent = ({ style } = {}) => h(RN.Image, { source: { uri: SIGMA_ICON },
-            resizeMode: 'contain', style: [{ width: 24, height: 24, tintColor: '#949CF7' }, style] });
+            resizeMode: 'contain', style: [style, { width: 24, height: 24, tintColor: session.settings.aiSend ? '#949CF7' : '#B5BAC1' }] });
         return h(React.Fragment, null,
-            session.ActionButton ? h(session.ActionButton, { accessibilityLabel: 'Math AI and scientific calculator', active: true, IconComponent, onPress: open })
-                : h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Math AI and scientific calculator', onPress: open,
+            session.ActionButton ? h(session.ActionButton, { accessibilityLabel: label, accessibilityHint: 'Tap to toggle. Hold to open the calculator.', accessibilityState: { selected: session.settings.aiSend }, active: session.settings.aiSend, IconComponent, onPress: toggle, onLongPress: open })
+                : h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label, accessibilityHint: 'Tap to toggle. Hold to open the calculator.', accessibilityState: { selected: session.settings.aiSend }, onPress: toggle, onLongPress: open,
                     style: { width: 40, height: 40, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } }, h(IconComponent)),
             h(RN.Modal, { visible: session.visible, animationType: 'slide', onRequestClose: () => { session.visible = false; changed(); } },
                 h(RN.SafeAreaView, { style: { flex: 1, backgroundColor: '#1E1F22' } },
@@ -520,9 +588,7 @@
             placeholder: label, placeholderTextColor: muted, autoCapitalize: 'none', autoCorrect: false,
             style: { color: fg, backgroundColor: card, padding: 12, borderRadius: 9, fontSize: 16, marginBottom: 10 }, ...extra });
         function save(key, value) {
-            session.settings = settingsOf({ ...session.settings, [key]: value }); changed();
-            const next = { ...session.settings };
-            writes = writes.catch(() => {}).then(() => api.jsonStorage.set(next, true)).catch(() => { if (session.active) { session.error = 'Could not save settings.'; changed(); } });
+            saveSettings(session, key, value);
         }
         function edit(value) { if (session.busy) return; session.question = value; session.result = ''; session.error = ''; session.notice = ''; changed(); }
         function calc() {
@@ -561,11 +627,13 @@
         return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 50 } },
             row([text('Math AI', { color: fg, fontSize: 27, fontWeight: '700' }), modal ? button('Close', () => { session.visible = false; changed(); }) : null]),
             text('Calculate offline, or use Gemini Nano on this device for an AI answer. No API key is needed. Review answers before sending.'),
+            button(session.settings.aiSend ? 'Auto AI solve: ON' : 'Auto AI solve: OFF', () => save('aiSend', !session.settings.aiSend), false, session.settings.aiSend),
+            text('Tap Σ in chat to turn Auto AI solve on or off. When ON, Discord Send solves your whole question and sends the answer. Simple expressions solve immediately; written questions open Math Nano and send after it returns. Hold Σ to open this calculator. Turn it OFF for normal chat.'),
             row([button(session.settings.inline ? 'Inline Calculator: ON' : 'Inline Calculator: OFF', () => save('inline', !session.settings.inline)),
                 button(session.settings.currency ? 'Currency conversions: ON' : 'Currency conversions: OFF', () => save('currency', !session.settings.currency)),
                 button(session.settings.autoSend ? 'Solve when sending: ON' : 'Solve when sending: OFF', () => save('autoSend', !session.settings.autoSend))]),
             text('Send 2+2 using Discord’s normal send button and your message becomes 4. Scientific expressions and offline unit conversions also work. This switch is independent of the inline preview and needs no AI key.'),
-            session.settings.autoSend && !session.sendReady ? text('Open a chat or fully restart Discord to connect automatic solving.') : null,
+            (session.settings.autoSend || session.settings.aiSend) && !session.sendReady ? text('Open a chat or fully restart Discord to connect automatic solving.') : null,
             text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Currency examples: = 10 USD to AUD or = 10 USD to SGD. Currency pairs use Frankfurter online; rates have a date and may differ from bank rates. Tap a result to copy it.'),
             input('Math question or expression', session.question, edit, { multiline: true, maxLength: 6000, editable: !session.busy, textAlignVertical: 'top', style: { minHeight: 90, padding: 12, borderRadius: 9, backgroundColor: card, color: fg, fontSize: 17, marginBottom: 10 } }),
             row([button('Load chat draft', () => session.readDraft(), session.busy), button('Paste question', () => { void paste(); }, session.busy),
@@ -597,3 +665,4 @@
     function SettingsComponent({ api }) { return api.unscoped.react.React.createElement(Panel, { api, session: current }); }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start, stop() { stop(current); }, SettingsComponent } };
 })()
+

@@ -49,7 +49,7 @@ test('rejects code, invalid domains, malformed expressions and excessive work', 
 });
 test('settings remove old cloud fields, keys, questions and answer history', () => {
     const { settingsOf } = load().test;
-    assert.deepEqual(Object.keys(settingsOf({ key:'secret', endpoint:'https://old.example/v1', model:'old-cloud-model', question:'private', history:[] })).sort(),['angle','autoSend','currency','inline','steps']);
+    assert.deepEqual(Object.keys(settingsOf({ key:'secret', endpoint:'https://old.example/v1', model:'old-cloud-model', question:'private', history:[] })).sort(),['aiSend','angle','autoSend','currency','inline','steps']);
 
 });
 test('chat button loads the draft, appends only on request and rejects channel/account changes', async () => {
@@ -108,7 +108,7 @@ test('Nano rejects a result from a different job instead of showing a stale answ
     assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.0.0.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.0.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -117,7 +117,7 @@ test('packaged plugin starts, retains settings access, and saves no API key from
     const nodes=[]; function visit(n){if(Array.isArray(n))n.forEach(visit);else if(n&&typeof n==='object'){nodes.push(n);visit(n.props?.children);}} visit(rendered);
     const saveAngle=nodes.find(n=>n.props?.accessibilityLabel==='RAD'); assert.ok(saveAngle); saveAngle.props.onPress();
     await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['angle','autoSend','currency','inline','steps']);
+    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['aiSend','angle','autoSend','currency','inline','steps']);
     packaged.default.stop(); for(const fn of h.removers)fn();
 });
 
@@ -195,7 +195,7 @@ test('Sigma uses Discord action button with a fixed-size image instead of font b
     const h=harness();await h.default.start(h.api);const s=h.test.getSession();
     function NativeActionButton(){}h.callbacks.get('modules/chat_input/native/action_buttons/ChatInputActionButton.tsx')({default:NativeActionButton});
     const tree=h.test.MathButton({api:h.api,session:s}), button=tree.props.children[0];assert.equal(button.type,NativeActionButton);
-    const icon=button.props.IconComponent({});assert.equal(icon.props.style[0].width,24);assert.equal(icon.props.style[0].height,24);
+    const icon=button.props.IconComponent({});assert.equal(icon.props.style.at(-1).width,24);assert.equal(icon.props.style.at(-1).height,24);
     assert.match(icon.props.source.uri,/^data:image\/png;base64,/);h.default.stop();
 });
 test('preview is inside the floating native layout, with an uncapped height and unchanged composer controls', () => {
@@ -264,3 +264,90 @@ test('expanded scientific keys include roots, powers, inverse/hyperbolic trig, l
     nodes.find(n=>n.props?.accessibilityLabel==='±').props.onPress();assert.equal(s.question,'-(3²)');
     assert.equal(h.test.calculate(s.question),-9);assert.equal(h.test.calculate('asinh(0)+acosh(1)+atanh(0)'),0);h.default.stop();
 });
+
+function connectSender(h) {
+    const sent=[];
+    const actions={sendMessage(...args){sent.push({receiver:this,args});return Promise.resolve('sent');},revealMessage(){}};
+    h.callbacks.get('actions/MessageActionCreators.tsx')({default:actions});
+    return {actions,sent};
+}
+test('Sigma tap toggles and persists AI mode; hold opens the calculator without toggling', async () => {
+    const h=harness();await h.default.start(h.api);const s=h.test.getSession();
+    assert.equal(s.settings.aiSend,false);
+    let b=h.test.MathButton({api:h.api,session:s}).props.children[0];
+    assert.equal(b.props.accessibilityLabel,'Auto AI solve: OFF');
+    b.props.onPress();assert.equal(s.settings.aiSend,true);assert.equal(s.visible,false);
+    await new Promise(r=>setImmediate(r));assert.equal(h.saved.at(-1).aiSend,true);
+    b=h.test.MathButton({api:h.api,session:s}).props.children[0];
+    assert.equal(b.props.accessibilityState.selected,true);b.props.onLongPress();
+    assert.equal(s.visible,true);assert.equal(s.settings.aiSend,true);assert.equal(s.question,h.draft.text);
+    b.props.onPress();assert.equal(s.settings.aiSend,false);h.default.stop();
+});
+test('AI Send solves the entire written question and sends only the answer once with metadata intact', async () => {
+    const h=harness({fetch:()=>{throw Error('No cloud request');}}),nano=[];
+    h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{nano.push([name,args]);return {phase:'done',jobId:'one',answer:'x = 3'};}};
+    await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;
+    const {actions,sent}=connectSender(h),msg={content:'Solve 2x + 3 = 9',attachments:[],nonce:'1',allowedMentions:{parse:[]}},options={tts:false};
+    const promise=actions.sendMessage('123',msg,options);assert.equal(sent.length,0);
+    assert.equal(actions.sendMessage('123',msg,options),promise);
+    msg.content='changed after send';assert.equal(await promise,'sent');assert.equal(sent.length,1);
+    assert.equal(sent[0].receiver,actions);assert.equal(sent[0].args[0],'123');assert.equal(sent[0].args[1].content,'x = 3');
+    assert.equal(sent[0].args[1].nonce,'1');assert.equal(sent[0].args[1].attachments,msg.attachments);
+    assert.equal(sent[0].args[1].allowedMentions,msg.allowedMentions);assert.equal(sent[0].args[2],options);
+    assert.deepEqual(Array.from(nano[0][1]),['Solve 2x + 3 = 9','DEG',false]);
+    assert.equal(nano.filter(c=>c[0].endsWith('.solve')).length,1);assert.equal(s.pendingSend,undefined);h.default.stop();
+});
+test('AI mode computes complete local expressions immediately and bypasses Nano even if offline mode is off', async () => {
+    const h=harness();await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;s.settings.autoSend=false;
+    h.api.unscoped.modules.native={callNativeMethod:()=>{throw Error('No Nano for local expression');}};
+    const {actions,sent}=connectSender(h);await actions.sendMessage('123',{content:'2+2'});
+    assert.equal(sent[0].args[1].content,'4');assert.equal(s.busy,false);h.default.stop();
+});
+test('AI mode does not partially replace sums inside word problems', async () => {
+    const h=harness();let question;
+    h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{if(name.endsWith('.solve'))question=args[0];return {phase:'done',jobId:'one',answer:'8 apples'};}};
+    await h.default.start(h.api);h.test.getSession().settings.aiSend=true;const {actions,sent}=connectSender(h);
+    await actions.sendMessage('123',{content:'I have 2+2 apples and double them. How many?'});
+    assert.equal(question,'I have 2+2 apples and double them. How many?');assert.equal(sent[0].args[1].content,'8 apples');h.default.stop();
+});
+test('missing Nano, inference failures and overlong output reject the send without sending raw questions', async () => {
+    for(const status of [null,{phase:'error',jobId:'one',error:'Nano unavailable'},{phase:'done',jobId:'one',answer:'x'.repeat(1901)}]){
+        const h=harness();if(status)h.api.unscoped.modules.native={callNativeMethod:async()=>status};
+        await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;const {actions,sent}=connectSender(h);
+        await assert.rejects(actions.sendMessage('123',{content:'Solve this equation x+1=2'}));
+        assert.equal(sent.length,0);assert.equal(s.visible,true);assert.ok(s.error);assert.equal(s.question,'Solve this equation x+1=2');
+        assert.equal(s.pendingSend,undefined);h.default.stop();
+    }
+});
+test('changing chat/account/mode, cancelling or stopping prevents late AI sends and removes subscriptions', async () => {
+    for(const change of ['chat','account','mode','cancel','stop']){
+        let finish;const subscriptions=new Set();const h=harness();
+        h.api.unscoped.modules.native={callNativeMethod:(name)=>name.endsWith('.solve')?new Promise(r=>finish=r):Promise.resolve({phase:'done'})};
+        for(const store of Object.values(h.api.unscoped.discord.flux.Stores)){store.addChangeListener=fn=>subscriptions.add(fn);store.removeChangeListener=fn=>subscriptions.delete(fn);}
+        await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;const {actions,sent}=connectSender(h);
+        const promise=actions.sendMessage('123',{content:'Solve x+1=2',nonce:'a'});const rejected=assert.rejects(promise);
+        if(change==='chat'){h.draft.channel='999';for(const fn of subscriptions)fn();h.draft.channel='123';}
+        if(change==='account'){h.draft.account='999';for(const fn of subscriptions)fn();h.draft.account='456';}
+        if(change==='mode')h.test.MathButton({api:h.api,session:s}).props.children[0].props.onPress();
+        if(change==='cancel')h.test.cancel(s);
+        if(change==='stop')h.default.stop();
+        finish({phase:'done',jobId:'one',answer:'x = 1'});await rejected;
+        assert.equal(sent.length,0,change);assert.equal(s.pendingSend,undefined);assert.equal(subscriptions.size,0);h.default.stop();
+    }
+});
+test('a different send is blocked during inference and normal sending works again with AI mode off', async () => {
+    let finish;const h=harness();h.api.unscoped.modules.native={callNativeMethod:name=>name.endsWith('.solve')?new Promise(r=>finish=r):Promise.resolve({phase:'done'})};
+    await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=true;const {actions,sent}=connectSender(h);
+    const first=actions.sendMessage('123',{content:'Solve x+1=2',nonce:'a'});
+    await assert.rejects(actions.sendMessage('123',{content:'Another question',nonce:'b'}),/already being prepared/);
+    finish({phase:'done',jobId:'one',answer:'x = 1'});await first;assert.equal(sent.length,1);
+    s.settings.aiSend=false;s.settings.autoSend=false;await actions.sendMessage('123',{content:'hello'});
+    assert.equal(sent[1].args[1].content,'hello');h.default.stop();
+});
+test('a synchronous local send failure is not retried through Nano', async () => {
+    const h=harness();await h.default.start(h.api);h.test.getSession().settings.aiSend=true;
+    const actions={sendMessage(){throw Error('Native send failed');},revealMessage(){}};
+    h.callbacks.get('actions/MessageActionCreators.tsx')(actions);
+    assert.throws(()=>actions.sendMessage('123',{content:'2+2'}),/Native send failed/);assert.equal(h.test.getSession().busy,false);h.default.stop();
+});
+

@@ -4,7 +4,20 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
-## Solve when sending (1.2.0)
+## Auto AI solve on Send (2.1.0)
+
+- **Tap Σ** to toggle **Auto AI solve ON/OFF**. Purple means ON; grey means OFF. The choice is saved, starts OFF for existing installs, and is also available in Math AI settings.
+- With **Auto AI solve ON**, type a math question in Discord and press the normal **Send** button. Complete expressions such as `2+2` send `4` immediately. Written questions and equations open the existing Math Nano companion; after it returns successfully, the plugin sends the answer to the original chat. The send request asks Nano for the answer without working steps.
+- **Hold Σ** to open the full scientific calculator and AI panel.
+- Turn Auto AI solve OFF for ordinary messages. The older offline **Solve when sending** switch remains independent; turn that off too to send literal arithmetic.
+
+Key-free AI still requires the Math Nano companion APK and a prepared, supported AICore model. Keep the companion screen open during inference. This release does not change the companion or the native bridge, so an existing companion installation can be kept. It cannot provide invisible background Nano inference.
+
+While an AI send is pending, repeat taps on the same request share one result; different sends are blocked. Cancelling, disabling Auto AI solve, stopping the plugin, or changing chat/account cancels that pending answer, including switching away and back. Errors or answers longer than 1,900 characters open the panel with the question/result and do not post the raw question. Native send failures are propagated without retrying. The original channel, attachments, mention policy, nonce and send options are retained. No chat history is read.
+
+AI answers are generated and sent after your Send press; check them for mistakes. The default OFF mode lets you choose which questions to solve.
+
+## Offline solve when sending (1.2.0)
 
 Type `2+2` in the normal chat box and press Discord’s usual Send button: your message is sent as `4`. No leading `=` or extra calculator button is needed. **Solve when sending** is ON by default and can be turned off independently of inline previews in Math AI settings.
 
@@ -12,7 +25,7 @@ Scientific examples: `sin(30)` → `0.5` in DEG, `2^3^2` → `512`, `5!` → `12
 
 The scientific panel now has extra keys for square/cube/general powers, square/cube/nth roots, inverse and hyperbolic trig (including asinh/acosh/atanh), log₂/log₁₀/ln, 10ˣ/eˣ, reciprocal, absolute value, factorial, nCr/nPr, remainder, floor/ceil/round, π/τ/e, scientific exponent EE, ANS and sign change. Functions use parentheses; binary functions such as `root(3,27)` and `ncr(10,3)` need a comma.
 
-Send-time solving is synchronous and offline. It never calls AI or an exchange-rate service, never starts another send, and preserves attachments, mentions and send options. Plain numbers, dates, code, links, mentions, equations, unsupported or invalid expressions are kept. Currency conversions stay in the preview; copy their dated result when needed. Disabling or stopping the plugin restores ordinary sending.
+The separate offline Solve when sending feature is synchronous and offline when Auto AI solve is OFF. It never calls AI or an exchange-rate service, never starts another send, and preserves attachments, mentions and send options. Plain numbers, dates, code, links, mentions, equations, unsupported or invalid expressions are kept. Currency conversions stay in the preview; copy their dated result when needed. Disabling or stopping the plugin restores ordinary sending.
 
 ## Inline Calculator
 
@@ -36,11 +49,11 @@ The ∑ icon uses a fixed 24×24 image in Discord's native ChatInputActionButton
 ## Use the full calculator and AI panel
 
 1. Paste the math problem into your normal Discord chat box without sending it.
-2. Tap **∑** beside the chat controls. It loads the current draft into the panel, removing a leading `=`.
+2. Hold **Σ** beside the chat controls. It loads the current draft into the panel, removing a leading `=`.
 3. Tap **Calculate** for an expression, or **AI solve** for an equation or written problem.
 4. Read the answer, then **Copy answer** or **Append answer to draft**. Review and send using Discord normally.
 
-The question can also be pasted or typed directly into the panel. Open it through **Settings → Valenced → Math AI** if your Discord version does not expose the chat button. The plugin never sends Discord messages automatically and does not read chat history.
+The question can also be pasted or typed directly into the panel. Open it through **Settings → Valenced → Math AI** if your Discord version does not expose the chat button. The panel only inserts or copies answers on request. Auto AI solve sends an answer only in response to your Discord Send press and does not read chat history.
 
 ## Scientific calculator
 
@@ -53,7 +66,7 @@ Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!
 Cloud AI configuration and API key fields have been removed. AI solve now uses Gemini Nano on the device through the **Math Nano** companion Android app. This release requires two installs:
 
 1. Install [Math Nano companion 1.0.0 APK](Math_Nano_Companion_v1.0.0.apk) on your phone.
-2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.0.0**, then fully close and reopen Discord to load the native bridge.
+2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.1.0**, then fully close and reopen Discord to load the native bridge.
 3. Open the plugin's **AI setup → Open Nano setup**. The companion checks whether Gemini Nano is ready, downloadable, downloading or unavailable.
 4. If offered, tap **Download / prepare Nano**, keep the screen open and allow the model to finish downloading. The model may be large and needs internet and storage for initial setup.
 5. Return to Valenced. Paste a question into the panel and tap **AI solve**. The companion opens in the foreground, solves locally, and returns the answer to the plugin for review, copying or appending.
@@ -70,8 +83,8 @@ SDK: `com.google.mlkit:genai-prompt:1.0.0-beta4`, with coroutines pinned to `1.1
 
 ## Compatibility and validation
 
-Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. Automatic send-time solving is controlled by the separate Solve when sending switch.
+Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request; Auto AI solve uses the message passed to Send. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. Auto AI solve is controlled by Σ or its settings switch; the older offline rewriting uses its separate Solve when sending switch.
 
-Automated tests cover live draft previews, unit and currency conversions, cache/cancellation behaviour, native icon sizing, the parser, native Nano request/result/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. The bridge is compiled against Android and the companion is compiled against the real ML Kit SDK. Physical Samsung/Android and real AICore inference testing have not been performed.
+Automated tests also cover Σ tap/hold, persisted AI mode, answer-only send, duplicate taps, metadata, failed/cancelled solves, long answers, context changes and plugin stop. They cover live draft previews, unit and currency conversions, cache/cancellation behaviour, native icon sizing, the parser, native Nano request/result/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. The bridge is compiled against Android and the companion is compiled against the real ML Kit SDK. Physical Samsung/Android and real AICore inference testing have not been performed.
 
 Inspired by [mlemception's Math](https://github.com/mlemception/mlem-plugins/tree/main/plugins/math); this separate implementation does not bundle its source or icon.
