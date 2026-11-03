@@ -104,5 +104,5 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
     } catch { return false; }
   }
 
-  return { shouldHide, observe, clear: () => metadata.clear() };
+  return { shouldHide, isFilteredUser, observe, clear: () => metadata.clear() };
 }

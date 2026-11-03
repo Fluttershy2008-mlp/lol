@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
-const source = ['filter', 'collection', 'settings', 'plugin'].map(name => {
+const source = ['filter', 'mentions', 'collection', 'settings', 'plugin'].map(name => {
   const code = readFileSync(new URL(`src/${name}.js`, root), 'utf8')
     .replace(/^import \{[^\n]+\} from '\.\/[a-z-]+\.js';\n/gm, '')
     .replace(/^export (?=(function|const) )/gm, '');

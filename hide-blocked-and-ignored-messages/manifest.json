@@ -1,7 +1,7 @@
 {
   "name": "HideBlockedAndIgnoredMessages",
-  "description": "Hides blocked and ignored messages without placeholder text, including bot responses to their slash commands and optional replies.",
-  "version": "1.1.2",
+  "description": "Hides blocked and ignored messages, their @mentions in other people’s messages, bot responses to their commands, and optional replies.",
+  "version": "1.2.0",
   "authors": [
     {
       "name": "Zykrah",
@@ -20,5 +20,5 @@
   "vendetta": {
     "icon": "ic_block"
   },
-  "hash": "ff51901cd1ef8af2ba99b1d0faae0cda41a27b022493118d2fbceb3e290099dd"
+  "hash": "6d088e4d082afc1aaf523c1d0b63f67c35c3d17b5ba19508669ca2c2daec8bcf"
 }

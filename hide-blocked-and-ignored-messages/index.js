@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,9 +193,10 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.1.1, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.2.0, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -308,16 +307,53 @@ function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage }
     } catch { return false; }
   }
 
-  return { shouldHide, observe, clear: () => metadata.clear() };
+  return { shouldHide, isFilteredUser, observe, clear: () => metadata.clear() };
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
+// Display-only MessageRecord copies. Never edit the gateway payload or cache.
+function createMentionFilter(isFilteredUser, storage) {
+  let cache = new WeakMap();
+  const same = (a, b) => a === b || (Array.isArray(a) && Array.isArray(b)
+    && a.length === b.length && a.every((item, i) => item === b[i]));
+
+  function project(message) {
+    if (!message || typeof message !== 'object' || storage.removeMentions === false) return message;
+    const original = message.content;
+    // Both normal and legacy nickname mentions; role/channel mentions stay intact.
+    const content = typeof original === 'string'
+      ? original.replace(/<@!?(\d+)>/g, (token, id) => isFilteredUser(id) ? '' : token) : original;
+    const mentions = Array.isArray(message.mentions)
+      ? message.mentions.filter(user => !isFilteredUser(typeof user === 'string' ? user : user?.id))
+      : message.mentions;
+    if (content === original && same(mentions, message.mentions)) return message;
+    const descriptors = Object.getOwnPropertyDescriptors(message);
+    const keys = Reflect.ownKeys(descriptors);
+    const previous = cache.get(message);
+    if (previous && previous.content === content && same(previous.mentions, mentions)
+      && keys.length === previous.keys.length && keys.every(key => {
+        const a = descriptors[key], b = previous.descriptors[key];
+        return b && a.value === b.value && a.get === b.get && a.set === b.set;
+      })) return previous.view;
+    const sourceDescriptors = { ...descriptors };
+    descriptors.content = { value: content, writable: true, enumerable: true, configurable: true };
+    if (Array.isArray(mentions)) {
+      descriptors.mentions = { value: mentions, writable: true, enumerable: true, configurable: true };
+    }
+    const view = Object.create(Object.getPrototypeOf(message), descriptors);
+    cache.set(message, { content, mentions, view, keys, descriptors: sourceDescriptors });
+    return view;
+  }
+  return { project, clear: () => { cache = new WeakMap(); } };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
 const sameItems = (a, b) => a.length === b.length && a.every((item, i) => item === b[i]);
 
 // Project the list BEFORE Discord groups blocked messages or generates native
-// rows. Leave MessageStore.getMessage and the real channel cache untouched.
+// rows. Leave the real channel cache untouched.
 // Pagination/loading flags and the ChannelMessages prototype are preserved.
-function createCollectionFilter(shouldHide, reportUnsupported = () => {}) {
+function createCollectionFilter(shouldHide, reportUnsupported = () => {}, projectMessage = message => message) {
   let cache = new WeakMap();
 
   function project(collection) {
@@ -327,8 +363,8 @@ function createCollectionFilter(shouldHide, reportUnsupported = () => {}) {
       reportUnsupported();
       return collection;
     }
-    const visible = raw.filter(message => !shouldHide(message));
-    if (visible.length === raw.length) return collection;
+    const visible = raw.filter(message => !shouldHide(message)).map(projectMessage);
+    if (sameItems(visible, raw)) return collection;
     if (Array.isArray(collection)) {
       const previous = cache.get(collection);
       if (previous && sameItems(previous.visible, visible)) return previous.view;
@@ -353,14 +389,13 @@ function createCollectionFilter(shouldHide, reportUnsupported = () => {}) {
     // Keep indexed lookups consistent with the displayed collection. Native
     // MessageStore.getMessage still uses the complete original map for replies.
     if (collection._map instanceof Map) {
-      const visibleIds = new Set(visible.map(message => message?.id));
-      projected._map = { value: new Map([...collection._map].filter(([id]) => visibleIds.has(id))),
+      projected._map = { value: new Map(visible.map(message => [message?.id, message])),
         writable: true, enumerable: true, configurable: true };
     } else if (collection._map && typeof collection._map === 'object') {
       const map = Object.create(Object.getPrototypeOf(collection._map));
       for (const message of visible) {
         if (message?.id && Object.prototype.hasOwnProperty.call(collection._map, message.id)) {
-          Object.defineProperty(map, message.id, { value: collection._map[message.id],
+          Object.defineProperty(map, message.id, { value: message,
             writable: true, enumerable: true, configurable: true });
         }
       }
@@ -385,6 +420,7 @@ function createSettings(V, refresh) {
     const rows = [
       ['blocked', 'Hide blocked users', 'Remove their messages from chat.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat.'],
+      ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
     ];
@@ -404,7 +440,7 @@ function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, 'Version 1.1.0'));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, 'Version 1.2.0'));
   };
 }
 
@@ -412,7 +448,7 @@ function createSettings(V, refresh) {
 
 function createPlugin(V) {
   let active = false;
-  let filter, lists, messageStore, refreshTimer;
+  let filter, lists, mentions, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -421,6 +457,7 @@ function createPlugin(V) {
 
   function refresh() {
     lists?.clear();
+    mentions?.clear();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -432,7 +469,7 @@ function createPlugin(V) {
   function onLoad() {
     if (active) return;
     const storage = V.plugin.storage;
-    for (const key of ['blocked', 'ignored', 'removeReplies', 'removeBotCommands']) {
+    for (const key of ['blocked', 'ignored', 'removeReplies', 'removeBotCommands', 'removeMentions']) {
       if (typeof storage[key] !== 'boolean') storage[key] = true;
     }
     messageStore = byStore('MessageStore');
@@ -446,16 +483,23 @@ function createPlugin(V) {
       || (!method(blockedStore, 'isBlocked') && !method(ignoredStore, 'isIgnored'))) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
+    const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
-      getMessage: (channel, id) => messageStore.getMessage(channel, id) });
+      getMessage: originalGetMessage });
+    mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
     lists = createCollectionFilter(filter.shouldHide, () => {
       if (warned) return;
       warned = true;
       try { V.logger?.warn?.('HideBlockedAndIgnoredMessages: unsupported message-list format; please report your Discord version.'); } catch {}
-    });
+    }, mentions.project);
     active = true;
     try {
+      // Native rows can resolve content by ID instead of using the list record.
+      cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
+        if (!active) return;
+        try { return mentions.project(result); } catch { return result; }
+      }));
       cleanup.push(V.patcher.after('getMessages', messageStore, (_args, result) => {
         if (!active) return;
         try { return lists.project(result); } catch {
@@ -487,8 +531,8 @@ function createPlugin(V) {
     if (refreshTimer !== undefined) clearTimeout(refreshTimer);
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
-    filter?.clear(); lists?.clear();
-    filter = lists = undefined;
+    filter?.clear(); lists?.clear(); mentions?.clear();
+    filter = lists = mentions = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

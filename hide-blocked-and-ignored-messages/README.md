@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.1.0
+# HideBlockedAndIgnoredMessages 1.2.0
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -19,6 +19,15 @@ Original authors: Zykrah and シグマ siguma. Updated for Fluttershy2008-mlp.
 Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
+## Valenced update
+
+Valenced package **1.0.0-beta3** adds **Hide mentions of them**, enabled by default.
+A friend’s `<@blocked-user-id>` or `<@!ignored-user-id>` mention disappears from
+the displayed message while the remaining text, attachments and other users’
+mentions stay visible. The blocked/ignored switches decide which users this
+applies to. Turn the new switch off to restore mentions. This is local display
+filtering and does not stop the original message from pinging its recipient.
+
 ## Changes
 
 - Removes entire blocked/ignored message entries before Discord builds chat
@@ -31,14 +40,14 @@ contains both files, ready to install; no GitHub Actions build is required.
 - Leaves unrelated bot posts and other people's commands visible. Mentioning
   a blocked user or targeting them with a command does not by itself count as
   that user running the command.
-- Retains independent switches for blocked users, ignored users, replies, and
-  bot commands. All four default to enabled.
+- Retains independent switches for blocked users, ignored users, mentions, replies, and
+  bot commands. All five default to enabled.
 - Reads cached reply targets without making network requests.
 - Observes incoming interaction IDs in a bounded, memory-only cache when a
   Discord build drops metadata during MessageRecord normalization. Partial
   edits retain that attribution; account changes/unloading clear the ID cache.
 - Preserves Discord's original messages, event payloads, pagination state,
-  collection prototype, and direct message lookup. Unblocking a user or
+  collection prototype, and underlying message cache. Direct lookups return display copies when mentions are hidden. Unblocking a user or
   disabling the plugin restores the underlying cached messages.
 - Removes the old fake startup messages, channel-ID rewrites, and native
   RowManager field mutations. No REST requests, message deletions, or automatic
@@ -77,7 +86,7 @@ npm test
 ```
 
 The build writes `index.js` and updates the SHA-256 hash in `manifest.json`.
-Thirteen regression tests cover cached/live messages, fully hidden history
+Regression tests cover cached/live messages, fully hidden history
 pages and pagination flags, interaction variants, other users' commands,
 replies, partial edits, frozen records, bounded/cyclic metadata, restoring
 messages, installation format, and cleanup after a failed startup.

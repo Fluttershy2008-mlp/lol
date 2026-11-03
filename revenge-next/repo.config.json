@@ -17,7 +17,8 @@
     "addon-list": "1.0.0-beta5",
     "info-commands": "1.0.0-beta14",
     "valid-user": "1.0.0-beta7",
-    "auto-text": "1.0.0-beta6"
+    "auto-text": "1.0.0-beta6",
+    "hide-blocked-and-ignored-messages": "1.0.0-beta5"
   },
   "sourceRefs": {
     "save-as-sticker": "main",
@@ -31,7 +32,8 @@
     "addon-list": "main",
     "info-commands": "main",
     "valid-user": "main",
-    "auto-text": "main"
+    "auto-text": "main",
+    "hide-blocked-and-ignored-messages": "main"
   },
   "themeVersion": "1.0.0-beta1",
   "sourceCommit": "b77722dec20ba713ae58dad00ebce671ed80a8ce",

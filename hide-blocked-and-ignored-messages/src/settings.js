@@ -10,6 +10,7 @@ export function createSettings(V, refresh) {
     const rows = [
       ['blocked', 'Hide blocked users', 'Remove their messages from chat.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat.'],
+      ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
     ];
@@ -29,6 +30,6 @@ export function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, 'Version 1.1.0'));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, 'Version 1.2.0'));
   };
 }

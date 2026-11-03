@@ -2,10 +2,11 @@
 import { createMessageFilter } from './filter.js';
 import { createCollectionFilter } from './collection.js';
 import { createSettings } from './settings.js';
+import { createMentionFilter } from './mentions.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, messageStore, refreshTimer;
+  let filter, lists, mentions, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -14,6 +15,7 @@ export function createPlugin(V) {
 
   function refresh() {
     lists?.clear();
+    mentions?.clear();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -25,7 +27,7 @@ export function createPlugin(V) {
   function onLoad() {
     if (active) return;
     const storage = V.plugin.storage;
-    for (const key of ['blocked', 'ignored', 'removeReplies', 'removeBotCommands']) {
+    for (const key of ['blocked', 'ignored', 'removeReplies', 'removeBotCommands', 'removeMentions']) {
       if (typeof storage[key] !== 'boolean') storage[key] = true;
     }
     messageStore = byStore('MessageStore');
@@ -39,16 +41,23 @@ export function createPlugin(V) {
       || (!method(blockedStore, 'isBlocked') && !method(ignoredStore, 'isIgnored'))) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
+    const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
-      getMessage: (channel, id) => messageStore.getMessage(channel, id) });
+      getMessage: originalGetMessage });
+    mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
     lists = createCollectionFilter(filter.shouldHide, () => {
       if (warned) return;
       warned = true;
       try { V.logger?.warn?.('HideBlockedAndIgnoredMessages: unsupported message-list format; please report your Discord version.'); } catch {}
-    });
+    }, mentions.project);
     active = true;
     try {
+      // Native rows can resolve content by ID instead of using the list record.
+      cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
+        if (!active) return;
+        try { return mentions.project(result); } catch { return result; }
+      }));
       cleanup.push(V.patcher.after('getMessages', messageStore, (_args, result) => {
         if (!active) return;
         try { return lists.project(result); } catch {
@@ -80,8 +89,8 @@ export function createPlugin(V) {
     if (refreshTimer !== undefined) clearTimeout(refreshTimer);
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
-    filter?.clear(); lists?.clear();
-    filter = lists = undefined;
+    filter?.clear(); lists?.clear(); mentions?.clear();
+    filter = lists = mentions = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }
