@@ -235,6 +235,18 @@
         "section": "VALENCED",
         "title": "Quick Delete"
       }
+    },
+    "dev.fluttershy2008.math-ai": {
+      "path": "valenced/plugins/math-ai/index.js",
+      "sha256": "dae290e3d3d4de1312bea7eed8fe9a1cd6b95f7455504ba5512f8b2a33661659",
+      "originalVersion": "1.0.0",
+      "kind": "native-plugin",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "69d9c0c71748a6cfb13a0859387720ff14573653b80492a69d3e448b64bb02fc",
+        "section": "VALENCED",
+        "title": "Math AI"
+      }
     }
   }
 }

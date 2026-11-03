@@ -1,0 +1,8 @@
+Math AI & Scientific Calculator for Valenced
+Author: Fluttershy2008-mlp
+Inspired by the chat-input workflow of mlemception's Math plugin:
+https://github.com/mlemception/mlem-plugins/tree/main/plugins/math
+This is a separate implementation with a bounded scientific expression parser,
+an optional user-configured AI connection, and answer preview tools.
+No upstream arithmetic source or image assets are bundled.
+No physical Android device testing has been performed.

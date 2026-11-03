@@ -1,5 +1,7 @@
 **More Alts! stable13:** Added account-specific **Re-sign in** when Discord rejects a saved session. Password and two-factor authentication errors are now explained separately, and the plugin never deletes an expired account automatically. Only More Alts! is promoted to stable13; all other plugin versions remain unchanged. QR login stays removed. Keep your plugin data when updating.
 
+**Math AI & Scientific Calculator 1.0.0**: paste a problem into the chat box, tap **∑**, then choose **Calculate** or **AI solve**. Includes offline scientific functions, DEG/RAD, working steps, copy and draft insertion. AI requires your own API key in AI setup. Also available in **Settings → Valenced → Math AI**. [Setup and examples](plugins/math-ai/README.md).
+
 # Fluttershy's Valenced plugins
 
 **Long Video Share 1.0.0-beta2:** fixes the install error “No version of Plugin API
@@ -207,3 +209,4 @@ The picker now uses Valenced's registered settings/navigation page instead of ne
 Nine new page-flow cases fail against beta5 and pass with this release; one additional test keeps a page mounted while it loses and regains focus. Both old upload/cancellation checks and the ordinary-page checks pass. The complete suite passes 890 Node checks and 16 Python checks, with one optional unrelated Hermes test skipped; both 25-entry deterministic checks pass. Physical device input behavior remains unverified. Only Stealmoji receives new packages: Valenced beta6, Next beta8 and Classic 2.1.7. Other current artifacts and all older archives remain unchanged. [Details and source references](../stealmoji/README.md#valenced-page-picker-in-217).
 
 The stable12 release keeps the existing account storage intact; do not clear plugin data during the update.
+

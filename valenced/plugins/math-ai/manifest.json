@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.math-ai",
+  "name": "Math AI & Scientific Calculator",
+  "description": "Solve pasted chat questions with AI, or calculate scientific expressions offline. Preview, copy or append answers before sending.",
+  "author": "Fluttershy2008-mlp <753962426407452713>",
+  "version": "1.0.0",
+  "dependencies": {
+    "valenced.api": { "version": ">=1 <2" },
+    "discord": { "version": "*" }
+  },
+  "icon": "ScienceIcon",
+  "dist": { "script": "index.js" }
+}

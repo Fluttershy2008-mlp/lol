@@ -1,0 +1,36 @@
+# Math AI & Scientific Calculator
+
+Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calculator**, and fully restart Discord.
+
+Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
+
+## Use it
+
+1. Paste the math problem into your normal Discord chat box without sending it.
+2. Tap **∑** beside the chat controls. It loads the current draft into the panel.
+3. Tap **Calculate** for an expression, or **AI solve** for an equation or written problem.
+4. Read the answer, then **Copy answer** or **Append answer to draft**. Review and send using Discord normally.
+
+The question can also be pasted or typed directly into the panel. Open it through **Settings → Valenced → Math AI** if your Discord version does not expose the chat button. The plugin never sends Discord messages automatically and does not read chat history.
+
+## Scientific calculator
+
+Runs offline without an API key. Supports DEG/RAD, parentheses, implicit multiplication, right-associative powers, roots, percentages, factorials, trigonometry and inverse/hyperbolic trig, logs, exp, abs, floor/ceil/round, combinations, permutations, remainder, π, e and the last calculator answer (`ans`). Real numbers only; results use floating-point arithmetic and are rounded to 14 significant digits for display. Long expressions and excessive nesting are bounded.
+
+Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!`, `ncr(10,3)`, `npr(10,3)`, `log(1000)`, `ln(e)`, `2^3^2`, `1e-3`. Postfix `%` divides by 100, so `200*10%` is 20 and `200+10%` is 200.1. For equations, variables, units, or written questions use AI solve.
+
+## AI setup
+
+Open **AI setup** and supply your own provider's HTTPS **Chat Completions endpoint**, model name and API key. Defaults are `https://api.openai.com/v1/chat/completions` and `gpt-4.1-mini`; change the model to one your provider supports. Other providers must implement the same request/response format. A ChatGPT subscription does not provide API access or credits.
+
+The API key is held in memory only and must be re-entered after a restart. It is never written to plugin JSON settings, logs or GitHub. Changing endpoint clears the key. Only the panel question and math instructions are transmitted, and only when AI solve is tapped; provider charges and privacy terms apply. Endpoint and model settings persist, while recent answers remain in memory. No shared key or free hosted service is included.
+
+AI answers can be wrong: review assumptions, units and working. Choose whether to include working steps. Requests time out after 45 seconds, can be cancelled, and are cancelled when the plugin stops. Repeated taps cannot start duplicate requests. Unavailable clipboard, composer hooks, network, keys, credits and unsupported responses show actionable errors.
+
+## Compatibility and validation
+
+Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. No automatic send-time arithmetic rewrite is installed.
+
+Automated tests cover the parser, AI request/response/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. Physical Samsung/Android testing and live paid AI requests have not been performed.
+
+Inspired by [mlemception's Math](https://github.com/mlemception/mlem-plugins/tree/main/plugins/math); this separate implementation does not bundle its source or icon.

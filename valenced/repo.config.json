@@ -70,15 +70,31 @@
   "nativePlugins": {
     "long-video-share": {
       "path": "valenced/plugins/long-video-share",
-      "settingsShortcut": { "title": "Long Video Share", "icon": "VideoIcon" }
+      "settingsShortcut": {
+        "title": "Long Video Share",
+        "icon": "VideoIcon"
+      }
     },
     "auto-quest": {
       "path": "valenced/plugins/auto-quest",
-      "settingsShortcut": { "title": "Auto Quest", "icon": "GiftIcon" }
+      "settingsShortcut": {
+        "title": "Auto Quest",
+        "icon": "GiftIcon"
+      }
     },
     "quick-delete": {
       "path": "valenced/plugins/quick-delete",
-      "settingsShortcut": { "title": "Quick Delete", "icon": "TrashIcon" }
+      "settingsShortcut": {
+        "title": "Quick Delete",
+        "icon": "TrashIcon"
+      }
+    },
+    "math-ai": {
+      "path": "valenced/plugins/math-ai",
+      "settingsShortcut": {
+        "title": "Math AI",
+        "icon": "ScienceIcon"
+      }
     }
   },
   "nativeThemes": {
