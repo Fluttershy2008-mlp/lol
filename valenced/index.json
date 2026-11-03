@@ -799,14 +799,27 @@
               "version": "*"
             }
           }
+        },
+        "1.1.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@1.1.0.zip",
+          "sha256": "a275cdcdab6072b39df23e92a460ab2e651f9a6f12aca7176885daff7c55dc8a",
+          "size": 19034,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0",
-        "beta": "1.0.0"
+        "latest": "1.1.0",
+        "beta": "1.1.0"
       },
       "name": "Math AI & Scientific Calculator",
-      "description": "Solve pasted chat questions with AI, or calculate scientific expressions offline. Preview, copy or append answers before sending.",
+      "description": "Live inline calculator above chat: type = for scientific sums, unit conversions and dated currency rates. Includes optional AI solving and an aligned chat button.",
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "ScienceIcon"
     },

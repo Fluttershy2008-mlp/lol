@@ -1,6 +1,7 @@
 (() => {
     'use strict';
-    const DEFAULTS = { angle: 'DEG', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4.1-mini', steps: true };
+    const SIGMA_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAEpUlEQVR4nO2dzW4cRRDH/7XrjZGTB8ohBHEKkjFC8ABceAdOyDlx8EvAlQOKYhuJG8Rw4CF4Aq4kIvZ+/Dh0dXb9gWd3ZpzuWddPGlmWPa2equ7pf1X3dEtBEARBEARBEATBe8X6KggYSxr1VV7FzM1sUboSQU906gGASZKZATyT9FjSQtvZE/Jz/WZmr4BRHz1hp+2NbvyRpBHwk6SDrpUZCEeSXkkaKzmlE60dIMnMbA68UDL+vI8KVcxU0kTS6z4LbeUAYOzG/0TJ+FMva9xn5Spkop5fr20Ly/c91bLV96ao7hN9eDMM34G2Dsit/kzJAduoet4LrQzn7/+xmf2ipSKYtSiKAV690qnlAiNJ3yoZf0ebV9AGdE10B729tQxd6QW/A59L+lHSAy9znXFhIelvSY80DPmaG9m/fRbaeQAFds3sHDiU9FzSuaTdhtsWSg/0laQXkvb895oHdJTqd25m56Ur8w7AgAnwEDglccHtLIA58BZ4XPoZStJLiwPM80FjSS8l7StFxrcFZrlL/yHpYy3Hj6pfR2bW+0DcC8DIrzFw4i181tAT8t9P/b5RTvAFLXBVJGAPeOPGnTc4Ib+uToEdv8IJbVlpyfvewucbOOHYy5iUfo5BQxoLtOIESAPvOk448HvDCV3IBnQnvHYD3+aEBTD1a3+1jKAlwK7/PHQjv23oBVmezlacsO0p7ruDdjFCHjNmwBMvp8vE0f0GVzSkwTk7oUmeTv3nGctBPTKubSFihPIQMUJ5iBihPESMUB4iRigPESOUhYgRykPECOUhYoTyEDFCeYgYoTz0EyOEMuoC3WKET70nhRO6wOYxQn5V/YOPBcR40B5ujhGaxoOZO+qZlzGIXlClfva1NzMzeyPpC6Vlj+j2NUMLpRV5H/nvVT7bVaqtpC/0emBmF5J+UFro1bQoqs5FU0OE64po0TAYZ+k6qFdQleD5HeDJimHXMf6ffl+1Pfsq1VXUjbfwFvydlp+DNqmakaS/SAoqFFAbXP3kvNC6ybnc+k+AXSIv1A43fs7pbJKehpQ/2vNyquvVg4BlBHy8gfHfTdDknlP6OQbJivEP1jR+HpBjdqwrXM795JxOU+7ngpQnivnhLnBd6zfJTVjmhQ793qbv0YKb4Gatv8kkzENSvigUz6ZweRryzI06vWbuy1yahvRywvibQnetHxPxbSG0flkIrV8OQuuXg9D65SC0fjkIrV8OQuuXg9D65SC0flkIrV8OQuuXg9D6rejl8x7S5n35A7qXurzb4P8xV9qJ8MjMfgYeSTofgBPqOj+Adlo//9/3petfmj7OD8jXr5I+1HIvuFtvVdrw+0jShf9/XvtT6/LCOzk/oLUDWJ4fIK2/Ud82cGRm3wATM5t2LayP8wOOlYyf99ffhJnqbfFXqf78gDaD59C+8a36/ICgBRHuF6aP8wNyGUN5l1dFl/MDRn5+wInSuzFvyF16f/97c34Anrf5UskJYy23rt/Gq7rzAwAWkhZm9hnp06Cnkr6W9EFfFayIOs8PuIrndLZxcK/z/IAMaRZraLq+OHfRA7Z6Drfa8wOCIAiCIAiCIBgM/wHBRUp2UjlY0wAAAABJRU5ErkJggg==';
+    const DEFAULTS = { angle: 'DEG', endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4.1-mini', steps: true, inline: true, currency: true };
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const listeners = new Set();
     let current, writes = Promise.resolve();
@@ -10,7 +11,7 @@
     function calculate(source, angle = 'DEG', ans = 0) {
         if (typeof source !== 'string' || !source.trim()) throw new Error('Enter an expression first.');
         if (source.length > 2000) throw new Error('Expression is too long (maximum 2,000 characters).');
-        const text = source.toLowerCase().replace(/[×·]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-')
+        const text = source.toLowerCase().replace(/(\d|\)|!|%)\s*x\s*(?=[\d.(])/g, '$1*').replace(/[×·]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-')
             .replace(/π/g, 'pi').replace(/√/g, 'sqrt').replace(/²/g, '^2').replace(/³/g, '^3').replace(/\*\*/g, '^');
         const tokens = []; let at = 0, depth = 0, i = 0;
         while (at < text.length) {
@@ -78,9 +79,89 @@
         return value;
     }
     const format = n => String(Number(n.toPrecision(14)));
+    // Linear SI conversions plus affine temperature scales. Currency rates are
+    // fetched separately; no exchange-rate numbers are bundled in the plugin.
+    const UNITS = Object.create(null);
+    function unit(names, dimension, factor, offset = 0) {
+        for (const name of names.split('|')) UNITS[name] = { dimension, factor, offset };
+    }
+    unit('m|metre|metres|meter|meters', 'length', 1);
+    unit('mm|millimetre|millimetres|millimeter|millimeters', 'length', 0.001);
+    unit('cm|centimetre|centimetres|centimeter|centimeters', 'length', 0.01);
+    unit('km|kilometre|kilometres|kilometer|kilometers', 'length', 1000);
+    unit('in|inch|inches', 'length', 0.0254); unit('ft|foot|feet', 'length', 0.3048);
+    unit('yd|yard|yards', 'length', 0.9144); unit('mi|mile|miles', 'length', 1609.344);
+    unit('kg|kilogram|kilograms', 'mass', 1); unit('g|gram|grams', 'mass', 0.001);
+    unit('mg|milligram|milligrams', 'mass', 0.000001); unit('lb|lbs|pound|pounds', 'mass', 0.45359237);
+    unit('oz|ounce|ounces', 'mass', 0.028349523125); unit('t|tonne|tonnes', 'mass', 1000);
+    unit('s|sec|second|seconds', 'time', 1); unit('min|minute|minutes', 'time', 60);
+    unit('h|hr|hour|hours', 'time', 3600); unit('d|day|days', 'time', 86400);
+    unit('l|litre|litres|liter|liters', 'volume', 1); unit('ml|millilitre|millilitres|milliliter|milliliters', 'volume', 0.001);
+    unit('m3|m³', 'volume', 1000); unit('cm3|cm³|cc', 'volume', 0.001);
+    unit('m2|m²', 'area', 1); unit('cm2|cm²', 'area', 0.0001); unit('km2|km²', 'area', 1000000);
+    unit('ft2|ft²|sqft', 'area', 0.09290304); unit('ha|hectare|hectares', 'area', 10000);
+    unit('m/s|mps', 'speed', 1); unit('km/h|kmph|kph', 'speed', 1 / 3.6);
+    unit('mph', 'speed', 0.44704); unit('ft/s|fps', 'speed', 0.3048);
+    unit('pa', 'pressure', 1); unit('kpa', 'pressure', 1000); unit('mpa', 'pressure', 1000000);
+    unit('bar', 'pressure', 100000); unit('psi', 'pressure', 6894.757293168);
+    unit('rad|radian|radians', 'angle', 1); unit('deg|degree|degrees|°', 'angle', Math.PI / 180);
+    unit('c|°c|celsius', 'temperature', 1, 273.15); unit('f|°f|fahrenheit', 'temperature', 5 / 9, 273.15 - 32 * 5 / 9);
+    unit('k|kelvin', 'temperature', 1);
+    function inlineAnswer(draft, angle = 'DEG', ans = 0) {
+        if (typeof draft !== 'string' || !/^\s*=(?!=)/.test(draft)) return null;
+        const query = draft.replace(/^\s*=\s*/, '').trim();
+        if (!query) return null;
+        if (query.length > 2000) throw new Error('Expression is too long.');
+        const conversion = query.match(/^(.+?)\s+([a-z°][a-z0-9°²³/]*|°)\s+(?:in|to)\s+([a-z°][a-z0-9°²³/]*|°)$/i);
+        if (!conversion) { const value = calculate(query, angle, ans); return { kind: 'calculator', text: format(value), value }; }
+        const [, source, from, to] = conversion, a = UNITS[from.toLowerCase()], b = UNITS[to.toLowerCase()];
+        const amount = calculate(source, angle, ans);
+        if (a && b) {
+            if (a.dimension !== b.dimension) throw new Error('These units measure different quantities.');
+            const base = amount * a.factor + a.offset;
+            if (a.dimension === 'temperature' && base < -1e-9) throw new Error('Temperature is below absolute zero.');
+            const value = (base - b.offset) / b.factor;
+            if (!Number.isFinite(value)) throw new Error('Conversion result is too large.');
+            return { kind: 'unit', text: format(a.dimension === 'temperature' && Math.abs(value) < 1e-12 ? 0 : value) + ' ' + to, value };
+        }
+        if (!a && !b && /^[a-z]{3}$/i.test(from) && /^[a-z]{3}$/i.test(to))
+            return { kind: 'currency', amount, from: from.toUpperCase(), to: to.toUpperCase() };
+        throw new Error('Unknown or incompatible units. Try 5 ft in cm or 10 USD to SGD.');
+    }
+    function rateRequest(session, from, to) {
+        const id = from + '/' + to, cached = session.rates.get(id);
+        if (from === to) return { promise: Promise.resolve({ rate: 1, date: '', same: true }), cancel() {} };
+        if (cached && Date.now() - cached.saved < 600000) return { promise: Promise.resolve(cached), cancel() {} };
+        const controller = typeof AbortController === 'function' ? new AbortController() : undefined;
+        let reject, timer;
+        const job = { cancel() { controller?.abort(); reject?.(new Error('Cancelled.')); } };
+        const cancelled = new Promise((_, fail) => { reject = fail; });
+        session.fxJobs.add(job);
+        timer = setTimeout(() => { controller?.abort(); reject(new Error('Exchange-rate lookup timed out.')); }, 10000);
+        job.promise = Promise.race([cancelled, (async () => {
+            if (typeof globalThis.fetch !== 'function') throw new Error('Currency conversion needs an internet connection.');
+            const response = await globalThis.fetch('https://api.frankfurter.dev/v2/rate/' + from.toLowerCase() + '/' + to.toLowerCase(),
+                { ...(controller ? { signal: controller.signal } : {}), redirect: 'error' });
+            if (!response.ok) throw new Error([404, 422].includes(response.status) ? 'This currency pair is unavailable.' : 'Could not load exchange rates.');
+            const raw = await response.text();
+            if (raw.length > 12000) throw new Error('Invalid exchange-rate response.');
+            let data; try { data = JSON.parse(raw); } catch { throw new Error('Invalid exchange-rate response.'); }
+            if (data.base !== from || data.quote !== to || typeof data.rate !== 'number' || !(data.rate > 0) || !Number.isFinite(data.rate) || !/^\d{4}-\d{2}-\d{2}$/.test(data.date))
+                throw new Error('Invalid exchange-rate response.');
+            return { rate: data.rate, date: data.date, saved: Date.now() };
+        })()]).then(data => { if (session.active && !data.same) { if (session.rates.size >= 20) session.rates.delete(session.rates.keys().next().value); session.rates.set(id, data); } return data; })
+            .finally(() => { clearTimeout(timer); session.fxJobs.delete(job); });
+        return job;
+    }
+    function currencyText(value, to) {
+        if (!Number.isFinite(value) || Math.abs(value) >= 1e15) throw new Error('Currency amount is too large.');
+        const digits = optional(() => new Intl.NumberFormat('en', { style: 'currency', currency: to }).resolvedOptions().maximumFractionDigits) ?? 2;
+        return value.toFixed(digits) + ' ' + to;
+    }
     function settingsOf(value) {
         return { angle: value?.angle === 'RAD' ? 'RAD' : 'DEG', endpoint: typeof value?.endpoint === 'string' ? value.endpoint.slice(0, 500) : DEFAULTS.endpoint,
-            model: typeof value?.model === 'string' ? value.model.slice(0, 100) : DEFAULTS.model, steps: value?.steps !== false };
+            model: typeof value?.model === 'string' ? value.model.slice(0, 100) : DEFAULTS.model, steps: value?.steps !== false,
+            inline: value?.inline !== false, currency: value?.currency !== false };
     }
     function endpointOf(value) {
         const s = value.trim();
@@ -135,6 +216,10 @@
     function stop(session) {
         if (!session?.active) return;
         session.active = false; session.visible = false; session.key = ''; cancel(session);
+        for (const job of [...session.fxJobs]) job.cancel();
+        for (const remove of [...session.previewDisposers]) remove();
+        for (const remove of [...session.draftSubscriptions]) remove();
+        session.rates.clear();
         for (const remove of session.removers.splice(0).reverse()) optional(remove);
         session.question = ''; session.result = ''; session.history = [];
         if (current === session) current = undefined;
@@ -157,7 +242,8 @@
         if (current?.active) return;
         const U = api.unscoped, F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const session = { api, active: true, settings: settingsOf(api.jsonStorage.cache), key: '', question: '', result: '', resultKind: '',
-            error: '', notice: '', ans: 0, history: [], visible: false, busy: false, removers: [], account: null, channel: null };
+            error: '', notice: '', ans: 0, history: [], visible: false, busy: false, removers: [], account: null, channel: null,
+            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null };
         current = session; api.cleanup(() => stop(session));
         const data = api.jsonStorage.loaded ? api.jsonStorage.cache : await api.jsonStorage.get();
         if (!session.active) return;
@@ -166,12 +252,25 @@
         const stores = U.discord.flux.Stores;
         session.selected = () => optional(() => stores.SelectedChannelStore.getChannelId());
         session.user = () => optional(() => stores.UserStore.getCurrentUser()?.id);
+        const draftStore = () => optional(() => stores.DraftStore) ?? byProps('getDraft', 'getState');
+        session.snapshot = () => JSON.stringify([session.user() ?? '', session.selected() ?? '',
+            optional(() => draftStore()?.getDraft(session.selected(), 0)) ?? '']);
+        session.subscribeDraft = callback => {
+            const removes = []; let timer, disposed = false;
+            for (const store of [draftStore(), optional(() => stores.SelectedChannelStore), optional(() => stores.UserStore)]) {
+                if (store?.addChangeListener && store?.removeChangeListener) {
+                    store.addChangeListener(callback); removes.push(() => store.removeChangeListener(callback));
+                } else if (!timer) timer = setInterval(callback, 250);
+            }
+            const remove = () => { if (disposed) return; disposed = true; for (const fn of removes) optional(fn); if (timer) clearInterval(timer); session.draftSubscriptions.delete(remove); };
+            session.draftSubscriptions.add(remove); return remove;
+        };
         session.readDraft = () => {
             if (!session.active || current !== session || session.busy) return;
             const channel = session.selected();
             const draft = optional(() => stores.DraftStore.getDraft(channel, 0)) ?? optional(() => byProps('getDraft', 'getState')?.getDraft(channel, 0));
             if (typeof draft !== 'string') { session.notice = 'Could not read this chat draft. Use Paste question below.'; return; }
-            session.channel = channel; session.account = session.user(); session.question = draft.slice(0, 6000);
+            session.channel = channel; session.account = session.user(); session.question = draft.replace(/^\s*=(?!=)\s*/, '').slice(0, 6000);
             session.result = ''; session.error = ''; session.notice = draft.length > 6000 ? 'Only the first 6,000 characters were loaded.' : ''; changed();
         };
         session.append = () => {
@@ -189,13 +288,18 @@
             if (typeof remove === 'function') session.removers.push(remove);
         };
         const patched = new WeakSet();
+        watch('modules/chat_input/native/action_buttons/ChatInputActionButton.tsx', mod => { session.ActionButton = mod.default; changed(); });
         watch('modules/chat_input/native/ChatInput.tsx', mod => {
             let holder = mod.default, key = 'type';
             if (typeof holder?.type !== 'function') { holder = mod; key = 'default'; }
             if (!holder || typeof holder[key] !== 'function' || patched.has(holder)) return;
             patched.add(holder);
-            session.removers.push(U.patcher.after(holder, key, result => session.active
-                ? addButton(U.react.React, result, U.react.React.createElement(MathButton, { key: 'fluttershy-math-ai', api, session })) : result));
+            session.removers.push(U.patcher.after(holder, key, result => {
+                if (!session.active || !U.react.React.isValidElement(result)) return result;
+                const h = U.react.React.createElement;
+                const tree = addButton(U.react.React, result, h(MathButton, { key: 'fluttershy-math-ai', api, session }));
+                return h(Composer, { api, session }, tree);
+            }));
         });
         changed();
     }
@@ -203,15 +307,76 @@
         const [, set] = React.useState(0);
         React.useEffect(() => { const fn = () => set(x => x + 1); listeners.add(fn); return () => listeners.delete(fn); }, []);
     }
+    function Composer({ api, session, children }) {
+        const { React, ReactNative: RN } = api.unscoped.react;
+        useRefresh(React);
+        if (!session.active || !session.settings.inline) return children;
+        return React.createElement(RN.View, { style: { alignSelf: 'stretch', flexShrink: 0 } },
+            React.createElement(InlinePreview, { api, session }), children);
+    }
+    function InlinePreview({ api, session }) {
+        const { React, ReactNative: RN } = api.unscoped.react, h = React.createElement;
+        useRefresh(React);
+        const [snapshot, setSnapshot] = React.useState(session.snapshot), [answer, setAnswer] = React.useState(null), [copied, setCopied] = React.useState(false);
+        React.useEffect(() => {
+            const update = () => { if (session.active) setSnapshot(session.snapshot()); };
+            const remove = session.subscribeDraft(update); update(); return remove;
+        }, [session]);
+        React.useEffect(() => {
+            let live = true, timer, job;
+            const remove = () => { live = false; clearTimeout(timer); job?.cancel(); session.previewDisposers.delete(remove); };
+            session.previewDisposers.add(remove);
+            const show = value => { if (live && session.active) setAnswer({ ...value, snapshot }); };
+            setCopied(false);
+            try {
+                const draft = JSON.parse(snapshot)[2];
+                const result = session.active && session.settings.inline ? inlineAnswer(draft, session.settings.angle, session.ans) : null;
+                if (!result) setAnswer(null);
+                else if (result.kind !== 'currency') show(result);
+                else if (!session.settings.currency) show({ error: 'Currency lookup is off in Math AI settings.' });
+                else {
+                    show({ loading: true });
+                    timer = setTimeout(async () => {
+                        if (!live || !session.active) return;
+                        job = rateRequest(session, result.from, result.to);
+                        try {
+                            const rate = await job.promise;
+                            show({ kind: 'currency', text: currencyText(result.amount * rate.rate, result.to), date: rate.date });
+                        } catch (error) { show({ error: error.message || 'Could not load exchange rates.' }); }
+                    }, 550);
+                }
+            } catch (error) { show({ error: error.message }); }
+            return remove;
+        }, [snapshot, session, session.settings.inline, session.settings.currency, session.settings.angle, session.ans]);
+        // Hide old results immediately, even before the next effect runs.
+        if (!session.active || !session.settings.inline || !answer || answer.snapshot !== snapshot) return null;
+        const light = optional(() => api.unscoped.discord.flux.Stores.ThemeStore.theme) === 'light';
+        const fg = light ? '#17191C' : '#F2F3F5', card = light ? '#E9EAF0' : '#2B2D31';
+        const label = answer.loading ? 'Loading exchange rate…' : answer.error || '= ' + answer.text;
+        async function copy() {
+            if (!answer.text || snapshot !== session.snapshot()) return;
+            try { await api.unscoped.externals.ReactNativeClipboard.Clipboard.setString(answer.text); if (session.active) setCopied(true); }
+            catch { if (session.active) setAnswer({ ...answer, error: 'Could not copy. Long-press the answer or open ∑.' }); }
+        }
+        return h(RN.View, { style: { alignItems: 'flex-start', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 6 } },
+            h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label, accessibilityHint: 'Tap to copy the answer',
+                disabled: !answer.text, onPress: () => { void copy(); },
+                style: { maxWidth: '100%', backgroundColor: card, paddingVertical: 9, paddingHorizontal: 13, borderRadius: 12 } },
+                h(RN.Text, { selectable: true, style: { color: answer.error ? light ? '#B42318' : '#F2A6A6' : fg,
+                    fontSize: 17, fontWeight: '600', lineHeight: 23, includeFontPadding: false } }, copied ? 'Copied · ' + label : label),
+                answer.date ? h(RN.Text, { style: { color: light ? '#5C5E66' : '#B5BAC1', fontSize: 11, marginTop: 3 } }, 'Frankfurter · ' + answer.date) : null));
+    }
     function MathButton({ api, session }) {
         const { React, ReactNative: RN } = api.unscoped.react, h = React.createElement;
         useRefresh(React);
         if (!session.active) return null;
+        const open = () => { if (!session.busy) session.readDraft(); session.visible = true; RN.Keyboard?.dismiss(); changed(); };
+        const IconComponent = ({ style } = {}) => h(RN.Image, { source: { uri: SIGMA_ICON },
+            resizeMode: 'contain', style: [{ width: 24, height: 24, tintColor: '#949CF7' }, style] });
         return h(React.Fragment, null,
-            h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Math AI and scientific calculator',
-                onPress: () => { if (!session.busy) session.readDraft(); session.visible = true; RN.Keyboard?.dismiss(); changed(); },
-                style: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' } },
-                h(RN.Text, { style: { fontSize: 24, color: '#949CF7', fontWeight: '700' } }, '∑')),
+            session.ActionButton ? h(session.ActionButton, { accessibilityLabel: 'Math AI and scientific calculator', active: true, IconComponent, onPress: open })
+                : h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Math AI and scientific calculator', onPress: open,
+                    style: { width: 40, height: 40, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } }, h(IconComponent)),
             h(RN.Modal, { visible: session.visible, animationType: 'slide', onRequestClose: () => { session.visible = false; changed(); } },
                 h(RN.SafeAreaView, { style: { flex: 1, backgroundColor: '#1E1F22' } },
                     h(Panel, { api, session, modal: true }))));
@@ -262,6 +427,9 @@
         return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 18, paddingBottom: 50 } },
             row([text('Math AI', { color: fg, fontSize: 27, fontWeight: '700' }), modal ? button('Close', () => { session.visible = false; changed(); }) : null]),
             text('Paste a question, then choose Calculate or AI solve. Answers appear here before you send them.'),
+            row([button(session.settings.inline ? 'Inline Calculator: ON' : 'Inline Calculator: OFF', () => save('inline', !session.settings.inline)),
+                button(session.settings.currency ? 'Currency conversions: ON' : 'Currency conversions: OFF', () => save('currency', !session.settings.currency))]),
+            text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Currency examples: = 10 USD to AUD or = 10 USD to SGD. Currency pairs use Frankfurter online; rates have a date and may differ from bank rates. Tap a result to copy it.'),
             input('Math question or expression', session.question, edit, { multiline: true, maxLength: 6000, editable: !session.busy, textAlignVertical: 'top', style: { minHeight: 90, padding: 12, borderRadius: 9, backgroundColor: card, color: fg, fontSize: 17, marginBottom: 10 } }),
             row([button('Load chat draft', () => session.readDraft(), session.busy), button('Paste question', () => { void paste(); }, session.busy),
                 button('Clear', () => edit(''), session.busy), button('⌫', () => edit(session.question.slice(0, -1)), session.busy)]),

@@ -6,3 +6,7 @@ This is a separate implementation with a bounded scientific expression parser,
 an optional user-configured AI connection, and answer preview tools.
 No upstream arithmetic source or image assets are bundled.
 No physical Android device testing has been performed.
+
+Inline currency rates: Frankfurter v2 public API (https://frankfurter.dev/).
+Only currency codes are sent. Displayed dates describe the published rates.
+The sigma icon is an original geometric image drawn for this plugin.
