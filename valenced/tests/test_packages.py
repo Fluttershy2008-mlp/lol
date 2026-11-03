@@ -95,7 +95,15 @@ class ValencedPackages(unittest.TestCase):
                     self.assertEqual(payload, (directory / native["path"]).read_bytes())
                     with zipfile.ZipFile(__import__('io').BytesIO(payload)) as jar:
                         dex = jar.read("classes.dex")
-                    self.assertEqual(dex[:8], b"dex\n035\0")
+                    # D8 emits DEX 039 for Android API 28+; older DX builds use 035.
+            # https://source.android.com/docs/core/runtime/dex-format
+            supported_magic = {b"dex\n035\0"}
+            metadata_path = directory / "native-source.json"
+            if metadata_path.exists():
+                metadata = json.loads(metadata_path.read_text())
+                if metadata.get("minAndroidApi", 0) >= 28:
+                    supported_magic.add(b"dex\n039\0")
+            self.assertIn(dex[:8], supported_magic)
                     self.assertEqual(hashlib.sha1(dex[32:]).digest(), dex[12:32])
                     self.assertEqual(zlib.adler32(dex[12:]) & 0xffffffff, struct.unpack_from("<I", dex, 8)[0])
                     self.assertIn(native["class"].replace(".", "/").encode(), dex)
