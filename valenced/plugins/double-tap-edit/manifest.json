@@ -4,7 +4,7 @@
   "name": "Double Tap Edit",
   "description": "Double-tap your own message to open Discord’s normal text editor. Supports servers and DMs, with adjustable double-tap speed.",
   "author": "fluttershy_simper67 <753962426407452713>",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "PencilIcon",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },

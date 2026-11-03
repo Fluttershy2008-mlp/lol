@@ -226,12 +226,12 @@
     },
     "dev.fluttershy2008.quick-delete": {
       "path": "valenced/plugins/quick-delete/index.js",
-      "sha256": "d1331414a47d0519163d23b2d06efb2c75772025cb47805f320934e0ec465cb6",
-      "originalVersion": "1.2.1",
+      "sha256": "8b5e352f6354d653fb10fbcfa28a72912dd7d1b18d6b2bb6e7809770a7442915",
+      "originalVersion": "1.2.2",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
-        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "sha256": "69d9c0c71748a6cfb13a0859387720ff14573653b80492a69d3e448b64bb02fc",
         "section": "VALENCED",
         "title": "Quick Delete"
       }
@@ -250,8 +250,8 @@
     },
     "dev.fluttershy2008.double-tap-edit": {
       "path": "valenced/plugins/double-tap-edit/index.js",
-      "sha256": "2cf759ea615f5fe1541037a1631b58813ddee36a472ed2c3bcf7650edbaef73a",
-      "originalVersion": "1.0.0",
+      "sha256": "b34129f112436b2bde0dca1fa5838cc0ad26b19134d22dc4990f2a8c75629dc5",
+      "originalVersion": "1.0.1",
       "kind": "native-plugin"
     }
   }

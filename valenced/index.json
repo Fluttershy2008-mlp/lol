@@ -412,11 +412,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.double-tap-edit@1.0.1.zip",
+          "sha256": "1c2fc8e43c1f868da85a5d3f64aacb92075ea6a97e2b5da1327609e75dcb42fe",
+          "size": 7081,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0",
-        "beta": "1.0.0"
+        "latest": "1.0.1",
+        "beta": "1.0.1"
       },
       "name": "Double Tap Edit",
       "description": "Double-tap your own message to open Discord’s normal text editor. Supports servers and DMs, with adjustable double-tap speed.",
@@ -1451,11 +1464,24 @@
               "version": "*"
             }
           }
+        },
+        "1.2.2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.quick-delete@1.2.2.zip",
+          "sha256": "57b6407c2180f3dd9024547d710c6294abf473027596296c84356290f6ba1c1f",
+          "size": 14279,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.2.1",
-        "beta": "1.2.1"
+        "latest": "1.2.2",
+        "beta": "1.2.2"
       },
       "name": "Quick Delete",
       "description": "Choose one-tap reply, one-tap delete or a quick action menu. Native reply bar and keyboard, instant embed removal and a Quick Delete entry in Valenced settings.",

@@ -1,5 +1,7 @@
 # Quick Delete
 
+**1.2.2 gesture compatibility:** works alongside **Double Tap Edit 1.0.1** with **Tap for quick actions** kept on. Single-tap your own message for the quick menu; double-tap it for Discord's **Editing Message** composer. Editable own messages wait for the double-tap interval before running the selected single-tap action, including one-tap reply/delete. Both plugin load orders are supported. Update both plugins and fully restart Discord.
+
 **1.2.1 reply fix:** direct taps no longer wait for Android's interaction-idle
 queue. Reply from the quick menu has a bounded wait, and the first reply can
 open through Discord's normal pending-reply events while its helper modules
@@ -51,7 +53,7 @@ actions after disabling the plugin.
 ## Install
 
 Refresh `https://fluttershy2008-mlp.github.io/lol/valenced/index.json`, find
-**Quick Delete**, update it to **1.2.1** and fully close and reopen Valenced. Find its settings
+**Quick Delete**, update it to **1.2.2** and fully close and reopen Valenced. Find its settings
 directly at **Settings → Valenced → Quick Delete**, alongside Server Leaver and
 Friends List. Its Plugins-page settings button remains available. Saved settings
 and the plugin ID are retained. One-tap reply starts off; Reply in tap menu
@@ -74,3 +76,4 @@ idle scheduling for direct and menu replies, and the first tap before native
 reply helpers load. Extra checks cover the composer fallback, one execution
 after a late idle callback, cancellation and the existing deletion permissions.
 The repaired interaction still requires handset verification.
+

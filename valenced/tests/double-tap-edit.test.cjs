@@ -8,7 +8,8 @@ function fixture(t, options = {}) {
     const w = createWorld(), original = React.createElement;
     w.messages[0].author = w.users[ACCOUNT]; w.messages[0].type = 0;
     w.selected = CHANNEL; w.stores.SelectedChannelStore.getChannelId = () => w.selected;
-    w.actions = { startEditMessage(...args) { assert.equal(this, w.actions); w.calls.push(['edit', ...args]); }, editMessage() {}, sendMessage() {} };
+    w.actions = { startEditMessage(...args) { assert.equal(this, w.actions); w.calls.push(['edit', ...args]); }, editMessage() {}, sendMessage() {},
+        deleteMessage(...args) { w.calls.push(['delete', ...args]); return Promise.resolve({ status: 204 }); }, suppressEmbeds() {} };
     if (!options.cold) w.addModule({ default: w.actions }, 'actions/MessageActionCreators.tsx');
     w.addModule({ getBestActiveInputForChannelId: id => id === CHANNEL ? { openSystemKeyboard: () => w.calls.push(['keyboard']) } : null }, 'utils/native/ChatInputUtils.tsx');
     w.nativeTap = (...args) => { w.calls.push(['tap', ...args]); return 'native'; };
@@ -23,6 +24,7 @@ function fixture(t, options = {}) {
         assert.equal(w.timers.size, 0); assert.equal(w.moduleWaiters.size, 0); assert.equal(w.pathWaiters.size, 0);
         assert.equal(w.stores.UserStore.listeners.size, 0); assert.equal(w.stores.SelectedChannelStore.listeners.size, 0);
         assert.equal(w.appListeners.size, 0); assert.deepEqual(w.errors, []);
+        assert.equal(w.U[Symbol.for('dev.fluttershy2008.message-taps.v1')], undefined);
     });
     return w;
 }
@@ -112,4 +114,77 @@ test('settings render and save the enabled toggle and speed', async t => {
         await w.Renderer.act(async () => ui.root.findAllByType('Pressable')[2].props.onPress());
         assert.equal(item.api.jsonStorage.cache.interval, 500);
     } finally { await w.Renderer.act(async () => ui.unmount()); }
+});
+test('native channel IDs work before the selected-channel store has initialized', async t => {
+    const w = fixture(t); w.stores.SelectedChannelStore.getChannelId = () => undefined;
+    await w.start('double-tap-edit'); w.tap(); w.tap(); assert.equal(w.edits().length, 1);
+});
+for (const order of [['double-tap-edit', 'quick-delete'], ['quick-delete', 'double-tap-edit']]) {
+    test('single tap opens Quick Actions and double tap edits with load order ' + order.join(' then '), async t => {
+        const w = fixture(t);
+        for (const slug of order) await w.start(slug);
+        w.tap(); assert.equal(w.openedSheets.length, 0); await w.advance(351);
+        assert.equal(w.openedSheets.length, 1, 'single tap opens exactly one Quick Actions sheet');
+        assert.equal(w.edits().length, 0);
+        w.tap(); await w.advance(80); w.tap(); await w.advance(351);
+        assert.equal(w.edits().length, 1, 'double tap opens the editor');
+        assert.equal(w.openedSheets.length, 1, 'double tap does not open another quick menu');
+        assert.equal(w.calls.filter(c => c[0] === 'delete').length, 0);
+    });
+    test('native handler callbacks work with both plugins, load order ' + order.join(' then '), async t => {
+        const w = fixture(t);
+        class MessagesHandlers {
+            constructor() { this.handleTapMessage = w.nativeTap; this.handleLongPressMessage = w.hold; }
+            get params() { return { channelId: CHANNEL, chatInputRef: { current: { openSystemKeyboard: () => w.calls.push(['nativeKeyboard']) } } }; }
+            getMessageData() { return { message: w.messages[0], messageChannel: w.channels[CHANNEL] }; }
+        }
+        const namespace = { MessagesHandlers }, descriptor = Object.getOwnPropertyDescriptor(MessagesHandlers.prototype, 'params');
+        w.addModule(namespace, 'modules/messages/native/MessagesHandlers.tsx');
+        const items = [];
+        for (const slug of order) items.push(await w.start(slug));
+        // This callback never passes through a React factory.
+        const handler = new namespace.MessagesHandlers(); void handler.params;
+        const captured = handler.handleTapMessage;
+        captured(w.event); await w.advance(70); captured(w.event); await w.advance(351);
+        assert.equal(w.edits().length, 1); assert.equal(w.openedSheets.length, 0);
+        captured(w.event); await w.advance(351); assert.equal(w.openedSheets.length, 1);
+        // Stop in creation order too, so getter restoration is not limited to a stack.
+        for (const item of items) await w.stop(item);
+        assert.equal(namespace.MessagesHandlers, MessagesHandlers);
+        assert.equal(Object.getOwnPropertyDescriptor(MessagesHandlers.prototype, 'params').get, descriptor.get);
+        assert.equal(handler.handleTapMessage, w.nativeTap);
+    });
+    test('one-tap delete waits for a possible edit instead of deleting on the first tap, ' + order.join(' then '), async t => {
+        const w = fixture(t);
+        for (const slug of order) await w.start(slug, slug === 'quick-delete' ? { directDelete: true } : {});
+        w.tap(); await w.advance(80); w.tap(); await w.advance(500);
+        assert.equal(w.edits().length, 1); assert.equal(w.calls.filter(c => c[0] === 'delete').length, 0);
+        w.tap(); await w.advance(351);
+        assert.equal(w.calls.filter(c => c[0] === 'delete').length, 1);
+    });
+}
+test('constructor hook reaches arrow callbacks even when params is a non-configurable own property', async t => {
+    const w = fixture(t);
+    class MessagesHandlers { constructor() { Object.defineProperty(this, 'params', { value: {} }); this.handleTapMessage = w.nativeTap; } }
+    const namespace = { MessagesHandlers }; w.addModule(namespace, 'modules/messages/native/MessagesHandlers.tsx');
+    await w.start('double-tap-edit'); const instance = new namespace.MessagesHandlers();
+    instance.handleTapMessage(w.event); instance.handleTapMessage(w.event); assert.equal(w.edits().length, 1);
+});
+test('cached constructor params getter and source wrappers do not count the same tap twice', async t => {
+    const w = fixture(t);
+    class MessagesHandlers {
+        constructor() { this.handleTapMessage = w.nativeTap; }
+        get params() { return {}; }
+    }
+    const instance = new MessagesHandlers(); w.addModule({ MessagesHandlers }, 'modules/messages/native/MessagesHandlers.tsx');
+    await w.start('double-tap-edit'); void instance.params;
+    const element = React.createElement('NativeChat', { onTapMessage: instance.handleTapMessage, onLongPressMessage: w.hold });
+    element.props.onTapMessage(w.event); await w.advance(351); assert.equal(w.edits().length, 0);
+    assert.equal(w.calls.filter(c => c[0] === 'tap').length, 1);
+    element.props.onTapMessage(w.event); await w.advance(60); element.props.onTapMessage(w.event); assert.equal(w.edits().length, 1);
+});
+test('pending taps keep pooled React Native events alive', async t => {
+    const w = fixture(t); await w.start('double-tap-edit'); let persisted = false;
+    w.tap({ ...w.event, persist() { persisted = true; } }); assert.ok(persisted);
+    await w.advance(351); assert.equal(w.calls.filter(c => c[0] === 'tap').length, 1);
 });

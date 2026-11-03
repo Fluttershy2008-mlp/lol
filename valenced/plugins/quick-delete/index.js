@@ -4,6 +4,7 @@
     const SHEET = 'dev.fluttershy2008.quick-delete.actions';
     const HANDLERS_PATH = 'modules/messages/native/MessagesHandlers.tsx';
     const MESSAGE_ACTIONS_PATH = 'actions/MessageActionCreators.tsx';
+    const EDIT_GESTURE = Symbol.for('dev.fluttershy2008.message-taps.v1');
     const optional = fn => { try { return fn(); } catch { return undefined; } };
     const validId = value => typeof value === 'string' && /^\d{1,20}$/.test(value);
     const settingsOf = value => {
@@ -278,13 +279,17 @@
             if (session.settings.directDelete && resolve(ref)?.canDelete && typeof actions?.deleteMessage === 'function') { void run('delete', ref); return true; }
             return showQuick(ref, handler);
         }
+        function routeTap(event, handler, forward) {
+            const run = () => tap(event, handler) ? undefined : forward();
+            const gesture = U[EDIT_GESTURE];
+            return live() && typeof gesture?.handle === 'function' ? gesture.handle(event, handler, run) : run();
+        }
         const patchedHandlers = new WeakSet(), patchedClasses = new WeakSet();
         function patchHandler(handler) {
             if (!live() || !handler || patchedHandlers.has(handler) || typeof handler.handleTapMessage !== 'function') return;
             patchedHandlers.add(handler);
             session.removers.push(U.patcher.instead(handler, 'handleTapMessage', function(args, original) {
-                if (tap(args[0], handler)) return;
-                return Reflect.apply(original, this, args);
+                return routeTap(args[0], handler, () => Reflect.apply(original, this, args));
             }));
             session.hooks++;
         }
@@ -296,10 +301,15 @@
             // Some builds expose a configurable getter. Other builds use the native-view fallback below.
             if (descriptor?.get && descriptor.configurable) {
                 const get = function() { patchHandler(this); return Reflect.apply(descriptor.get, this, []); };
+                const marker = Symbol.for('dev.fluttershy2008.message-params.v1');
+                get[marker] = { descriptor, live };
                 Object.defineProperty(Type.prototype, 'params', { ...descriptor, get });
                 session.removers.push(() => {
-                    if (Object.getOwnPropertyDescriptor(Type.prototype, 'params')?.get === get)
-                        Object.defineProperty(Type.prototype, 'params', descriptor);
+                    if (Object.getOwnPropertyDescriptor(Type.prototype, 'params')?.get === get) {
+                        let restore = descriptor;
+                        while (restore.get?.[marker] && !restore.get[marker].live()) restore = restore.get[marker].descriptor;
+                        Object.defineProperty(Type.prototype, 'params', restore);
+                    }
                 });
             }
         }
@@ -323,8 +333,7 @@
             let wrapped = wrappedTaps.get(original);
             if (!wrapped) {
                 wrapped = function(event, ...rest) {
-                    if (tap(event)) return;
-                    return Reflect.apply(original, this, [event, ...rest]);
+                    return routeTap(event, undefined, () => Reflect.apply(original, this, [event, ...rest]));
                 };
                 wrappedTaps.set(original, wrapped); wrappedTaps.set(wrapped, wrapped);
                 session.hooks++; session.status = 'Tap actions connected.';
@@ -432,8 +441,9 @@
             toggle('skipEmbeds', 'Skip Remove Embeds confirmation', 'Skip the native Remove Embeds confirmation from the full message menu.'),
             toggle('feedback', 'Success feedback', 'Show a short toast after a successful action. Errors are always shown.'),
             h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 8 } }, 'Reply opens Discord’s normal reply bar and keeps your draft. Remove Embeds keeps the text and attachments. Deleting a message removes it for everyone and requires permission.'),
-            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.2.1'));
+            h(RN.Text, { style: { color: muted, lineHeight: 21, marginTop: 14 } }, (session?.status ?? 'Plugin is stopped.') + '\nQuick Delete 1.2.2'));
     }
     return { default: { jsonStorage: { load: true, default: { ...DEFAULTS } }, start,
         stop() { stopSession(current); }, SettingsComponent } };
 })()
+
