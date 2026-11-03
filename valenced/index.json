@@ -1467,7 +1467,7 @@
         },
         "1.2.2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.quick-delete@1.2.2.zip",
-          "sha256": "57b6407c2180f3dd9024547d710c6294abf473027596296c84356290f6ba1c1f",
+          "sha256": "25051ee6e063c1958d36cb6e3eb2e1f4ffde8b4af860816f7ab6894c9eb5d10c",
           "size": 14279,
           "dependencies": {
             "valenced.api": {
