@@ -1,0 +1,44 @@
+name: Publish Math AI Valenced update
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'valenced/plugins/math-ai/index.js'
+      - 'valenced/plugins/math-ai/manifest.json'
+      - '.github/workflows/publish-math-ai.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Package Valenced plugins and regenerate repository index
+        run: python3 valenced/build.py
+      - name: Test the updated Math AI plugin
+        run: |
+          node --test valenced/tests/math-ai.test.cjs
+          python3 -m unittest discover -s valenced/tests -p 'test_*.py'
+      - name: Provide installable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Math-AI-Valenced-2.2.2
+          path: valenced/pool/dev.fluttershy2008.math-ai@2.2.2.zip
+      - name: Publish version to the Valenced repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add valenced/index.json valenced/pool/dev.fluttershy2008.math-ai@2.2.2.zip
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish Math AI 2.2.2 ZIP and index"
+            git push origin HEAD:main
+          fi
