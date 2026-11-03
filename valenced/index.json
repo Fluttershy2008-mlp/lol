@@ -838,14 +838,27 @@
               "version": "*"
             }
           }
+        },
+        "2.0.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@2.0.0.zip",
+          "sha256": "edb995b0568f23ba3047fa48c747d27e62cc4fde6b107c2b909a6b2959e9591e",
+          "size": 29071,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.2.0",
-        "beta": "1.2.0"
+        "latest": "2.0.0",
+        "beta": "2.0.0"
       },
       "name": "Math AI & Scientific Calculator",
-      "description": "Automatically solve maths when you press Send. Expanded scientific keypad, optional inline previews, offline units, dated currency rates and optional AI answers.",
+      "description": "No-key Gemini Nano AI through the Math Nano Android companion, with automatic send-time maths, scientific keypad, live previews and unit conversions.",
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "ScienceIcon"
     },

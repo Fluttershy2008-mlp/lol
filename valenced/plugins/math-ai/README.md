@@ -48,18 +48,30 @@ Runs offline without an API key. Supports DEG/RAD, parentheses, implicit multipl
 
 Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!`, `ncr(10,3)`, `npr(10,3)`, `log(1000)`, `ln(e)`, `2^3^2`, `1e-3`. Postfix `%` divides by 100, so `200*10%` is 20 and `200+10%` is 200.1. For equations, variables, units, or written questions use AI solve.
 
-## AI setup
+## Gemini Nano AI setup (2.0.0)
 
-Open **AI setup** and supply your own provider's HTTPS **Chat Completions endpoint**, model name and API key. Defaults are `https://api.openai.com/v1/chat/completions` and `gpt-4.1-mini`; change the model to one your provider supports. Other providers must implement the same request/response format. A ChatGPT subscription does not provide API access or credits.
+Cloud AI configuration and API key fields have been removed. AI solve now uses Gemini Nano on the device through the **Math Nano** companion Android app. This release requires two installs:
 
-The API key is held in memory only and must be re-entered after a restart. It is never written to plugin JSON settings, logs or GitHub. Changing endpoint clears the key. Only the panel question and math instructions are transmitted, and only when AI solve is tapped; provider charges and privacy terms apply. Endpoint and model settings persist, while recent answers remain in memory. No shared key or free hosted service is included.
+1. Install [Math Nano companion 1.0.0 APK](Math_Nano_Companion_v1.0.0.apk) on your phone.
+2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.0.0**, then fully close and reopen Discord to load the native bridge.
+3. Open the plugin's **AI setup → Open Nano setup**. The companion checks whether Gemini Nano is ready, downloadable, downloading or unavailable.
+4. If offered, tap **Download / prepare Nano**, keep the screen open and allow the model to finish downloading. The model may be large and needs internet and storage for initial setup.
+5. Return to Valenced. Paste a question into the panel and tap **AI solve**. The companion opens in the foreground, solves locally, and returns the answer to the plugin for review, copying or appending.
 
-AI answers can be wrong: review assumptions, units and working. Choose whether to include working steps. Requests time out after 45 seconds, can be cancelled, and are cancelled when the plugin stops. Repeated taps cannot start duplicate requests. Unavailable clipboard, composer hooks, network, keys, credits and unsupported responses show actionable errors.
+No API key, cloud AI endpoint or paid API account is used for inference. The initial model preparation is managed by Android AICore; currency previews continue to use Frankfurter separately. The companion does not save questions or answers to files and disables Android backup. Google SDK/system components may have their own diagnostics and network activity.
+
+The companion is necessary because ML Kit requires the AICore binding permission in the Android app manifest. A Valenced plugin ZIP cannot add that permission to Discord. Keeping the SDK in its own APK also avoids conflicts with Discord's Kotlin and Google libraries, and keeps Nano inference in a real foreground Activity as required by AICore.
+
+Google lists the Samsung Galaxy S26 Ultra as supported, but runtime availability depends on the installed AICore version, downloaded model and device configuration. If unavailable, update Android AICore/Google Play system components and retry; don't clear AICore data as a troubleshooting default. An unlocked bootloader can prevent Nano access. The scientific calculator and automatic send-time maths remain usable regardless of Nano availability.
+
+Answers can be wrong. Check the final answer, assumptions and working. Cancelling or stopping the plugin cancels the identified companion request; results from old requests are rejected. Switching away pauses inference; return to the companion and check/retry. Input is bounded to 6,000 characters and checked against Nano's context window; output is bounded. Inference waits up to two minutes, model preparation up to fifteen minutes, and the plugin's overall operation is bounded to twenty minutes.
+
+SDK: `com.google.mlkit:genai-prompt:1.0.0-beta4`, with coroutines pinned to `1.11.0` for Google's documented download fix. Sources: [Google setup](https://developers.google.com/ml-kit/genai/prompt/android/get-started), [device support](https://developers.google.com/ml-kit/genai), [known issues](https://developers.google.com/ml-kit/known-issues).
 
 ## Compatibility and validation
 
 Uses Valenced API v1 and the current Math plugin's imported chat-input path. Button insertion depends on Discord internals and can require a full restart; settings remain available when a button hook changes. Drafts are loaded only on request. Appending checks the original account and channel, preserves the question, and is disabled for answers over 1,900 characters; copy longer answers instead. Automatic send-time solving is controlled by the separate Solve when sending switch.
 
-Automated tests cover live draft previews, unit and currency conversions, cache/cancellation behaviour, native icon sizing, the parser, AI request/response/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. Physical Samsung/Android testing and live paid AI requests have not been performed.
+Automated tests cover live draft previews, unit and currency conversions, cache/cancellation behaviour, native icon sizing, the parser, native Nano request/result/error handling, cancellation, lifecycle cleanup, settings key exclusion and packaged entry point. The bridge is compiled against Android and the companion is compiled against the real ML Kit SDK. Physical Samsung/Android and real AICore inference testing have not been performed.
 
 Inspired by [mlemception's Math](https://github.com/mlemception/mlem-plugins/tree/main/plugins/math); this separate implementation does not bundle its source or icon.

@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const source = fs.readFileSync(path.join(__dirname, '../plugins/math-ai/index.js'), 'utf8');
 function load(extra = {}) {
     const context = { setTimeout, clearTimeout, setInterval, clearInterval, AbortController, ...extra };
-    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, endpointOf, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
+    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, runNano, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
     return vm.runInNewContext(code, context);
 }
 function harness(extra = {}) {
@@ -47,11 +47,10 @@ test('rejects code, invalid domains, malformed expressions and excessive work', 
         '(-1)!', '2+', '(2+3', 'sin(1,2)', 'root(0,2)', 'tan(90)', '2^10000', '('.repeat(70)+'1'+')'.repeat(70),
         '2^'.repeat(100)+'2', '1+'.repeat(300)+'1', '1'.repeat(2001)]) assert.throws(() => c(q), undefined, q);
 });
-test('settings strip keys, questions and answer history; endpoint validation', () => {
-    const { settingsOf, endpointOf } = load().test;
-    assert.deepEqual(Object.keys(settingsOf({ key:'secret', question:'private', history:[] })).sort(),['angle','autoSend','currency','endpoint','inline','model','steps']);
-    assert.equal(endpointOf('https://api.openai.com/v1/chat/completions'),'https://api.openai.com/v1/chat/completions');
-    for (const url of ['http://host/v1','https://user:pass@host/v1','https://host/path?key=secret','https://host/path#secret','https://host/\\evil']) assert.throws(() => endpointOf(url));
+test('settings remove old cloud fields, keys, questions and answer history', () => {
+    const { settingsOf } = load().test;
+    assert.deepEqual(Object.keys(settingsOf({ key:'secret', endpoint:'https://old.example/v1', model:'old-cloud-model', question:'private', history:[] })).sort(),['angle','autoSend','currency','inline','steps']);
+
 });
 test('chat button loads the draft, appends only on request and rejects channel/account changes', async () => {
     const h = harness(); await h.default.start(h.api);
@@ -67,43 +66,49 @@ test('chat button loads the draft, appends only on request and rejects channel/a
     s.result = '14'; s.append(); assert.equal(h.inserted[0][0],'INSERT_TEXT'); assert.equal(h.inserted[0][1].rawText,'\n14');
     h.draft.channel = '789'; s.append(); assert.match(s.error,/original chat/); assert.equal(h.inserted.length,1);
     h.draft.channel = '123'; h.draft.account = '999'; s.append(); assert.equal(h.inserted.length,1);
-    s.key = 'not-saved'; h.default.stop(); assert.equal(s.key,''); assert.equal(mod.default.type,original); assert.equal(h.callbacks.size,0);
+    h.default.stop(); assert.equal(mod.default.type,original); assert.equal(h.callbacks.size,0);
     for (const fn of h.removers) fn();
 });
-test('AI sends only the selected question and instructions, parses answer and blocks duplicate taps', async () => {
-    let resolve, count=0, sent;
-    const h = harness({ fetch: (url, request) => { count++; sent={url,request}; return new Promise(r => { resolve=r; }); } });
-    await h.default.start(h.api); const s=h.test.getSession(); s.question='Solve 2x+3=9'; s.key='test-key';
-    const pending=h.test.solveAI(s); await h.test.solveAI(s); assert.equal(count,1); assert.equal(s.busy,true);
-    const body=JSON.parse(sent.request.body); assert.equal(body.messages.length,2); assert.equal(body.messages[1].content,s.question);
-    assert.equal(sent.request.headers.Authorization,'Bearer test-key'); assert.equal(sent.request.redirect,'error');
-    resolve({ok:true,text:async()=>JSON.stringify({choices:[{message:{content:'x = 3'},finish_reason:'stop'}]})});
-    await pending; assert.equal(s.result,'x = 3'); assert.equal(s.busy,false); assert.equal(s.history.length,1); assert.equal(h.saved.length,0);
-    h.default.stop();
+test('Nano solve uses the native bridge without a key or any cloud AI request', async () => {
+    const h=harness({fetch:()=>{throw Error('Cloud inference must not be used');}}),calls=[];
+    h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{calls.push([name,args]);return {phase:'done',jobId:'job-1',answer:'x = 3',availability:'ready'};}};
+    await h.default.start(h.api);const session=h.test.getSession();session.question='Solve 2x+3=9';
+    await h.test.solveAI(session);assert.equal(session.result,'x = 3');assert.match(session.resultKind,/Gemini Nano/);assert.equal(session.busy,false);
+    assert.equal(calls[0][0],'dev.fluttershy2008.math-ai.nano.solve');assert.deepEqual(Array.from(calls[0][1]),['Solve 2x+3=9','DEG',true]);
+    assert.equal(session.history.length,1);assert.equal(h.saved.length,0);h.default.stop();
 });
-test('AI errors, no key, empty content, invalid JSON, cut-off answer and credit failures', async () => {
-    for(const response of [ {ok:false,status:401}, {ok:false,status:429}, {ok:false,status:500},
-        {ok:true,text:async()=>'bad json'}, {ok:true,text:async()=>'{}'},
-        {ok:true,text:async()=>JSON.stringify({choices:[{finish_reason:'length',message:{content:'partial'}}]})} ]) {
-        const h=harness({fetch:async()=>response}); await h.default.start(h.api); const s=h.test.getSession(); s.question='2+2';
-        await h.test.solveAI(s); assert.match(s.error,/API key/); s.key='test-key'; await h.test.solveAI(s);
-        assert.ok(s.error); assert.equal(s.result,''); assert.equal(s.busy,false); h.default.stop();
+test('Nano setup checks model readiness without a question or API fields', async () => {
+    const h=harness(),calls=[];h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{calls.push([name,args]);return {result:{phase:'done',jobId:'setup',answer:'',availability:'ready'}};}};
+    await h.default.start(h.api);const s=h.test.getSession();await h.test.runNano(s,true);assert.match(s.notice,/ready/);assert.equal(s.nanoAvailability,'ready');
+    assert.equal(calls[0][0],'dev.fluttershy2008.math-ai.nano.setup');assert.equal(calls[0][1].length,0);h.default.stop();
+});
+test('Nano reports unavailable native bridge, missing companion and invalid answers without cloud fallback', async () => {
+    const h=harness();await h.default.start(h.api);const s=h.test.getSession();s.question='2+2';await h.test.solveAI(s);assert.match(s.error,/Android Nano bridge/);h.default.stop();
+    for(const status of [{phase:'error',error:'Install the Math Nano companion APK first',jobId:'one'},
+        {phase:'done',answer:'',jobId:'one'},{phase:'cancelled',jobId:'one'},{phase:'done',answer:'x'.repeat(16001),jobId:'one'}]){
+        const w=harness();w.api.unscoped.modules.native={callNativeMethod:async()=>status};await w.default.start(w.api);const session=w.test.getSession();session.question='2+2';
+        await w.test.solveAI(session);assert.ok(session.error);assert.equal(session.result,'');assert.equal(session.busy,false);w.default.stop();
     }
 });
-test('AI timeout and cancel settle stalled fetch/body and stop clears all session data', async () => {
-    for(const stage of ['fetch','body']) {
-        let timer;
-        const h=harness({fetch:async()=> stage==='fetch' ? new Promise(()=>{}) : {ok:true,text:()=>new Promise(()=>{})},
-            setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>{}});
-        await h.default.start(h.api); const s=h.test.getSession(); s.question='2+2'; s.key='key';
-        let pending=h.test.solveAI(s); timer(); await pending; assert.match(s.error,/timed out/);
-        pending=h.test.solveAI(s); h.test.cancel(s); await pending; assert.match(s.error,/cancelled/);
-        pending=h.test.solveAI(s); h.default.stop(); await pending;
-        assert.equal(s.key,''); assert.equal(s.question,''); assert.equal(s.result,''); assert.equal(s.history.length,0);
-    }
+test('Nano polls an identified job, ignores duplicate taps, and handles cancellation and plugin stop', async () => {
+    const timers=new Map();let serial=0;const calls=[],statuses=[];
+    const h=harness({setTimeout:(fn,delay)=>{const id=++serial;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id)});
+    h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{calls.push([name,args]);if(name.endsWith('.status'))return statuses.shift();return {phase:'opening',jobId:'nano-1'};}};
+    await h.default.start(h.api);const s=h.test.getSession();s.question='2+2';let run=h.test.solveAI(s);await h.test.solveAI(s);
+    for(let i=0;i<5;i++)await Promise.resolve();assert.equal(calls.filter(c=>c[0].endsWith('.solve')).length,1);
+    statuses.push({phase:'done',jobId:'nano-1',answer:'4',availability:'ready'});[...timers.values()].find(t=>t.delay===500).fn();await run;assert.equal(s.result,'4');
+    run=h.test.solveAI(s);for(let i=0;i<5;i++)await Promise.resolve();h.test.cancel(s);await run;assert.match(s.error,/cancelled/);
+    assert.ok(calls.some(c=>c[0].endsWith('.cancel')&&c[1][0]==='nano-1'));
+    run=h.test.solveAI(s);for(let i=0;i<5;i++)await Promise.resolve();h.default.stop();await run;assert.equal(s.question,'');assert.equal(s.result,'');assert.equal(s.history.length,0);assert.equal(timers.size,0);
+});
+test('Nano rejects a result from a different job instead of showing a stale answer', async () => {
+    let poll;const h=harness({setTimeout:(fn,delay)=>{if(delay===500)poll=fn;return delay;},clearTimeout:()=>{}});
+    h.api.unscoped.modules.native={callNativeMethod:async(name)=>name.endsWith('.status')?{phase:'done',jobId:'other-job',answer:'bad'}:{phase:'opening',jobId:'expected'}};
+    await h.default.start(h.api);const s=h.test.getSession();s.question='2+2';const run=h.test.solveAI(s);for(let i=0;i<5;i++)await Promise.resolve();poll();await run;
+    assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@1.2.0.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.0.0.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -112,7 +117,7 @@ test('packaged plugin starts, retains settings access, and saves no API key from
     const nodes=[]; function visit(n){if(Array.isArray(n))n.forEach(visit);else if(n&&typeof n==='object'){nodes.push(n);visit(n.props?.children);}} visit(rendered);
     const saveAngle=nodes.find(n=>n.props?.accessibilityLabel==='RAD'); assert.ok(saveAngle); saveAngle.props.onPress();
     await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['angle','autoSend','currency','endpoint','inline','model','steps']);
+    assert.equal(h.saved.at(-1).angle,'RAD'); assert.deepEqual(Object.keys(h.saved.at(-1)).sort(),['angle','autoSend','currency','inline','steps']);
     packaged.default.stop(); for(const fn of h.removers)fn();
 });
 

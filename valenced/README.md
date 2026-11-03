@@ -1,6 +1,6 @@
 **More Alts! stable13:** Added account-specific **Re-sign in** when Discord rejects a saved session. Password and two-factor authentication errors are now explained separately, and the plugin never deletes an expired account automatically. Only More Alts! is promoted to stable13; all other plugin versions remain unchanged. QR login stays removed. Keep your plugin data when updating.
 
-**Math AI & Scientific Calculator 1.2.0**: type `2+2` and press Discord’s normal Send button to send `4`. Solve when sending is enabled by default, with its own toggle. The scientific keypad now includes more powers, roots, trig, logs, combinatorics and symbol options. Inline previews, units and dated currency conversions remain available. [Setup and examples](plugins/math-ai/README.md).
+**Math AI & Scientific Calculator 2.0.0** replaces cloud AI/key fields with on-device Gemini Nano. Install the [Math Nano companion APK](plugins/math-ai/Math_Nano_Companion_v1.0.0.apk), update the plugin, and fully restart Discord. Use **AI setup → Open Nano setup** to check/download the model. Existing automatic maths, scientific keys and inline previews remain available. [Setup and requirements](plugins/math-ai/README.md).
 
 # Fluttershy's Valenced plugins
 

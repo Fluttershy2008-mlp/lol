@@ -14,3 +14,10 @@ The sigma icon is an original geometric image drawn for this plugin.
 Version 1.2.0 adds independently implemented offline send-time solving inspired
 by mlemception Math. Basic arithmetic fragments in prose and whole scientific
 expressions are supported; literals and invalid expressions are preserved.
+
+Version 2.0.0 removes cloud AI and API key configuration. Gemini Nano is
+provided by Google's ML Kit GenAI SDK and Android AICore through the Math Nano
+companion APK. SDK and service terms: https://developers.google.com/ml-kit/terms
+Google SDK setup: https://developers.google.com/ml-kit/genai/prompt/android/get-started
+The companion pins kotlinx-coroutines 1.11.0 for the documented Nano download fix.
+No model weights or shared cloud credentials are bundled in the plugin.

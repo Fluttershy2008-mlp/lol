@@ -1,0 +1,20 @@
+{
+  "package": "dev.fluttershy2008.mathnano",
+  "activity": "dev.fluttershy2008.mathnano.NanoActivity",
+  "version": "1.0.0",
+  "apk": "Math_Nano_Companion_v1.0.0.apk",
+  "sha256": "ffa870e7e986222b3e8aba47828e47f36180291255671802867ae833e05f25e5",
+  "size": 4231930,
+  "mlKitPrompt": "1.0.0-beta4",
+  "coroutines": "1.11.0",
+  "agp": "8.13.2",
+  "gradle": "8.13",
+  "sources": {
+    "settings.gradle": "5bfc65a843ae14ffd57c48288e73cb96c81907ee90a2a8f5f5b9f005aa25eb34",
+    "build.gradle": "96a33edb21d173da2c36f5312f50cdfb9f71d9f5078c081c81f2d029547f6cb9",
+    "gradle.properties": "99a268d5dfbb1a6a42ea57e62ddde98263990d158076fe840c690012c9659198",
+    "app/build.gradle": "05cd4f9f46d08298e79b64d9a467a92a020571e4832d2ec64857ea3a0231c26c",
+    "app/src/main/AndroidManifest.xml": "bd8687eb53bff399e627f74455c73ec14709cf01ec10c308b26c61e51bd9ac54",
+    "app/src/main/java/dev/fluttershy2008/mathnano/NanoActivity.java": "cc04ab8602278ce4f2046d60f995a613366cc827bdb1a475ce0c364cd91a8e2e"
+  }
+}
