@@ -238,8 +238,8 @@
     },
     "dev.fluttershy2008.math-ai": {
       "path": "valenced/plugins/math-ai/index.js",
-      "sha256": "f07a2dccf7bdbc85711e083b4f1f4665bfa398a87bf9685a22c42445838ebf76",
-      "originalVersion": "2.2.0",
+      "sha256": "58177689b2f1d2f519d43a0c674f4f9ce2f32548a66b7b2fb704af6dd4099a6e",
+      "originalVersion": "2.2.1",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",

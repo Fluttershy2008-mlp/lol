@@ -903,11 +903,24 @@
               "version": "*"
             }
           }
+        },
+        "2.2.1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@2.2.1.zip",
+          "sha256": "6b7a456fa7a4db06d08cebcac7340fce71966a8b22ed1be3c7e1065ba180ae59",
+          "size": 37896,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "2.2.0",
-        "beta": "2.2.0"
+        "latest": "2.2.1",
+        "beta": "2.2.1"
       },
       "name": "Math AI & Scientific Calculator",
       "description": "Show currency conversions inside the editable chat bar: type 10 MYR to SGD. Includes short Nano AI answers, scientific maths and units.",

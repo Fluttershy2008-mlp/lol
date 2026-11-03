@@ -108,7 +108,7 @@ test('Nano rejects a result from a different job instead of showing a stale answ
     assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.2.0.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.2.1.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -402,10 +402,10 @@ test('currency appears inside the native chat input, refreshes the amount and cl
     h.draft.text='10 myr to sgd';const ui=mountHooks(h,h.test.InlinePreview,{api:h.api,session:s});assert.equal(ui.render(),null);
     [...timers.values()].find(t=>t.ms===550).fn();await new Promise(r=>setImmediate(r));assert.equal(ui.render(),null);
     const first=native.find(c=>c[1][1]==='10 myr to sgd');assert.ok(first);assert.equal(first[0],'dev.fluttershy2008.math-ai.currency.preview');
-    assert.equal(first[1][2],'≈ 3.10 SGD');assert.equal(h.draft.text,'10 myr to sgd');assert.equal(s.lastCurrencyLabel,'10 MYR ≈ 3.10 SGD · 2026-11-03');
+    assert.equal(first[1][2],'3.10 SGD');assert.equal(h.draft.text,'10 myr to sgd');assert.equal(s.lastCurrencyLabel,'10 MYR ≈ 3.10 SGD · 2026-11-03');
     h.draft.text='20 myr to sgd';for(const fn of events)fn();ui.render();
     [...timers.values()].filter(t=>t.ms===550).at(-1).fn();await new Promise(r=>setImmediate(r));assert.equal(ui.render(),null);
-    const second=native.find(c=>c[1][1]==='20 myr to sgd');assert.equal(second[1][2],'≈ 6.20 SGD');
+    const second=native.find(c=>c[1][1]==='20 myr to sgd');assert.equal(second[1][2],'6.20 SGD');
     assert.ok(second[1][0]>first[1][0]);assert.equal(fetches,1);
     h.draft.text='hello';for(const fn of events)fn();assert.equal(ui.render(),null);
     assert.equal(native.at(-1)[1][1],'');assert.equal(native.at(-1)[1][2],'');ui.unmount();h.default.stop();
@@ -417,7 +417,7 @@ test('currency sends use fetched rates with Sigma either on or off and preserve 
         await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=aiSend;
         const {actions,sent}=connectSender(h),message={content:'10 myr to sgd',nonce:'fx',attachments:[],allowedMentions:{parse:[]}},options={tts:false};
         const pending=actions.sendMessage('123',message,options);assert.equal(sent.length,0);assert.equal(actions.sendMessage('123',message,options),pending);
-        await pending;assert.equal(sent.length,1);assert.equal(sent[0].args[1].content,'10 MYR ≈ 3.10 SGD · 2026-11-03');
+        await pending;assert.equal(sent.length,1);assert.equal(sent[0].args[1].content,'3.10 SGD');assert.equal(s.lastCurrencyLabel,'10 MYR ≈ 3.10 SGD · 2026-11-03');
         assert.equal(sent[0].args[1].attachments,message.attachments);assert.equal(sent[0].args[1].allowedMentions,message.allowedMentions);assert.equal(sent[0].args[2],options);
         assert.equal(message.content,'10 myr to sgd');assert.deepEqual(requests,['https://api.frankfurter.dev/v2/rate/myr/sgd']);
         assert.equal(s.busy,false);assert.equal(s.pendingSend,undefined);h.default.stop();

@@ -338,7 +338,9 @@
                 if (conversion) {
                     session.error = ''; session.busy = true; session.nanoMode = 'currency'; changed();
                     session.sendFx = rateRequest(session, conversion.from, conversion.to);
-                    answer = currencyLabel(conversion, await session.sendFx.promise);
+                    const rate = await session.sendFx.promise;
+                    answer = currencyText(conversion.amount * rate.rate, conversion.to);
+                    session.lastCurrencyLabel = currencyLabel(conversion, rate);
                 } else answer = await runNano(session, false, { steps: false, shortReply: true });
                 const modeEnabled = conversion ? session.settings.currency && (session.settings.aiSend || session.settings.autoSend) : session.settings.aiSend;
                 if (!session.active || current !== session || moved || session.sendEpoch !== epoch || !modeEnabled
@@ -575,7 +577,7 @@
                             const rate = await job.promise;
                             if (!live || !session.active || snapshot !== session.snapshot()) return;
                             const label = currencyLabel(result, rate);
-                            const native = await currencyInline(session, snapshot, draft, '≈ ' + currencyText(result.amount * rate.rate, result.to));
+                            const native = await currencyInline(session, snapshot, draft, currencyText(result.amount * rate.rate, result.to));
                             session.lastCurrencyLabel = label;
                             show({ kind: 'currency', text: currencyText(result.amount * rate.rate, result.to), label, date: rate.date, native });
                         } catch (error) { show({ error: error.message || 'Could not load exchange rates.' }); }
@@ -701,7 +703,7 @@
             text('Send 2+2 using Discord’s normal send button and your message becomes 4. Scientific expressions and offline unit conversions also work. This switch is independent of the inline preview and needs no AI key.'),
             (session.settings.autoSend || session.settings.aiSend) && !session.sendReady ? text('Open a chat or fully restart Discord to connect automatic solving.') : null,
             text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Tap a calculator result to copy it. Currency conversions use the inline chat display below.'),
-            text('Currency inside the chat bar: type 10 MYR to SGD (no = needed). After a short pause the native input displays the converted amount. The latest rate date is shown here and included when sending. Your original query stays editable. With Solve when sending or Auto AI solve enabled, Send posts the dated conversion. Internet is required; a rate is never invented by AI. Fully restart Valenced after installing this native update.'),
+            text('Currency inside the chat bar: type 10 MYR to SGD (no = needed). The input and sent message show just the converted amount and currency. The full conversion and rate date stay here in settings. Your original query stays editable. With Solve when sending or Auto AI solve enabled, Send posts the converted amount. Internet is required; a rate is never invented by AI.'),
             session.lastCurrencyLabel ? text('Last currency conversion: ' + session.lastCurrencyLabel) : null,
             input('Math question or expression', session.question, edit, { multiline: true, maxLength: 6000, editable: !session.busy, textAlignVertical: 'top', style: { minHeight: 90, padding: 12, borderRadius: 9, backgroundColor: card, color: fg, fontSize: 17, marginBottom: 10 } }),
             row([button('Load chat draft', () => session.readDraft(), session.busy), button('Paste question', () => { void paste(); }, session.busy),

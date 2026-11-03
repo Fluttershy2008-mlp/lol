@@ -4,13 +4,17 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
+## Clean conversion results (2.2.1)
+
+Currency previews and sent messages now show only the converted amount and target code, for example `31.79 MYR`. They omit the original amount, approximation symbol and date. The full conversion and rate date remain in Math AI settings under Last currency conversion.
+
 ## Currency inside the editable chat bar (2.2.0)
 
-Type `10 myr to sgd` in Discord. No leading `=` is needed. After a short pause, the chat input displays `≈ <converted amount> SGD` using a fetched Frankfurter rate. `=10 MYR to SGD` still works, as do lowercase codes and `in` instead of `to`.
+Type `10 myr to sgd` in Discord. No leading `=` is needed. After a short pause, the chat input displays `<converted amount> SGD` using a fetched Frankfurter rate. `=10 MYR to SGD` still works, as do lowercase codes and `in` instead of `to`.
 
 The conversion is drawn inside the real Android text input with an owned ReplacementSpan, following the same approach as Inline Markdown. The underlying draft remains your original query so you can change the amount/currency or select and edit it. Selecting a range reveals the original source. Active keyboard composition is left alone. The plugin only removes its own currency spans; it preserves Markdown, mentions, keyboard and selection spans.
 
-The Math AI panel shows the last full conversion and its rate date. With the default Solve when sending switch enabled (or with Sigma Auto AI solve ON), Discord Send posts `10 MYR ≈ <converted amount> SGD · <rate date>`. Attachments, mentions, the original chat and send options are preserved. Currency conversion does not use Nano. Turn Currency conversions OFF to disable both the inline conversion and the send conversion. Turning both send-solving switches OFF retains the query when sending.
+The Math AI panel shows the last full conversion and its rate date. With the default Solve when sending switch enabled (or with Sigma Auto AI solve ON), Discord Send posts just `<converted amount> SGD`. Attachments, mentions, the original chat and send options are preserved. Currency conversion does not use Nano. Turn Currency conversions OFF to disable both the inline conversion and the send conversion. Turning both send-solving switches OFF retains the query when sending.
 
 Rates require internet, are cached for ten minutes, and are daily reference rates rather than bank quotes or live trading prices. Only the currency pair is requested from the API. No amount, message text, chat history or account token is transmitted to the rate service. Unsupported pairs and lookup failures show an error; no AI-estimated rate or raw question is sent as a fallback.
 
@@ -94,7 +98,7 @@ Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!
 Cloud AI configuration and API key fields have been removed. AI solve now uses Gemini Nano on the device through the **Math Nano** companion Android app. This release requires two installs:
 
 1. Install [Math Nano companion 1.0.0 APK](Math_Nano_Companion_v1.0.0.apk) on your phone.
-2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.2.0**, then fully close and reopen Discord to load the native bridge.
+2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.2.1**, then fully close and reopen Discord to load the native bridge.
 3. Open the plugin's **AI setup → Open Nano setup**. The companion checks whether Gemini Nano is ready, downloadable, downloading or unavailable.
 4. If offered, tap **Download / prepare Nano**, keep the screen open and allow the model to finish downloading. The model may be large and needs internet and storage for initial setup.
 5. Return to Valenced. Paste a question into the panel and tap **AI solve**. The companion opens in the foreground, solves locally, and returns the answer to the plugin for review, copying or appending.
