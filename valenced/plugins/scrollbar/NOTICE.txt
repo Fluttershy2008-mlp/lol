@@ -1,0 +1,3 @@
+Scrollbar for Valenced (c) 2026 fluttershy_simper67.
+Original Valenced-compatible plugin. This preview is not affiliated with Discord or Valenced.
+Requires a compatible Valenced Plugin API. Native Discord chat list compatibility depends on the installed build.

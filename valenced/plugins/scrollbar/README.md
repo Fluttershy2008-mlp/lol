@@ -1,17 +1,26 @@
-# Scrollbar (Valenced) · 1.0.0-beta2
+# Scrollbar for Valenced — 1.0.0-beta3
 
-This version expands Scrollbar's vertical list recognition beyond beta1 to support compatible Discord chat message histories, the DM home inbox and server channel lists. It fixes a first-render bug in which viewport and content size events arriving separately prevented the thumb from ever appearing.
+Fixes for beta2's duplicate bars and non-functional drag handles. **Update in place**; the plugin ID and saved preferences remain the same.
 
-Features: position left/right; custom thumb colour, width and direction; optional track; automatic other-list detection (on by default); virtualized-list size estimation; normal touch scrolling outside the narrow handle.
+## Changes
 
-The plugin uses scroll methods supported by each component (scrollToOffset, scrollTo, scrollToPosition, scrollToIndex, scrollToEnd and scrollToTop) and preserves existing message click, swipe, layout and ref callbacks. No network requests or message changes. Settings show Chat/DM/Other detection counts and unsupported command reports.
+- Only one active, measurable scrollbar is rendered. Narrow server icon rails, horizontal carousels and nested non-active lists do not show extra handles.
+- Requires a real list ref exposing scroll commands. No scrollbar is shown for a message tap handler or non-scrollable container.
+- Correct RecyclerListView signatures: `scrollToOffset(x, y, animate)` and `scrollToIndex(index, animate)`, as distinct from React Native FlatList `scrollToOffset({offset, animated})`.
+- Preserves original scroll callbacks including RecyclerListView's `(event, x, y)` and existing refs.
+- Smooth thumb dragging without jumping at the start of the gesture; thumb tracks native scroll events.
+- Detects ignored commands: if no actual `onScroll` event or current offset change is observed, hides the nonworking handle rather than pretending to scroll.
+- Reduces ref reattachment by keeping a stable callback ref between React renders.
+- Tracks scroll commands sent, movement confirmed, and failures in settings.
 
 ## Install
 
-Refresh https://fluttershy2008-mlp.github.io/lol/valenced/index.json, update **Scrollbar** to **1.0.0-beta2**, then fully restart Discord. Find plugin preferences under Valenced > Plugins > Scrollbar.
+Refresh `https://fluttershy2008-mlp.github.io/lol/valenced/index.json`, update Scrollbar to **1.0.0-beta3**, and **fully close and reopen Valenced**. Do not keep beta2 running in the same process. Find preferences under Valenced > Plugins > Scrollbar > Settings.
 
-## Compatibility
+## Compatibility and limitations
 
-This is an experimental client-side compatibility release. Some modern Discord chat views use private native list implementations with no exposed JS scroll ref or content dimensions. Those views may still lack a working scrollbar until their particular native interface is identified. Local tests cover mocked React Native chats, DM lists, ScrollViews, dragging and stop cleanup, **not live Android handset tests**.
+Tested with 11 automated mock interaction/regression cases, including FlatList, ScrollView, RecyclerListView, nested lists, native offset verification, cancelled ref detach and missing list refs. Physical Android handset testing has **not** been performed.
 
-If a list still doesn't show the handle, open plugin Settings and report the Status plus Chat/DM/Other counters, and send a screenshot of the missing view. Source code is bundled inside the release ZIP under index.js.
+Valenced/Discord builds using private native chat renderers without an imperative scrolling ref cannot be forced to scroll by this JavaScript-only plugin; beta3 hides its handle on those screens rather than covering messages with broken controls. A device-specific native implementation would be needed for unsupported renderers. Reopen the plugin settings after attempting a drag to inspect the movement counters and status.
+
+There are no network requests, remote scripts, or message changes.

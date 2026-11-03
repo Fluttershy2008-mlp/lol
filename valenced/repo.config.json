@@ -98,6 +98,9 @@
     },
     "double-tap-edit": {
       "path": "valenced/plugins/double-tap-edit"
+    },
+    "scrollbar": {
+      "path": "valenced/plugins/scrollbar"
     }
   },
   "nativeThemes": {

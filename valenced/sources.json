@@ -253,6 +253,12 @@
       "sha256": "f3b8fa8d8d3e0fb835ed8ed328480c955cd747edb4a4ae271124cd4b165014d0",
       "originalVersion": "1.1.0",
       "kind": "native-plugin"
+    },
+    "dev.fluttershy2008.scrollbar": {
+      "path": "valenced/plugins/scrollbar/index.js",
+      "sha256": "2c936fab155b1f6144f3bc350014f141f7df4e4651c8e185932f2defb22712e0",
+      "originalVersion": "1.0.0-beta3",
+      "kind": "native-plugin"
     }
   }
 }
