@@ -12,6 +12,7 @@ const plugins = [
     ['quick-delete', 'Quick Delete'],
     ['auto-quest', 'Auto Quest'],
     ['long-video-share', 'Long Video Share'],
+    ['math-ai', 'Math AI'],
 ];
 
 function scenario(t) {

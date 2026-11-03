@@ -18,7 +18,7 @@ class ValencedPackages(unittest.TestCase):
     def test_index_matches_every_download_and_host_dependency(self):
         index = json.loads((HERE / "index.json").read_text())
         self.assertEqual(index["format"], 1)
-        self.assertEqual(len(index["plugins"]), 29)
+        self.assertEqual(len(index["plugins"]), 30)
         for plugin_id, plugin in index["plugins"].items():
             self.assertIn(plugin["channels"]["latest"], plugin["versions"])
             for version, entry in plugin["versions"].items():
@@ -106,7 +106,7 @@ class ValencedPackages(unittest.TestCase):
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         native = {slug for slug, entry in config.get("nativePlugins", {}).items()
                   if isinstance(entry, dict) and entry.get("settingsShortcut")}
-        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share"})
+        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share", "math-ai"})
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         digest = hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest()
