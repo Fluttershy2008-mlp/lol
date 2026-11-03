@@ -4,6 +4,20 @@ Refresh Fluttershy's Valenced repository, install **Math AI & Scientific Calcula
 
 Repository: https://fluttershy2008-mlp.github.io/lol/valenced/index.json
 
+## Currency inside the editable chat bar (2.2.0)
+
+Type `10 myr to sgd` in Discord. No leading `=` is needed. After a short pause, the chat input displays `≈ <converted amount> SGD` using a fetched Frankfurter rate. `=10 MYR to SGD` still works, as do lowercase codes and `in` instead of `to`.
+
+The conversion is drawn inside the real Android text input with an owned ReplacementSpan, following the same approach as Inline Markdown. The underlying draft remains your original query so you can change the amount/currency or select and edit it. Selecting a range reveals the original source. Active keyboard composition is left alone. The plugin only removes its own currency spans; it preserves Markdown, mentions, keyboard and selection spans.
+
+The Math AI panel shows the last full conversion and its rate date. With the default Solve when sending switch enabled (or with Sigma Auto AI solve ON), Discord Send posts `10 MYR ≈ <converted amount> SGD · <rate date>`. Attachments, mentions, the original chat and send options are preserved. Currency conversion does not use Nano. Turn Currency conversions OFF to disable both the inline conversion and the send conversion. Turning both send-solving switches OFF retains the query when sending.
+
+Rates require internet, are cached for ten minutes, and are daily reference rates rather than bank quotes or live trading prices. Only the currency pair is requested from the API. No amount, message text, chat history or account token is transmitted to the rate service. Unsupported pairs and lookup failures show an error; no AI-estimated rate or raw question is sent as a fallback.
+
+Draft changes cancel obsolete preview requests and clear the native display. Changing chats/accounts, disabling conversion, cancelling or stopping the plugin prevents a pending send from posting a late result. Identical send taps share one operation. Without the native bridge, the existing above-input preview remains available as a fallback.
+
+Install the updated ZIP and fully restart Valenced to load the new native bridge. Your existing Math Nano companion can be kept. This release includes Android SDK compilation, host-side input span tests and JavaScript preview/send regression tests; physical-device layout still needs verification.
+
 ## Short natural auto replies (2.1.2)
 
 Auto AI solve now asks for just the answer in plain, natural chat language: normally the result alone, or one or two short sentences if needed. It asks Nano to omit working steps, headings, lists, greetings and extra commentary while keeping units and all solutions. If the question is unclear, it asks one short clarification instead of inventing an answer.
@@ -39,7 +53,7 @@ Scientific examples: `sin(30)` → `0.5` in DEG, `2^3^2` → `512`, `5!` → `12
 
 The scientific panel now has extra keys for square/cube/general powers, square/cube/nth roots, inverse and hyperbolic trig (including asinh/acosh/atanh), log₂/log₁₀/ln, 10ˣ/eˣ, reciprocal, absolute value, factorial, nCr/nPr, remainder, floor/ceil/round, π/τ/e, scientific exponent EE, ANS and sign change. Functions use parentheses; binary functions such as `root(3,27)` and `ncr(10,3)` need a comma.
 
-The separate offline Solve when sending feature is synchronous and offline when Auto AI solve is OFF. It never calls AI or an exchange-rate service, never starts another send, and preserves attachments, mentions and send options. Plain numbers, dates, code, links, mentions, equations, unsupported or invalid expressions are kept. Currency conversions stay in the preview; copy their dated result when needed. Disabling or stopping the plugin restores ordinary sending.
+The separate offline Solve when sending feature is synchronous and offline when Auto AI solve is OFF. It never calls AI or an exchange-rate service, never starts another send, and preserves attachments, mentions and send options. Plain numbers, dates, code, links, mentions, equations, unsupported or invalid expressions are kept. Currency conversions now use the inline and send behaviour described above (2.2.0). Disabling or stopping the plugin restores ordinary sending.
 
 ## Inline Calculator
 
@@ -80,7 +94,7 @@ Examples: `2(3+4)`, `sin(30)`, `cos(pi/3)` in RAD, `sqrt(81)`, `root(3,-8)`, `5!
 Cloud AI configuration and API key fields have been removed. AI solve now uses Gemini Nano on the device through the **Math Nano** companion Android app. This release requires two installs:
 
 1. Install [Math Nano companion 1.0.0 APK](Math_Nano_Companion_v1.0.0.apk) on your phone.
-2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.1.2**, then fully close and reopen Discord to load the native bridge.
+2. Refresh the repository and install/update **Math AI & Scientific Calculator 2.2.0**, then fully close and reopen Discord to load the native bridge.
 3. Open the plugin's **AI setup → Open Nano setup**. The companion checks whether Gemini Nano is ready, downloadable, downloading or unavailable.
 4. If offered, tap **Download / prepare Nano**, keep the screen open and allow the model to finish downloading. The model may be large and needs internet and storage for initial setup.
 5. Return to Valenced. Paste a question into the panel and tap **AI solve**. The companion opens in the foreground, solves locally, and returns the answer to the plugin for review, copying or appending.

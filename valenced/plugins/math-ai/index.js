@@ -195,13 +195,35 @@
         const digits = optional(() => new Intl.NumberFormat('en', { style: 'currency', currency: to }).resolvedOptions().maximumFractionDigits) ?? 2;
         return value.toFixed(digits) + ' ' + to;
     }
+    function currencyQuery(draft, angle = 'DEG', ans = 0) {
+        if (typeof draft !== 'string' || draft.length > 2000) return null;
+        const query = draft.replace(/^\s*=(?!=)\s*/, '').trim();
+        if (!/^[+\-]?(?:\d+(?:\.\d+)?|\.\d+)\s+[a-z]{3}\s+(?:to|in)\s+[a-z]{3}$/i.test(query)) return null;
+        try { const result = inlineAnswer('= ' + query, angle, ans); return result?.kind === 'currency' ? result : null; }
+        catch { return null; }
+    }
+    function currencyLabel(query, rate) {
+        return format(query.amount) + ' ' + query.from + ' ≈ ' + currencyText(query.amount * rate.rate, query.to)
+            + (rate.date ? ' · ' + rate.date : '');
+    }
+    async function currencyInline(session, snapshot, source, label) {
+        if (snapshot && (!session.active || snapshot !== session.snapshot())) return false;
+        session.currencyNativeUsed = source !== '';
+        const revision = ++session.currencyRevision;
+        try {
+            const native = session.api.unscoped.modules?.native;
+            if (typeof native?.callNativeMethod !== 'function') return false;
+            const result = await native.callNativeMethod('dev.fluttershy2008.math-ai.currency.preview', [revision, source, label]);
+            return (result?.result ?? result)?.ready === true;
+        } catch { return false; }
+    }
     function settingsOf(value) {
         return { angle: value?.angle === 'RAD' ? 'RAD' : 'DEG', steps: value?.steps !== false,
             inline: value?.inline !== false, currency: value?.currency !== false, autoSend: value?.autoSend !== false, aiSend: value?.aiSend === true };
     }
     function saveSettings(session, key, value) {
         if (!session.active) return;
-        if (key === 'aiSend' && value !== session.settings.aiSend) { session.sendEpoch++; cancel(session); }
+        if (['aiSend', 'currency', 'autoSend'].includes(key) && value !== session.settings[key]) { session.sendEpoch++; cancel(session); }
         session.settings = settingsOf({ ...session.settings, [key]: value }); changed();
         const next = { ...session.settings };
         writes = writes.catch(() => {}).then(() => session.api.jsonStorage.set(next, true)).catch(() => {
@@ -219,7 +241,7 @@
         if (!value || typeof value.phase !== 'string') throw new Error('The Android Nano bridge did not respond. Fully restart Valenced after updating.');
         return value;
     }
-    function cancel(session) { session?.request?.cancel(); }
+    function cancel(session) { session?.request?.cancel(); session?.sendFx?.cancel(); }
     async function runNano(session, setup = false, options = {}) {
         if (!session?.active || session.busy) return;
         const question = session.question.trim();
@@ -276,7 +298,7 @@
         }
     }
     async function solveAI(session) { return runNano(session, false); }
-    function sendSolved(session, receiver, args, original) {
+    function sendSolved(session, receiver, args, original, conversion = null) {
         args = [...args];
         const message = { ...args[1] }, question = message.content.trim(), channel = args[0], account = session.user();
         const fail = error => {
@@ -287,17 +309,19 @@
             const pending = session.pendingSend;
             if (pending.channel === channel && pending.account === account && pending.content === message.content
                 && pending.nonce === message.nonce) return pending.promise;
-            return fail(new Error('An AI answer is already being prepared. Wait or cancel it first.'));
+            return fail(new Error('An answer is already being prepared. Wait or cancel it first.'));
         }
         if (session.busy) return fail(new Error('Finish or cancel the current Nano operation before sending.'));
         if (!question || question.length > 6000 || !account || !channel || session.selected() !== channel)
             return fail(new Error('Open the original chat and enter a question from 1 to 6,000 characters.'));
         // The explicit Sigma mode solves the entire question, never a partial
         // arithmetic fragment inside a written problem.
-        let localAnswer;
+        let localAnswer = conversion;
         try {
-            localAnswer = inlineAnswer('= ' + question.replace(/^=(?!=)\s*/, ''), session.settings.angle, session.ans);
+            if (!localAnswer) localAnswer = inlineAnswer('= ' + question.replace(/^=(?!=)\s*/, ''), session.settings.angle, session.ans);
         } catch { /* Written questions and equations use Nano. */ }
+        conversion = localAnswer?.kind === 'currency' ? localAnswer : null;
+        if (conversion && !session.settings.currency) return fail(new Error('Currency conversion is off in Math AI settings.'));
         if (localAnswer && localAnswer.kind !== 'currency')
             return Reflect.apply(original, receiver, [channel, { ...message, content: localAnswer.text }, ...args.slice(2)]);
         session.channel = channel; session.account = account; session.question = question;
@@ -310,21 +334,28 @@
         session.pendingSend = pending;
         pending.promise = (async () => {
             try {
-                const answer = await runNano(session, false, { steps: false, shortReply: true });
-                if (!session.active || current !== session || moved || session.sendEpoch !== epoch || !session.settings.aiSend
+                let answer;
+                if (conversion) {
+                    session.error = ''; session.busy = true; session.nanoMode = 'currency'; changed();
+                    session.sendFx = rateRequest(session, conversion.from, conversion.to);
+                    answer = currencyLabel(conversion, await session.sendFx.promise);
+                } else answer = await runNano(session, false, { steps: false, shortReply: true });
+                const modeEnabled = conversion ? session.settings.currency && (session.settings.aiSend || session.settings.autoSend) : session.settings.aiSend;
+                if (!session.active || current !== session || moved || session.sendEpoch !== epoch || !modeEnabled
                     || session.selected() !== channel || session.user() !== account)
-                    throw new Error('AI send cancelled because the chat, account or auto-solve mode changed.');
+                    throw new Error('Send cancelled because the chat, account or conversion/auto-solve mode changed.');
                 if (!answer) throw new Error(session.error || 'AI solve was cancelled. Nothing was sent.');
                 if (answer.length > 1900) throw new Error('The AI answer is too long to send. Copy it from the calculator panel.');
-                session.notice = 'Sending AI answer…'; changed();
+                session.notice = conversion ? 'Sending currency conversion…' : 'Sending AI answer…'; changed();
                 // Call the captured sender once with the captured chat and metadata.
                 const sent = await Reflect.apply(original, receiver, [channel, { ...message, content: answer }, ...args.slice(2)]);
-                if (session.active) { session.notice = 'AI answer sent.'; changed(); }
+                if (session.active) { session.notice = conversion ? 'Currency conversion sent.' : 'AI answer sent.'; changed(); }
                 return sent;
             } catch (error) {
                 if (session.active && current === session) { session.error = error.message || 'Could not send the AI answer.'; session.visible = true; changed(); }
                 throw error;
             } finally {
+                if (conversion) { session.sendFx = undefined; session.busy = false; if (session.active) changed(); }
                 remove(); if (session.pendingSend === pending) session.pendingSend = undefined;
             }
         })();
@@ -360,7 +391,8 @@
         const U = api.unscoped, F = U.modules.finders, paths = U.discord.utils?.modules?.finders;
         const session = { api, active: true, settings: settingsOf(api.jsonStorage.cache), nanoAvailability: 'unknown', nanoMode: '', question: '', result: '', resultKind: '',
             error: '', notice: '', ans: 0, history: [], visible: false, busy: false, removers: [], account: null, channel: null,
-            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null, sendReady: false, sendEpoch: 0 };
+            rates: new Map(), fxJobs: new Set(), draftSubscriptions: new Set(), previewDisposers: new Set(), ActionButton: null, sendReady: false, sendEpoch: 0,
+            currencyRevision: Date.now() * 1000, currencyNativeUsed: false };
         current = session; api.cleanup(() => stop(session));
         const data = api.jsonStorage.loaded ? api.jsonStorage.cache : await api.jsonStorage.get();
         if (!session.active) return;
@@ -413,6 +445,9 @@
                 session.removers.push(U.patcher.instead(actions, 'sendMessage', function(args, original) {
                     if (!session.active || typeof args[1]?.content !== 'string')
                         return Reflect.apply(original, this, args);
+                    const conversion = session.settings.currency && (session.settings.autoSend || session.settings.aiSend)
+                        ? currencyQuery(args[1].content, session.settings.angle, session.ans) : null;
+                    if (conversion) return sendSolved(session, this, args, original, conversion);
                     if (session.settings.aiSend && args[1].content.trim()) return sendSolved(session, this, args, original);
                     if (!session.settings.autoSend) return Reflect.apply(original, this, args);
                     const content = solveOutgoing(args[1].content, session.settings.angle, session.ans);
@@ -517,24 +552,32 @@
         }, [session]);
         React.useEffect(() => {
             let live = true, timer, job;
-            const remove = () => { live = false; clearTimeout(timer); job?.cancel(); session.previewDisposers.delete(remove); };
+            const remove = () => {
+                live = false; clearTimeout(timer); job?.cancel(); session.previewDisposers.delete(remove);
+                if (session.currencyNativeUsed) void currencyInline(session, null, '', '');
+            };
             session.previewDisposers.add(remove);
             const show = value => { if (live && session.active) setAnswer({ ...value, snapshot }); };
             setCopied(false);
             try {
                 const draft = JSON.parse(snapshot)[2];
-                const result = session.active && session.settings.inline ? inlineAnswer(draft, session.settings.angle, session.ans) : null;
+                const result = session.active && session.settings.inline
+                    ? currencyQuery(draft, session.settings.angle, session.ans) || inlineAnswer(draft, session.settings.angle, session.ans) : null;
                 if (!result) setAnswer(null);
                 else if (result.kind !== 'currency') show(result);
                 else if (!session.settings.currency) show({ error: 'Currency lookup is off in Math AI settings.' });
                 else {
-                    show({ loading: true });
+                    show({ kind: 'currency', loading: true });
                     timer = setTimeout(async () => {
                         if (!live || !session.active) return;
                         job = rateRequest(session, result.from, result.to);
                         try {
                             const rate = await job.promise;
-                            show({ kind: 'currency', text: currencyText(result.amount * rate.rate, result.to), date: rate.date });
+                            if (!live || !session.active || snapshot !== session.snapshot()) return;
+                            const label = currencyLabel(result, rate);
+                            const native = await currencyInline(session, snapshot, draft, '≈ ' + currencyText(result.amount * rate.rate, result.to));
+                            session.lastCurrencyLabel = label;
+                            show({ kind: 'currency', text: currencyText(result.amount * rate.rate, result.to), label, date: rate.date, native });
                         } catch (error) { show({ error: error.message || 'Could not load exchange rates.' }); }
                     }, 550);
                 }
@@ -543,6 +586,7 @@
         }, [snapshot, session, session.settings.inline, session.settings.currency, session.settings.angle, session.ans]);
         // Hide old results immediately, even before the next effect runs.
         if (!session.active || !session.settings.inline || !answer || answer.snapshot !== snapshot) return null;
+        if (answer.kind === 'currency' && (answer.native || answer.loading)) return null;
         const light = optional(() => api.unscoped.discord.flux.Stores.ThemeStore.theme) === 'light';
         const fg = light ? '#17191C' : '#F2F3F5', card = light ? '#E9EAF0' : '#2B2D31';
         const label = answer.loading ? 'Loading exchange rate…' : answer.error || '= ' + answer.text;
@@ -656,7 +700,9 @@
                 button(session.settings.autoSend ? 'Solve when sending: ON' : 'Solve when sending: OFF', () => save('autoSend', !session.settings.autoSend))]),
             text('Send 2+2 using Discord’s normal send button and your message becomes 4. Scientific expressions and offline unit conversions also work. This switch is independent of the inline preview and needs no AI key.'),
             (session.settings.autoSend || session.settings.aiSend) && !session.sendReady ? text('Open a chat or fully restart Discord to connect automatic solving.') : null,
-            text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Currency examples: = 10 USD to AUD or = 10 USD to SGD. Currency pairs use Frankfurter online; rates have a date and may differ from bank rates. Tap a result to copy it.'),
+            text('Type = and a sum or a unit conversion, like = 12 * 4.5 or = 5 ft in cm, and see the answer above the message box. Tap a calculator result to copy it. Currency conversions use the inline chat display below.'),
+            text('Currency inside the chat bar: type 10 MYR to SGD (no = needed). After a short pause the native input displays the converted amount. The latest rate date is shown here and included when sending. Your original query stays editable. With Solve when sending or Auto AI solve enabled, Send posts the dated conversion. Internet is required; a rate is never invented by AI. Fully restart Valenced after installing this native update.'),
+            session.lastCurrencyLabel ? text('Last currency conversion: ' + session.lastCurrencyLabel) : null,
             input('Math question or expression', session.question, edit, { multiline: true, maxLength: 6000, editable: !session.busy, textAlignVertical: 'top', style: { minHeight: 90, padding: 12, borderRadius: 9, backgroundColor: card, color: fg, fontSize: 17, marginBottom: 10 } }),
             row([button('Load chat draft', () => session.readDraft(), session.busy), button('Paste question', () => { void paste(); }, session.busy),
                 button('Clear', () => edit(''), session.busy), button('⌫', () => edit(session.question.slice(0, -1)), session.busy)]),
@@ -664,8 +710,8 @@
             ...keys.map((keys, i) => h(RN.View, { key: 'keys-' + i, style: { flexDirection: 'row', flexWrap: 'wrap' } },
                 keys.map(([label, value]) => button(label, () => edit((value === null ? session.question.trim() ? '-(' + session.question + ')' : '-' : session.question + value).slice(0, 6000)), session.busy)))),
             row([button('Calculate', calc, session.busy || !session.question.trim(), true),
-                button(session.busy ? 'Nano is open…' : 'AI solve', () => { void solveAI(session); }, session.busy || !session.question.trim(), true),
-                session.busy ? button('Cancel AI', () => cancel(session)) : null]),
+                button(session.busy ? session.nanoMode === 'currency' ? 'Converting currency…' : 'Nano is open…' : 'AI solve', () => { void solveAI(session); }, session.busy || !session.question.trim(), true),
+                session.busy ? button(session.nanoMode === 'currency' ? 'Cancel conversion' : 'Cancel AI', () => cancel(session)) : null]),
             session.busy ? h(RN.ActivityIndicator, { color: '#949CF7' }) : null,
             session.error ? text(session.error, { color: light ? '#B42318' : '#F2A6A6' }) : null,
             session.result ? h(RN.View, { style: { backgroundColor: card, padding: 14, borderRadius: 10, marginVertical: 10 } },

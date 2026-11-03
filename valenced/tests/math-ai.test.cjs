@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const source = fs.readFileSync(path.join(__dirname, '../plugins/math-ai/index.js'), 'utf8');
 function load(extra = {}) {
     const context = { setTimeout, clearTimeout, setInterval, clearInterval, AbortController, ...extra };
-    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, runNano, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
+    const code = source.replace('return { default: { jsonStorage:', 'return { test: { calculate, solveOutgoing, inlineAnswer, currencyQuery, currencyLabel, rateRequest, currencyText, Composer, attachPreview, flatStyle, InlinePreview, MathButton, format, settingsOf, runNano, solveAI, cancel, addButton, getSession: () => current }, default: { jsonStorage:');
     return vm.runInNewContext(code, context);
 }
 function harness(extra = {}) {
@@ -108,7 +108,7 @@ test('Nano rejects a result from a different job instead of showing a stale answ
     assert.match(s.error,/session changed/);assert.equal(s.result,'');h.default.stop();
 });
 test('packaged plugin starts, retains settings access, and saves no API key from panel actions', async () => {
-    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.1.2.zip');
+    const zip=path.join(__dirname,'../pool/dev.fluttershy2008.math-ai@2.2.0.zip');
     const script=execFileSync('python3',['-c','import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read("index.js").decode())',zip],{encoding:'utf8'});
     const packaged=vm.runInNewContext(script,{setTimeout,clearTimeout,setInterval,clearInterval,AbortController});
     const h=harness(); await packaged.default.start(h.api);
@@ -382,5 +382,59 @@ test('a synchronous local send failure is not retried through Nano', async () =>
     const actions={sendMessage(){throw Error('Native send failed');},revealMessage(){}};
     h.callbacks.get('actions/MessageActionCreators.tsx')(actions);
     assert.throws(()=>actions.sendMessage('123',{content:'2+2'}),/Native send failed/);assert.equal(h.test.getSession().busy,false);h.default.stop();
+});
+
+test('bare currency queries accept ISO codes without = and leave ordinary text, units and code alone', () => {
+    const {currencyQuery:q,currencyLabel:label}=load().test;
+    for(const text of ['10 myr to sgd','=10 MYR to SGD',' 10 MyR in sGd ']){
+        const parsed=q(text);assert.equal(parsed.amount,10);assert.equal(parsed.from,'MYR');assert.equal(parsed.to,'SGD');
+        assert.equal(label(parsed,{rate:0.31,date:'2026-11-03'}),'10 MYR ≈ 3.10 SGD · 2026-11-03');
+    }
+    for(const text of ['hello','10 myr','10 myr to','`10 MYR to SGD`','10 bar to psi','10 MYR to SGD please','2+2','https://example.com/10'])assert.equal(q(text),null,text);
+});
+test('currency appears inside the native chat input, refreshes the amount and clears on edits/unmount', async () => {
+    const timers=new Map(),native=[],events=new Set();let id=0,fetches=0;
+    const h=harness({setTimeout:(fn,ms)=>{const next=++id;timers.set(next,{fn,ms});return next;},clearTimeout:id=>timers.delete(id),
+        fetch:async()=>{fetches++;return {ok:true,text:async()=>JSON.stringify({base:'MYR',quote:'SGD',rate:0.31,date:'2026-11-03'})};}});
+    h.api.unscoped.modules.native={callNativeMethod:async(name,args)=>{native.push([name,Array.from(args)]);return {ready:true};}};
+    await h.default.start(h.api);const s=h.test.getSession();
+    for(const store of Object.values(h.api.unscoped.discord.flux.Stores)){store.addChangeListener=fn=>events.add(fn);store.removeChangeListener=fn=>events.delete(fn);}
+    h.draft.text='10 myr to sgd';const ui=mountHooks(h,h.test.InlinePreview,{api:h.api,session:s});assert.equal(ui.render(),null);
+    [...timers.values()].find(t=>t.ms===550).fn();await new Promise(r=>setImmediate(r));assert.equal(ui.render(),null);
+    const first=native.find(c=>c[1][1]==='10 myr to sgd');assert.ok(first);assert.equal(first[0],'dev.fluttershy2008.math-ai.currency.preview');
+    assert.equal(first[1][2],'≈ 3.10 SGD');assert.equal(h.draft.text,'10 myr to sgd');assert.equal(s.lastCurrencyLabel,'10 MYR ≈ 3.10 SGD · 2026-11-03');
+    h.draft.text='20 myr to sgd';for(const fn of events)fn();ui.render();
+    [...timers.values()].filter(t=>t.ms===550).at(-1).fn();await new Promise(r=>setImmediate(r));assert.equal(ui.render(),null);
+    const second=native.find(c=>c[1][1]==='20 myr to sgd');assert.equal(second[1][2],'≈ 6.20 SGD');
+    assert.ok(second[1][0]>first[1][0]);assert.equal(fetches,1);
+    h.draft.text='hello';for(const fn of events)fn();assert.equal(ui.render(),null);
+    assert.equal(native.at(-1)[1][1],'');assert.equal(native.at(-1)[1][2],'');ui.unmount();h.default.stop();
+});
+test('currency sends use fetched rates with Sigma either on or off and preserve send metadata', async () => {
+    for(const aiSend of [false,true]){
+        const requests=[];const h=harness({fetch:async(url)=>{requests.push(url);return {ok:true,text:async()=>JSON.stringify({base:'MYR',quote:'SGD',rate:0.31,date:'2026-11-03'})};}});
+        h.api.unscoped.modules.native={callNativeMethod:()=>{throw Error('Currency must not use Nano');}};
+        await h.default.start(h.api);const s=h.test.getSession();s.settings.aiSend=aiSend;
+        const {actions,sent}=connectSender(h),message={content:'10 myr to sgd',nonce:'fx',attachments:[],allowedMentions:{parse:[]}},options={tts:false};
+        const pending=actions.sendMessage('123',message,options);assert.equal(sent.length,0);assert.equal(actions.sendMessage('123',message,options),pending);
+        await pending;assert.equal(sent.length,1);assert.equal(sent[0].args[1].content,'10 MYR ≈ 3.10 SGD · 2026-11-03');
+        assert.equal(sent[0].args[1].attachments,message.attachments);assert.equal(sent[0].args[1].allowedMentions,message.allowedMentions);assert.equal(sent[0].args[2],options);
+        assert.equal(message.content,'10 myr to sgd');assert.deepEqual(requests,['https://api.frankfurter.dev/v2/rate/myr/sgd']);
+        assert.equal(s.busy,false);assert.equal(s.pendingSend,undefined);h.default.stop();
+    }
+});
+test('failed currency lookup never sends the raw query or an AI-guessed rate', async () => {
+    const h=harness({fetch:async()=>({ok:false,status:422})});await h.default.start(h.api);const {actions,sent}=connectSender(h);
+    await assert.rejects(actions.sendMessage('123',{content:'10 ABC to SGD'}),/currency pair is unavailable/);
+    assert.equal(sent.length,0);assert.equal(h.test.getSession().busy,false);h.default.stop();
+});
+test('changing chats cancels currency sends, including switching back before the rate returns', async () => {
+    let finish;const events=new Set(),h=harness({fetch:()=>new Promise(r=>finish=r)});
+    for(const store of Object.values(h.api.unscoped.discord.flux.Stores)){store.addChangeListener=fn=>events.add(fn);store.removeChangeListener=fn=>events.delete(fn);}
+    await h.default.start(h.api);const {actions,sent}=connectSender(h),s=h.test.getSession();
+    const pending=actions.sendMessage('123',{content:'10 MYR to SGD'}),rejected=assert.rejects(pending);
+    h.draft.channel='999';for(const fn of events)fn();h.draft.channel='123';
+    finish({ok:true,text:async()=>JSON.stringify({base:'MYR',quote:'SGD',rate:0.31,date:'2026-11-03'})});
+    await rejected;assert.equal(sent.length,0);assert.equal(s.busy,false);assert.equal(s.pendingSend,undefined);h.default.stop();
 });
 

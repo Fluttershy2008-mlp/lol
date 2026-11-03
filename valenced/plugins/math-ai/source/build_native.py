@@ -31,7 +31,7 @@ STUBS = {
         public interface ValencedBridge { void registerMethod(String name, Function1<List<?>,Object> f); }''',
     'de/robv/android/xposed/XC_MethodHook.java': '''package de.robv.android.xposed;
         public abstract class XC_MethodHook { protected void afterHookedMethod(MethodHookParam p) throws Throwable {}
-        public static class MethodHookParam { public Object[] args; }
+        public static class MethodHookParam { public Object[] args; public Object thisObject; }
         public class Unhook { public void unhook() {} } }''',
     'de/robv/android/xposed/XposedBridge.java': '''package de.robv.android.xposed; import java.lang.reflect.Member;
         public final class XposedBridge { public static XC_MethodHook.Unhook hookMethod(Member m, XC_MethodHook hook) { return null; } }''',
@@ -90,6 +90,7 @@ def main(check):
                 assert z.namelist() == ['classes.dex']
                 dex = z.read('classes.dex')
                 assert dex.startswith(b'dex\n') and b'Ldev/fluttershy2008/mathai/NanoBridge;' in dex
+                assert b'Ldev/fluttershy2008/mathai/CurrencyPreview;' in dex
                 assert b'Landroid/content/Intent;' in dex
             print('Android bridge compilation and checked-in DEX verified.')
             return

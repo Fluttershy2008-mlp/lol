@@ -81,6 +81,8 @@ jobs:
         run: python3 valenced/plugins/long-video-share/source/build_native.py --check
       - name: Compile Math Nano Android bridge and verify payload
         run: python3 valenced/plugins/math-ai/source/build_native.py --check
+      - name: Check native currency input spans
+        run: python3 valenced/plugins/math-ai/source/test_currency.py
       - name: Check ZIP integrity and catalogue metadata
         run: python3 -m unittest discover -s valenced/tests -p 'test_*.py'
       - name: Check requested plugins' source regressions

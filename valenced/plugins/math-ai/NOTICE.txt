@@ -21,3 +21,5 @@ companion APK. SDK and service terms: https://developers.google.com/ml-kit/terms
 Google SDK setup: https://developers.google.com/ml-kit/genai/prompt/android/get-started
 The companion pins kotlinx-coroutines 1.11.0 for the documented Nano download fix.
 No model weights or shared cloud credentials are bundled in the plugin.
+
+The currency input renderer follows the source-preserving native span approach demonstrated by the user-provided Inline Markdown Valenced v1.2.0 plugin by fluttershy_simper67. Its currency spans have separate ownership and do not replace the Markdown plugin.

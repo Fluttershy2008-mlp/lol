@@ -2,7 +2,8 @@
   "minAndroidApi": 28,
   "entryPoint": "dev.fluttershy2008.mathai.NanoBridge",
   "sources": {
-    "source/native/dev/fluttershy2008/mathai/NanoBridge.java": "cd055140aa268539650e75228a8c91beb41f3ae307f0574e6c4da20c9c4334e5"
+    "source/native/dev/fluttershy2008/mathai/CurrencyPreview.java": "9df2d7b37c39bda3cbc7cd59083eb3bbf682adc2277581883be226620a3bf7f7",
+    "source/native/dev/fluttershy2008/mathai/NanoBridge.java": "0ca2a4f80e66539dce9f0443f0eee44d1210d153a2fc49715bbae22b381bfe39"
   },
-  "sha256": "dd5405385e636f66e57f0abf464511d68dd394a24f94f8acb8bcff9f8f600a34"
+  "sha256": "458d0fb851f7c56d749f24a175bb36bc9cf39c6245d05f62035e3e160303272a"
 }

@@ -29,6 +29,7 @@ public final class NanoBridge {
     }
     private static synchronized void start(final PluginScope scope) {
         stop(); final Engine engine = new Engine(scope); current = engine;
+        engine.currency = new CurrencyPreview(scope);
         scope.withAppContext(new Function1<Context, Unit>() { public Unit invoke(Context context) { if (engine.active) engine.context = context.getApplicationContext(); return Unit.INSTANCE; } });
         for (final String action : new String[] { "status", "solve", "setup", "cancel", "clear" })
             scope.getBridge().registerMethod(PREFIX + action, new Function1<List<?>, Object>() { public Object invoke(List<?> args) { return engine.call(action, args); } });
@@ -40,6 +41,7 @@ public final class NanoBridge {
         final List<Class<?>> hooked = new ArrayList<Class<?>>();
         volatile boolean active = true;
         volatile Context context;
+        CurrencyPreview currency;
         String phase = "idle", nonce = "", answer = "", error = "", availability = "unknown";
         boolean setup;
         Engine(PluginScope scope) { this.scope = scope; }
@@ -109,6 +111,7 @@ public final class NanoBridge {
         }
         synchronized void close() {
             cancel(); active = false;
+            if (currency != null) { currency.close(); currency = null; }
             for (XC_MethodHook.Unhook hook : hooks) try { hook.unhook(); } catch (Throwable ignored) { }
             hooks.clear(); hooked.clear(); context = null;
         }

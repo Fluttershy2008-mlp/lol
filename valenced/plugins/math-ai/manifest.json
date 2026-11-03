@@ -2,9 +2,9 @@
   "format": 1,
   "id": "dev.fluttershy2008.math-ai",
   "name": "Math AI & Scientific Calculator",
-  "description": "Tap Σ to toggle automatic AI solve on Discord Send. Key-free Gemini Nano for written questions, offline scientific maths and unit conversions.",
+  "description": "Show currency conversions inside the editable chat bar: type 10 MYR to SGD. Includes short Nano AI answers, scientific maths and units.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"
