@@ -1,6 +1,6 @@
 {
   "name": "ValidUser",
-  "description": "Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",
+  "description": "Tap user mentions to resolve and open profiles, including unknown mentions in embeds and forwards.",
   "authors": [
     {
       "name": "fshin",
@@ -23,5 +23,5 @@
   "vendetta": {
     "icon": "ic_mention_24px"
   },
-  "version": "2.1.5"
+  "version": "2.1.6"
 }

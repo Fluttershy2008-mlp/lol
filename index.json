@@ -2083,14 +2083,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.valid-user@1.0.0-beta8.zip",
+          "sha256": "fed81fc8befca37ae920dca2934cc367d8d736c27ad9b5c4169dcc695111e720",
+          "size": 24744,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta7",
-        "beta": "1.0.0-beta7"
+        "latest": "1.0.0-beta8",
+        "beta": "1.0.0-beta8"
       },
       "name": "ValidUser (Next preview)",
-      "description": "Revenge Next preview. Automatically resolve unknown mentions when Revenge starts and messages load, including embeds and forwards.",
+      "description": "Revenge Next preview. Tap user mentions to resolve and open profiles, including unknown mentions in embeds and forwards.",
       "author": "fshin <1381008677301129257>",
       "icon": "ic_mention_24px",
       "contributors": [

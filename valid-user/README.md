@@ -10,6 +10,7 @@ Disable the old ValidUser first, install this version, then restart Revenge.
 
 ## Use
 
+- Tap a user mention to load and open its profile directly. Unknown native mentions use Discord's `parsedUserId`, including embed and component text. Role mentions keep their native action. Discord must return the real account; failed lookups display a short status message.
 - Automatic resolution is on by default. It starts when Revenge loads, waits for Discord's account/channel/message cache to be ready, and looks up unknown mentions in the channel you are viewing, including embeds, component text and forwarded messages.
 - Message and channel store changes, reconnection, and returning to the app trigger further automatic scans. Startup retries stop after 30 seconds; later cache changes are detected through store listeners. No long-press or pop-up confirmation is needed for automatic lookups.
 - Long-press a message and choose **Resolve mentions / Open profile**. The result explains whether Discord returned a real user and offers **Open profile** on success. For several users, tap **Next**.

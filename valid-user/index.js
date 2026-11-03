@@ -388,6 +388,78 @@ function createAutoScanner({ scan, enabled, onError = () => {} }) {
     };
 }
 
+// Discord's native chat and component-text views share contentHandlers.onTapMention.
+// Unresolved mentions carry parsedUserId instead of userId; never treat role IDs
+// or arbitrary link text as user IDs.
+function mentionTarget(event) {
+    const data = event?.nativeEvent ?? event;
+    if (!data || data.roleId != null || data.roleName != null) return;
+    const id = data.userId ?? data.parsedUserId;
+    if (typeof id !== 'string' || !/^[1-9]\d{16,19}$/.test(id)) return;
+    const options = { userId: id };
+    for (const key of ['channelId', 'guildId']) {
+        if (typeof data[key] === 'string' && /^[1-9]\d{16,19}$/.test(data[key])) options[key] = data[key];
+    }
+    return options;
+}
+
+function installMentionTaps(V, { isActive, open }) {
+    const removers = [], patched = new WeakSet(), factories = new WeakMap(), wrappers = new WeakMap();
+    let active = true;
+    const live = () => active && isActive();
+    const optional = fn => { try { return fn(); } catch {} };
+    function wrap(original) {
+        if (wrappers.has(original)) return wrappers.get(original);
+        const wrapped = function(event, ...rest) {
+            const options = live() && mentionTarget(event);
+            if (!options) return Reflect.apply(original, this, [event, ...rest]);
+            // The replacement owns just this user tap; it does not replay the
+            // original handler, which would immediately show the stale popup.
+            return open(options);
+        };
+        wrappers.set(original, wrapped); wrappers.set(wrapped, wrapped);
+        return wrapped;
+    }
+    function attach(module) {
+        for (const target of [module?.contentHandlers, module?.default?.contentHandlers, module?.default, module]) {
+            if (!target || typeof target.onTapMention !== 'function' || patched.has(target)) continue;
+            const remove = optional(() => V.patcher.instead('onTapMention', target, function(args, original) {
+                return Reflect.apply(wrap(original), this, args);
+            }));
+            if (typeof remove === 'function') { patched.add(target); removers.push(remove); }
+        }
+    }
+    function decorate(element) {
+        if (!live() || typeof element?.props?.onTapMention !== 'function') return element;
+        return V.metro.common.React.cloneElement(element, { onTapMention: wrap(element.props.onTapMention) });
+    }
+    function attachFactory(module, keys) {
+        if (!module || !['object', 'function'].includes(typeof module)) return;
+        let done = factories.get(module);
+        if (!done) factories.set(module, done = new Set());
+        for (const key of keys) if (!done.has(key) && typeof module[key] === 'function') {
+            const remove = optional(() => V.patcher.after(key, module, (_args, result) => decorate(result)));
+            if (typeof remove === 'function') { done.add(key); removers.push(remove); }
+        }
+    }
+    function scan() {
+        if (!live()) return;
+        attach(optional(() => V.metro.findByProps('contentHandlers')));
+        attach(optional(() => V.metro.findByProps('onTapMention', 'onLongPressLink')));
+        attachFactory(optional(() => V.metro.findByProps('jsx', 'jsxs')), ['jsx', 'jsxs', 'jsxDEV']);
+    }
+    const path = 'components_native/chat/contentHandlers.tsx';
+    attach(optional(() => V.metro.findByImportedPath?.(path)));
+    const remove = optional(() => V.metro.getModuleWithImportedPath?.(path, module => { if (live()) attach(module); }));
+    if (typeof remove === 'function') removers.push(remove);
+    attachFactory(V.metro.common.React, ['createElement']);
+    scan();
+    return { scan, stop() {
+        active = false;
+        for (const remove of removers.splice(0).reverse()) optional(remove);
+    } };
+}
+
 // SPDX-License-Identifier: MIT
 const USER_PROFILE_MODULE_PATH = 'modules/user_profile/native/showUserProfileActionSheet.tsx';
 const profileTry = callback => { try { return callback(); } catch { return undefined; } };
@@ -463,7 +535,7 @@ function createPlugin(V) {
     const h = React.createElement, storage = V.plugin?.storage ?? {};
     const unpatches = [], timers = new Set(), autoIds = new Set(), watchedStores = new Set();
     let active = false, generation = 0, resolver, resolverAccount, scanTimer, refreshTimer;
-    let autoScanner, loggedOut = false;
+    let autoScanner, mentionTaps, loggedOut = false, tapSequence = 0, pendingTap;
     let users, messages, selected, dispatcher, rest, sheetHost, Row;
     const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
     const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
@@ -549,6 +621,28 @@ function createPlugin(V) {
             }
         } catch { if (live()) toast("Discord could not open this profile. Try the mention again."); }
     }
+    function openMention(options) {
+        if (!ensureResolver()) return Promise.resolve();
+        const session = generation, account = users.getCurrentUser?.()?.id;
+        const channel = selected?.getChannelId?.();
+        if (pendingTap?.id === options.userId && pendingTap.session === session && pendingTap.channel === channel) return pendingTap.promise;
+        const sequence = ++tapSequence;
+        const live = () => active && !loggedOut && generation === session && sequence === tapSequence
+            && account === users.getCurrentUser?.()?.id && channel === selected?.getChannelId?.();
+        const job = { id: options.userId, session, channel };
+        pendingTap = job;
+        job.promise = (async () => {
+            try {
+                const result = await resolver.resolve(options.userId);
+                if (!live()) return;
+                if (result.status !== "resolved") { toast(statusText(result)); return; }
+                const opened = await openUserProfile(V, options, live);
+                if (!opened && live()) toast("Profile opening is unavailable on this Discord version.");
+            } catch { if (live()) toast("Discord could not open this profile. Try again."); }
+            finally { if (pendingTap === job) pendingTap = null; }
+        })();
+        return job.promise;
+    }
     function showResults(results, index = 0, session = generation) {
         if (!active || session !== generation || !results.length) return;
         const result = results[index];
@@ -588,6 +682,7 @@ function createPlugin(V) {
         });
     }
     function scanCurrentChannel() {
+        mentionTaps?.scan();
         if (storage.autoResolve === false || !ensureResolver()) return;
         if (!messages) {
             messages = byStore("MessageStore") ?? byProps("getMessage", "getMessages");
@@ -744,6 +839,7 @@ function createPlugin(V) {
         active = true; loggedOut = false;
         try {
             resetResolver();
+            mentionTaps = installMentionTaps(V, { isActive: () => active, open: openMention });
             autoScanner = createAutoScanner({
                 scan: scanCurrentChannel,
                 enabled: () => active && !loggedOut && storage.autoResolve !== false,
@@ -790,6 +886,7 @@ function createPlugin(V) {
     }
     function onUnload() {
         active = false; generation++; resolver?.stop(); autoScanner?.stop();
+        tapSequence++; pendingTap = null; mentionTaps?.stop(); mentionTaps = null;
         for (const timer of timers) clearTimeout(timer);
         timers.clear(); autoIds.clear(); scanTimer = refreshTimer = null;
         for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }

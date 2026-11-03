@@ -1,6 +1,7 @@
 import { validId, extractMentionIds, createResolver } from "./core.mjs";
 import { createAutoScanner } from "./auto.mjs";
 import { openUserProfile } from "../../compatibility/user-profile.mjs";
+import { installMentionTaps } from "./mention-taps.mjs";
 
 export default function createPlugin(V) {
     "use strict";
@@ -8,7 +9,7 @@ export default function createPlugin(V) {
     const h = React.createElement, storage = V.plugin?.storage ?? {};
     const unpatches = [], timers = new Set(), autoIds = new Set(), watchedStores = new Set();
     let active = false, generation = 0, resolver, resolverAccount, scanTimer, refreshTimer;
-    let autoScanner, loggedOut = false;
+    let autoScanner, mentionTaps, loggedOut = false, tapSequence = 0, pendingTap;
     let users, messages, selected, dispatcher, rest, sheetHost, Row;
     const byProps = (...keys) => { try { return V.metro.findByProps(...keys); } catch {} };
     const byStore = name => { try { return V.metro.findByStoreName(name); } catch {} };
@@ -94,6 +95,28 @@ export default function createPlugin(V) {
             }
         } catch { if (live()) toast("Discord could not open this profile. Try the mention again."); }
     }
+    function openMention(options) {
+        if (!ensureResolver()) return Promise.resolve();
+        const session = generation, account = users.getCurrentUser?.()?.id;
+        const channel = selected?.getChannelId?.();
+        if (pendingTap?.id === options.userId && pendingTap.session === session && pendingTap.channel === channel) return pendingTap.promise;
+        const sequence = ++tapSequence;
+        const live = () => active && !loggedOut && generation === session && sequence === tapSequence
+            && account === users.getCurrentUser?.()?.id && channel === selected?.getChannelId?.();
+        const job = { id: options.userId, session, channel };
+        pendingTap = job;
+        job.promise = (async () => {
+            try {
+                const result = await resolver.resolve(options.userId);
+                if (!live()) return;
+                if (result.status !== "resolved") { toast(statusText(result)); return; }
+                const opened = await openUserProfile(V, options, live);
+                if (!opened && live()) toast("Profile opening is unavailable on this Discord version.");
+            } catch { if (live()) toast("Discord could not open this profile. Try again."); }
+            finally { if (pendingTap === job) pendingTap = null; }
+        })();
+        return job.promise;
+    }
     function showResults(results, index = 0, session = generation) {
         if (!active || session !== generation || !results.length) return;
         const result = results[index];
@@ -133,6 +156,7 @@ export default function createPlugin(V) {
         });
     }
     function scanCurrentChannel() {
+        mentionTaps?.scan();
         if (storage.autoResolve === false || !ensureResolver()) return;
         if (!messages) {
             messages = byStore("MessageStore") ?? byProps("getMessage", "getMessages");
@@ -289,6 +313,7 @@ export default function createPlugin(V) {
         active = true; loggedOut = false;
         try {
             resetResolver();
+            mentionTaps = installMentionTaps(V, { isActive: () => active, open: openMention });
             autoScanner = createAutoScanner({
                 scan: scanCurrentChannel,
                 enabled: () => active && !loggedOut && storage.autoResolve !== false,
@@ -335,6 +360,7 @@ export default function createPlugin(V) {
     }
     function onUnload() {
         active = false; generation++; resolver?.stop(); autoScanner?.stop();
+        tapSequence++; pendingTap = null; mentionTaps?.stop(); mentionTaps = null;
         for (const timer of timers) clearTimeout(timer);
         timers.clear(); autoIds.clear(); scanTimer = refreshTimer = null;
         for (const unpatch of unpatches.splice(0).reverse()) { try { unpatch(); } catch {} }

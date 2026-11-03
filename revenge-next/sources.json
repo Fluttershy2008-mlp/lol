@@ -129,8 +129,8 @@
     },
     "dev.fluttershy2008.valid-user": {
       "path": "valid-user/index.js",
-      "sha256": "21cfbd47ccb89479cac132e69aa1a8fc3643418b8e69b62b090d3868581b9452",
-      "originalVersion": "2.1.5",
+      "sha256": "2424b1ebfd10cd81cd079b6e513df296621a8e5884c085b1a6a1ffb98282e8ed",
+      "originalVersion": "2.1.6",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
