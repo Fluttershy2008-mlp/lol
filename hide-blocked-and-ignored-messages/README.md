@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.3.0
+# HideBlockedAndIgnoredMessages 1.3.1
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -21,8 +21,13 @@ contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
 
-Valenced package **1.0.0-beta5** adds an optional **Show whitelisted users**
-switch and **Manage whitelisted IDs** button in this plugin's settings.
+Valenced package **1.0.0-beta6** shows whitelisted users as normal messages,
+without the **X blocked messages** or ignored-message group header. Update and
+restart Discord once to rebuild already cached native rows. Existing whitelist
+IDs and settings are kept.
+
+The optional **Show whitelisted users** switch and **Manage whitelisted IDs**
+button, introduced in beta5, are in this plugin's settings.
 
 1. Open **Manage whitelisted IDs**.
 2. Paste Discord user IDs or user mentions, separated by spaces, commas,
@@ -36,10 +41,18 @@ switches. An explicitly whitelisted author's own messages are allowed even when
 they reply to another hidden user. Keep **Hide blocked users** and **Hide ignored
 users** enabled to continue hiding everyone else.
 
-These users remain blocked or ignored in Discord. Discord may still display
-their messages inside its native blocked-message group: tap the group to expand
-it, as usual. No relationship-store functions are changed or unblock requests
-sent. Whitelisting only affects the local message display.
+These users remain blocked or ignored in Discord. Whitelisted messages are
+unwrapped from native blocked/ignored groups into ordinary message rows, so no
+tap-to-expand bar is needed. Hidden users' rows are excluded even from a mixed
+group. No relationship-store functions are changed or unblock requests sent.
+Whitelisting only affects the local message display.
+
+The native row hook supports an already loaded or later loaded `ChatManager`.
+It calls Discord's original `createRow` for every permitted child so native row
+indexing and changesets stay under Discord's control. It copies generated child
+rows instead of changing cached message records or the original group. Unknown
+native group layouts pass through rather than guessing their structure. The
+schema follows Valenced's own [hide-blocked-messages plugin](https://github.com/Valenced/valenced-community-plugins/blob/998f55771c3fbb07c267f295eafccd4e25af24b3/plugins/hide-blocked-messages/index.ts).
 
 The whitelist defaults off on upgrade. IDs are stored locally as exact strings,
 validated as 17–20 digit user IDs and deduplicated. Invalid input adds nothing.
@@ -141,7 +154,7 @@ late promises, channel/account changes and synchronous display subscriptions.
 The Valenced package is exercised with its vendored native patcher and adapter:
 
 ```sh
-node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs valenced/tests/hide-blocked-whitelist.test.cjs
+node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs valenced/tests/hide-blocked-whitelist.test.cjs valenced/tests/hide-blocked-native-rows.test.cjs
 ```
 
 For a device smoke test: open a channel containing a blocked/ignored user's

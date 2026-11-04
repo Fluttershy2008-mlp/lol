@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.3.0, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.3.1, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -568,6 +568,73 @@ function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessa
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
+
+// Native schema used by Valenced's own hide-blocked-messages plugin:
+// ChatManager.createRow receives type 1 messages or type 2/6 groups containing
+// generated message rows in `content`. Unwrap at this boundary, after native
+// grouping, without changing RelationshipStore or mutating message records.
+function projectNativeRows(row, storage, isFilteredUser) {
+  if (!row || (row.type !== 2 && row.type !== 6)) return [row];
+  const children = [], seen = new Set();
+  function collect(value, depth) {
+    if (!value || depth > 8 || seen.has(value)) return false;
+    seen.add(value);
+    if (value.type === 1 && typeof value.message?.authorId === 'string') {
+      children.push(value); return true;
+    }
+    if ((value.type !== 2 && value.type !== 6) || !Array.isArray(value.content)) return false;
+    return value.content.every(child => collect(child, depth + 1));
+  }
+  // Unknown native layouts pass through rather than inventing row fields.
+  if (!collect(row, 0) || !children.length) return [row];
+  const filtered = children.map(child => isFilteredUser(child.message.authorId));
+  const whitelisted = children.some(child => isUserWhitelisted(storage, child.message.authorId));
+  if (!whitelisted && !filtered.some(Boolean)) return [row];
+  // Native createRow will assign a consecutive index to each top-level child.
+  // Force a native rebind when the prior cached row was a blocked group.
+  return children.filter((_child, index) => !filtered[index])
+    .map(child => ({ ...child, changeType: 2 }));
+}
+
+function installNativeRows(V, storage, isFilteredUser) {
+  let stopped = false;
+  const patched = new WeakSet(), cleanups = [];
+  function attach(module) {
+    if (stopped) return;
+    const ChatManager = module?.default ?? module?.ChatManager ?? module;
+    const prototype = ChatManager?.prototype;
+    if (!prototype || typeof prototype.createRow !== 'function' || patched.has(prototype)) return;
+    const unpatch = V.patcher.instead('createRow', prototype, function (args, original) {
+      if (stopped) return original.apply(this, args);
+      let rows;
+      try { rows = projectNativeRows(args[0], storage, isFilteredUser); }
+      catch { return original.apply(this, args); }
+      if (rows.length === 1 && rows[0] === args[0]) return original.apply(this, args);
+      let result;
+      for (const row of rows) result = original.apply(this, [row, ...args.slice(1)]);
+      return result;
+    });
+    patched.add(prototype); cleanups.push(unpatch);
+  }
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    for (const cleanup of cleanups.splice(0).reverse()) { try { cleanup(); } catch {} }
+  }
+  try {
+    try { attach(V.metro.findByName?.('ChatManager')); } catch {}
+    if (typeof V.metro.getModuleWithImportedPath === 'function') {
+      // Handles ChatManager being loaded after the plugin starts. Registration
+      // is owned by the adapter and also removed explicitly on plugin unload.
+      const cancel = V.metro.getModuleWithImportedPath(
+        'modules/messages/native/renderer/ChatManager.tsx', attach);
+      if (typeof cancel === 'function') cleanups.push(cancel);
+    }
+  } catch (error) { stop(); throw error; }
+  return stop;
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
 function createSettings(V, refresh) {
   return function HideBlockedSettings() {
     const { React, ReactNative: RN } = V.metro.common;
@@ -585,7 +652,7 @@ function createSettings(V, refresh) {
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
-      ['whitelistEnabled', 'Show whitelisted users', 'Allow selected blocked or ignored users through these filters. Add their Discord user IDs below.'],
+      ['whitelistEnabled', 'Show whitelisted users', 'Show selected blocked or ignored users as normal chat messages, without the blocked-message bar. Add their Discord user IDs below.'],
     ];
     const h = React.createElement;
     const ids = normalizeWhitelist(storage.whitelistedIds);
@@ -645,13 +712,13 @@ function createSettings(V, refresh) {
         button('Remove ID', () => removeId(id), { accessibilityLabel: `Remove whitelisted user ${id}` })))
         : h(RN.Text, { style: { color: muted, fontSize: 13, marginTop: 14 } }, 'No whitelisted IDs. All blocked and ignored users follow your hide settings.'),
       h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 14 } },
-        'Discord may put allowed messages in a blocked-message group. Tap that group to view them. Keep Hide blocked users and Hide ignored users enabled to hide everyone else.')
+        'Whitelisted users appear as normal messages, without a blocked-message bar. Keep Hide blocked users and Hide ignored users enabled to hide everyone else.')
     ) : null,
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.3.0'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.3.1'}`));
   };
 }
 
@@ -715,6 +782,7 @@ function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
         if (!active || pagination.isNative()) return;

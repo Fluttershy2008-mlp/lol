@@ -5,6 +5,7 @@ import { createSettings } from './settings.js';
 import { createMentionFilter } from './mentions.js';
 import { createPagination } from './pagination.js';
 import { normalizeWhitelist } from './whitelist.js';
+import { installNativeRows } from './native-rows.js';
 
 export function createPlugin(V) {
   let active = false;
@@ -64,6 +65,7 @@ export function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
         if (!active || pagination.isNative()) return;
