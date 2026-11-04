@@ -4,6 +4,7 @@ import { createCollectionFilter } from './collection.js';
 import { createSettings } from './settings.js';
 import { createMentionFilter } from './mentions.js';
 import { createPagination } from './pagination.js';
+import { normalizeWhitelist } from './whitelist.js';
 
 export function createPlugin(V) {
   let active = false;
@@ -32,6 +33,8 @@ export function createPlugin(V) {
     for (const key of ['blocked', 'ignored', 'removeReplies', 'removeBotCommands', 'removeMentions']) {
       if (typeof storage[key] !== 'boolean') storage[key] = true;
     }
+    if (typeof storage.whitelistEnabled !== 'boolean') storage.whitelistEnabled = false;
+    storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
     messageStore = byStore('MessageStore');
     if (!method(messageStore, 'getMessages') || !method(messageStore, 'getMessage')) {
       messageStore = byProps('getMessages', 'getMessage');

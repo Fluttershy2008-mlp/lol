@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { isUserWhitelisted } from './whitelist.js';
 // Only interaction initiators count. target_user, mentions and installation
 // owners are NOT the user who ran a command.
 export function interactionInfo(message) {
@@ -34,6 +35,7 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
 
   function isFilteredUser(id) {
     if (typeof id !== 'string' || !id) return false;
+    if (isUserWhitelisted(storage, id)) return false;
     try { if (enabled('blocked') && blockedStore?.isBlocked?.(id)) return true; } catch {}
     try { if (enabled('ignored') && ignoredStore?.isIgnored?.(id)) return true; } catch {}
     return false;
@@ -81,6 +83,7 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
   }
 
   function identityHidden(message) {
+    if (isUserWhitelisted(storage, message?.author?.id)) return false;
     return Boolean(message && (isFilteredUser(message.author?.id)
       || (enabled('removeBotCommands') && botResponseHidden(message))));
   }
@@ -88,6 +91,9 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
   function shouldHide(message) {
     if (!message || typeof message !== 'object') return false;
     try {
+      // An explicit author exception also applies when they reply to another
+      // hidden user. This does not reveal that other user's own messages.
+      if (isUserWhitelisted(storage, message.author?.id)) return false;
       if (identityHidden(message)) return true;
       if (!enabled('removeReplies')) return false;
       const embedded = message.referenced_message ?? message.referencedMessage;

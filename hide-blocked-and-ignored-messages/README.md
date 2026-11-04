@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.2.1
+# HideBlockedAndIgnoredMessages 1.3.0
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,33 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+Valenced package **1.0.0-beta5** adds an optional **Show whitelisted users**
+switch and **Manage whitelisted IDs** button in this plugin's settings.
+
+1. Open **Manage whitelisted IDs**.
+2. Paste Discord user IDs or user mentions, separated by spaces, commas,
+   semicolons or new lines.
+3. Press **Add and show** to save the IDs and enable the whitelist.
+
+Only the selected IDs are exempt from this plugin's blocked/ignored filters.
+Their messages, mentions, replies and attributed command responses are allowed
+through; other blocked/ignored users remain hidden according to your existing
+switches. An explicitly whitelisted author's own messages are allowed even when
+they reply to another hidden user. Keep **Hide blocked users** and **Hide ignored
+users** enabled to continue hiding everyone else.
+
+These users remain blocked or ignored in Discord. Discord may still display
+their messages inside its native blocked-message group: tap the group to expand
+it, as usual. No relationship-store functions are changed or unblock requests
+sent. Whitelisting only affects the local message display.
+
+The whitelist defaults off on upgrade. IDs are stored locally as exact strings,
+validated as 17–20 digit user IDs and deduplicated. Invalid input adds nothing.
+Remove an ID to hide that user again, or switch the option off while keeping
+your saved list. Changes refresh the chat and persist across plugin restarts.
+
+### Previous history-loading fix
 
 Valenced package **1.0.0-beta4** fixes history loading when filtering leaves a
 page empty. Update this plugin in your Valenced repository, then restart Discord.
@@ -114,7 +141,7 @@ late promises, channel/account changes and synchronous display subscriptions.
 The Valenced package is exercised with its vendored native patcher and adapter:
 
 ```sh
-node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs
+node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs valenced/tests/hide-blocked-whitelist.test.cjs
 ```
 
 For a device smoke test: open a channel containing a blocked/ignored user's
