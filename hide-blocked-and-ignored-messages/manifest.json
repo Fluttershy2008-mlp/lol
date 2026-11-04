@@ -1,7 +1,7 @@
 {
   "name": "HideBlockedAndIgnoredMessages",
-  "description": "Hides blocked and ignored messages, mentions, replies and command responses, with an optional user-ID whitelist to show selected users.",
-  "version": "1.3.1",
+  "description": "Hides blocked and ignored users in chat, message search and search suggestions, with an optional ID whitelist to show selected users.",
+  "version": "1.4.0",
   "authors": [
     {
       "name": "Zykrah",
@@ -20,5 +20,5 @@
   "vendetta": {
     "icon": "ic_block"
   },
-  "hash": "dd8f38871f075e0265fb58365af6cc4f99e20fadb4fc2ba87eaa29b51ce916ff"
+  "hash": "1b8649feeaf47efbbf3089207d2778cef02025fac63ff70679ef2b5c153d373c"
 }

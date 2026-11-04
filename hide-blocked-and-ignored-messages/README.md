@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.3.1
+# HideBlockedAndIgnoredMessages 1.4.0
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,34 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+Valenced package **1.0.0-beta7** applies the same filtering to message search
+and author/mention search suggestions. Blocked or ignored users outside your
+enabled whitelist are removed from displayed results. Keep the corresponding
+**Hide blocked users** and **Hide ignored users** switches on.
+
+- Supports `SearchMessageStore.getMessages`, older grouped
+  `SearchStore.getSearchResults`, and `SearchAutocompleteStore.getState`.
+- Filters matching hits and surrounding context. A hidden hit's unrelated
+  context is not shown as a replacement search result.
+- Keeps whitelisted users allowed through this plugin's filters, and hides
+  their messages again when their ID is removed or the whitelist is disabled.
+  Discord's own search exclusions still apply; this does not recover results
+  Discord never put in its search cache.
+- Applies mention display filtering and search interaction attribution to
+  bot command responses, without altering received search events.
+- Preserves typed query text, unrelated channel/filter suggestions, server
+  result totals, cursor, fetch state and the original cached results. Counts
+  may therefore include messages hidden locally. It does not automatically
+  fetch additional search pages or rewrite the search request.
+- Attaches to already loaded or later loaded search stores, refreshes them
+  after settings/relationship changes, and restores original getters on stop.
+
+After updating, restart Discord and run the search again. If a user is in your
+whitelist and you want them hidden in search too, remove their ID or turn off
+**Show whitelisted users**.
+
+### Normal whitelist messages
 
 Valenced package **1.0.0-beta6** shows whitelisted users as normal messages,
 without the **X blocked messages** or ignored-message group header. Update and
@@ -113,9 +141,9 @@ filtering and does not stop the original message from pinging its recipient.
 
 ## Scope and compatibility
 
-This changes the local chat message list. It does not change what other users
-see or control server-side notifications, search results, or other plugins'
-separate message-history viewers.
+This changes the local chat message list, displayed message-search results and
+search user suggestions. It does not change what other users see, server-side
+notifications or other plugins' separate message-history viewers.
 
 Bot attribution requires Discord to supply an interaction initiator or a
 resolvable original-response reference. Ordinary bot/webhook posts without
@@ -154,7 +182,7 @@ late promises, channel/account changes and synchronous display subscriptions.
 The Valenced package is exercised with its vendored native patcher and adapter:
 
 ```sh
-node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs valenced/tests/hide-blocked-whitelist.test.cjs valenced/tests/hide-blocked-native-rows.test.cjs
+node --test valenced/tests/hide-blocked-*.test.cjs
 ```
 
 For a device smoke test: open a channel containing a blocked/ignored user's

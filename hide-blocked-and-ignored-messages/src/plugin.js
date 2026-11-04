@@ -6,10 +6,11 @@ import { createMentionFilter } from './mentions.js';
 import { createPagination } from './pagination.js';
 import { normalizeWhitelist } from './whitelist.js';
 import { installNativeRows } from './native-rows.js';
+import { installSearch } from './search.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -19,12 +20,14 @@ export function createPlugin(V) {
   function refresh() {
     lists?.clear();
     mentions?.clear();
+    search?.clear();
     pagination?.reset();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
       if (!active) return;
       try { messageStore?.emitChange?.(); } catch {}
+      search?.refresh();
     }, 0);
   }
 
@@ -66,6 +69,8 @@ export function createPlugin(V) {
     active = true;
     try {
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
+      search = installSearch(V, filter, mentions.project, refresh);
+      cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
         if (!active || pagination.isNative()) return;
@@ -132,7 +137,7 @@ export function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = undefined;
+    filter = lists = mentions = pagination = search = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

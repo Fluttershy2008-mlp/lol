@@ -58,6 +58,16 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
     if (event.type === 'LOGOUT' || event.type === 'CONNECTION_OPEN') { metadata.clear(); return; }
     if (event.type === 'LOAD_MESSAGES_SUCCESS' && Array.isArray(event.messages)) {
       for (const message of event.messages) observeMessage(message, event.channelId ?? event.channel_id);
+    } else if (event.type === 'SEARCH_FINISH' || event.type === 'SEARCH_MESSAGES_SUCCESS') {
+      const batches = event.type === 'SEARCH_MESSAGES_SUCCESS' ? event.data : [event];
+      if (Array.isArray(batches)) for (const batch of batches) {
+        if (!Array.isArray(batch?.messages)) continue;
+        for (const entry of batch.messages) {
+          const group = Array.isArray(entry) ? entry : [entry];
+          for (const value of group) observeMessage(value?.message ?? value,
+            batch.channelId ?? batch.channel_id ?? event.channelId ?? event.channel_id);
+        }
+      }
     } else if (event.type === 'MESSAGE_CREATE' || event.type === 'MESSAGE_UPDATE') {
       observeMessage(event.message, event.channelId ?? event.channel_id);
     }
