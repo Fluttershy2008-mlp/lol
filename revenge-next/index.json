@@ -633,8 +633,8 @@
         },
         "1.0.0-beta5": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta5.zip",
-          "sha256": "b95e16e281c47e61f1a7adcb6d9ee01e054fab9e3ccb0fb12f235884476bcb1e",
-          "size": 21528,
+          "sha256": "a6ba67bb570f424a13f8c2fdb243ddd932b892b2424b553279cccccdd4de692b",
+          "size": 22974,
           "dependencies": {
             "revenge.api": {
               "version": ">=1.2.1 <2"
@@ -650,7 +650,7 @@
         "beta": "1.0.0-beta5"
       },
       "name": "HideBlockedAndIgnoredMessages (Next preview)",
-      "description": "Revenge Next preview. Hides blocked and ignored messages, their @mentions in other people’s messages, bot responses to their commands, and optional replies.",
+      "description": "Revenge Next preview. Hides blocked and ignored messages, mentions, replies and command responses, with an optional user-ID whitelist to show selected users.",
       "author": "Zykrah <543614592291700748>",
       "icon": "ic_block",
       "contributors": [
