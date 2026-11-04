@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.2.0
+# HideBlockedAndIgnoredMessages 1.2.1
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -21,7 +21,24 @@ contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
 
-Valenced package **1.0.0-beta3** adds **Hide mentions of them**, enabled by default.
+Valenced package **1.0.0-beta4** fixes history loading when filtering leaves a
+page empty. Update this plugin in your Valenced repository, then restart Discord.
+
+- Native history actions read the complete cached collection when choosing
+  their cursors; chat readers still receive the filtered list, including
+  synchronous Flux subscribers during loading.
+- Older/newer requests anchored at the visible list edge advance from the
+  corresponding real cached edge. Explicit jumps and arbitrary anchors stay
+  unchanged.
+- A fully hidden cached chat or older batch can continue through up to five
+  additional native pages (50 messages each), only in the selected channel.
+  This requires recognized native paging flags and the native history action;
+  unsupported builds retain Discord's manual loading control.
+- Stops on visible history, the true history boundary, repeated cursors,
+  failures, channel/account changes or disable. Manual loading can start another
+  bounded pass. Never hides the native loading control or invents an end flag.
+
+**Hide mentions of them**, added in beta3, remains enabled by default.
 A friend’s `<@blocked-user-id>` or `<@!ignored-user-id>` mention disappears from
 the displayed message while the remaining text, attachments and other users’
 mentions stay visible. The blocked/ignored switches decide which users this
@@ -50,8 +67,9 @@ filtering and does not stop the original message from pinging its recipient.
   collection prototype, and underlying message cache. Direct lookups return display copies when mentions are hidden. Unblocking a user or
   disabling the plugin restores the underlying cached messages.
 - Removes the old fake startup messages, channel-ID rewrites, and native
-  RowManager field mutations. No REST requests, message deletions, or automatic
-  read acknowledgements are sent.
+  RowManager field mutations. Automatic history loading uses Discord's native
+  action; there are no direct REST calls, message deletions, or automatic read
+  acknowledgements from the plugin.
 
 ## Scope and compatibility
 
@@ -90,6 +108,14 @@ Regression tests cover cached/live messages, fully hidden history
 pages and pagination flags, interaction variants, other users' commands,
 replies, partial edits, frozen records, bounded/cyclic metadata, restoring
 messages, installation format, and cleanup after a failed startup.
+Paging tests also cover cursor repair, consecutive hidden pages, pending native
+requests, network failures, repeated pages, five-page limits, cancelled timers,
+late promises, channel/account changes and synchronous display subscriptions.
+The Valenced package is exercised with its vendored native patcher and adapter:
+
+```sh
+node --test valenced/tests/hide-blocked-mentions.test.cjs valenced/tests/hide-blocked-pagination.test.cjs
+```
 
 For a device smoke test: open a channel containing a blocked/ignored user's
 message and slash-command response, then compare with a friend's command to

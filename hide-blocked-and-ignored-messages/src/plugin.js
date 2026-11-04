@@ -3,10 +3,11 @@ import { createMessageFilter } from './filter.js';
 import { createCollectionFilter } from './collection.js';
 import { createSettings } from './settings.js';
 import { createMentionFilter } from './mentions.js';
+import { createPagination } from './pagination.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -16,6 +17,7 @@ export function createPlugin(V) {
   function refresh() {
     lists?.clear();
     mentions?.clear();
+    pagination?.reset();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -44,6 +46,12 @@ export function createPlugin(V) {
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
       getMessage: originalGetMessage });
+    const originalGetMessages = messageStore.getMessages.bind(messageStore);
+    const selectedStore = byStore('SelectedChannelStore') ?? byProps('getChannelId', 'getVoiceChannelId');
+    const actions = byProps('fetchMessages', 'sendMessage') ?? byProps('fetchMessages');
+    pagination = createPagination({ getMessages: originalGetMessages, shouldHide: filter.shouldHide,
+      selectedChannel: method(selectedStore, 'getChannelId') ? () => selectedStore.getChannelId() : undefined,
+      fetchMessages: method(actions, 'fetchMessages') ? options => actions.fetchMessages(options) : undefined });
     mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
     lists = createCollectionFilter(filter.shouldHide, () => {
@@ -55,22 +63,50 @@ export function createPlugin(V) {
     try {
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
-        if (!active) return;
+        if (!active || pagination.isNative()) return;
         try { return mentions.project(result); } catch { return result; }
       }));
-      cleanup.push(V.patcher.after('getMessages', messageStore, (_args, result) => {
-        if (!active) return;
-        try { return lists.project(result); } catch {
+      cleanup.push(V.patcher.after('getMessages', messageStore, ([channelId], result) => {
+        if (!active || pagination.isNative()) return;
+        try { pagination.consider(channelId); } catch {}
+        try {
+          return lists.project(result);
+        } catch {
           // Preserve Discord's return value on unsupported collection shapes.
           return result;
         }
       }));
+      if (method(actions, 'fetchMessages')) {
+        cleanup.push(V.patcher.instead('fetchMessages', actions, function (args, original) {
+          if (!active) return original.apply(this, args);
+          // Keep the original receiver, remaining arguments and return value.
+          const next = [...args];
+          const paging = pagination;
+          let ticket;
+          try {
+            ticket = paging.manualRequest(args[0]);
+            next[0] = paging.repairOptions(args[0]);
+          } catch {}
+          let result;
+          try { result = paging.runNative(() => original.apply(this, next)); }
+          catch (error) { paging.finishRequest(ticket, true); throw error; }
+          if (result && typeof result.then === 'function') {
+            Promise.resolve(result).then(() => paging.finishRequest(ticket), () => paging.finishRequest(ticket, true));
+          }
+          return result;
+        }));
+      }
       const dispatcher = V.metro.common.FluxDispatcher;
       if (method(dispatcher, 'dispatch')) {
-        // Observe IDs before native normalization. Never drop, rewrite, redirect
-        // or synthesize gateway events; pagination receives the full history.
-        cleanup.push(V.patcher.before('dispatch', dispatcher, ([event]) => {
-          if (active) { try { filter.observe(event); } catch {} }
+        // Observe IDs before normalization. Native events stay untouched. Flux
+        // subscriptions can read the display list synchronously during dispatch,
+        // including when a history action dispatches its loading/success event.
+        cleanup.push(V.patcher.instead('dispatch', dispatcher, function (args, original) {
+          if (!active) return original.apply(this, args);
+          try { filter.observe(args[0]); } catch {}
+          const result = pagination.runDisplay(() => original.apply(this, args));
+          try { pagination.observe(args[0]); } catch {}
+          return result;
         }));
       }
       for (const store of new Set([blockedStore, ignoredStore])) {
@@ -86,11 +122,12 @@ export function createPlugin(V) {
   function onUnload() {
     const wasActive = active;
     active = false;
+    pagination?.stop();
     if (refreshTimer !== undefined) clearTimeout(refreshTimer);
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = undefined;
+    filter = lists = mentions = pagination = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

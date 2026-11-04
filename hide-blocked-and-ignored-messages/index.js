@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.2.0, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.2.1, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -409,6 +409,137 @@ function createCollectionFilter(shouldHide, reportUnsupported = () => {}, projec
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
+const historyRows = value => Array.isArray(value) ? value : value?._array;
+const snowflake = id => typeof id === 'string' && /^[1-9]\d*$/.test(id);
+const compareIds = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+
+// Rendering sees a projection; history actions need the real collection to
+// choose cursors. Otherwise an empty projected page has no pagination cursor.
+function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessages,
+  setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let nativeDepth = 0, stopped = false, timer, epoch = 0;
+  let channel, attempted = new Set(), pages = 0, busy = false, failed = false;
+  let requestedBefore = false, hiddenPage = false;
+  const maxPages = 5;
+
+  function runNative(fn) {
+    nativeDepth++;
+    try { return fn(); } finally { nativeDepth--; }
+  }
+  function runDisplay(fn) {
+    const depth = nativeDepth;
+    nativeDepth = 0;
+    try { return fn(); } finally { nativeDepth = depth; }
+  }
+  function currentChannel() {
+    try { return selectedChannel?.(); } catch { return undefined; }
+  }
+  function reset() {
+    epoch++;
+    if (timer !== undefined) clearTimer(timer);
+    timer = undefined;
+    channel = undefined; attempted = new Set(); pages = 0; busy = failed = false;
+    requestedBefore = hiddenPage = false;
+  }
+  function inspect(id) {
+    const collection = getMessages(id), rows = historyRows(collection);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const ids = rows.map(row => row?.id).filter(snowflake).sort(compareIds);
+    if (!ids.length) return;
+    return { collection, rows, oldest: ids[0], newest: ids[ids.length - 1] };
+  }
+  function canContinue(info) {
+    const c = info?.collection;
+    // Unknown flags/array-only builds have no proven history boundary. Leave
+    // their native Load more control alone rather than guessing end-of-history.
+    return c && c.hasMoreBefore === true && c.hasMoreAfter === false
+      && c.ready !== false && !c.loadingMore && !c.loadingMoreBefore && !c.loadingMoreAfter
+      && !c.loading && !c.isLoading && (hiddenPage || info.rows.every(shouldHide));
+  }
+  function consider(id) {
+    if (stopped || nativeDepth || !fetchMessages || !id || currentChannel() !== id) return;
+    if (channel !== id) { reset(); channel = id; }
+    if (timer !== undefined || busy || failed || pages >= maxPages) return;
+    const info = inspect(id);
+    if (!canContinue(info) || attempted.has(info.oldest)) return;
+    const session = epoch;
+    // Schedule outside getMessages/render and Flux dispatch. Never recursively
+    // dispatch or fetch while Discord is constructing a native message row.
+    timer = setTimer(() => {
+      timer = undefined;
+      if (stopped || session !== epoch || currentChannel() !== id) return;
+      const latest = inspect(id);
+      if (!canContinue(latest) || attempted.has(latest.oldest)) return;
+      attempted.add(latest.oldest); pages++; busy = true;
+      requestedBefore = true;
+      let result;
+      try {
+        result = runNative(() => fetchMessages({ channelId: id, before: latest.oldest, limit: 50 }));
+      } catch { busy = false; failed = true; return; }
+      // Native success/failure dispatches handle actions that return void. A
+      // rejected promise must never produce retries or an unhandled rejection.
+      Promise.resolve(result).then(() => {
+        if (stopped || session !== epoch) return;
+        busy = false;
+        consider(id);
+      }, () => {
+        if (stopped || session !== epoch) return;
+        busy = false; failed = true;
+      });
+    }, 250);
+  }
+  function observe(event) {
+    const type = event?.type;
+    if (['LOGOUT', 'CONNECTION_OPEN', 'CHANNEL_SELECT'].includes(type)) { reset(); return; }
+    const id = event?.channelId ?? event?.channel_id;
+    if (!id || id !== channel) return;
+    if (type === 'LOAD_MESSAGES_FAILURE') { busy = false; failed = true; }
+    if (type === 'LOAD_MESSAGES_SUCCESS') {
+      busy = false;
+      hiddenPage = requestedBefore && Array.isArray(event.messages)
+        && event.messages.length > 0 && event.messages.every(shouldHide);
+      consider(id);
+    }
+  }
+  function repairOptions(options) {
+    if (!options || typeof options !== 'object' || options.jump || options.around
+      || options.messageId || options.jumpToMessageId || options.isSearch) return options;
+    const id = options.channelId ?? options.channel_id;
+    if (!id || Boolean(options.before) === Boolean(options.after)) return options;
+    const info = inspect(id);
+    if (!info) return options;
+    const visible = info.rows.filter(row => !shouldHide(row)).map(row => row?.id).filter(snowflake).sort(compareIds);
+    if (!visible.length) return options;
+    // Only move an actual display-boundary cursor; explicit jumps and arbitrary
+    // anchors must retain exactly the range Discord requested.
+    if (options.before === visible[0] && options.before !== info.oldest)
+      return { ...options, before: info.oldest };
+    if (options.after === visible[visible.length - 1] && options.after !== info.newest)
+      return { ...options, after: info.newest };
+    return options;
+  }
+  function manualRequest(options) {
+    if (nativeDepth) return;
+    const id = options?.channelId ?? options?.channel_id;
+    if (!id || currentChannel() !== id) return;
+    reset(); channel = id;
+    busy = true;
+    requestedBefore = Boolean(options.before) && !options.after && !options.jump && !options.around
+      && !options.messageId && !options.jumpToMessageId && !options.isSearch;
+    return epoch;
+  }
+  function finishRequest(ticket, error = false) {
+    if (stopped || ticket === undefined || ticket !== epoch) return;
+    busy = false;
+    if (error) failed = true;
+    else consider(channel);
+  }
+  return { runNative, runDisplay, consider, observe, repairOptions, manualRequest, finishRequest, reset,
+    isNative: () => nativeDepth > 0,
+    stop() { stopped = true; reset(); } };
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
 function createSettings(V, refresh) {
   return function HideBlockedSettings() {
     const { React, ReactNative: RN } = V.metro.common;
@@ -448,7 +579,7 @@ function createSettings(V, refresh) {
 
 function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -458,6 +589,7 @@ function createPlugin(V) {
   function refresh() {
     lists?.clear();
     mentions?.clear();
+    pagination?.reset();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -486,6 +618,12 @@ function createPlugin(V) {
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
       getMessage: originalGetMessage });
+    const originalGetMessages = messageStore.getMessages.bind(messageStore);
+    const selectedStore = byStore('SelectedChannelStore') ?? byProps('getChannelId', 'getVoiceChannelId');
+    const actions = byProps('fetchMessages', 'sendMessage') ?? byProps('fetchMessages');
+    pagination = createPagination({ getMessages: originalGetMessages, shouldHide: filter.shouldHide,
+      selectedChannel: method(selectedStore, 'getChannelId') ? () => selectedStore.getChannelId() : undefined,
+      fetchMessages: method(actions, 'fetchMessages') ? options => actions.fetchMessages(options) : undefined });
     mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
     lists = createCollectionFilter(filter.shouldHide, () => {
@@ -497,22 +635,50 @@ function createPlugin(V) {
     try {
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
-        if (!active) return;
+        if (!active || pagination.isNative()) return;
         try { return mentions.project(result); } catch { return result; }
       }));
-      cleanup.push(V.patcher.after('getMessages', messageStore, (_args, result) => {
-        if (!active) return;
-        try { return lists.project(result); } catch {
+      cleanup.push(V.patcher.after('getMessages', messageStore, ([channelId], result) => {
+        if (!active || pagination.isNative()) return;
+        try { pagination.consider(channelId); } catch {}
+        try {
+          return lists.project(result);
+        } catch {
           // Preserve Discord's return value on unsupported collection shapes.
           return result;
         }
       }));
+      if (method(actions, 'fetchMessages')) {
+        cleanup.push(V.patcher.instead('fetchMessages', actions, function (args, original) {
+          if (!active) return original.apply(this, args);
+          // Keep the original receiver, remaining arguments and return value.
+          const next = [...args];
+          const paging = pagination;
+          let ticket;
+          try {
+            ticket = paging.manualRequest(args[0]);
+            next[0] = paging.repairOptions(args[0]);
+          } catch {}
+          let result;
+          try { result = paging.runNative(() => original.apply(this, next)); }
+          catch (error) { paging.finishRequest(ticket, true); throw error; }
+          if (result && typeof result.then === 'function') {
+            Promise.resolve(result).then(() => paging.finishRequest(ticket), () => paging.finishRequest(ticket, true));
+          }
+          return result;
+        }));
+      }
       const dispatcher = V.metro.common.FluxDispatcher;
       if (method(dispatcher, 'dispatch')) {
-        // Observe IDs before native normalization. Never drop, rewrite, redirect
-        // or synthesize gateway events; pagination receives the full history.
-        cleanup.push(V.patcher.before('dispatch', dispatcher, ([event]) => {
-          if (active) { try { filter.observe(event); } catch {} }
+        // Observe IDs before normalization. Native events stay untouched. Flux
+        // subscriptions can read the display list synchronously during dispatch,
+        // including when a history action dispatches its loading/success event.
+        cleanup.push(V.patcher.instead('dispatch', dispatcher, function (args, original) {
+          if (!active) return original.apply(this, args);
+          try { filter.observe(args[0]); } catch {}
+          const result = pagination.runDisplay(() => original.apply(this, args));
+          try { pagination.observe(args[0]); } catch {}
+          return result;
         }));
       }
       for (const store of new Set([blockedStore, ignoredStore])) {
@@ -528,11 +694,12 @@ function createPlugin(V) {
   function onUnload() {
     const wasActive = active;
     active = false;
+    pagination?.stop();
     if (refreshTimer !== undefined) clearTimeout(refreshTimer);
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = undefined;
+    filter = lists = mentions = pagination = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

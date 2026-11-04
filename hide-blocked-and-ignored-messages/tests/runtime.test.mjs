@@ -9,13 +9,14 @@ const root = new URL('../', import.meta.url);
 const bundle = readFileSync(new URL('index.js', root), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
 
-function harness({ failPatch = false, missing = false } = {}) {
+function harness({ failPatch = false, missing = false, historyActions = false } = {}) {
   const blocked = new Set(['blocked']);
   const ignored = new Set(['ignored']);
   const rows = [];
   const listeners = new Set();
   const timers = new Map();
   const events = [];
+  const subscriptions = [], requests = [];
   const storage = {};
   let nextTimer = 0, emits = 0;
   const relationships = {
@@ -23,7 +24,7 @@ function harness({ failPatch = false, missing = false } = {}) {
     addChangeListener: fn => listeners.add(fn), removeChangeListener: fn => listeners.delete(fn),
   };
   class Collection {
-    constructor() { this._array = rows; this.hasMoreBefore = true; this.ready = true; }
+    constructor() { this._array = rows; this.hasMoreBefore = true; this.hasMoreAfter = false; this.ready = true; }
     toArray() { return this._array; }
   }
   const collection = new Collection();
@@ -42,15 +43,24 @@ function harness({ failPatch = false, missing = false } = {}) {
     };
     if (event.type === 'LOAD_MESSAGES_SUCCESS') event.messages.forEach(add);
     if (event.type === 'MESSAGE_CREATE' || event.type === 'MESSAGE_UPDATE') add(event.message);
+    for (const fn of subscriptions) fn(event);
     return 'passed-through';
   } };
+  const actions = { fetchMessages(options, extra) {
+    assert.equal(this, actions);
+    requests.push({ options, extra, nativeRows: messageStore.getMessages('channel').toArray() });
+    dispatcher.dispatch({ type: 'LOAD_MESSAGES', channelId: 'channel' });
+    return 'native-result';
+  } };
+  const selected = { getChannelId: () => 'channel' };
   const originalGet = messageStore.getMessages, originalDispatch = dispatcher.dispatch;
   const V = {
     plugin: { storage }, logger: { warn() {} },
-    patcher: failPatch ? { ...patcher, before() { throw new Error('patch failed'); } } : patcher,
+    patcher: failPatch ? { ...patcher, instead() { throw new Error('patch failed'); } } : patcher,
     metro: { common: { FluxDispatcher: dispatcher },
-      findByStoreName: name => missing ? undefined : ({ MessageStore: messageStore, RelationshipStore: relationships })[name],
-      findByProps: () => undefined,
+      findByStoreName: name => missing ? undefined : ({ MessageStore: messageStore, RelationshipStore: relationships,
+        ...(historyActions ? { SelectedChannelStore: selected } : {}) })[name],
+      findByProps: (...props) => historyActions && props.includes('fetchMessages') ? actions : undefined,
     },
   };
   const plugin = vm.runInNewContext(bundle, { vendetta: V,
@@ -59,7 +69,7 @@ function harness({ failPatch = false, missing = false } = {}) {
   });
   function flush() { for (const [id, fn] of [...timers]) { timers.delete(id); fn(); } }
   return { plugin, dispatcher, messageStore, rows, collection, events, storage, blocked, ignored,
-    listeners, timers, originalGet, originalDispatch, flush, getEmits: () => emits };
+    listeners, timers, originalGet, originalDispatch, flush, actions, subscriptions, requests, getEmits: () => emits };
 }
 const row = (id, user = 'friend', extra = {}) => ({ id, channel_id: 'channel', content: 'original', author: { id: user }, ...extra });
 
@@ -131,4 +141,36 @@ test('missing modules or partially failed setup do not leave an installed hook',
     assert.equal(h.dispatcher.dispatch, h.originalDispatch);
     assert.equal(h.listeners.size, 0); assert.equal(h.timers.size, 0);
   }
+});
+
+test('Load more uses raw history boundaries while synchronous Flux subscribers still see filtered rows', () => {
+  const h = harness({ historyActions: true });
+  h.rows.push(row('100', 'blocked'), row('200'), row('300', 'ignored'));
+  const originalFetch = h.actions.fetchMessages;
+  h.plugin.onLoad(); h.flush();
+  h.subscriptions.push(() => assert.deepEqual(h.messageStore.getMessages('channel').toArray().map(m => m.id), ['200']));
+  const request = Object.freeze({ channelId: 'channel', before: '200', limit: 25 });
+  assert.equal(h.actions.fetchMessages(request, 'extra'), 'native-result');
+  assert.equal(request.before, '200');
+  assert.equal(h.requests[0].options.before, '100');
+  assert.equal(h.requests[0].extra, 'extra');
+  assert.equal(h.requests[0].nativeRows, h.rows);
+  assert.deepEqual(h.messageStore.getMessages('channel').toArray().map(m => m.id), ['200']);
+  h.plugin.onUnload();
+  assert.equal(h.actions.fetchMessages, originalFetch);
+  assert.equal(h.timers.size, 0);
+});
+
+test('all-hidden cached chat requests a native older page once and cancels further work on disable', async () => {
+  const h = harness({ historyActions: true });
+  h.rows.push(row('100', 'blocked'), row('200', 'ignored'));
+  h.plugin.onLoad(); h.flush();
+  assert.equal(h.messageStore.getMessages('channel').toArray().length, 0);
+  h.flush(); await Promise.resolve(); h.flush();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.requests[0].options.before, '100');
+  assert.equal(h.requests[0].nativeRows.length, 2);
+  h.plugin.onUnload();
+  assert.equal(h.messageStore.getMessages('channel').toArray().length, 2);
+  assert.equal(h.timers.size, 0);
 });

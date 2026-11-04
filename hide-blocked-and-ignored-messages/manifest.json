@@ -1,7 +1,7 @@
 {
   "name": "HideBlockedAndIgnoredMessages",
   "description": "Hides blocked and ignored messages, their @mentions in other people’s messages, bot responses to their commands, and optional replies.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "authors": [
     {
       "name": "Zykrah",
@@ -20,5 +20,5 @@
   "vendetta": {
     "icon": "ic_block"
   },
-  "hash": "6d088e4d082afc1aaf523c1d0b63f67c35c3d17b5ba19508669ca2c2daec8bcf"
+  "hash": "f594340af5d237a81a8ec3dcf255aff592bfcfc6cf98512ff410e74dbed5f029"
 }
