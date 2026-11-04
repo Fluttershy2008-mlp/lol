@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.4.0
+# HideBlockedAndIgnoredMessages 1.4.1
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -21,31 +21,26 @@ contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
 
-Valenced package **1.0.0-beta7** applies the same filtering to message search
-and author/mention search suggestions. Blocked or ignored users outside your
-enabled whitelist are removed from displayed results. Keep the corresponding
-**Hide blocked users** and **Hide ignored users** switches on.
+Valenced package **1.0.0-beta8** allows blocked and ignored users in explicit
+message search, including the **from:** author suggestions. Search visibility
+is separate from chat hiding: the chat whitelist does not restrict search.
+Update, restart Discord and run the search again. Your existing whitelist stays
+saved and continues to control normal chat visibility.
 
-- Supports `SearchMessageStore.getMessages`, older grouped
-  `SearchStore.getSearchResults`, and `SearchAutocompleteStore.getState`.
-- Filters matching hits and surrounding context. A hidden hit's unrelated
-  context is not shown as a replacement search result.
-- Keeps whitelisted users allowed through this plugin's filters, and hides
-  their messages again when their ID is removed or the whitelist is disabled.
-  Discord's own search exclusions still apply; this does not recover results
-  Discord never put in its search cache.
-- Applies mention display filtering and search interaction attribution to
-  bot command responses, without altering received search events.
-- Preserves typed query text, unrelated channel/filter suggestions, server
-  result totals, cursor, fetch state and the original cached results. Counts
-  may therefore include messages hidden locally. It does not automatically
-  fetch additional search pages or rewrite the search request.
-- Attaches to already loaded or later loaded search stores, refreshes them
-  after settings/relationship changes, and restores original getters on stop.
-
-After updating, restart Discord and run the search again. If a user is in your
-whitelist and you want them hidden in search too, remove their ID or turn off
-**Show whitelisted users**.
+- Removes beta7's search-result and autocomplete projections. Search getters
+  return the complete original arrays/state, including context and mentions.
+- Discord normally discards blocked messages during `SEARCH_MESSAGES_SUCCESS`.
+  A synchronous exception for its combined blocked/ignored check lets returned
+  messages enter the search cache.
+- The same exception covers `AutocompleteScreen` while its native author
+  suggestions are being rendered. It supports already loaded or later loaded
+  stores/components and restores hooks on stop.
+- Unrelated nested events and deferred callbacks use the real relationship
+  checks. `isBlocked`, `isIgnored` and the relationship map remain unchanged.
+  No unblock request or search-payload rewrite is sent.
+- Server result totals, cursors, fetch state and the exact original cached
+  results stay intact. Only messages actually returned by Discord can appear;
+  this does not fetch deleted or inaccessible content.
 
 ### Normal whitelist messages
 
@@ -72,8 +67,8 @@ users** enabled to continue hiding everyone else.
 These users remain blocked or ignored in Discord. Whitelisted messages are
 unwrapped from native blocked/ignored groups into ordinary message rows, so no
 tap-to-expand bar is needed. Hidden users' rows are excluded even from a mixed
-group. No relationship-store functions are changed or unblock requests sent.
-Whitelisting only affects the local message display.
+group. The stored relationships and ordinary blocking checks stay intact;
+no unblock requests are sent. Whitelisting only affects the local chat display.
 
 The native row hook supports an already loaded or later loaded `ChatManager`.
 It calls Discord's original `createRow` for every permitted child so native row
@@ -141,8 +136,8 @@ filtering and does not stop the original message from pinging its recipient.
 
 ## Scope and compatibility
 
-This changes the local chat message list, displayed message-search results and
-search user suggestions. It does not change what other users see, server-side
+This filters the local chat message list and allows blocked/ignored users in
+explicit message search and search user suggestions. It does not change what other users see, server-side
 notifications or other plugins' separate message-history viewers.
 
 Bot attribution requires Discord to supply an interaction initiator or a

@@ -69,7 +69,7 @@ export function createPlugin(V) {
     active = true;
     try {
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
-      search = installSearch(V, filter, mentions.project, refresh);
+      search = installSearch(V, refresh);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
@@ -114,7 +114,7 @@ export function createPlugin(V) {
         cleanup.push(V.patcher.instead('dispatch', dispatcher, function (args, original) {
           if (!active) return original.apply(this, args);
           try { filter.observe(args[0]); } catch {}
-          const result = pagination.runDisplay(() => original.apply(this, args));
+          const result = pagination.runDisplay(() => search.dispatch(args[0], () => original.apply(this, args)));
           try { pagination.observe(args[0]); } catch {}
           return result;
         }));

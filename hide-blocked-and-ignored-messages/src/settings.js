@@ -12,8 +12,8 @@ export function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
-      ['blocked', 'Hide blocked users', 'Remove their messages from chat and search, and hide their search suggestions.'],
-      ['ignored', 'Hide ignored users', 'Remove their messages from chat and search, and hide their search suggestions.'],
+      ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
+      ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
@@ -80,9 +80,11 @@ export function createSettings(V, refresh) {
         'Whitelisted users appear as normal messages, without a blocked-message bar. Keep Hide blocked users and Hide ignored users enabled to hide everyone else.')
     ) : null,
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
+      'Search includes blocked and ignored users, including from: suggestions and message results. Your chat whitelist does not restrict search.'),
+    h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.4.0'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.4.1'}`));
   };
 }
