@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "id": "fluttershy.show-hidden-channels",
+  "name": "ShowHiddenChannels",
+  "description": "Show hidden channels with original channel names, themed lock screens, avatars, server profiles, channel details and a permission inspector.",
+  "author": "fluttershy_simper67 <753962426407452713>",
+  "version": "1.0.0-beta11",
+  "icon": "LockIcon",
+  "dependencies": {
+    "valenced.api": {
+      "version": ">=1 <2"
+    },
+    "discord": {
+      "version": ">=350.2"
+    }
+  },
+  "dist": {
+    "script": "index.js"
+  }
+}

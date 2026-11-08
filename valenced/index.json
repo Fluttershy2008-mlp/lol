@@ -2234,6 +2234,31 @@
       "description": "Valenced preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Valenced mobile.",
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "ic_image"
+    },
+    "fluttershy.show-hidden-channels": {
+      "versions": {
+        "1.0.0-beta11": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/fluttershy.show-hidden-channels@1.0.0-beta11.zip",
+          "sha256": "9807ac0450eaf43fe5fc979651d051d694175eca13cfdf4e93e9ea8b57d41c78",
+          "size": 35957,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=350.2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta11",
+        "beta": "1.0.0-beta11"
+      },
+      "name": "ShowHiddenChannels",
+      "description": "Show hidden channels with original channel names, themed lock screens, avatars, server profiles, channel details and a permission inspector.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "LockIcon"
     }
   }
 }

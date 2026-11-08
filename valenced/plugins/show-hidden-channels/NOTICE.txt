@@ -1,0 +1,64 @@
+ShowHiddenChannels for Valenced 1.0.0-beta11
+Prepared for fluttershy_simper67; updated 8 November 2026.
+
+Conceptual reference:
+Vencord — ShowHiddenChannels
+Copyright (c) 2022 Vendicated and contributors
+https://github.com/Vendicated/Vencord/tree/main/src/plugins/showHiddenChannels
+Reference index.tsx blob: ae9aef2e4b7773e378392b5a79006ac44310ae80
+Vencord is licensed under GPL-3.0-or-later.
+
+This is an independently implemented mobile integration, not the desktop plugin
+bundled for Android. Vencord desktop source patches are not evaluated. It is not
+an official Vencord or Valenced release.
+
+Valenced API references:
+https://github.com/Valenced/valenced
+https://github.com/Valenced/valenced-community-plugins/tree/main/plugins/dashless
+https://github.com/Valenced/valenced-community-plugins/tree/main/plugins/better-typing-indicators
+https://github.com/Valenced/valenced-community-plugins/tree/main/plugins/valid-user
+https://github.com/Valenced/valenced/blob/main/bundle/src/plugins/start/settings.plugins/utils/contacts.ts
+https://github.com/Valenced/valenced/blob/main/bundle/lib/modules/src/finders/filters/dynamic.ts
+
+Native compatibility targets:
+modules/guild_sidebar/ChannelListStore.tsx
+modules/channel_list_v2/native/renderRedesignChannelListItem.tsx
+modules/channel_list_v2/native/RedesignChannelListConstants.tsx
+stores/GuildRoleStore.tsx
+modules/user_profile/native/showUserProfileActionSheet.tsx
+modules/links/native/handleSupportedURL.tsx
+modules/links/native/handleURL.tsx
+utils/native/parseURL.tsx
+
+The plugin patches native channel-list presentation and row measurements.
+Beta3 replaces the Android text alert with a full themed lock screen. The layout
+is informed by the user's reference screenshot and Vencord's HiddenChannelLockScreen.
+Its lock artwork is drawn with native View styles; no external image is required.
+Beta4 resolves missing usernames through Discord's existing HTTP client, supports
+modern role-store methods, and opens native profiles when user chips are tapped.
+Beta5 adds first-use profile routing through Discord's built-in lazy profile
+handler, alternate module export shapes and a Discord-only native URI fallback.
+No external web-browser fallback is used.
+Beta6 follows Valenced's dependency-aware native profile and link-handler
+discovery, uses native stack mode, and adds copyable local profile diagnostics.
+Allowed role calculations use Discord's documented permission hierarchy:
+https://github.com/discord/discord-api-docs/blob/main/developers/topics/permissions.mdx
+Discord's permission checks, channel records and global React factories are not
+replaced. No hidden-channel metadata is sent to any third-party service.
+
+Complete corresponding source: index.js (unminified).
+Licence: GPL-3.0-or-later; complete licence text is included in LICENSE.
+
+Beta10 uses the user-confirmed beta9 as its base. Channel details and the
+permission-inspector concept are informed by Vencord’s mobile-independent
+HiddenChannelLockScreen field coverage, implemented with React Native views.
+Reference component blob: 511d4856f43af7e9e12bc99adf9d003108f04024
+No Vencord desktop source patches or CSS are executed. Added local search,
+clipboard actions, and optional persisted layout settings. Permission labels
+follow the Discord API permission-flags documentation; unknown bits remain raw.
+
+Beta11 retains beta10's inspector, settings and profile features. Original channel
+list names take priority, row labels use React Native Text, and the native detail
+route retains the original list record within the current account. Missing names
+may use matching channel/server metadata already held in ChannelStore. No new
+network requests or permission changes were introduced for this name fix.

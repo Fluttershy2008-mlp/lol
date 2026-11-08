@@ -101,6 +101,9 @@
     },
     "scrollbar": {
       "path": "valenced/plugins/scrollbar"
+    },
+    "show-hidden-channels": {
+      "path": "valenced/plugins/show-hidden-channels"
     }
   },
   "nativeThemes": {
@@ -120,3 +123,4 @@
     }
   }
 }
+

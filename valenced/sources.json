@@ -259,6 +259,12 @@
       "sha256": "2c936fab155b1f6144f3bc350014f141f7df4e4651c8e185932f2defb22712e0",
       "originalVersion": "1.0.0-beta3",
       "kind": "native-plugin"
+    },
+    "fluttershy.show-hidden-channels": {
+      "path": "valenced/plugins/show-hidden-channels/index.js",
+      "sha256": "9e2b1b449841dae299ee0f7a3f5a22926d85cef364ffd464bb37b61b6feca5c1",
+      "originalVersion": "1.0.0-beta11",
+      "kind": "native-plugin"
     }
   }
 }
