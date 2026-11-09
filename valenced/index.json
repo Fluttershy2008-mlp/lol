@@ -2314,6 +2314,35 @@
       "author": "fluttershy_simper67 <753962426407452713>",
       "icon": "LockIcon"
     },
+    "fluttershy2008.always-animate": {
+      "versions": {
+        "1.1.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/fluttershy2008.always-animate@1.1.0-beta1.zip",
+          "sha256": "c114715650b7d2b134060b9116fe3950f741b40855697df8ea697aff5c951e30",
+          "size": 128626,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.1.0-beta1",
+        "beta": "1.1.0-beta1"
+      },
+      "name": "Always Animate",
+      "description": "Keep supported avatars, server banners, emoji, stickers, nameplates and gradient roles animating. Android adaptation of Vencord AlwaysAnimate.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "contributors": [
+        "Fiery (https://vencord.dev/plugins/AlwaysAnimate/ \"Original Vencord concept\")",
+        "MarkLong0467 (uploaded Always Animate 2.1.0 reference: native APNG switch and collectibles-shop asset routes)"
+      ],
+      "icon": "ActivityIcon"
+    },
     "mlemception.chatbuttons": {
       "versions": {
         "1.0.7": {

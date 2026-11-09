@@ -1,0 +1,1 @@
+package android.graphics.drawable;import android.content.res.Resources;public class Drawable {public Drawable mutate(){return this;}public static abstract class ConstantState {public abstract Drawable newDrawable(Resources r);}}

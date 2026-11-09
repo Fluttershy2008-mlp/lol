@@ -1,0 +1,1 @@
+package android.graphics;public class Paint {public Xfermode mode;public Paint(){}public Xfermode setXfermode(Xfermode mode){this.mode=mode;return mode;}}

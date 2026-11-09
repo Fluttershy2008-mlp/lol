@@ -110,6 +110,9 @@
     },
     "chat-buttons": {
       "path": "valenced/plugins/chat-buttons"
+    },
+    "always-animate": {
+      "path": "valenced/plugins/always-animate"
     }
   },
   "nativeThemes": {

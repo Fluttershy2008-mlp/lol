@@ -277,6 +277,12 @@
       "sha256": "3da73b07d7cede44792be10e96ba292742845164270d978d68f37d6165a079de",
       "originalVersion": "1.0.8",
       "kind": "native-plugin"
+    },
+    "fluttershy2008.always-animate": {
+      "path": "valenced/plugins/always-animate/index.js",
+      "sha256": "53d7b1a9c9b21fca92b1e14579dd1b052c6cfe484187848c155fe466b4c6b6f7",
+      "originalVersion": "1.1.0-beta1",
+      "kind": "native-plugin"
     }
   }
 }

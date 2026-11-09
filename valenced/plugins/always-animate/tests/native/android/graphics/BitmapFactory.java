@@ -1,0 +1,1 @@
+package android.graphics;import javax.imageio.*;import java.io.*;public class BitmapFactory {public static Bitmap decodeByteArray(byte[] data,int offset,int length)throws Exception{return new Bitmap(ImageIO.read(new ByteArrayInputStream(data,offset,length)));}}

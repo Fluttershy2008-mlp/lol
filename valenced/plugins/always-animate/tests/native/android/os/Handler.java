@@ -1,0 +1,1 @@
+package android.os;import java.util.concurrent.*;public class Handler {public static final ConcurrentLinkedQueue<Runnable> tasks=new ConcurrentLinkedQueue<Runnable>();public Handler(Looper looper){}public boolean post(Runnable r){tasks.add(r);return true;}public static void drain(){Runnable r;while((r=tasks.poll())!=null)r.run();}}

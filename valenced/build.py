@@ -288,6 +288,13 @@ def build(check=False):
             for path in sorted(directory.rglob("*")):
                 if path.is_file() and not any(part in ("__pycache__", "node_modules") for part in path.parts):
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()
+        if slug == "always-animate":
+            # Preserve the GPL Android helper's corresponding source, build
+            # recipe and regression fixtures in every repository release.
+            for folder in ("source", "tests"):
+                for path in sorted((directory / folder).rglob("*")):
+                    if path.is_file() and "__pycache__" not in path.parts:
+                        files[path.relative_to(directory).as_posix()] = path.read_bytes()
         native = manifest.get("dist", {}).get("android")
         if native:
             native_path = Path(native["path"])
@@ -355,3 +362,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Verify checked-in packages without rewriting them")
     build(parser.parse_args().check)
+

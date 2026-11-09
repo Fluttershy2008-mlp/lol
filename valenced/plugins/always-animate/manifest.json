@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "id": "fluttershy2008.always-animate",
+  "name": "Always Animate",
+  "description": "Keep supported avatars, server banners, emoji, stickers, nameplates and gradient roles animating. Android adaptation of Vencord AlwaysAnimate.",
+  "author": "fluttershy_simper67 <753962426407452713>",
+  "contributors": [
+    "Fiery (https://vencord.dev/plugins/AlwaysAnimate/ \"Original Vencord concept\")",
+    "MarkLong0467 (uploaded Always Animate 2.1.0 reference: native APNG switch and collectibles-shop asset routes)"
+  ],
+  "icon": "ActivityIcon",
+  "version": "1.1.0-beta1",
+  "dependencies": {
+    "valenced.api": {
+      "version": ">=1 <2"
+    },
+    "discord": {
+      "version": "*"
+    }
+  },
+  "dist": {
+    "script": "index.js",
+    "android": {
+      "path": "android/always-animate.jar",
+      "class": "dev.fluttershy.alwaysanimate.AlwaysAnimateNative"
+    }
+  }
+}

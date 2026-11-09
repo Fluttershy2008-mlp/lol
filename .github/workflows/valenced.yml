@@ -78,6 +78,8 @@ jobs:
           java-version: '17'
       - name: Check native Altitude avatar lifecycle
         run: python3 valenced/themes/altitude/source/test_native.py
+      - name: Check native Always Animate playback and lifecycle
+        run: sh valenced/plugins/always-animate/tests/run-native.sh
       - name: Compile Long Video Share against Android and verify its native payload
         run: python3 valenced/plugins/long-video-share/source/build_native.py --check
       - name: Compile Math Nano Android bridge and verify payload
@@ -88,3 +90,4 @@ jobs:
         run: python3 -m unittest discover -s valenced/tests -p 'test_*.py'
       - name: Check requested plugins' source regressions
         run: node --test compatibility/expression-upload.test.mjs save-as-sticker/tests/*.test.mjs stealmoji/tests/*.test.mjs compatibility/user-profile.test.mjs server-leaver/tests/*.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs auto-text/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+

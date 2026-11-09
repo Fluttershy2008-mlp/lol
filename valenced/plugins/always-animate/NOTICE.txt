@@ -1,0 +1,14 @@
+Always Animate for Valenced, 1.1.0-beta1
+
+Original concept: Vencord AlwaysAnimate by FieryFlames, Vendicated and contributors.
+https://github.com/Vendicated/Vencord/tree/main/src/plugins/alwaysAnimate
+Reference Git blob: 483599484e4fd44db06c1be168c01b6d93bfccf6
+
+Mobile adaptation by fluttershy_simper67 / fluttershy2008.
+Based on the supplied Always Animate 1.0.0-beta17 package.
+The included Android DEX helper is unchanged from that package; its matching
+Java source, compile stubs and build recipe are included under source/android.
+See README.md for playback scope and local verification limits.
+
+SPDX-License-Identifier: GPL-3.0-or-later
+See LICENSE for the complete licence.
