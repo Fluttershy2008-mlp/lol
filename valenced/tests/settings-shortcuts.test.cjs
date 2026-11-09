@@ -9,6 +9,7 @@ const plugins = [
     ['custom-rpc', 'CustomRPC'], ['friends-list', 'Friends List'],
     ['more-alts', 'Switch accounts'], ['server-leaver', 'Server Leaver'],
     ['blocked-user-list', 'Blocked User List'],
+    ['relationship-notifier', 'Relationship Notifier'],
     ['quick-delete', 'Quick Delete'],
     ['auto-quest', 'Auto Quest'],
     ['long-video-share', 'Long Video Share'],

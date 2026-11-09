@@ -21,7 +21,7 @@
     "valid-user": "1.0.0-beta4",
     "hide-blocked-and-ignored-messages": "1.0.0-beta14",
     "auto-text": "1.0.0-beta3",
-    "relationship-notifier": "1.0.0-beta4"
+    "relationship-notifier": "1.0.0-beta5"
   },
   "sourceRefs": {
     "save-as-sticker": "main",
@@ -60,6 +60,10 @@
     "server-leaver": {
       "title": "Server Leaver",
       "icon": "PuzzlePieceIcon"
+    },
+    "relationship-notifier": {
+      "title": "Relationship Notifier",
+      "icon": "FriendsIcon"
     }
   },
   "themeVersion": "1.0.0-beta1",

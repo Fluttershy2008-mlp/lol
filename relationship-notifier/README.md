@@ -3,6 +3,14 @@
 Mobile adaptation of Vencord's **RelationshipNotifier**, originally by nick and
 the Vencord contributors. Built for Revenge's Vendetta-compatible plugin loader.
 
+## Valenced settings shortcut (1.0.0-beta5)
+
+Open **Discord Settings → Valenced → Relationship Notifier** to reach the same
+settings and notification history as the plugin card. The shortcut appears while
+the plugin is enabled. Refresh the repository, update RelationshipNotifier and
+fully restart Discord to refresh the menu. Existing options and history stay in
+the same installation.
+
 ## Profile fix (Valenced 1.0.0-beta4 / source 1.2.1)
 
 The history profile button now uses the same mobile profile resolver as Friends

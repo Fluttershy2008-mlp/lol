@@ -129,7 +129,13 @@
       "sha256": "9095b4c032f226fa41bcd0f1d912ac36275cde8485d9868559af58e0c4fe6fa3",
       "originalVersion": "1.2.1",
       "kind": "compatibility-preview",
-      "sourceRef": "main"
+      "sourceRef": "main",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "Relationship Notifier"
+      }
     },
     "dev.fluttershy2008.save-as-sticker": {
       "path": "save-as-sticker/index.js",

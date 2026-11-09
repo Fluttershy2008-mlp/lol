@@ -3,6 +3,7 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, Renderer, ACCOUNT, FRIEND } = require('../../revenge-next/tests/next-harness.cjs');
+const { installSettingsSection } = require('./settings-fixture.cjs');
 
 const categories = ['friends', 'requests', 'guilds', 'groups'];
 function seed() {
@@ -20,10 +21,15 @@ const search = ui => nodes(ui).find(node => node.type === 'TextInput');
 async function press(ui, label) { await Renderer.act(async () => button(ui, label).props.onPress()); }
 async function scenario(t, history = seed()) {
     const w = createWorld();
+    const registry = installSettingsSection(w);
     const initial = { options: { notices: false }, accounts: { [ACCOUNT]: { snapshots: {}, manual: {}, history } } };
     const item = await w.start('relationship-notifier', initial);
     await w.advance(5000);
-    const ui = await w.render(item);
+    const route = 'dev.fluttershy2008.relationship-notifier.valenced-settings';
+    assert.ok(registry.section.settings.includes(route), 'Relationship Notifier is under Valenced settings');
+    const Page = w.registeredScreens.get(route).screen.getComponent();
+    let ui;
+    await Renderer.act(async () => { ui = Renderer.create(w.React.createElement(Page)); });
     t.after(async () => {
         await Renderer.act(async () => ui.unmount()); await w.stop(item);
         assert.equal(w.timers.size, 0); assert.deepEqual(w.errors, []);

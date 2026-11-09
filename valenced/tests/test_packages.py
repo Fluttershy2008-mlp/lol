@@ -103,7 +103,7 @@ class ValencedPackages(unittest.TestCase):
 
     def test_shortcut_helper_is_bundled_only_with_configured_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())
-        wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver", "blocked-user-list"}
+        wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver", "blocked-user-list", "relationship-notifier"}
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         native = {slug for slug, entry in config.get("nativePlugins", {}).items()
                   if isinstance(entry, dict) and entry.get("settingsShortcut")}

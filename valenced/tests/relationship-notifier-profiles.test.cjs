@@ -3,11 +3,13 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, Renderer, ACCOUNT } = require('../../revenge-next/tests/next-harness.cjs');
+const { installSettingsSection } = require('./settings-fixture.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
 const ID = '858884403258064896';
 const PATH = 'modules/user_profile/native/showUserProfileActionSheet.tsx';
 async function scenario(t, mode = 'cold') {
     const w = createWorld(), cold = installColdProfileModule(w);
+    const registry = installSettingsSection(w);
     const relationships = { ...w.relationships };
     if (mode !== 'cold') w.addModule(cold.namespace, mode === 'imported' ? PATH : undefined);
     const initial = { accounts: { [ACCOUNT]: { snapshots: {}, manual: {}, history: [
@@ -15,7 +17,11 @@ async function scenario(t, mode = 'cold') {
     ] } } };
     const item = await w.start('relationship-notifier', initial);
     await w.advance(5000);
-    const ui = await w.render(item);
+    const route = 'dev.fluttershy2008.relationship-notifier.valenced-settings';
+    assert.ok(registry.section.settings.includes(route), 'Relationship Notifier is under Valenced settings');
+    const Page = w.registeredScreens.get(route).screen.getComponent();
+    let ui;
+    await Renderer.act(async () => { ui = Renderer.create(w.React.createElement(Page)); });
     const callback = ui.root.findAll(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'Open profile for 2livelyy')[0]?.props.onPress;
     assert.equal(typeof callback, 'function');
     t.after(async () => {
