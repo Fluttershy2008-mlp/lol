@@ -1,10 +1,12 @@
-# Vencord Translate for Valenced — 2.0.4
+# Vencord Translate for Valenced — 2.0.5
 
 This is a source-derived mobile port of **Vendicated/Vencord → Translate**, replacing the earlier Translate Message 1.0 plugin. The upstream provider logic, language tables, language settings, message text selection and translate glyph are included with their original attribution and GPL-3.0-or-later licence.
 
+Chat Buttons integration: a fixed button ID and the translation glyph are exposed to the menu, preserving tap-to-toggle and hold-for-settings.
+
 ## Install or update
 
-1. Download `Vencord_Translate_Valenced_v2.0.4.zip`. Keep it zipped.
+1. Download `Vencord_Translate_Valenced_v2.0.5.zip`. Keep it zipped.
 2. Open **Discord Settings → Valenced → Plugins → Install from file** and select it.
 3. Confirm the update of **Translate Message** if prompted, then fully restart Discord.
 4. Enable **Translate (Vencord port)**. It uses the same plugin ID as the previous ZIP, preventing duplicate menu buttons.

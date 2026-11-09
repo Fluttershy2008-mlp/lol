@@ -16,7 +16,7 @@ manifest = {
     'description': 'Mobile port of Vencord Translate: incoming/outgoing languages, Google/DeepL/Kagi, composer button and outgoing auto-translation.',
     'author': 'Vendicated and Vencord contributors',
     'contributors': ['fluttershy_simper67 <753962426407452713>'],
-    'version': '2.0.4',
+    'version': '2.0.5',
     'icon': 'data:image/png;base64,' + base64.b64encode((ROOT/'assets/translate.png').read_bytes()).decode(),
     'dependencies': {'valenced.api': {'version': '>=1 <2'}, 'discord': {'version': '*'}},
     'dist': {'script': 'index.js'},
@@ -26,7 +26,7 @@ sources = [(ROOT / 'src' / name).read_text().split('// NODE_EXPORTS')[0]
 script = '(() => {\n' + '\n'.join(sources) + '\nreturn { default: createPluginOptions() };\n})()\n'
 (ROOT / 'index.js').write_text(script)
 (ROOT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-archive = OUT / 'Vencord_Translate_Valenced_v2.0.4.zip'
+archive = OUT / 'Vencord_Translate_Valenced_v2.0.5.zip'
 with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
     for path in sorted(ROOT.rglob('*')):
         if not path.is_file() or any(part in path.parts for part in ('__pycache__', 'node_modules', '.git')) or path.suffix == '.zip':

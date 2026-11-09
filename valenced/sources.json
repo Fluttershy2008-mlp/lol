@@ -238,8 +238,8 @@
     },
     "dev.fluttershy2008.math-ai": {
       "path": "valenced/plugins/math-ai/index.js",
-      "sha256": "749f02ec0d6aa289da0d62308fde90182e617860520e4be8d8fac8b0f8e73b49",
-      "originalVersion": "2.2.2",
+      "sha256": "e4d2e24f6efa215c432bed8571d1e2281d1268c77c2afdaf0a6d30d15d7f16bb",
+      "originalVersion": "2.2.3",
       "kind": "native-plugin",
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
@@ -268,8 +268,14 @@
     },
     "dev.fluttershy2008.translate-message": {
       "path": "valenced/plugins/translate-message/index.js",
-      "sha256": "7252211bed9c43f74d81a2338dbe0c7cf4347c3ef511635a9c71309f63af60c7",
-      "originalVersion": "2.0.4",
+      "sha256": "62fc5df8a87130345a031a679c7f07921bf34876f4a9d24cdf686be8de2c60a4",
+      "originalVersion": "2.0.5",
+      "kind": "native-plugin"
+    },
+    "mlemception.chatbuttons": {
+      "path": "valenced/plugins/chat-buttons/index.js",
+      "sha256": "8d39c7b5dc36740dfecd5f35df2a10e8e8e0fe800cece019503bd1c0baf0d682",
+      "originalVersion": "1.0.7",
       "kind": "native-plugin"
     }
   }

@@ -107,6 +107,9 @@
     },
     "translate-message": {
       "path": "valenced/plugins/translate-message"
+    },
+    "chat-buttons": {
+      "path": "valenced/plugins/chat-buttons"
     }
   },
   "nativeThemes": {

@@ -1,5 +1,9 @@
 # Math AI & Scientific Calculator
 
+## Chat Buttons integration (2.2.3)
+
+The menu entry keeps the same ID when auto solve is toggled. It uses the sigma icon; tap toggles auto solve, and hold opens the calculator/settings.
+
 ## Send button fix (2.2.2)
 
 - With Auto AI solve ON, type two simultaneous linear equations in one Discord message, for example:

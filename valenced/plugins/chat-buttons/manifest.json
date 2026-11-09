@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "id": "mlemception.chatbuttons",
+  "name": "Chat Buttons",
+  "description": "Puts the chat bar buttons in one menu.",
+  "author": "mlemception",
+  "version": "1.0.7",
+  "dependencies": {
+    "valenced.api": {
+      "version": ">=1 <2"
+    },
+    "discord": {
+      "version": "*"
+    }
+  },
+  "dist": {
+    "script": "index.js"
+  },
+  "contributors": [
+    "Fluttershy2008-mlp <753962426407452713>"
+  ],
+  "icon": "GridSquareIcon"
+}

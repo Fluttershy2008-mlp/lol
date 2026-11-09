@@ -4,6 +4,7 @@
   "files": {
     "instead.ts": "bundle/lib/patcher/src/hooks/instead.ts",
     "_internal.ts": "bundle/lib/patcher/src/_internal.ts",
-    "LICENSE": "LICENSE"
+    "LICENSE": "LICENSE",
+    "after.ts": "bundle/lib/patcher/src/hooks/after.ts"
   }
 }

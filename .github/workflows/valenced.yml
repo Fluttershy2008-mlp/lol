@@ -63,6 +63,7 @@ jobs:
           node stealmoji/build.mjs
           node server-leaver/build.mjs
           node more-alts/build.mjs
+          node valenced/plugins/chat-buttons/build.mjs --check
           python3 valenced/build.py --check
       - name: Check Valenced loader and plugin integration
         env:

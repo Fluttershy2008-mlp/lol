@@ -555,13 +555,14 @@ test('an action saved from the original menu rechecks whether the message is tra
 });
 
 test('ZIP manifest and script meet the current Valenced external loader contract', () => {
-    const archive = process.env.VALENCED_TRANSLATE_ARCHIVE ?? path.join(ROOT, '..', 'output', 'Vencord_Translate_Valenced_v2.0.4.zip');
+    const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'))).version;
+    const archive = process.env.VALENCED_TRANSLATE_ARCHIVE ?? path.join(ROOT, '..', 'output', `Vencord_Translate_Valenced_v${version}.zip`);
     const result = JSON.parse(execFileSync('python3', ['-c',
         'import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps({"names":z.namelist(),"manifest":json.loads(z.read("manifest.json")),"script":z.read("index.js").decode(),"bad":z.testzip()}))', archive], { encoding: 'utf8' }));
     assert.equal(result.bad, null);
     assert.equal(result.manifest.format, 1); assert.equal(result.manifest.dist.script, 'index.js');
     assert.ok(result.manifest.dependencies['valenced.api']); assert.ok(result.manifest.dependencies.discord);
-    assert.equal(result.manifest.version, '2.0.4');
+    assert.equal(result.manifest.version, version);
     assert.ok(result.names.includes('manifest.json')); assert.ok(result.names.includes('index.js'));
     assert.equal(result.names.some(name => name.includes('node_modules') || name.includes('..') || name.startsWith('/')), false);
     assert.equal(result.script.includes('module.exports'), false);

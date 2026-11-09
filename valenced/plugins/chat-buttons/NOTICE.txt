@@ -1,0 +1,7 @@
+Chat Buttons by mlemception, licensed under AGPL-3.0 (see LICENSE).
+Source: https://github.com/mlemception/mlem-plugins/tree/44d0b2199ff6d7b480c7029413168fe0f49087e7/plugins/chat-buttons
+Local changes: stable plugin button IDs, guarded lazy module hooks, function/memo/forwardRef support,
+React-safe storage subscription, lifecycle cleanup and Math AI integration.
+Corresponding modified source: https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/chat-buttons
+Build with: npm ci --ignore-scripts && node valenced/plugins/chat-buttons/build.mjs
+Device testing remains required for Discord layouts not represented by the regression fixtures.

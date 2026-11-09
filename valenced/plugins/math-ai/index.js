@@ -695,6 +695,7 @@
                     transform: [{ translateX: 0.42 }, { translateY: -0.1 }] } }));
         return h(React.Fragment, null,
             h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: label,
+                chatButtonsId: 'dev.fluttershy2008.math-ai', chatButtonsLabel: 'Math AI', IconComponent,
                 accessibilityHint: 'Tap to toggle. Hold to open Math AI settings.',
                 accessibilityState: { selected: session.settings.aiSend }, delayLongPress: 350,
                 onPressIn: () => { held.current = false; },

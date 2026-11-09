@@ -9,6 +9,7 @@ const { createWorld, React, Renderer, CHANNEL, FRIEND, GUILD } = require('../../
 const { createLegacyAdapter } = require('../runtime.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
 const { installNavigationHost } = require('../../revenge-next/tests/navigation-fixture.cjs');
+const { installChatButtonsHost } = require('./chat-buttons-fixture.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const h = React.createElement;
 
@@ -40,7 +41,10 @@ test('every package evaluates through the actual lexical Valenced loader contrac
         const script = fs.readFileSync(path.join(ROOT, '.build/plugins', slug, 'index.js'), 'utf8');
         const sandbox = {};
         const factory = vm.runInNewContext('(function(valenced, plugin) { return ' + script + '\n})', sandbox);
-        const options = factory({}, value => value)?.default;
+        // Native imports can use the lexical API during module evaluation.
+        const world = createWorld();
+        if (slug === 'chat-buttons') installChatButtonsHost(world);
+        const options = factory(world.U, value => value)?.default;
         assert.ok(options && typeof options === 'object', slug);
         assert.ok(typeof options.start === 'function' || typeof options.preInit === 'function', slug);
         assert.equal(sandbox.valenced, undefined);

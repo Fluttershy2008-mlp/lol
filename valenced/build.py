@@ -278,6 +278,16 @@ def build(check=False):
         manifest = json.loads((directory / "manifest.json").read_text())
         files = {name: (directory / name).read_bytes()
                  for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt", "README.md")}
+        # Ship the complete corresponding source and build recipe for AGPL ports.
+        if slug == "chat-buttons":
+            files["build.mjs"] = (directory / "build.mjs").read_bytes()
+            for path in sorted((directory / "source").rglob("*")):
+                if path.is_file():
+                    files[path.relative_to(directory).as_posix()] = path.read_bytes()
+        if slug == "translate-message":
+            for path in sorted(directory.rglob("*")):
+                if path.is_file() and not any(part in ("__pycache__", "node_modules") for part in path.parts):
+                    files[path.relative_to(directory).as_posix()] = path.read_bytes()
         native = manifest.get("dist", {}).get("android")
         if native:
             native_path = Path(native["path"])

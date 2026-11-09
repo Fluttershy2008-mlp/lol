@@ -1045,11 +1045,24 @@
               "version": "*"
             }
           }
+        },
+        "2.2.3": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.math-ai@2.2.3.zip",
+          "sha256": "e4efa56af0ff092ac42de027ae2535342ce7c72981f8e219692e4e02a0b404e4",
+          "size": 39491,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "2.2.2",
-        "beta": "2.2.2"
+        "latest": "2.2.3",
+        "beta": "2.2.3"
       },
       "name": "Math AI & Scientific Calculator",
       "description": "Solve simultaneous equations on Discord Send without opening Nano; includes scientific maths, currency and Nano AI.",
@@ -2129,11 +2142,24 @@
               "version": "*"
             }
           }
+        },
+        "2.0.5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.translate-message@2.0.5.zip",
+          "sha256": "a7fbfe9dc278b0510b8e69721d9ee8c9351b872031e0986972710204f26a49a0",
+          "size": 129765,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "2.0.4",
-        "beta": "2.0.4"
+        "latest": "2.0.5",
+        "beta": "2.0.5"
       },
       "name": "Translate (Vencord port)",
       "description": "Mobile port of Vencord Translate: incoming/outgoing languages, Google/DeepL/Kagi, composer button and outgoing auto-translation.",
@@ -2287,6 +2313,34 @@
       "description": "Show hidden channels with original channel names, themed lock screens, avatars, server profiles, channel details and a permission inspector.",
       "author": "fluttershy_simper67 <753962426407452713>",
       "icon": "LockIcon"
+    },
+    "mlemception.chatbuttons": {
+      "versions": {
+        "1.0.7": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.7.zip",
+          "sha256": "aa5112979c7e4038a7306bd0f24496b38e61d6420243d049ce1276a2beed2d42",
+          "size": 33986,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.7",
+        "beta": "1.0.7"
+      },
+      "name": "Chat Buttons",
+      "description": "Puts the chat bar buttons in one menu.",
+      "author": "mlemception",
+      "contributors": [
+        "Fluttershy2008-mlp <753962426407452713>"
+      ],
+      "icon": "GridSquareIcon"
     }
   }
 }

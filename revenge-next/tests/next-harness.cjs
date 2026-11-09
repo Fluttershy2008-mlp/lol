@@ -20,7 +20,9 @@ function nextPatcher() {
             .replace(/export\s+(?=const|let|function)/g, '');
         return new Function('internals', body + '\nreturn {' + exports.join(',') + '};')(internals);
     }
-    return compile('instead.ts', compile('_internal.ts')).instead;
+    const internals = compile('_internal.ts');
+    return { ...compile('instead.ts', internals),
+        ...(TARGET === 'valenced' ? compile('after.ts', internals) : {}) };
 }
 
 function createWorld(options = {}) {
@@ -195,7 +197,7 @@ function createWorld(options = {}) {
     }, native: { callNativeMethod: async name => name === HOST_ID + '.plugins.list'
         ? { result: [...loaded.values()].map(x => ({ manifest: x.manifest, source: { repo: 'https://example.test/index.json' } })) }
         : { error: { code: 'UNKNOWN_METHOD', message: 'Unexpected native call in test: ' + name } } } },
-        patcher: { instead: nextPatcher() }, discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
+        patcher: nextPatcher(), discord: { common: { flux: { Dispatcher: dispatcher }, constants: { Constants: { Permissions: { CREATE_GUILD_EXPRESSIONS: 1n << 43n }, ActivityTypes: {} } } },
             flux: { Stores: stores }, design: { Design: design }, actions: { ActionSheetActionCreators: sheets, AlertActionCreators: alertActions }, modules: { settings },
             ...(TARGET === 'valenced' ? { utils: { modules: { finders: importedPathFinders } } } : {}) },
         externals: { Gorhom: { BottomSheet: { BottomSheetScrollView: native('BottomSheetScrollView') } },

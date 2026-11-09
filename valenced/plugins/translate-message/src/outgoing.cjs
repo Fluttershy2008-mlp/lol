@@ -163,6 +163,7 @@ function connectMobileComposer(session, api, env = globalThis) {
             session.notify('Auto Translate ' + (next ? 'on → ' + languageName(config.sentOutput, config.service) : 'off'));
         };
         const props = { accessibilityLabel: 'Auto Translate', accessibilityRole: 'button',
+            chatButtonsId: 'dev.fluttershy2008.translate-message', chatButtonsLabel: 'Auto Translate', IconComponent: TranslationIcon,
             accessibilityHint: 'Tap to toggle outgoing auto-translation. Hold to open translation settings.',
             accessibilityState: { checked: config.autoTranslate }, onPress, onLongPress,
             onPressIn: () => { held.current = false; }, delayLongPress: 450 };

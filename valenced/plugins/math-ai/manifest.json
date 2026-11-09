@@ -4,7 +4,7 @@
   "name": "Math AI & Scientific Calculator",
   "description": "Solve simultaneous equations on Discord Send without opening Nano; includes scientific maths, currency and Nano AI.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"

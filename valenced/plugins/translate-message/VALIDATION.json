@@ -1,6 +1,6 @@
 {
   "date": "2026-11-09",
-  "plugin_version": "2.0.4",
+  "plugin_version": "2.0.5",
   "tests": {
     "total": 92,
     "passed": 92,
@@ -21,12 +21,12 @@
     "deepl": 127,
     "kagi": 274
   },
-  "runtime_script_sha256": "7252211bed9c43f74d81a2338dbe0c7cf4347c3ef511635a9c71309f63af60c7",
+  "runtime_script_sha256": "62fc5df8a87130345a031a679c7f07921bf34876f4a9d24cdf686be8de2c60a4",
   "source_sha256": {
     "src/core.cjs": "3b6a11b93376fdb0dbb38f95dc5015569147718ebdf1b242c702a52322bd4193",
     "src/icon.cjs": "f3c09bed8331701e369ad2800db1774a99d611dd9eefe76a5a8fd0d151aef71f",
     "src/languages.cjs": "5f63ab0f950650e08922791dd2de8240d02b4cc0089c37384d2df2fd7d2d6050",
-    "src/outgoing.cjs": "4e7b361ae247033e8742857becd07d6a0579a2b0c7ed35ea6a3bbe54d0a00242",
+    "src/outgoing.cjs": "671a1663db595d20dc344f2579bb36ba59dd01e427d0377f23ffff421e320d0e",
     "src/plugin.cjs": "af06b4c30fb37426733b4330cc00782ce445cab881afb84cd22eb2cf31e0aab1",
     "src/service.cjs": "208be37627d5d7fdbb3fe068ff4ee3faf0a514e648b6fed82172274df4b9fef2",
     "src/ui.cjs": "21d962dc13b0bec764191a3d08dc261ec1a1f06f3c08c923c0af907051dea8b0"
@@ -58,7 +58,8 @@
     "Composer single tap toggles outgoing auto-translation; holding opens settings without changing the toggle",
     "Persistent green icon, tile and status dot on the direct composer control in light/dark themes",
     "Direct RN Pressable handles tap and 450 ms hold without the private Discord action button",
-    "Hold opens settings with auto-translate initially on or off; release cannot toggle; next tap works normally"
+    "Hold opens settings with auto-translate initially on or off; release cannot toggle; next tap works normally",
+    "Chat Buttons menu integration with a stable identity, icon, tap toggle and long-press settings"
   ],
   "limitations": [
     "Not tested on a physical Android device",
