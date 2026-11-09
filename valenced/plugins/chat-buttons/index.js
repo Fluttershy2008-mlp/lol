@@ -35,7 +35,7 @@
         value: true
       }), mod);
 
-      // valenced/plugins/chat-buttons/source/js/index.ts
+      // chat-settings/valenced/plugins/chat-buttons/source/js/index.ts
       var index_exports = {};
       __export(index_exports, {
         default: () => index_default,
@@ -93,7 +93,7 @@
       var jsxs = valenced.react.ReactJSXRuntime.jsxs;
       var Fragment = valenced.react.ReactJSXRuntime.Fragment;
 
-      // valenced/plugins/chat-buttons/source/js/icons.tsx
+      // chat-settings/valenced/plugins/chat-buttons/source/js/icons.tsx
       var asset = name => ({
         style
       }) => /* @__PURE__ */jsx(Image, {
@@ -105,6 +105,7 @@
       });
       var MenuIcon = asset("GridSquareIcon");
       var EmojiIcon = asset("ReactionIcon");
+      var HiddenSettingsIcon = asset("WrenchIcon");
       var EditIcon = asset("PencilIcon");
       var MoreIcon = asset("MoreHorizontalIcon");
       var box = {
@@ -137,7 +138,11 @@
         return Tinted;
       }
 
-      // valenced/plugins/chat-buttons/source/js/store.ts
+      // valenced-api:@valenced/discord/actions
+      var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
+      var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
+
+      // chat-settings/valenced/plugins/chat-buttons/source/js/store.ts
       var defaults = {
         names: {},
         kept: {},
@@ -222,7 +227,36 @@
         return [...list].sort((a, b) => at(a) - at(b));
       }
 
-      // valenced/plugins/chat-buttons/source/js/bar.tsx
+      // chat-settings/valenced/plugins/chat-buttons/source/js/hidden-settings.tsx
+      var hiddenSettingsId = "dev.fluttershy2008.hide-blocked-and-ignored-messages";
+      var hiddenSettingsLabel = "Hidden users & servers";
+      var settings;
+      var setPluginSettings = api => {
+        settings = api;
+      };
+      function openHiddenSettings() {
+        if (!isActive()) return;
+        try {
+          if (settings?.hasPluginSettings?.(hiddenSettingsId) && typeof settings.openPluginSettings === "function") {
+            settings.openPluginSettings(hiddenSettingsId);
+            return;
+          }
+        } catch {}
+        var {
+          AlertModal,
+          AlertActionButton
+        } = Design;
+        AlertActionCreators.openAlert("chatbuttons-hidden-settings-unavailable", createElement(AlertModal, {
+          title: "Hidden users & servers",
+          content: "Enable HideBlockedAndIgnoredMessages in Valenced, then open this shortcut again.",
+          actions: createElement(AlertActionButton, {
+            text: "OK",
+            variant: "primary"
+          })
+        }));
+      }
+
+      // chat-settings/valenced/plugins/chat-buttons/source/js/bar.tsx
       var Bar = createContext(null);
       var Free = createContext(false);
       var Slot = createContext(null);
@@ -610,6 +644,23 @@
         var kids = c.props.children;
         return Array.isArray(kids) ? kids.some(hasExpr) : hasExpr(kids);
       };
+      function HiddenSettings() {
+        var kept = useHeld({
+          id: hiddenSettingsId,
+          label: hiddenSettingsLabel,
+          Icon: HiddenSettingsIcon,
+          press: openHiddenSettings
+        });
+        return kept ? /* @__PURE__ */jsx(Free.Provider, {
+          value: true,
+          children: /* @__PURE__ */jsx(Button, {
+            keep: true,
+            accessibilityLabel: hiddenSettingsLabel,
+            IconComponent: HiddenSettingsIcon,
+            onPress: openHiddenSettings
+          })
+        }) : null;
+      }
       function Menu({
         bar
       }) {
@@ -650,7 +701,7 @@
           ...props,
           children: out2
         });
-        out2.splice(Math.max(0, list.findIndex(isRight)), 0, /* @__PURE__ */jsx(Menu, {
+        out2.splice(Math.max(0, list.findIndex(isRight)), 0, /* @__PURE__ */jsx(HiddenSettings, {}, "hidden-settings"), /* @__PURE__ */jsx(Menu, {
           bar
         }, "menu"));
         return /* @__PURE__ */jsx(Bar.Provider, {
@@ -692,11 +743,7 @@
         return node;
       }
 
-      // valenced-api:@valenced/discord/actions
-      var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
-      var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
-
-      // valenced/plugins/chat-buttons/source/js/manage.tsx
+      // chat-settings/valenced/plugins/chat-buttons/source/js/manage.tsx
       function Nickname({
         id,
         label
@@ -820,7 +867,7 @@
         });
       }
 
-      // valenced/plugins/chat-buttons/source/js/menu.tsx
+      // chat-settings/valenced/plugins/chat-buttons/source/js/menu.tsx
       var edge = 12;
       var wide = 244;
       var gap = 8;
@@ -1104,7 +1151,7 @@
         });
       }
 
-      // valenced/plugins/chat-buttons/source/js/index.ts
+      // chat-settings/valenced/plugins/chat-buttons/source/js/index.ts
       function target(mod, name = "default") {
         var holder = mod,
           key = name;
@@ -1125,7 +1172,8 @@
         async start({
           cleanup,
           jsonStorage,
-          logger
+          logger,
+          pluginSettings
         }) {
           var active2 = true;
           var removers = [];
@@ -1136,6 +1184,7 @@
           cleanup(() => {
             active2 = false;
             setActive(false);
+            setPluginSettings(void 0);
             forced.on = false;
             for (var remove of removers.splice(0).reverse()) {
               try {
@@ -1148,6 +1197,7 @@
           if (!jsonStorage.loaded) await jsonStorage.get();
           if (!active2) return;
           setStorage(jsonStorage);
+          setPluginSettings(pluginSettings);
           setActive(true);
           var watch = (path2, callback) => {
             own(getModuleWithImportedPath(path2, mod => {

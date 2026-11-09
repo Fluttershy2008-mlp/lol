@@ -216,6 +216,7 @@ function createWorld(options = {}) {
             jsonStorage: { loaded: true, cache: initial, async get() { this.loaded = true; return this.cache; },
                 async set(value, replace) { if (!replace) throw new Error('Expected replace storage write'); this.cache = structuredClone(value); writes.push(this.cache); } },
         };
+        options.decorateApi?.(api, slug);
         let plugin;
         const sandbox = { ...host, console: { log() {}, warn() {}, error: (...args) => errors.push([slug, ...args]) },
             ...(options.globals ?? {}),

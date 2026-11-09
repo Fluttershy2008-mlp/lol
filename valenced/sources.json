@@ -274,8 +274,8 @@
     },
     "mlemception.chatbuttons": {
       "path": "valenced/plugins/chat-buttons/index.js",
-      "sha256": "3da73b07d7cede44792be10e96ba292742845164270d978d68f37d6165a079de",
-      "originalVersion": "1.0.8",
+      "sha256": "ca19f4fddc17d5c1ff94a0e6f14720efb4787be3c1afd302029c9a1ef40317e6",
+      "originalVersion": "1.0.9",
       "kind": "native-plugin"
     },
     "fluttershy2008.always-animate": {

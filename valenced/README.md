@@ -275,3 +275,11 @@ Beta13 fixes cached native lists that otherwise kept icons missing after OFF.
 Update and restart once to load the new version. Further ON/OFF flips work live,
 without remounting the server bar. Regression tests cover repeated flips and
 independent settings. Physical phone verification remains pending.
+
+### Chat Buttons 1.0.9 — Hidden users & servers settings shortcut
+
+Open **Buttons → Hidden users & servers** in chat to reach the existing
+HideBlockedAndIgnoredMessages settings page. It opens the same live settings,
+including saved server IDs and visibility toggles. It does not toggle any hide
+setting just by being tapped. Use **Manage buttons** to give it a nickname or keep
+it on the composer bar. Update Chat Buttons and restart Discord once.
