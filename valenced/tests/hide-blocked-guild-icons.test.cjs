@@ -41,7 +41,9 @@ test('beta11 hides server slots and folder previews, keeps membership/order inta
   await Renderer.act(async () => toggle('Hide selected server icons').props.onValueChange(true));
   assert.equal(f.store.getFlattenedGuildIds().length, 1);
   await Renderer.act(async () => toggle('Hide messages from selected servers').props.onValueChange(false));
-  assert.equal(f.store.getFlattenedGuildIds(), f.ids); assert.ok(f.emits() > 0);
+  assert.deepEqual(Array.from(f.store.getFlattenedGuildIds()), [KEEP]); assert.ok(f.emits() > 0);
+  await Renderer.act(async () => toggle('Hide selected server icons').props.onValueChange(false));
+  assert.equal(f.store.getFlattenedGuildIds(), f.ids);
   await w.stop(item); assert.equal(f.store.getFastListGuildFolders, f.original); assert.equal(f.store.getGuildsTree(), f.tree);
 });
 test('late server bar stores attach correctly, support doEmitChanges and clean up on stop', async () => {

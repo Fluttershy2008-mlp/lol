@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.5.3, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.5.4, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -244,10 +244,11 @@ function createServerFilter(storage, getChannel = () => undefined) {
       id = channel.parent_id ?? channel.parentId;
     }
   }
-  function hiddenGuild(id) {
-    return storage.hideServers !== false && isDiscordUserId(id)
+  function selectedGuild(id) {
+    return isDiscordUserId(id)
       && Array.isArray(storage.hiddenServerIds) && storage.hiddenServerIds.includes(id);
   }
+  function hiddenGuild(id) { return storage.hideServers !== false && selectedGuild(id); }
   function isChannelHidden(id) { return hiddenGuild(guildForChannel(id)); }
   function isServerMessageHidden(message) {
     if (!message || storage.hideServers === false || !storage.hiddenServerIds?.length) return false;
@@ -258,17 +259,21 @@ function createServerFilter(storage, getChannel = () => undefined) {
       : guildForChannel(message.channel_id ?? message.channelId));
   }
   return { isChannelHidden, isServerMessageHidden,
-    isGuildIconHidden: id => storage.hideServerIcons !== false && hiddenGuild(id),
+    isGuildIconHidden: id => storage.hideServerIcons !== false && selectedGuild(id),
     isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
 // Some mobile bars hold their own list snapshot instead of reading the patched
 // store getters. Filter that snapshot at its render boundary as well.
-function installGuildBarRenderer(V, servers, filter) {
+function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn => fn()) {
   const React = V.metro.common.React;
   if (!React?.createElement || !React?.cloneElement) return { refresh() {}, stop() {} };
-  let stopped = false;
+  let stopped = false, rawRenderDepth = 0;
+  function rawRender(fn) {
+    rawRenderDepth++;
+    try { return runUnfiltered(fn); } finally { rawRenderDepth--; }
+  }
   const listeners = new Set(), cleanups = [], patched = new WeakMap();
   const names = ['GuildsBar', 'GuildsBarGuild', 'GuildsBarGuildItem', 'GuildsBarItem',
     'GuildsBarFolder', 'GuildsBarAnimatedItemWrapper', 'GuildIcon'];
@@ -284,12 +289,12 @@ function installGuildBarRenderer(V, servers, filter) {
   const callbacks = new WeakMap();
   function wrapCallback(fn) {
     if (!callbacks.has(fn)) callbacks.set(fn, function (...args) {
-      return projectElement(fn.apply(this, args));
+      return projectElement(rawRender(() => fn.apply(this, args)));
     });
     return callbacks.get(fn);
   }
   function projectProps(props) {
-    if (!props || typeof props !== 'object' || stopped) return props;
+    if (!props || typeof props !== 'object' || stopped || rawRenderDepth) return props;
     const next = {};
     for (const key of ['data', 'items', 'guilds', 'guildFolders', 'fastListGuildFolders', 'guildIds', 'guild_ids']) {
       if (Array.isArray(props[key])) {
@@ -363,7 +368,9 @@ function installGuildBarRenderer(V, servers, filter) {
     patch(owner, key, function (args, original) {
       // Always call the original so its React hook order stays unchanged.
       // VisibilityGate owns our hooks as a separate component.
-      const source = original.apply(this, args);
+      // Preserve a complete source snapshot, even if native code memoizes it.
+      // VisibilityGate projects it at display time so OFF can always restore it.
+      const source = rawRender(() => original.apply(this, args));
       return stopped ? source : React.createElement(VisibilityGate, { source, rowProps: this?.props ?? args[0] });
     });
   }
@@ -481,7 +488,11 @@ function createGuildIconFilter(isHidden) {
 }
 
 function installGuildIcons(V, servers) {
-  let stopped = false, renderer;
+  let stopped = false, renderer, unfilteredDepth = 0;
+  function runUnfiltered(fn) {
+    unfilteredDepth++;
+    try { return fn(); } finally { unfilteredDepth--; }
+  }
   const stores = new Set(), cleanups = [], patched = new WeakSet();
   const filter = createGuildIconFilter(id => !stopped && servers.isGuildIconHidden(id));
   function refresh() {
@@ -508,7 +519,7 @@ function installGuildIcons(V, servers) {
       if (typeof store[key] !== 'function') continue;
       cleanups.push(V.patcher.instead(key, store, function (args, original) {
         const result = original.apply(this, args);
-        if (stopped) return result;
+        if (stopped || unfilteredDepth) return result;
         try { return project(result); } catch { return result; }
       }));
     }
@@ -523,7 +534,7 @@ function installGuildIcons(V, servers) {
   try {
     try { attach(V.metro.findByStoreName?.('SortedGuildStore')); } catch {}
     try { attach(V.metro.findByProps?.('getGuildsTree', 'getFastListGuildFolders')); } catch {}
-    renderer = installGuildBarRenderer(V, servers, filter);
+    renderer = installGuildBarRenderer(V, servers, filter, runUnfiltered);
     cleanups.push(renderer.stop);
     if (typeof V.metro.getModuleWithImportedPath === 'function') {
       const cancel = V.metro.getModuleWithImportedPath('stores/SortedGuildStore.tsx', attach);
@@ -1171,7 +1182,7 @@ function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
-      ['hideServerIcons', 'Hide selected server icons', 'Hide these servers from the server bar and folder previews. Uses your saved server IDs. Turn this off or remove an ID below to bring its icon back.'],
+      ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
       ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
       ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
@@ -1279,7 +1290,7 @@ function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.3'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.4'}`));
   };
 }
 

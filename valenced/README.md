@@ -266,3 +266,12 @@ builds where beta11's store filtering leaves the icon visible. It covers cached
 bar snapshots and late-loaded/minified server rows, including streaming badges.
 Saved server IDs carry over. Update and fully restart Discord. A captured-snapshot
 regression test fails on beta11 and passes on beta12; phone coverage is unverified.
+
+### HideBlockedAndIgnoredMessages beta13 — live icon visibility toggle
+
+**Hide selected server icons** now works independently of message/channel hiding.
+ON hides icons; OFF restores them immediately while keeping the saved server IDs.
+Beta13 fixes cached native lists that otherwise kept icons missing after OFF.
+Update and restart once to load the new version. Further ON/OFF flips work live,
+without remounting the server bar. Regression tests cover repeated flips and
+independent settings. Physical phone verification remains pending.

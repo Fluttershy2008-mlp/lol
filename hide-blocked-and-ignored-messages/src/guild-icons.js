@@ -77,7 +77,11 @@ export function createGuildIconFilter(isHidden) {
 }
 
 export function installGuildIcons(V, servers) {
-  let stopped = false, renderer;
+  let stopped = false, renderer, unfilteredDepth = 0;
+  function runUnfiltered(fn) {
+    unfilteredDepth++;
+    try { return fn(); } finally { unfilteredDepth--; }
+  }
   const stores = new Set(), cleanups = [], patched = new WeakSet();
   const filter = createGuildIconFilter(id => !stopped && servers.isGuildIconHidden(id));
   function refresh() {
@@ -104,7 +108,7 @@ export function installGuildIcons(V, servers) {
       if (typeof store[key] !== 'function') continue;
       cleanups.push(V.patcher.instead(key, store, function (args, original) {
         const result = original.apply(this, args);
-        if (stopped) return result;
+        if (stopped || unfilteredDepth) return result;
         try { return project(result); } catch { return result; }
       }));
     }
@@ -119,7 +123,7 @@ export function installGuildIcons(V, servers) {
   try {
     try { attach(V.metro.findByStoreName?.('SortedGuildStore')); } catch {}
     try { attach(V.metro.findByProps?.('getGuildsTree', 'getFastListGuildFolders')); } catch {}
-    renderer = installGuildBarRenderer(V, servers, filter);
+    renderer = installGuildBarRenderer(V, servers, filter, runUnfiltered);
     cleanups.push(renderer.stop);
     if (typeof V.metro.getModuleWithImportedPath === 'function') {
       const cancel = V.metro.getModuleWithImportedPath('stores/SortedGuildStore.tsx', attach);

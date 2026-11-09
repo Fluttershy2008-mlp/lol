@@ -1,10 +1,14 @@
 /* SPDX-License-Identifier: CC0-1.0 */
 // Some mobile bars hold their own list snapshot instead of reading the patched
 // store getters. Filter that snapshot at its render boundary as well.
-export function installGuildBarRenderer(V, servers, filter) {
+export function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn => fn()) {
   const React = V.metro.common.React;
   if (!React?.createElement || !React?.cloneElement) return { refresh() {}, stop() {} };
-  let stopped = false;
+  let stopped = false, rawRenderDepth = 0;
+  function rawRender(fn) {
+    rawRenderDepth++;
+    try { return runUnfiltered(fn); } finally { rawRenderDepth--; }
+  }
   const listeners = new Set(), cleanups = [], patched = new WeakMap();
   const names = ['GuildsBar', 'GuildsBarGuild', 'GuildsBarGuildItem', 'GuildsBarItem',
     'GuildsBarFolder', 'GuildsBarAnimatedItemWrapper', 'GuildIcon'];
@@ -20,12 +24,12 @@ export function installGuildBarRenderer(V, servers, filter) {
   const callbacks = new WeakMap();
   function wrapCallback(fn) {
     if (!callbacks.has(fn)) callbacks.set(fn, function (...args) {
-      return projectElement(fn.apply(this, args));
+      return projectElement(rawRender(() => fn.apply(this, args)));
     });
     return callbacks.get(fn);
   }
   function projectProps(props) {
-    if (!props || typeof props !== 'object' || stopped) return props;
+    if (!props || typeof props !== 'object' || stopped || rawRenderDepth) return props;
     const next = {};
     for (const key of ['data', 'items', 'guilds', 'guildFolders', 'fastListGuildFolders', 'guildIds', 'guild_ids']) {
       if (Array.isArray(props[key])) {
@@ -99,7 +103,9 @@ export function installGuildBarRenderer(V, servers, filter) {
     patch(owner, key, function (args, original) {
       // Always call the original so its React hook order stays unchanged.
       // VisibilityGate owns our hooks as a separate component.
-      const source = original.apply(this, args);
+      // Preserve a complete source snapshot, even if native code memoizes it.
+      // VisibilityGate projects it at display time so OFF can always restore it.
+      const source = rawRender(() => original.apply(this, args));
       return stopped ? source : React.createElement(VisibilityGate, { source, rowProps: this?.props ?? args[0] });
     });
   }

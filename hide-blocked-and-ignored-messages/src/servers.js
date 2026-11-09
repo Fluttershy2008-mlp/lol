@@ -19,10 +19,11 @@ export function createServerFilter(storage, getChannel = () => undefined) {
       id = channel.parent_id ?? channel.parentId;
     }
   }
-  function hiddenGuild(id) {
-    return storage.hideServers !== false && isDiscordUserId(id)
+  function selectedGuild(id) {
+    return isDiscordUserId(id)
       && Array.isArray(storage.hiddenServerIds) && storage.hiddenServerIds.includes(id);
   }
+  function hiddenGuild(id) { return storage.hideServers !== false && selectedGuild(id); }
   function isChannelHidden(id) { return hiddenGuild(guildForChannel(id)); }
   function isServerMessageHidden(message) {
     if (!message || storage.hideServers === false || !storage.hiddenServerIds?.length) return false;
@@ -33,6 +34,6 @@ export function createServerFilter(storage, getChannel = () => undefined) {
       : guildForChannel(message.channel_id ?? message.channelId));
   }
   return { isChannelHidden, isServerMessageHidden,
-    isGuildIconHidden: id => storage.hideServerIcons !== false && hiddenGuild(id),
+    isGuildIconHidden: id => storage.hideServerIcons !== false && selectedGuild(id),
     isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
 }

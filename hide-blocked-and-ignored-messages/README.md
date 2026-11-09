@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.3
+# HideBlockedAndIgnoredMessages 1.5.4
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,24 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Live icon visibility switch (1.0.0-beta13)
+
+**Hide selected server icons** now has independent, immediate control:
+- **ON:** hide selected server icons and folder previews.
+- **OFF:** show them again, keeping the saved IDs.
+
+Message and channel visibility settings do not override this icon switch. Toggling
+icons does not change those settings. Update and fully restart Discord once to
+load beta13; subsequent icon-toggle changes do not need an app restart.
+
+The native bar retains a complete source snapshot while its display is filtered.
+This fixes OFF failing to restore icons when native code memoized a previously
+filtered list. Updates redraw the visibility layer without remounting the bar or
+resetting its native state. Two new regression scenarios fail against beta12 and
+pass against beta13, including repeated OFF/ON flips on a once-cached list and icon
+hiding with message/channel hiding disabled. Phone verification is still needed.
+
 
 ### Native server icon render fix (1.0.0-beta12)
 
