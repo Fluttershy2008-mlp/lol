@@ -4,7 +4,7 @@
   "name": "Chat Buttons",
   "description": "Puts the chat bar buttons in one menu.",
   "author": "mlemception",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"

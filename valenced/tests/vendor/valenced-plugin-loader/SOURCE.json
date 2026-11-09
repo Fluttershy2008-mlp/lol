@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Valenced/valenced",
+  "commit": "706dae437058922a10246a1df0a614328db79a5c",
+  "files": {
+    "script.ts": "bundle/lib/plugins/src/_internal/script.ts",
+    "LICENSE": "LICENSE"
+  }
+}

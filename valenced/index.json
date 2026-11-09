@@ -2328,11 +2328,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.8.zip",
+          "sha256": "27e43442d61469a52187427085c70d2288144edddc683aefd9a3bba29986c320",
+          "size": 35048,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.7",
-        "beta": "1.0.7"
+        "latest": "1.0.8",
+        "beta": "1.0.8"
       },
       "name": "Chat Buttons",
       "description": "Puts the chat bar buttons in one menu.",

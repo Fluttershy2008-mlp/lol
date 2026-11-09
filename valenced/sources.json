@@ -274,8 +274,8 @@
     },
     "mlemception.chatbuttons": {
       "path": "valenced/plugins/chat-buttons/index.js",
-      "sha256": "8d39c7b5dc36740dfecd5f35df2a10e8e8e0fe800cece019503bd1c0baf0d682",
-      "originalVersion": "1.0.7",
+      "sha256": "3da73b07d7cede44792be10e96ba292742845164270d978d68f37d6165a079de",
+      "originalVersion": "1.0.8",
       "kind": "native-plugin"
     }
   }

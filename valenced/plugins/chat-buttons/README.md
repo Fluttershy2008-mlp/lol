@@ -12,6 +12,10 @@ Send stays outside the menu. Plugins that have no composer button keep their nor
 The catalogue is checked with Chat Buttons enabled, including both Math AI/AutoText load orders.
 The checks use React and Valenced patcher fixtures; they do not replace testing on an Android device.
 
+## Loader fix (1.0.8)
+
+The loader receives a plain options object during preInit; React/Discord imports are evaluated at startup. The final generated bundle is transformed for Hermes function scoping. This prevents the export getters from all capturing the last loop key, which made the 1.0.7 default export resolve to a function instead of the plugin options object. Refresh the repository, update Chat Buttons, and fully restart Discord.
+
 ## Development
 
 `npm ci --ignore-scripts` at the repository root, then

@@ -1,4 +1,6 @@
 import { build } from 'esbuild';
+import { transformSync } from '@babel/core';
+import transformBlockScoping from '@babel/plugin-transform-block-scoping';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const here = new URL('./', import.meta.url);
@@ -30,7 +32,35 @@ const result = await build({
     });
   } }],
 });
-const output = `(() => {\n// Chat Buttons by mlemception; local compatibility changes. See LICENSE and NOTICE.txt.\nconst module = { exports: {} }; const exports = module.exports;\n${result.outputFiles[0].text}\nreturn module.exports;\n})()\n`;
+// The loader resolves options during preInit, when React and Discord tokens may
+// not exist yet. Return plain lifecycle options now; evaluate imports at start.
+const wrapped = `(() => {
+// Chat Buttons by mlemception; local compatibility changes. See LICENSE and NOTICE.txt.
+let runtime;
+function load(valenced) {
+  if (!runtime) runtime = (() => {
+    const module = { exports: {} }; const exports = module.exports;
+${result.outputFiles[0].text}
+    return module.exports.default;
+  })();
+  return runtime;
+}
+return { default: {
+  jsonStorage: { load: true, default: { names: {}, kept: {}, seen: {} } },
+  start(api) { return load(api.unscoped).start(api); },
+  SettingsComponent(props) {
+    const U = props.api.unscoped;
+    return U.react.React.createElement(load(U).SettingsComponent, props);
+  },
+} };
+})()\n`;
+// Hermes function-scopes let/const. Transform the final bundle too: esbuild's
+// CommonJS export getters capture the loop key, so transforming sources alone
+// would still make .default resolve to the last named export on Android.
+const output = transformSync(wrapped, {
+  babelrc: false, configFile: false, sourceType: 'script',
+  plugins: [transformBlockScoping], comments: true, compact: false,
+}).code + '\n';
 const destination = new URL('index.js', here);
 if (process.argv.includes('--check')) {
   if (readFileSync(destination, 'utf8') !== output) throw Error('Chat Buttons bundle is out of date');
