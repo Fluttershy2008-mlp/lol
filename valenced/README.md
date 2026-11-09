@@ -258,3 +258,11 @@ Restore an icon by disabling it or removing the server ID in plugin settings.
 Refresh the repository, update to beta11 and fully restart Discord. Existing
 message and channel filters remain available. Membership and synced folder order
 stay intact; empty folder shells may remain. Phone verification is still needed.
+
+### HideBlockedAndIgnoredMessages beta12 — native icon rendering fix
+
+Beta12 adds native server bar, props-selector and server-row render hooks for
+builds where beta11's store filtering leaves the icon visible. It covers cached
+bar snapshots and late-loaded/minified server rows, including streaming badges.
+Saved server IDs carry over. Update and fully restart Discord. A captured-snapshot
+regression test fails on beta11 and passes on beta12; phone coverage is unverified.

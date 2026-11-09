@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.2
+# HideBlockedAndIgnoredMessages 1.5.3
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,22 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Native server icon render fix (1.0.0-beta12)
+
+Beta11's store-only filtering can leave icons visible when the mobile bar keeps
+its own snapshot. Beta12 additionally projects the native server bar's rendered
+list data, its props selector and individual server rows. Imported source paths
+cover minified and later-loaded components. The original row's React hooks still
+run in the same order; a separate visibility component hides its rendered icon
+and streaming badge and responds to the existing icon visibility switch.
+
+Existing server IDs and settings carry over. Update and fully restart Discord.
+This does not replace the server bar, alter server membership or filter the
+folder-save getters. A regression fixture with captured, unfiltered bar data
+reproduces beta11's failure without reading any SortedGuildStore getter.
+Phone testing is still required to confirm coverage on each Discord build.
+
 
 ### Hide server icons too (1.0.0-beta11)
 

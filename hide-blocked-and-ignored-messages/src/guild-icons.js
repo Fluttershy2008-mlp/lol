@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: CC0-1.0 */
 // Display-only SortedGuildStore APIs. Never filter getGuildFolders or
 // getCompatibleGuildFolders: Discord uses those to save account-wide ordering.
+import { installGuildBarRenderer } from './guild-bar.js';
 export function createGuildIconFilter(isHidden) {
   function replaceFields(source, fields) {
     const descriptors = Object.getOwnPropertyDescriptors(source);
@@ -20,7 +21,7 @@ export function createGuildIconFilter(isHidden) {
       }
       if (!entry || typeof entry !== 'object') { items.push(entry); continue; }
       const guildId = entry.guildId ?? entry.guild_id ?? entry.guild?.id
-        ?? (entry.type === 'guild' || (entry.type == null && entry.folderId == null) ? entry.id : undefined);
+        ?? (entry.type !== 'folder' && entry.type !== 'root' && entry.folderId == null ? entry.id : undefined);
       if (typeof guildId === 'string' && isHidden(guildId)) { changed = true; continue; }
       const next = projectFolder(entry, seen, depth + 1);
       // Native standalone servers can be folder-shaped rows without a folder ID.
@@ -40,7 +41,7 @@ export function createGuildIconFilter(isHidden) {
     if (!value || typeof value !== 'object' || depth > 12 || seen.has(value)) return value;
     seen.add(value);
     const fields = {};
-    for (const key of ['guildIds', 'guild_ids', 'children']) {
+    for (const key of ['guildIds', 'guild_ids', 'children', 'data', 'items']) {
       if (!Array.isArray(value[key])) continue;
       const next = projectList(value[key], seen, depth + 1);
       if (next !== value[key]) fields[key] = next;
@@ -76,10 +77,11 @@ export function createGuildIconFilter(isHidden) {
 }
 
 export function installGuildIcons(V, servers) {
-  let stopped = false;
+  let stopped = false, renderer;
   const stores = new Set(), cleanups = [], patched = new WeakSet();
   const filter = createGuildIconFilter(id => !stopped && servers.isGuildIconHidden(id));
   function refresh() {
+    renderer?.refresh();
     for (const store of stores) {
       try {
         if (typeof store.doEmitChanges === 'function') store.doEmitChanges();
@@ -117,6 +119,8 @@ export function installGuildIcons(V, servers) {
   try {
     try { attach(V.metro.findByStoreName?.('SortedGuildStore')); } catch {}
     try { attach(V.metro.findByProps?.('getGuildsTree', 'getFastListGuildFolders')); } catch {}
+    renderer = installGuildBarRenderer(V, servers, filter);
+    cleanups.push(renderer.stop);
     if (typeof V.metro.getModuleWithImportedPath === 'function') {
       const cancel = V.metro.getModuleWithImportedPath('stores/SortedGuildStore.tsx', attach);
       if (typeof cancel === 'function') cleanups.push(cancel);

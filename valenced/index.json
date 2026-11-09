@@ -691,6 +691,19 @@
             }
           }
         },
+        "1.0.0-beta12": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta12.zip",
+          "sha256": "9e851e97d3b62670a4724b477d92326a844c0a0634f1ec4a7b7abd21d915b76d",
+          "size": 30326,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta2.zip",
           "sha256": "c1910a82f8a6e848111ebae0074f0ca21ae54288cf9aa7ca632e8bb1fe2eeb48",
@@ -797,8 +810,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.0-beta11",
-        "beta": "1.0.0-beta11"
+        "latest": "1.0.0-beta12",
+        "beta": "1.0.0-beta12"
       },
       "name": "HideBlockedAndIgnoredMessages (Valenced)",
       "description": "Valenced preview. Hides blocked and ignored users, plus messages, channels and icons from selected server IDs. Explicit message search stays available.",

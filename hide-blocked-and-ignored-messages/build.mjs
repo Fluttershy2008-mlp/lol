@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
-const source = ['whitelist', 'servers', 'guild-icons', 'channel-lists', 'filter', 'mentions', 'collection', 'pagination', 'native-rows', 'search', 'settings', 'plugin'].map(name => {
+const source = ['whitelist', 'servers', 'guild-bar', 'guild-icons', 'channel-lists', 'filter', 'mentions', 'collection', 'pagination', 'native-rows', 'search', 'settings', 'plugin'].map(name => {
   const code = readFileSync(new URL(`src/${name}.js`, root), 'utf8')
     .replace(/^import \{[^\n]+\} from '\.\/[a-z-]+\.js';\n/gm, '')
     .replace(/^export (?=(function|const) )/gm, '');

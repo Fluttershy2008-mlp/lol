@@ -124,6 +124,6 @@ export function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.2'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.3'}`));
   };
 }

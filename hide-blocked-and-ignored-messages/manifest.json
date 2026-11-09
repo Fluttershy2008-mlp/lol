@@ -1,7 +1,7 @@
 {
   "name": "HideBlockedAndIgnoredMessages",
   "description": "Hides blocked and ignored users, plus messages, channels and icons from selected server IDs. Explicit message search stays available.",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "authors": [
     {
       "name": "Zykrah",
@@ -20,5 +20,5 @@
   "vendetta": {
     "icon": "ic_block"
   },
-  "hash": "f34c8e3c2c5c0ef0db19db894333fcc1127265455fef948299d3c16ebb2296cd"
+  "hash": "3ecf78957d9f68079b0aa7f4cbb00effdcc5941023b977b50658057b4b9e3e58"
 }
