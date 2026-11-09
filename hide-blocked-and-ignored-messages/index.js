@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.4.1, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.5.0, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -225,6 +225,42 @@ function isUserWhitelisted(storage, id) {
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
+// Server snowflakes use the same string format as user IDs. Do not accept user mentions.
+const normalizeServerIds = normalizeWhitelist;
+function parseServerIds(value) {
+  const tokens = String(value ?? '').trim().split(/[\s,;]+/).filter(Boolean);
+  return { ids: [...new Set(tokens.filter(isDiscordUserId))], invalid: tokens.filter(id => !isDiscordUserId(id)) };
+}
+function createServerFilter(storage, getChannel = () => undefined) {
+  function guildForChannel(id) {
+    const seen = new Set();
+    while (typeof id === 'string' && id && !seen.has(id) && seen.size < 8) {
+      seen.add(id);
+      let channel;
+      try { channel = getChannel(id); } catch { return undefined; }
+      if (!channel) return undefined;
+      const guild = channel.guild_id ?? channel.guildId;
+      if (typeof guild === 'string' && guild) return guild;
+      id = channel.parent_id ?? channel.parentId;
+    }
+  }
+  function hiddenGuild(id) {
+    return storage.hideServers !== false && isDiscordUserId(id)
+      && Array.isArray(storage.hiddenServerIds) && storage.hiddenServerIds.includes(id);
+  }
+  function isChannelHidden(id) { return hiddenGuild(guildForChannel(id)); }
+  function isServerMessageHidden(message) {
+    if (!message || storage.hideServers === false || !storage.hiddenServerIds?.length) return false;
+    // Never use the selected server or a reply's server: DMs and crossposts must
+    // be classified by the message's own channel, not somebody else's location.
+    const guild = message.guild_id ?? message.guildId;
+    return hiddenGuild(typeof guild === 'string' && guild ? guild
+      : guildForChannel(message.channel_id ?? message.channelId));
+  }
+  return { isChannelHidden, isServerMessageHidden };
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
 // Only interaction initiators count. target_user, mentions and installation
 // owners are NOT the user who ran a command.
 function interactionInfo(message) {
@@ -247,7 +283,7 @@ function interactionInfo(message) {
   return { ids: [...ids], originals: [...originals] };
 }
 
-function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage }) {
+function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage, isServerMessageHidden = () => false }) {
   // Keep only IDs, never message contents. Some mobile MessageRecord versions
   // discard interaction metadata while converting gateway messages.
   const metadata = new Map();
@@ -326,6 +362,7 @@ function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage }
   function shouldHide(message) {
     if (!message || typeof message !== 'object') return false;
     try {
+      if (isServerMessageHidden(message)) return true;
       // An explicit author exception also applies when they reply to another
       // hidden user. This does not reveal that other user's own messages.
       if (isUserWhitelisted(storage, message.author?.id)) return false;
@@ -454,7 +491,7 @@ const compareIds = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)
 // Rendering sees a projection; history actions need the real collection to
 // choose cursors. Otherwise an empty projected page has no pagination cursor.
 function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessages,
-  setTimer = setTimeout, clearTimer = clearTimeout }) {
+  isChannelHidden = () => false, setTimer = setTimeout, clearTimer = clearTimeout }) {
   let nativeDepth = 0, stopped = false, timer, epoch = 0;
   let channel, attempted = new Set(), pages = 0, busy = false, failed = false;
   let requestedBefore = false, hiddenPage = false;
@@ -495,7 +532,7 @@ function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessa
       && !c.loading && !c.isLoading && (hiddenPage || info.rows.every(shouldHide));
   }
   function consider(id) {
-    if (stopped || nativeDepth || !fetchMessages || !id || currentChannel() !== id) return;
+    if (stopped || nativeDepth || !fetchMessages || !id || isChannelHidden(id) || currentChannel() !== id) return;
     if (channel !== id) { reset(); channel = id; }
     if (timer !== undefined || busy || failed || pages >= maxPages) return;
     const info = inspect(id);
@@ -559,7 +596,7 @@ function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessa
   function manualRequest(options) {
     if (nativeDepth) return;
     const id = options?.channelId ?? options?.channel_id;
-    if (!id || currentChannel() !== id) return;
+    if (!id || isChannelHidden(id) || currentChannel() !== id) return;
     reset(); channel = id;
     busy = true;
     requestedBefore = Boolean(options.before) && !options.after && !options.jump && !options.around
@@ -583,7 +620,8 @@ function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessa
 // ChatManager.createRow receives type 1 messages or type 2/6 groups containing
 // generated message rows in `content`. Unwrap at this boundary, after native
 // grouping, without changing RelationshipStore or mutating message records.
-function projectNativeRows(row, storage, isFilteredUser) {
+function projectNativeRows(row, storage, isFilteredUser, isServerMessageHidden = () => false) {
+  if (row?.type === 1 && isServerMessageHidden(row.message)) return [];
   if (!row || (row.type !== 2 && row.type !== 6)) return [row];
   const children = [], seen = new Set();
   function collect(value, depth) {
@@ -597,7 +635,7 @@ function projectNativeRows(row, storage, isFilteredUser) {
   }
   // Unknown native layouts pass through rather than inventing row fields.
   if (!collect(row, 0) || !children.length) return [row];
-  const filtered = children.map(child => isFilteredUser(child.message.authorId));
+  const filtered = children.map(child => isServerMessageHidden(child.message) || isFilteredUser(child.message.authorId));
   const whitelisted = children.some(child => isUserWhitelisted(storage, child.message.authorId));
   if (!whitelisted && !filtered.some(Boolean)) return [row];
   // Native createRow will assign a consecutive index to each top-level child.
@@ -606,7 +644,7 @@ function projectNativeRows(row, storage, isFilteredUser) {
     .map(child => ({ ...child, changeType: 2 }));
 }
 
-function installNativeRows(V, storage, isFilteredUser) {
+function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden) {
   let stopped = false;
   const patched = new WeakSet(), cleanups = [];
   function attach(module) {
@@ -617,7 +655,7 @@ function installNativeRows(V, storage, isFilteredUser) {
     const unpatch = V.patcher.instead('createRow', prototype, function (args, original) {
       if (stopped) return original.apply(this, args);
       let rows;
-      try { rows = projectNativeRows(args[0], storage, isFilteredUser); }
+      try { rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden); }
       catch { return original.apply(this, args); }
       if (rows.length === 1 && rows[0] === args[0]) return original.apply(this, args);
       let result;
@@ -747,6 +785,9 @@ function createSettings(V, refresh) {
     const { React, ReactNative: RN } = V.metro.common;
     const storage = V.plugin.storage;
     const [, redraw] = React.useState(0);
+    const [manageServers, setManageServers] = React.useState(false);
+    const [serverInput, setServerInput] = React.useState('');
+    const [serverFeedback, setServerFeedback] = React.useState('');
     const [manageIds, setManageIds] = React.useState(false);
     const [input, setInput] = React.useState('');
     const [feedback, setFeedback] = React.useState('');
@@ -754,6 +795,7 @@ function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
+      ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
       ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
@@ -762,6 +804,7 @@ function createSettings(V, refresh) {
       ['whitelistEnabled', 'Show whitelisted users', 'Show selected blocked or ignored users as normal chat messages, without the blocked-message bar. Add their Discord user IDs below.'],
     ];
     const h = React.createElement;
+    const serverIds = normalizeServerIds(storage.hiddenServerIds);
     const ids = normalizeWhitelist(storage.whitelistedIds);
     const border = dark ? '#34363c' : '#d5d8df';
     const button = (label, action, props = {}) => h(RN.Pressable, {
@@ -769,6 +812,20 @@ function createSettings(V, refresh) {
       style: { minHeight: 44, justifyContent: 'center', padding: 12,
         borderWidth: 1, borderColor: border, borderRadius: 8, marginTop: 10 }, ...props,
     }, h(RN.Text, { style: { color: text, fontSize: 15, fontWeight: '600' } }, label));
+    function addServers() {
+      const parsed = parseServerIds(serverInput);
+      if (parsed.invalid.length) { setServerFeedback('Enter valid server IDs (17–20 digits). Nothing was added.'); return; }
+      if (!parsed.ids.length) { setServerFeedback('Paste at least one server ID first.'); return; }
+      storage.hiddenServerIds = [...new Set([...serverIds, ...parsed.ids])];
+      storage.hideServers = true;
+      setServerInput(''); setServerFeedback('Server list saved. Messages from these servers are now hidden.');
+      redraw(n => n + 1); refresh();
+    }
+    function removeServer(id) {
+      storage.hiddenServerIds = serverIds.filter(value => value !== id);
+      setServerFeedback('Server removed. Its messages follow your user hide settings again.');
+      redraw(n => n + 1); refresh();
+    }
     function addIds() {
       const parsed = parseWhitelistInput(input);
       if (parsed.invalid.length) {
@@ -798,6 +855,23 @@ function createSettings(V, refresh) {
       h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 4 } }, note)),
     h(RN.Switch, { value: key === 'whitelistEnabled' ? storage[key] === true : storage[key] !== false, accessibilityLabel: label,
       onValueChange(value) { storage[key] = value; redraw(n => n + 1); refresh(); } }))),
+    button(`Manage hidden server IDs (${serverIds.length})`, () => setManageServers(value => !value),
+      { accessibilityState: { expanded: manageServers } }),
+    manageServers ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: border, borderRadius: 10 } },
+      h(RN.Text, { style: { color: text, fontSize: 17, fontWeight: '700' } }, 'Hidden server IDs'),
+      h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 6 } },
+        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. It does not mute notifications or leave the server. Explicit search stays available.'),
+      h(RN.TextInput, { value: serverInput, onChangeText: value => { setServerInput(value); setServerFeedback(''); },
+        accessibilityLabel: 'Server IDs to hide', placeholder: 'Paste Discord server IDs',
+        placeholderTextColor: muted, multiline: true, autoCorrect: false, autoCapitalize: 'none',
+        style: { color: text, minHeight: 80, padding: 12, marginTop: 12, textAlignVertical: 'top', borderWidth: 1, borderColor: border, borderRadius: 8 } }),
+      button('Add and hide servers', addServers),
+      serverFeedback ? h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 10 } }, serverFeedback) : null,
+      ...serverIds.map(id => h(RN.View, { key: id, style: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: border } },
+        h(RN.Text, { selectable: true, style: { color: text, fontSize: 14 } }, id),
+        button('Remove server', () => removeServer(id), { accessibilityLabel: `Remove hidden server ${id}` }))),
+      !serverIds.length ? h(RN.Text, { style: { color: muted, fontSize: 13, marginTop: 14 } }, 'No hidden servers. Add a server ID to hide its chat messages.') : null
+    ) : null,
     button(`Manage whitelisted IDs (${ids.length})`, () => setManageIds(value => !value),
       { accessibilityState: { expanded: manageIds } }),
     manageIds ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1,
@@ -864,6 +938,8 @@ function createPlugin(V) {
     }
     if (typeof storage.whitelistEnabled !== 'boolean') storage.whitelistEnabled = false;
     storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
+    if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;
+    storage.hiddenServerIds = normalizeServerIds(storage.hiddenServerIds);
     messageStore = byStore('MessageStore');
     if (!method(messageStore, 'getMessages') || !method(messageStore, 'getMessage')) {
       messageStore = byProps('getMessages', 'getMessage');
@@ -875,14 +951,17 @@ function createPlugin(V) {
       || (!method(blockedStore, 'isBlocked') && !method(ignoredStore, 'isIgnored'))) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
+    const channelStore = byStore('ChannelStore') ?? byProps('getChannel', 'getChannels');
+    const servers = createServerFilter(storage, id => channelStore?.getChannel?.(id));
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
-      getMessage: originalGetMessage });
+      getMessage: originalGetMessage, isServerMessageHidden: servers.isServerMessageHidden });
     const originalGetMessages = messageStore.getMessages.bind(messageStore);
     const selectedStore = byStore('SelectedChannelStore') ?? byProps('getChannelId', 'getVoiceChannelId');
     const actions = byProps('fetchMessages', 'sendMessage') ?? byProps('fetchMessages');
     pagination = createPagination({ getMessages: originalGetMessages, shouldHide: filter.shouldHide,
       selectedChannel: method(selectedStore, 'getChannelId') ? () => selectedStore.getChannelId() : undefined,
+      isChannelHidden: servers.isChannelHidden,
       fetchMessages: method(actions, 'fetchMessages') ? options => actions.fetchMessages(options) : undefined });
     mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
@@ -893,7 +972,7 @@ function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
-      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
+      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
       search = installSearch(V, refresh);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
@@ -944,7 +1023,7 @@ function createPlugin(V) {
           return result;
         }));
       }
-      for (const store of new Set([blockedStore, ignoredStore])) {
+      for (const store of new Set([blockedStore, ignoredStore, channelStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
           store.addChangeListener(refresh);
           cleanup.push(() => store.removeChangeListener(refresh));

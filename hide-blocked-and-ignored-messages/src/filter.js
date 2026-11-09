@@ -22,7 +22,7 @@ export function interactionInfo(message) {
   return { ids: [...ids], originals: [...originals] };
 }
 
-export function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage }) {
+export function createMessageFilter({ storage, blockedStore, ignoredStore, getMessage, isServerMessageHidden = () => false }) {
   // Keep only IDs, never message contents. Some mobile MessageRecord versions
   // discard interaction metadata while converting gateway messages.
   const metadata = new Map();
@@ -101,6 +101,7 @@ export function createMessageFilter({ storage, blockedStore, ignoredStore, getMe
   function shouldHide(message) {
     if (!message || typeof message !== 'object') return false;
     try {
+      if (isServerMessageHidden(message)) return true;
       // An explicit author exception also applies when they reply to another
       // hidden user. This does not reveal that other user's own messages.
       if (isUserWhitelisted(storage, message.author?.id)) return false;

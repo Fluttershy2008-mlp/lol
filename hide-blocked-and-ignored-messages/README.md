@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.4.1
+# HideBlockedAndIgnoredMessages 1.5.0
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,28 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Hide servers by ID (1.0.0-beta9)
+
+Open the plugin's settings, press **Manage hidden server IDs**, paste the server
+ID and press **Add and hide servers**. Multiple IDs may be separated by spaces,
+commas, semicolons or new lines. Turn on Developer Mode in Discord to access
+**Copy Server ID** in the server menu.
+
+**Hide messages from selected servers** pauses or enables the saved server list.
+**Remove server** removes one entry. This hides all chat messages in those servers,
+including threads and native message groups, even from whitelisted users. DMs from
+server members and other servers still follow your existing user hide settings.
+Explicit search stays available. Server hiding does not mute notifications, change
+unread counts, remove the server icon or leave the server. Empty lists hide no servers.
+Update and fully restart Discord once to rebuild cached native rows.
+
+The server filter preserves original message history and avoids automatically
+loading more history in a server whose entire chat is hidden. Tests cover the
+packaged settings flow, restart, server/thread native rows, search, DMs, other
+servers and unload. Physical Android testing is still needed.
+
+### Search behaviour retained from beta8
 
 Valenced package **1.0.0-beta8** allows blocked and ignored users in explicit
 message search, including the **from:** author suggestions. Search visibility

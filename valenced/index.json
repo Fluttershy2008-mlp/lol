@@ -755,14 +755,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta9": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta9.zip",
+          "sha256": "a2e0b33693a2953b89d1b8105bdd08ad7e40e1728754e3045a44d307d6227101",
+          "size": 26536,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta8",
-        "beta": "1.0.0-beta8"
+        "latest": "1.0.0-beta9",
+        "beta": "1.0.0-beta9"
       },
       "name": "HideBlockedAndIgnoredMessages (Valenced)",
-      "description": "Valenced preview. Hides blocked and ignored users in chat with an optional ID whitelist, while allowing them in explicit message search and author suggestions.",
+      "description": "Valenced preview. Hides blocked and ignored users and selected servers by ID in chat, with an optional user whitelist. Explicit message search stays available.",
       "author": "Zykrah <543614592291700748>",
       "icon": "ic_block",
       "contributors": [

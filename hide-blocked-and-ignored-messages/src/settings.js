@@ -1,10 +1,14 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { normalizeServerIds, parseServerIds } from './servers.js';
 import { normalizeWhitelist, parseWhitelistInput } from './whitelist.js';
 export function createSettings(V, refresh) {
   return function HideBlockedSettings() {
     const { React, ReactNative: RN } = V.metro.common;
     const storage = V.plugin.storage;
     const [, redraw] = React.useState(0);
+    const [manageServers, setManageServers] = React.useState(false);
+    const [serverInput, setServerInput] = React.useState('');
+    const [serverFeedback, setServerFeedback] = React.useState('');
     const [manageIds, setManageIds] = React.useState(false);
     const [input, setInput] = React.useState('');
     const [feedback, setFeedback] = React.useState('');
@@ -12,6 +16,7 @@ export function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
+      ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
       ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
@@ -20,6 +25,7 @@ export function createSettings(V, refresh) {
       ['whitelistEnabled', 'Show whitelisted users', 'Show selected blocked or ignored users as normal chat messages, without the blocked-message bar. Add their Discord user IDs below.'],
     ];
     const h = React.createElement;
+    const serverIds = normalizeServerIds(storage.hiddenServerIds);
     const ids = normalizeWhitelist(storage.whitelistedIds);
     const border = dark ? '#34363c' : '#d5d8df';
     const button = (label, action, props = {}) => h(RN.Pressable, {
@@ -27,6 +33,20 @@ export function createSettings(V, refresh) {
       style: { minHeight: 44, justifyContent: 'center', padding: 12,
         borderWidth: 1, borderColor: border, borderRadius: 8, marginTop: 10 }, ...props,
     }, h(RN.Text, { style: { color: text, fontSize: 15, fontWeight: '600' } }, label));
+    function addServers() {
+      const parsed = parseServerIds(serverInput);
+      if (parsed.invalid.length) { setServerFeedback('Enter valid server IDs (17–20 digits). Nothing was added.'); return; }
+      if (!parsed.ids.length) { setServerFeedback('Paste at least one server ID first.'); return; }
+      storage.hiddenServerIds = [...new Set([...serverIds, ...parsed.ids])];
+      storage.hideServers = true;
+      setServerInput(''); setServerFeedback('Server list saved. Messages from these servers are now hidden.');
+      redraw(n => n + 1); refresh();
+    }
+    function removeServer(id) {
+      storage.hiddenServerIds = serverIds.filter(value => value !== id);
+      setServerFeedback('Server removed. Its messages follow your user hide settings again.');
+      redraw(n => n + 1); refresh();
+    }
     function addIds() {
       const parsed = parseWhitelistInput(input);
       if (parsed.invalid.length) {
@@ -56,6 +76,23 @@ export function createSettings(V, refresh) {
       h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 4 } }, note)),
     h(RN.Switch, { value: key === 'whitelistEnabled' ? storage[key] === true : storage[key] !== false, accessibilityLabel: label,
       onValueChange(value) { storage[key] = value; redraw(n => n + 1); refresh(); } }))),
+    button(`Manage hidden server IDs (${serverIds.length})`, () => setManageServers(value => !value),
+      { accessibilityState: { expanded: manageServers } }),
+    manageServers ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: border, borderRadius: 10 } },
+      h(RN.Text, { style: { color: text, fontSize: 17, fontWeight: '700' } }, 'Hidden server IDs'),
+      h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 6 } },
+        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. It does not mute notifications or leave the server. Explicit search stays available.'),
+      h(RN.TextInput, { value: serverInput, onChangeText: value => { setServerInput(value); setServerFeedback(''); },
+        accessibilityLabel: 'Server IDs to hide', placeholder: 'Paste Discord server IDs',
+        placeholderTextColor: muted, multiline: true, autoCorrect: false, autoCapitalize: 'none',
+        style: { color: text, minHeight: 80, padding: 12, marginTop: 12, textAlignVertical: 'top', borderWidth: 1, borderColor: border, borderRadius: 8 } }),
+      button('Add and hide servers', addServers),
+      serverFeedback ? h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 10 } }, serverFeedback) : null,
+      ...serverIds.map(id => h(RN.View, { key: id, style: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: border } },
+        h(RN.Text, { selectable: true, style: { color: text, fontSize: 14 } }, id),
+        button('Remove server', () => removeServer(id), { accessibilityLabel: `Remove hidden server ${id}` }))),
+      !serverIds.length ? h(RN.Text, { style: { color: muted, fontSize: 13, marginTop: 14 } }, 'No hidden servers. Add a server ID to hide its chat messages.') : null
+    ) : null,
     button(`Manage whitelisted IDs (${ids.length})`, () => setManageIds(value => !value),
       { accessibilityState: { expanded: manageIds } }),
     manageIds ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1,

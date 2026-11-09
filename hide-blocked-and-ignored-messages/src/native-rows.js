@@ -5,7 +5,8 @@ import { isUserWhitelisted } from './whitelist.js';
 // ChatManager.createRow receives type 1 messages or type 2/6 groups containing
 // generated message rows in `content`. Unwrap at this boundary, after native
 // grouping, without changing RelationshipStore or mutating message records.
-export function projectNativeRows(row, storage, isFilteredUser) {
+export function projectNativeRows(row, storage, isFilteredUser, isServerMessageHidden = () => false) {
+  if (row?.type === 1 && isServerMessageHidden(row.message)) return [];
   if (!row || (row.type !== 2 && row.type !== 6)) return [row];
   const children = [], seen = new Set();
   function collect(value, depth) {
@@ -19,7 +20,7 @@ export function projectNativeRows(row, storage, isFilteredUser) {
   }
   // Unknown native layouts pass through rather than inventing row fields.
   if (!collect(row, 0) || !children.length) return [row];
-  const filtered = children.map(child => isFilteredUser(child.message.authorId));
+  const filtered = children.map(child => isServerMessageHidden(child.message) || isFilteredUser(child.message.authorId));
   const whitelisted = children.some(child => isUserWhitelisted(storage, child.message.authorId));
   if (!whitelisted && !filtered.some(Boolean)) return [row];
   // Native createRow will assign a consecutive index to each top-level child.
@@ -28,7 +29,7 @@ export function projectNativeRows(row, storage, isFilteredUser) {
     .map(child => ({ ...child, changeType: 2 }));
 }
 
-export function installNativeRows(V, storage, isFilteredUser) {
+export function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden) {
   let stopped = false;
   const patched = new WeakSet(), cleanups = [];
   function attach(module) {
@@ -39,7 +40,7 @@ export function installNativeRows(V, storage, isFilteredUser) {
     const unpatch = V.patcher.instead('createRow', prototype, function (args, original) {
       if (stopped) return original.apply(this, args);
       let rows;
-      try { rows = projectNativeRows(args[0], storage, isFilteredUser); }
+      try { rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden); }
       catch { return original.apply(this, args); }
       if (rows.length === 1 && rows[0] === args[0]) return original.apply(this, args);
       let result;

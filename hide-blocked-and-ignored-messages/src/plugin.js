@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { createServerFilter, normalizeServerIds } from './servers.js';
 import { createMessageFilter } from './filter.js';
 import { createCollectionFilter } from './collection.js';
 import { createSettings } from './settings.js';
@@ -39,6 +40,8 @@ export function createPlugin(V) {
     }
     if (typeof storage.whitelistEnabled !== 'boolean') storage.whitelistEnabled = false;
     storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
+    if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;
+    storage.hiddenServerIds = normalizeServerIds(storage.hiddenServerIds);
     messageStore = byStore('MessageStore');
     if (!method(messageStore, 'getMessages') || !method(messageStore, 'getMessage')) {
       messageStore = byProps('getMessages', 'getMessage');
@@ -50,14 +53,17 @@ export function createPlugin(V) {
       || (!method(blockedStore, 'isBlocked') && !method(ignoredStore, 'isIgnored'))) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
+    const channelStore = byStore('ChannelStore') ?? byProps('getChannel', 'getChannels');
+    const servers = createServerFilter(storage, id => channelStore?.getChannel?.(id));
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
-      getMessage: originalGetMessage });
+      getMessage: originalGetMessage, isServerMessageHidden: servers.isServerMessageHidden });
     const originalGetMessages = messageStore.getMessages.bind(messageStore);
     const selectedStore = byStore('SelectedChannelStore') ?? byProps('getChannelId', 'getVoiceChannelId');
     const actions = byProps('fetchMessages', 'sendMessage') ?? byProps('fetchMessages');
     pagination = createPagination({ getMessages: originalGetMessages, shouldHide: filter.shouldHide,
       selectedChannel: method(selectedStore, 'getChannelId') ? () => selectedStore.getChannelId() : undefined,
+      isChannelHidden: servers.isChannelHidden,
       fetchMessages: method(actions, 'fetchMessages') ? options => actions.fetchMessages(options) : undefined });
     mentions = createMentionFilter(filter.isFilteredUser, storage);
     warned = false;
@@ -68,7 +74,7 @@ export function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
-      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser));
+      cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
       search = installSearch(V, refresh);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
@@ -119,7 +125,7 @@ export function createPlugin(V) {
           return result;
         }));
       }
-      for (const store of new Set([blockedStore, ignoredStore])) {
+      for (const store of new Set([blockedStore, ignoredStore, channelStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
           store.addChangeListener(refresh);
           cleanup.push(() => store.removeChangeListener(refresh));

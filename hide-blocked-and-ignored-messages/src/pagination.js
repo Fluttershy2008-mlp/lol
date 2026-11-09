@@ -6,7 +6,7 @@ const compareIds = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)
 // Rendering sees a projection; history actions need the real collection to
 // choose cursors. Otherwise an empty projected page has no pagination cursor.
 export function createPagination({ getMessages, shouldHide, selectedChannel, fetchMessages,
-  setTimer = setTimeout, clearTimer = clearTimeout }) {
+  isChannelHidden = () => false, setTimer = setTimeout, clearTimer = clearTimeout }) {
   let nativeDepth = 0, stopped = false, timer, epoch = 0;
   let channel, attempted = new Set(), pages = 0, busy = false, failed = false;
   let requestedBefore = false, hiddenPage = false;
@@ -47,7 +47,7 @@ export function createPagination({ getMessages, shouldHide, selectedChannel, fet
       && !c.loading && !c.isLoading && (hiddenPage || info.rows.every(shouldHide));
   }
   function consider(id) {
-    if (stopped || nativeDepth || !fetchMessages || !id || currentChannel() !== id) return;
+    if (stopped || nativeDepth || !fetchMessages || !id || isChannelHidden(id) || currentChannel() !== id) return;
     if (channel !== id) { reset(); channel = id; }
     if (timer !== undefined || busy || failed || pages >= maxPages) return;
     const info = inspect(id);
@@ -111,7 +111,7 @@ export function createPagination({ getMessages, shouldHide, selectedChannel, fet
   function manualRequest(options) {
     if (nativeDepth) return;
     const id = options?.channelId ?? options?.channel_id;
-    if (!id || currentChannel() !== id) return;
+    if (!id || isChannelHidden(id) || currentChannel() !== id) return;
     reset(); channel = id;
     busy = true;
     requestedBefore = Boolean(options.before) && !options.after && !options.jump && !options.around

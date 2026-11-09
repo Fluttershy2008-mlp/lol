@@ -231,3 +231,12 @@ Nine new page-flow cases fail against beta5 and pass with this release; one addi
 The stable12 release keeps the existing account storage intact; do not clear plugin data during the update.
 
 
+
+### HideBlockedAndIgnoredMessages beta9 — server IDs
+
+Open the plugin gear → **Manage hidden server IDs** → paste IDs → **Add and hide servers**.
+The **Hide messages from selected servers** switch pauses the saved list. All chat
+messages in selected servers, including threads, are hidden; user whitelist entries
+do not override server hiding. DMs and other servers follow the existing user settings.
+Explicit search remains available. This does not mute notifications or leave servers.
+Refresh the repository, update to beta9 and fully restart Discord.
