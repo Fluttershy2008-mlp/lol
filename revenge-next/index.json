@@ -646,8 +646,8 @@
         },
         "1.0.0-beta5": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta5.zip",
-          "sha256": "ca5971b196214a5a5b0adf86969c3c891340ac1ac42fbb86ec2f924595a523fe",
-          "size": 28649,
+          "sha256": "f319b230c06baa83e5b5d978b84a185fd9e7bef5519d4846e2c376e104ff739a",
+          "size": 30088,
           "dependencies": {
             "revenge.api": {
               "version": ">=1.2.1 <2"
