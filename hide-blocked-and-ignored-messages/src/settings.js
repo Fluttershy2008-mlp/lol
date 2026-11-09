@@ -16,6 +16,7 @@ export function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
+      ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
       ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
@@ -81,7 +82,7 @@ export function createSettings(V, refresh) {
     manageServers ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: border, borderRadius: 10 } },
       h(RN.Text, { style: { color: text, fontSize: 17, fontWeight: '700' } }, 'Hidden server IDs'),
       h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 6 } },
-        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. It does not mute notifications or leave the server. Explicit search stays available.'),
+        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. Channel list hiding uses the switch above. It does not mute notifications or leave the server. Explicit search stays available.'),
       h(RN.TextInput, { value: serverInput, onChangeText: value => { setServerInput(value); setServerFeedback(''); },
         accessibilityLabel: 'Server IDs to hide', placeholder: 'Paste Discord server IDs',
         placeholderTextColor: muted, multiline: true, autoCorrect: false, autoCapitalize: 'none',
@@ -122,6 +123,6 @@ export function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.4.1'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.1'}`));
   };
 }

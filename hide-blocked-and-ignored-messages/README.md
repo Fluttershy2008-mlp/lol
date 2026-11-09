@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.0
+# HideBlockedAndIgnoredMessages 1.5.1
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,20 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Hide channel lists too (1.0.0-beta10)
+
+The existing server IDs now hide their sidebar channels by default as well.
+**Hide channel lists in selected servers** covers text, announcement, voice,
+stage, category, forum, media and thread entries. It shares the server ID list;
+you do not need to paste the IDs again. Turn this switch off to keep channel
+names visible while hiding messages. The main server hiding switch pauses both.
+Update and fully restart Discord once to refresh cached sidebar layouts.
+
+Channel metadata and permissions remain intact. Other servers and explicit search
+keep working. The server icon and server header remain visible. Tests cover
+settings changes, late sidebar loading, cleanup and the actual ShowHiddenChannels
+package in both plugin load orders. Physical phone testing is still needed.
 
 ### Hide servers by ID (1.0.0-beta9)
 

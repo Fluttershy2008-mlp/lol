@@ -240,3 +240,12 @@ messages in selected servers, including threads, are hidden; user whitelist entr
 do not override server hiding. DMs and other servers follow the existing user settings.
 Explicit search remains available. This does not mute notifications or leave servers.
 Refresh the repository, update to beta9 and fully restart Discord.
+
+### HideBlockedAndIgnoredMessages beta10 — hide the server sidebar
+
+Saved hidden server IDs now also hide the server's text, forum, media, voice,
+stage, category and thread entries from the channel list. **Hide channel lists
+in selected servers** controls this separately from message filtering. Existing
+IDs carry over; refreshing the repository, updating and restarting Discord is
+all that is needed. The actual ShowHiddenChannels package was tested in both
+load orders. Server icons and headers stay visible; search remains available.

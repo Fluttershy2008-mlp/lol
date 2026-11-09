@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.5.0, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.5.1, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -257,7 +257,111 @@ function createServerFilter(storage, getChannel = () => undefined) {
     return hiddenGuild(typeof guild === 'string' && guild ? guild
       : guildForChannel(message.channel_id ?? message.channelId));
   }
-  return { isChannelHidden, isServerMessageHidden };
+  return { isChannelHidden, isServerMessageHidden,
+    isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
+// Project the sidebar's display model; ChannelStore and permission data stay real.
+// Hide the final renderer too, so ShowHiddenChannels cannot reintroduce locked rows.
+function installChannelLists(V, servers) {
+  let stopped = false;
+  const cleanups = [], stores = new Set(), models = new Set();
+  const patched = new WeakMap(), proxies = new WeakMap(), projected = new WeakSet();
+  const hidden = id => !stopped && servers.isGuildChannelListHidden(id);
+  function patch(object, key, callback) {
+    if (!object || typeof object[key] !== 'function') return;
+    const keys = patched.get(object) ?? new Set();
+    if (keys.has(key)) return;
+    cleanups.push(V.patcher.instead(key, object, callback));
+    keys.add(key); patched.set(object, keys);
+  }
+  function modelView(model) {
+    if (!model || typeof model !== 'object' || typeof model.getSections !== 'function') return model;
+    if (projected.has(model)) return model;
+    if (proxies.has(model)) return proxies.get(model);
+    models.add(model);
+    const methods = new Map();
+    const view = new Proxy(model, { get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (typeof value !== 'function') return value;
+      if (!methods.has(key) || methods.get(key).source !== value) {
+        const wrapper = function (...args) {
+          const result = Reflect.apply(value, target, args);
+          if (!hidden(target.id) || !Array.isArray(result)) return result;
+          if (key === 'getSections' && result.every(count => typeof count === 'number')) return result.map(() => 0);
+          if (key === 'getRows' && result.every(Array.isArray)) return result.map(() => []);
+          return result;
+        };
+        methods.set(key, { source: value, wrapper });
+      }
+      return methods.get(key).wrapper;
+    } });
+    proxies.set(model, view); projected.add(view);
+    return view;
+  }
+  function attachStore(module) {
+    if (stopped) return;
+    const store = module?.default ?? module;
+    for (const key of ['getGuild', 'getGuildWithoutChangingGuildActionRows']) {
+      patch(store, key, function (args, original) {
+        const result = original.apply(this, args);
+        if (stopped) return result;
+        if (result?.guildChannels) return { ...result, guildChannels: modelView(result.guildChannels) };
+        return modelView(result);
+      });
+    }
+    if (store) stores.add(store);
+  }
+  function attachLegacyStore(module) {
+    if (stopped) return;
+    const store = module?.default ?? module;
+    patch(store, 'getChannels', function (args, original) {
+      const result = original.apply(this, args);
+      if (!hidden(args[0]) || !result || typeof result !== 'object' || Array.isArray(result)) return result;
+      const descriptors = Object.getOwnPropertyDescriptors(result);
+      for (const key of Object.keys(result)) {
+        if (Array.isArray(result[key])) descriptors[key] = { value: [], enumerable: descriptors[key].enumerable, configurable: true, writable: true };
+      }
+      return Object.create(Object.getPrototypeOf(result), descriptors);
+    });
+    if (store) stores.add(store);
+  }
+  function attachRenderer(module) {
+    if (stopped) return;
+    const renderer = module?.default ?? module;
+    const guild = options => options?.guildChannels?.id;
+    patch(renderer, 'renderChannelListItem', function (args, original) {
+      return hidden(guild(args[0])) ? null : original.apply(this, args);
+    });
+    patch(renderer, 'getChannelListItemSize', function (args, original) {
+      return hidden(guild(args[0])) ? 0 : original.apply(this, args);
+    });
+  }
+  function watch(path, callback) {
+    if (typeof V.metro.getModuleWithImportedPath !== 'function') return;
+    const remove = V.metro.getModuleWithImportedPath(path, callback);
+    if (typeof remove === 'function') cleanups.push(remove);
+  }
+  function refresh() {
+    for (const model of models) { try { model.invalidate?.(); } catch {} }
+    for (const store of stores) { try { store.emitChange?.(); } catch {} }
+  }
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    for (const remove of cleanups.splice(0).reverse()) { try { remove(); } catch {} }
+    refresh(); models.clear(); stores.clear();
+  }
+  try {
+    try { attachStore(V.metro.findByStoreName?.('ChannelListStore')); } catch {}
+    try { attachLegacyStore(V.metro.findByStoreName?.('GuildChannelStore')); } catch {}
+    try { attachRenderer(V.metro.findByProps?.('renderChannelListItem', 'getChannelListItemSize')); } catch {}
+    watch('modules/guild_sidebar/ChannelListStore.tsx', attachStore);
+    watch('stores/GuildChannelStore.tsx', attachLegacyStore);
+    watch('modules/channel_list_v2/native/renderRedesignChannelListItem.tsx', attachRenderer);
+  } catch (error) { stop(); throw error; }
+  return { refresh, stop };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
@@ -795,6 +899,7 @@ function createSettings(V, refresh) {
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
     const rows = [
+      ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
       ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
       ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
@@ -860,7 +965,7 @@ function createSettings(V, refresh) {
     manageServers ? h(RN.View, { style: { marginTop: 12, padding: 14, borderWidth: 1, borderColor: border, borderRadius: 10 } },
       h(RN.Text, { style: { color: text, fontSize: 17, fontWeight: '700' } }, 'Hidden server IDs'),
       h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 19, marginTop: 6 } },
-        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. It does not mute notifications or leave the server. Explicit search stays available.'),
+        'Enable Developer Mode in Discord, then open a server’s menu and copy its server ID. Paste IDs separated by spaces, commas or new lines. This hides messages in that server, not DMs from its members. Channel list hiding uses the switch above. It does not mute notifications or leave the server. Explicit search stays available.'),
       h(RN.TextInput, { value: serverInput, onChangeText: value => { setServerInput(value); setServerFeedback(''); },
         accessibilityLabel: 'Server IDs to hide', placeholder: 'Paste Discord server IDs',
         placeholderTextColor: muted, multiline: true, autoCorrect: false, autoCapitalize: 'none',
@@ -901,7 +1006,7 @@ function createSettings(V, refresh) {
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
       'Bot filtering needs Discord to identify who triggered the response. Ordinary bot posts without that information stay visible.'),
-    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.4.1'}`));
+    h(RN.Text, { style: { color: muted, fontSize: 12, marginTop: 18 } }, `Version ${V.plugin.manifest?.version ?? '1.5.1'}`));
   };
 }
 
@@ -909,7 +1014,7 @@ function createSettings(V, refresh) {
 
 function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, search, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, channelLists, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -921,6 +1026,7 @@ function createPlugin(V) {
     mentions?.clear();
     search?.clear();
     pagination?.reset();
+    channelLists?.refresh();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -940,6 +1046,7 @@ function createPlugin(V) {
     storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
     if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;
     storage.hiddenServerIds = normalizeServerIds(storage.hiddenServerIds);
+    if (typeof storage.hideServerChannels !== 'boolean') storage.hideServerChannels = true;
     messageStore = byStore('MessageStore');
     if (!method(messageStore, 'getMessages') || !method(messageStore, 'getMessage')) {
       messageStore = byProps('getMessages', 'getMessage');
@@ -972,6 +1079,8 @@ function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      channelLists = installChannelLists(V, servers);
+      cleanup.push(channelLists.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
       search = installSearch(V, refresh);
       cleanup.push(search.stop);
@@ -1041,7 +1150,7 @@ function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = search = undefined;
+    filter = lists = mentions = pagination = search = channelLists = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }
