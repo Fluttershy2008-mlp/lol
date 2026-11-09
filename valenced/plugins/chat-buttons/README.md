@@ -26,13 +26,27 @@ Adds **Buttons → Hidden users & servers**, using Valenced's public
 `api.pluginSettings.openPluginSettings` API to open the existing native settings
 route with the target plugin's live storage. No copy of its settings or server list
 is maintained in Chat Buttons. The entry works in either plugin load order and
-shows an enable-plugin message if the settings opener is unavailable. Update Chat
+offers the gear-icon fallback if native navigation is unavailable. Update Chat
 Buttons and fully restart Discord once.
 
 Checks cover menu navigation, unchanged hide settings on tap, the target settings
 page's live icon switch, pinning, nicknames and cleanup. The original catalogue
 coexistence and actual Hermes options-loader checks remain in place. Physical
 Android testing remains needed.
+
+## Settings opener compatibility fix (1.0.10)
+
+The settings helper may be missing or attached after Chat Buttons starts on some
+Valenced builds. The shortcut now reads the current host API when tapped, then
+falls back to the same native navigation route used by the plugin's gear button.
+It no longer mistakes a missing helper for a disabled HideBlockedAndIgnoredMessages
+plugin. Pending navigation-readiness callbacks are removed when Chat Buttons stops.
+
+Regressions cover a genuinely enabled target without the optional settings helper
+and a helper added after Chat Buttons has started; both fail with 1.0.9 and pass
+with 1.0.10. Update **Chat Buttons** and fully restart Discord once. Existing hide
+settings, pinning and nicknames stay intact. Physical phone navigation still needs
+verification.
 
 ## Development
 

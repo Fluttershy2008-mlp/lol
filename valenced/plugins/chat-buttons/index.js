@@ -35,7 +35,7 @@
         value: true
       }), mod);
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/index.ts
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/index.ts
       var index_exports = {};
       __export(index_exports, {
         default: () => index_default,
@@ -93,7 +93,7 @@
       var jsxs = valenced.react.ReactJSXRuntime.jsxs;
       var Fragment = valenced.react.ReactJSXRuntime.Fragment;
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/icons.tsx
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/icons.tsx
       var asset = name => ({
         style
       }) => /* @__PURE__ */jsx(Image, {
@@ -142,7 +142,7 @@
       var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
       var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/store.ts
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/store.ts
       var defaults = {
         names: {},
         kept: {},
@@ -227,18 +227,71 @@
         return [...list].sort((a, b) => at(a) - at(b));
       }
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/hidden-settings.tsx
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/hidden-settings.tsx
       var hiddenSettingsId = "dev.fluttershy2008.hide-blocked-and-ignored-messages";
       var hiddenSettingsLabel = "Hidden users & servers";
-      var settings;
-      var setPluginSettings = api => {
-        settings = api;
+      var host;
+      var cancelReady;
+      var setSettingsHost = api => {
+        cancelReady?.();
+        cancelReady = void 0;
+        host = api;
       };
-      function openHiddenSettings() {
-        if (!isActive()) return;
+      var optional = read => {
         try {
-          if (settings?.hasPluginSettings?.(hiddenSettingsId) && typeof settings.openPluginSettings === "function") {
+          return read();
+        } catch {}
+      };
+      function rootNavigation(api) {
+        var U = api?.unscoped;
+        var direct = optional(() => U.discord.modules.mainTabsV2.RootNavigationRef.getRootNavigationRef());
+        if (typeof direct?.navigate === "function") return direct;
+        var paths = U?.discord?.utils?.modules?.finders;
+        var imported = optional(() => paths.lookupModuleWithImportedPath("modules/main_tabs_v2/RootNavigationRef.native.tsx")[0]);
+        var fromPath = optional(() => (imported?.default ?? imported)?.getRootNavigationRef?.());
+        if (typeof fromPath?.navigate === "function") return fromPath;
+        var finders = U?.modules?.finders;
+        var found = optional(() => finders.lookupModule(finders.filters.withProps("getRootNavigationRef"), {
+          initialize: false
+        })[0]);
+        return optional(() => (found?.default ?? found)?.getRootNavigationRef?.());
+      }
+      function openHiddenSettings() {
+        if (!isActive() || !host) return;
+        var api = host;
+        var settings = optional(() => api.pluginSettings);
+        try {
+          if (typeof settings?.openPluginSettings === "function" && (typeof settings.hasPluginSettings !== "function" || settings.hasPluginSettings(hiddenSettingsId))) {
             settings.openPluginSettings(hiddenSettingsId);
+            return;
+          }
+        } catch {}
+        try {
+          var navigation = rootNavigation(api);
+          if (typeof navigation?.navigate === "function") {
+            var open = () => {
+              if (host === api && isActive()) navigation.navigate(hiddenSettingsId);
+            };
+            if (navigation.isReady?.() === false) {
+              if (typeof navigation.addListener !== "function") throw Error("Navigation is not ready");
+              if (!cancelReady) {
+                var remove;
+                var cancel = () => {
+                  if (typeof remove === "function") remove();
+                };
+                var ready = () => {
+                  if (cancelReady !== cancel) return;
+                  cancel();
+                  cancelReady = void 0;
+                  try {
+                    open();
+                  } catch {}
+                };
+                cancelReady = cancel;
+                var unsubscribe = navigation.addListener("ready", ready);
+                remove = typeof unsubscribe === "function" ? unsubscribe : () => navigation.removeListener?.("ready", ready);
+              }
+            } else open();
             return;
           }
         } catch {}
@@ -247,8 +300,8 @@
           AlertActionButton
         } = Design;
         AlertActionCreators.openAlert("chatbuttons-hidden-settings-unavailable", createElement(AlertModal, {
-          title: "Hidden users & servers",
-          content: "Enable HideBlockedAndIgnoredMessages in Valenced, then open this shortcut again.",
+          title: hiddenSettingsLabel,
+          content: "Could not open the native settings page. Use the plugin\u2019s gear icon for now.",
           actions: createElement(AlertActionButton, {
             text: "OK",
             variant: "primary"
@@ -256,7 +309,7 @@
         }));
       }
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/bar.tsx
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/bar.tsx
       var Bar = createContext(null);
       var Free = createContext(false);
       var Slot = createContext(null);
@@ -743,7 +796,7 @@
         return node;
       }
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/manage.tsx
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/manage.tsx
       function Nickname({
         id,
         label
@@ -867,7 +920,7 @@
         });
       }
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/menu.tsx
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/menu.tsx
       var edge = 12;
       var wide = 244;
       var gap = 8;
@@ -1151,7 +1204,7 @@
         });
       }
 
-      // chat-settings/valenced/plugins/chat-buttons/source/js/index.ts
+      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/index.ts
       function target(mod, name = "default") {
         var holder = mod,
           key = name;
@@ -1169,12 +1222,12 @@
           default: defaults
         },
         SettingsComponent: Settings,
-        async start({
-          cleanup,
-          jsonStorage,
-          logger,
-          pluginSettings
-        }) {
+        async start(api) {
+          var {
+            cleanup,
+            jsonStorage,
+            logger
+          } = api;
           var active2 = true;
           var removers = [];
           var own = remove => {
@@ -1184,7 +1237,7 @@
           cleanup(() => {
             active2 = false;
             setActive(false);
-            setPluginSettings(void 0);
+            setSettingsHost(void 0);
             forced.on = false;
             for (var remove of removers.splice(0).reverse()) {
               try {
@@ -1197,7 +1250,7 @@
           if (!jsonStorage.loaded) await jsonStorage.get();
           if (!active2) return;
           setStorage(jsonStorage);
-          setPluginSettings(pluginSettings);
+          setSettingsHost(api);
           setActive(true);
           var watch = (path2, callback) => {
             own(getModuleWithImportedPath(path2, mod => {

@@ -283,3 +283,11 @@ HideBlockedAndIgnoredMessages settings page. It opens the same live settings,
 including saved server IDs and visibility toggles. It does not toggle any hide
 setting just by being tapped. Use **Manage buttons** to give it a nickname or keep
 it on the composer bar. Update Chat Buttons and restart Discord once.
+
+### Chat Buttons 1.0.10 — fix the false enable-plugin alert
+
+The **Hidden users & servers** shortcut now supports Valenced builds without the
+optional pluginSettings helper, or where it is added after startup. It can open
+the same native settings route as the target plugin's gear button directly.
+Update Chat Buttons and restart once; the hider itself does not need reinstalling.
+Saved IDs, visibility settings and button customizations stay intact.

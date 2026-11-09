@@ -10,9 +10,10 @@ function button(ui, label) {
   const node = ui.root.findAll(n => typeof n.type === 'string' && n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
   assert.ok(node, 'button: ' + label); return node;
 }
-function scene(t) {
+function scene(t, { helper = true } = {}) {
   const routes = [], views = [];
   const w = createWorld({ decorateApi(api) {
+    if (!helper) return;
     api.pluginSettings = {
       hasPluginSettings: id => id === ID && !!w.loaded.get('hide-blocked-and-ignored-messages')?.options.SettingsComponent,
       openPluginSettings: id => routes.push(id),
@@ -61,11 +62,48 @@ test('shortcut supports nicknames and pinning, gives a useful unavailable messag
   const pinned = button(composer, LABEL), stalePress = pinned.props.onPress;
   await Renderer.act(async () => pinned.props.onPress()); assert.deepEqual(s.routes, [ID]);
   await s.w.stop(target);
+  for (let i = 0; i < s.w.modules.length; i++) if (typeof s.w.modules[i]?.getRootNavigationRef === 'function') s.w.modules[i] = {};
   await Renderer.act(async () => pinned.props.onPress());
   assert.deepEqual(s.routes, [ID]);
   assert.equal(s.w.alerts.at(-1)[0], 'chatbuttons-hidden-settings-unavailable');
-  assert.match(s.w.alerts.at(-1)[1].props.content, /Enable HideBlockedAndIgnoredMessages/);
+  assert.match(s.w.alerts.at(-1)[1].props.content, /gear icon/);
   await Renderer.act(async () => s.w.stop(chat));
   assert.equal(composer.root.findAll(n => n.props.accessibilityLabel === LABEL).length, 0);
   await Renderer.act(async () => stalePress()); assert.deepEqual(s.routes, [ID]);
+});
+
+
+test('enabled target opens through native navigation when this Valenced build has no pluginSettings helper', async t => {
+  const s = scene(t, { helper: false }), chat = await s.startChat();
+  const target = await s.w.start('hide-blocked-and-ignored-messages', { hiddenServerIds: [GUILD] });
+  const before = structuredClone(target.api.jsonStorage.cache);
+  assert.equal(chat.api.pluginSettings, undefined);
+  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
+  await Renderer.act(async () => button(menu, LABEL).props.onPress());
+  assert.ok(s.w.calls.some(call => call[0] === 'navigate' && call[1] === ID));
+  assert.equal(s.w.alerts.length, 0, 'do not tell an enabled plugin to be enabled');
+  assert.deepEqual(target.api.jsonStorage.cache, before);
+});
+
+test('a settings helper added after Chat Buttons starts is resolved live when tapped', async t => {
+  const s = scene(t, { helper: false }), chat = await s.startChat();
+  await s.w.start('hide-blocked-and-ignored-messages');
+  chat.api.pluginSettings = { hasPluginSettings: () => true, openPluginSettings: id => s.routes.push(id) };
+  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
+  await Renderer.act(async () => button(menu, LABEL).props.onPress());
+  assert.deepEqual(s.routes, [ID]); assert.equal(s.w.alerts.length, 0);
+});
+
+test('native readiness callback is one-shot and cancelled if Chat Buttons stops before navigation is ready', async t => {
+  const s = scene(t, { helper: false }), chat = await s.startChat();
+  await s.w.start('hide-blocked-and-ignored-messages');
+  let ready = false; const listeners = new Set();
+  s.w.navigation.isReady = () => ready;
+  s.w.navigation.addListener = (event, callback) => { assert.equal(event, 'ready'); listeners.add(callback); return () => listeners.delete(callback); };
+  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
+  await Renderer.act(async () => { button(menu, LABEL).props.onPress(); button(menu, LABEL).props.onPress(); });
+  assert.equal(listeners.size, 1); assert.equal(s.w.calls.some(call => call[0] === 'navigate'), false);
+  const stale = [...listeners][0];
+  await Renderer.act(async () => s.w.stop(chat)); assert.equal(listeners.size, 0);
+  ready = true; stale(); assert.equal(s.w.calls.some(call => call[0] === 'navigate'), false);
 });
