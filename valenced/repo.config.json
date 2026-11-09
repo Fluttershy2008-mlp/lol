@@ -104,6 +104,9 @@
     },
     "show-hidden-channels": {
       "path": "valenced/plugins/show-hidden-channels"
+    },
+    "translate-message": {
+      "path": "valenced/plugins/translate-message"
     }
   },
   "nativeThemes": {
@@ -123,4 +126,3 @@
     }
   }
 }
-

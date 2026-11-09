@@ -265,6 +265,12 @@
       "sha256": "9e2b1b449841dae299ee0f7a3f5a22926d85cef364ffd464bb37b61b6feca5c1",
       "originalVersion": "1.0.0-beta11",
       "kind": "native-plugin"
+    },
+    "dev.fluttershy2008.translate-message": {
+      "path": "valenced/plugins/translate-message/index.js",
+      "sha256": "7252211bed9c43f74d81a2338dbe0c7cf4347c3ef511635a9c71309f63af60c7",
+      "originalVersion": "2.0.4",
+      "kind": "native-plugin"
     }
   }
 }

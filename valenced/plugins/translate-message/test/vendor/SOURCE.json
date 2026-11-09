@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/Valenced/valenced",
+  "commit": "730ed4815a5ab77fe5e867eb6dc915d093721e33",
+  "files": {
+    "_internal.ts": "bundle/lib/patcher/src/_internal.ts",
+    "instead.ts": "bundle/lib/patcher/src/hooks/instead.ts",
+    "LICENSE": "bundle/lib/patcher/LICENSE"
+  },
+  "usage": "Development-only contract tests; not included in index.js"
+}

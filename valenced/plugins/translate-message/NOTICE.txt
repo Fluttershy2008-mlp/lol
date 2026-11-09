@@ -1,0 +1,32 @@
+Vencord Translate for Valenced 2.0.4
+
+User-tested on Android. Tap toggles outgoing auto-translation; hold opens settings.
+
+Complete corresponding source and upstream attribution:
+https://github.com/Fluttershy2008-mlp/lol/tree/main/valenced/plugins/translate-message
+
+# Third-party notices
+
+## Vencord Translate
+
+Copyright (c) 2023–2026 Vendicated and contributors. Licensed under GPL-3.0-or-later. Original authors listed by the plugin are Vendicated, AshtonMemer and koish1. The complete GPL-3.0 text is in `LICENSE` and `upstream/VENCORD_LICENSE`.
+
+Source: https://github.com/Vendicated/Vencord/tree/8d64c8be7e68616f8f116a6fff9480051aa2a0c5/src/plugins/translate
+
+Original files and headers are preserved in `upstream/vencord`. Language tables are TypeScript-stripped adaptations of `languages.ts`. `src/service.cjs` adapts the Google, DeepL, Kagi and fallback logic from `utils.ts` and `native.ts`; `src/ui.cjs` adapts the four selectors, provider settings and Auto Translate control from `settings.tsx` and `TranslateModal.tsx`. `src/outgoing.cjs` adapts the chat-bar control and before-send behaviour. `getMessageContent` follows `index.tsx`. The PNG glyph and data URI are rendered from the original `TranslateIcon.tsx` SVG path.
+
+Modifications for Valenced: native React controls and modals; lazy mobile composer hooks; scoped lifecycle cleanup; immutable native menu insertion; cancellation, timeout and duplicate-request handling; protected markup; local incoming display/revert; draft recovery; preference migration. The combined port is GPL-3.0-or-later.
+
+## Existing mobile integration techniques
+
+The earlier Translate Message session/menu shell and protected-text utilities were originally MIT licensed. The message-sheet approach also follows the user’s MIT-licensed Copy User ID integration. These adaptations are included under the combined port’s GPL-3.0-or-later terms.
+
+Mobile composer paths and ActionButton props were checked against Yumistra/Freestyle-Valenced’s silent-messages source, commit `5dc3d776a6384e5bfdab8eeb2c23ffe5e4ef0c10`. The port uses an independent immutable tree adapter and does not bundle that plugin.
+
+## Valenced patcher test sources
+
+`test/vendor/_internal.ts` and `test/vendor/instead.ts` are unmodified Valenced patcher sources, commit `730ed4815a5ab77fe5e867eb6dc915d093721e33`. Their CC0 licence is retained in `test/vendor/LICENSE`; paths are recorded in `test/vendor/SOURCE.json`. They are development test fixtures, excluded from the installed runtime script.
+
+## Development dependencies
+
+React and react-test-renderer are MIT-licensed development dependencies. Their code is not bundled in the installed runtime. The runtime uses the React and React Native APIs provided by Valenced.

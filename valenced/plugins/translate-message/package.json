@@ -1,0 +1,14 @@
+{
+  "name": "vencord-translate-valenced",
+  "version": "2.0.4",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "python3 build.py && node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "react": "19.2.0",
+    "react-test-renderer": "19.2.0"
+  }
+}

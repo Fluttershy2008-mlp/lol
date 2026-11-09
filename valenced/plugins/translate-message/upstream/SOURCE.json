@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/Vendicated/Vencord",
+  "commit": "8d64c8be7e68616f8f116a6fff9480051aa2a0c5",
+  "files": {
+    "src/plugins/translate/index.tsx": "b6317c84834567fa3127d9c3150c6a3faef95d96",
+    "src/plugins/translate/utils.ts": "eb6827423efc7b369c2762e1fb0a345f5fad19df",
+    "src/plugins/translate/settings.tsx": "5c65c8d026400076e323530e3dd6403b03ba4968",
+    "src/plugins/translate/TranslateIcon.tsx": "482c5bdbfdaff05c17bd74c03aad543bf81a21ba",
+    "src/plugins/translate/TranslateModal.tsx": "469a07e883c4c778828c8d44b08afbb433a1c491",
+    "src/plugins/translate/TranslationAccessory.tsx": "fa2e3471125954b6a56a1715c6c32053bf8295d0",
+    "src/plugins/translate/languages.ts": "2f433e377525c20d693a16bcb90450c400bd52fc",
+    "src/plugins/translate/native.ts": "93c7a25f8b07f031b94b7c818d334d491f597879",
+    "src/plugins/translate/styles.css": "28987068b8f85de752f2ddbc277093d7370a3cf9"
+  }
+}

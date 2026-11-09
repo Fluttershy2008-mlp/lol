@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-09",
+  "plugin_version": "2.0.4",
+  "tests": {
+    "total": 92,
+    "passed": 92,
+    "failed": 0,
+    "skipped": 0
+  },
+  "environment": {
+    "node": "24.22.1",
+    "react": "19.2.0",
+    "react-test-renderer": "19.2.0"
+  },
+  "upstream": {
+    "vencord": "8d64c8be7e68616f8f116a6fff9480051aa2a0c5",
+    "valenced": "730ed4815a5ab77fe5e867eb6dc915d093721e33"
+  },
+  "language_targets": {
+    "google": 133,
+    "deepl": 127,
+    "kagi": 274
+  },
+  "runtime_script_sha256": "7252211bed9c43f74d81a2338dbe0c7cf4347c3ef511635a9c71309f63af60c7",
+  "source_sha256": {
+    "src/core.cjs": "3b6a11b93376fdb0dbb38f95dc5015569147718ebdf1b242c702a52322bd4193",
+    "src/icon.cjs": "f3c09bed8331701e369ad2800db1774a99d611dd9eefe76a5a8fd0d151aef71f",
+    "src/languages.cjs": "5f63ab0f950650e08922791dd2de8240d02b4cc0089c37384d2df2fd7d2d6050",
+    "src/outgoing.cjs": "4e7b361ae247033e8742857becd07d6a0579a2b0c7ed35ea6a3bbe54d0a00242",
+    "src/plugin.cjs": "af06b4c30fb37426733b4330cc00782ce445cab881afb84cd22eb2cf31e0aab1",
+    "src/service.cjs": "208be37627d5d7fdbb3fe068ff4ee3faf0a514e648b6fed82172274df4b9fef2",
+    "src/ui.cjs": "21d962dc13b0bec764191a3d08dc261ec1a1f06f3c08c923c0af907051dea8b0"
+  },
+  "upstream_originals": "All nine original Translate files verified against their recorded Git blob SHA-1 values.",
+  "coverage": [
+    "Actual upstream Valenced patcher",
+    "Six React message-sheet shapes",
+    "Native composer control and Android back handling",
+    "All four Vencord language selectors",
+    "Green auto-translate toggle and preference writes",
+    "Google/DeepL Free/DeepL Pro/Kagi request contracts",
+    "Credential isolation and masked settings fields",
+    "DeepL quota/missing-key fallback",
+    "Outgoing native send metadata and receiver preservation",
+    "Nonce deduplication",
+    "Blocked sends and draft recovery on translation failure",
+    "Existing-new-draft preservation",
+    "Source/target changes and account switching",
+    "Timeouts and cancellation",
+    "Protected code/spoilers/mentions/links",
+    "Forwarded snapshots and moderation text",
+    "Incoming local display and original restoration",
+    "Archive manifest, runtime source and licence integrity",
+    "v1.0.2 inline translation on fresh and saved v2 settings",
+    "Single reactive Translate/Revert/Cancel menu row",
+    "Cached translation after restore and stale menu action handling",
+    "Silent successful incoming translations",
+    "Composer single tap toggles outgoing auto-translation; holding opens settings without changing the toggle",
+    "Persistent green icon, tile and status dot on the direct composer control in light/dark themes",
+    "Direct RN Pressable handles tap and 450 ms hold without the private Discord action button",
+    "Hold opens settings with auto-translate initially on or off; release cannot toggle; next tap works normally"
+  ],
+  "limitations": [
+    "Not tested on a physical Android device",
+    "No live translation provider requests; build environment network is restricted",
+    "Private Discord module compatibility validated using native UI fixtures"
+  ]
+}
