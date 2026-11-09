@@ -1557,8 +1557,8 @@
         },
         "1.0.0-beta4": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.relationship-notifier@1.0.0-beta4.zip",
-          "sha256": "d36747b29632fbe9fc8513fbddcd85e5200d84200853015967f68e7f18bf8397",
-          "size": 37999,
+          "sha256": "f23e348dfb65511362f79ab3ad2a7b5f6126c885f7f4c7d65b87713ff6ce494f",
+          "size": 39882,
           "dependencies": {
             "revenge.api": {
               "version": ">=1.2.1 <2"
