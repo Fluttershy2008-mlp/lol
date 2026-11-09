@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.4
+# HideBlockedAndIgnoredMessages 1.5.5
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,23 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Direct in-chat settings panel (1.0.0-beta14)
+
+The hider now owns a **Hidden users & servers** composer button. Tapping it mounts
+the actual settings component in a native full-screen Modal using this plugin's
+live storage and refresh handlers. It does not depend on pluginSettings helpers
+or settings-stack navigation. Close it with the top-right close button or Android
+Back. With **Chat Buttons 1.0.11**, the button is collected into the existing menu
+and retains its stable ID, nicknames and pinning settings.
+
+Update **both** the hider to beta14 and Chat Buttons to 1.0.11, then fully restart
+Discord. Existing server IDs, whitelist and visibility switches carry over.
+Checks require the settings panel itself to mount and test changes to its icon
+switch and server IDs, plus closing, reopening, both load orders and cleanup.
+They also reproduce the previous silent-navigation failure. Physical device
+verification remains needed.
+
 
 ### Live icon visibility switch (1.0.0-beta13)
 

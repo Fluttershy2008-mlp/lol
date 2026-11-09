@@ -10,17 +10,12 @@ function button(ui, label) {
   const node = ui.root.findAll(n => typeof n.type === 'string' && n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
   assert.ok(node, 'button: ' + label); return node;
 }
-function scene(t, { helper = true } = {}) {
-  const routes = [], views = [];
-  const w = createWorld({ decorateApi(api) {
-    if (!helper) return;
-    api.pluginSettings = {
-      hasPluginSettings: id => id === ID && !!w.loaded.get('hide-blocked-and-ignored-messages')?.options.SettingsComponent,
-      openPluginSettings: id => routes.push(id),
-    };
-  } });
-  const f = installChatButtonsHost(w);
-  const mount = async element => { let ui; await Renderer.act(async () => { ui = Renderer.create(element); }); views.push(ui); return ui; };
+const panels = ui => ui.root.findAll(n => n.type === 'Modal' && n.props.testID === 'hide-blocked.settings-panel');
+function scene(t) {
+  // Deliberately provide no pluginSettings API and make navigation silently do nothing.
+  // Only a mounted settings panel counts as success, not a call to navigate().
+  const w = createWorld(), f = installChatButtonsHost(w), views = [];
+  const mount = async el => { let ui; await Renderer.act(async () => { ui = Renderer.create(el); }); views.push(ui); return ui; };
   const startChat = async initial => { let item; await Renderer.act(async () => { item = await w.start('chat-buttons', initial); f.attachStorage(item); }); return item; };
   const menu = async composer => { await Renderer.act(async () => button(composer, 'Buttons').props.onPress()); return mount(f.popout.ContextMenuPopout({ menu: w.lastMenu, transitionState: 0, cleanUp() {} })); };
   t.after(async () => {
@@ -29,81 +24,54 @@ function scene(t, { helper = true } = {}) {
     assert.deepEqual(w.errors, []); assert.equal(w.timers.size, 0); assert.equal(w.pathWaiters.size, 0);
     assert.equal(f.patches.size, 0); assert.equal(f.backHandlers.size, 0);
   });
-  return { w, f, routes, mount, startChat, menu };
+  return { w, f, mount, startChat, menu };
 }
-for (const chatFirst of [true, false]) test('Hidden users & servers opens the existing plugin settings without toggling it; Chat Buttons loaded ' + (chatFirst ? 'first' : 'last'), async t => {
+for (const first of [true, false]) test('menu tap mounts real hider settings with silent navigation and no helper; Chat Buttons ' + (first ? 'first' : 'last'), async t => {
   const s = scene(t); let chat;
-  if (chatFirst) chat = await s.startChat();
+  if (first) chat = await s.startChat();
   const target = await s.w.start('hide-blocked-and-ignored-messages', { hiddenServerIds: [GUILD] });
-  if (!chatFirst) chat = await s.startChat();
+  if (!first) chat = await s.startChat();
   const before = structuredClone(target.api.jsonStorage.cache);
   const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
-  const row = button(menu, LABEL);
-  assert.equal(row.props.accessibilityRole, 'button');
-  await Renderer.act(async () => row.props.onPress());
-  assert.deepEqual(s.routes, [ID]); assert.equal(s.w.closed, true);
-  assert.deepEqual(target.api.jsonStorage.cache, before);
-  assert.equal(s.w.calls.some(call => call[0] === 'send' || call[0] === 'sendMessage'), false);
-  assert.equal(Object.keys(chat.api.jsonStorage.cache.seen).filter(id => id === ID).length, 1);
-  const page = await s.mount(h(target.options.SettingsComponent, { api: target.api }));
-  const toggle = page.root.findAll(n => n.type === 'Switch' && n.props.accessibilityLabel === 'Hide selected server icons')[0];
+  assert.equal(menu.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === LABEL).length, 1);
+  await Renderer.act(async () => button(menu, LABEL).props.onPress());
+  assert.equal(panels(composer).length, 1, 'the settings UI must actually mount');
+  assert.equal(s.w.closed, true); assert.deepEqual(target.api.jsonStorage.cache, before);
+  assert.equal(s.w.calls.some(c => c[0] === 'navigate' || c[0] === 'send'), false); assert.equal(s.w.alerts.length, 0);
+  const toggle = composer.root.findAll(n => n.type === 'Switch' && n.props.accessibilityLabel === 'Hide selected server icons')[0];
   await Renderer.act(async () => toggle.props.onValueChange(false));
-  assert.equal(target.api.jsonStorage.cache.hideServerIcons, false);
-  assert.deepEqual(Array.from(target.api.jsonStorage.cache.hiddenServerIds), [GUILD]);
+  assert.equal(target.api.jsonStorage.cache.hideServerIcons, false); assert.deepEqual(Array.from(target.api.jsonStorage.cache.hiddenServerIds), [GUILD]);
+  await Renderer.act(async () => button(composer, 'Manage hidden server IDs (1)').props.onPress());
+  const input = composer.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Server IDs to hide')[0];
+  await Renderer.act(async () => input.props.onChangeText('400000000000000002'));
+  await Renderer.act(async () => button(composer, 'Add and hide servers').props.onPress());
+  assert.deepEqual(Array.from(target.api.jsonStorage.cache.hiddenServerIds), [GUILD, '400000000000000002']);
+  await Renderer.act(async () => button(composer, 'Close Hidden users & servers').props.onPress());
+  assert.equal(panels(composer).length, 0);
+  await Renderer.act(async () => button(menu, LABEL).props.onPress());
+  assert.equal(panels(composer).length, 1); assert.equal(Object.keys(chat.api.jsonStorage.cache.seen).filter(id => id === ID).length, 1);
 });
 
-test('shortcut supports nicknames and pinning, gives a useful unavailable message and becomes inert on stop', async t => {
+test('the direct panel supports saved nicknames/pinning and closes cleanly when the hider stops', async t => {
   const s = scene(t), chat = await s.startChat({ names: { [ID]: 'My hide settings' } });
   const target = await s.w.start('hide-blocked-and-ignored-messages');
   const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
   assert.ok(button(menu, 'My hide settings'));
   await Renderer.act(async () => chat.api.jsonStorage.set({ kept: { [ID]: true } }));
   assert.equal(menu.root.findAll(n => n.props.accessibilityLabel === 'My hide settings').length, 0);
-  const pinned = button(composer, LABEL), stalePress = pinned.props.onPress;
-  await Renderer.act(async () => pinned.props.onPress()); assert.deepEqual(s.routes, [ID]);
-  await s.w.stop(target);
-  for (let i = 0; i < s.w.modules.length; i++) if (typeof s.w.modules[i]?.getRootNavigationRef === 'function') s.w.modules[i] = {};
-  await Renderer.act(async () => pinned.props.onPress());
-  assert.deepEqual(s.routes, [ID]);
-  assert.equal(s.w.alerts.at(-1)[0], 'chatbuttons-hidden-settings-unavailable');
-  assert.match(s.w.alerts.at(-1)[1].props.content, /gear icon/);
-  await Renderer.act(async () => s.w.stop(chat));
-  assert.equal(composer.root.findAll(n => n.props.accessibilityLabel === LABEL).length, 0);
-  await Renderer.act(async () => stalePress()); assert.deepEqual(s.routes, [ID]);
+  const press = button(composer, LABEL).props.onPress;
+  await Renderer.act(async () => press()); assert.equal(panels(composer).length, 1);
+  await Renderer.act(async () => s.w.stop(target)); assert.equal(panels(composer).length, 0);
+  await Renderer.act(async () => press()); assert.equal(panels(composer).length, 0);
+  assert.equal(menu.root.findAll(n => n.props.accessibilityLabel === 'My hide settings').length, 0);
 });
 
-
-test('enabled target opens through native navigation when this Valenced build has no pluginSettings helper', async t => {
-  const s = scene(t, { helper: false }), chat = await s.startChat();
+test('the hider settings button opens the same panel without Chat Buttons and Android Back closes it', async t => {
+  const s = scene(t);
   const target = await s.w.start('hide-blocked-and-ignored-messages', { hiddenServerIds: [GUILD] });
-  const before = structuredClone(target.api.jsonStorage.cache);
-  assert.equal(chat.api.pluginSettings, undefined);
-  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
-  await Renderer.act(async () => button(menu, LABEL).props.onPress());
-  assert.ok(s.w.calls.some(call => call[0] === 'navigate' && call[1] === ID));
-  assert.equal(s.w.alerts.length, 0, 'do not tell an enabled plugin to be enabled');
-  assert.deepEqual(target.api.jsonStorage.cache, before);
-});
-
-test('a settings helper added after Chat Buttons starts is resolved live when tapped', async t => {
-  const s = scene(t, { helper: false }), chat = await s.startChat();
-  await s.w.start('hide-blocked-and-ignored-messages');
-  chat.api.pluginSettings = { hasPluginSettings: () => true, openPluginSettings: id => s.routes.push(id) };
-  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
-  await Renderer.act(async () => button(menu, LABEL).props.onPress());
-  assert.deepEqual(s.routes, [ID]); assert.equal(s.w.alerts.length, 0);
-});
-
-test('native readiness callback is one-shot and cancelled if Chat Buttons stops before navigation is ready', async t => {
-  const s = scene(t, { helper: false }), chat = await s.startChat();
-  await s.w.start('hide-blocked-and-ignored-messages');
-  let ready = false; const listeners = new Set();
-  s.w.navigation.isReady = () => ready;
-  s.w.navigation.addListener = (event, callback) => { assert.equal(event, 'ready'); listeners.add(callback); return () => listeners.delete(callback); };
-  const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
-  await Renderer.act(async () => { button(menu, LABEL).props.onPress(); button(menu, LABEL).props.onPress(); });
-  assert.equal(listeners.size, 1); assert.equal(s.w.calls.some(call => call[0] === 'navigate'), false);
-  const stale = [...listeners][0];
-  await Renderer.act(async () => s.w.stop(chat)); assert.equal(listeners.size, 0);
-  ready = true; stale(); assert.equal(s.w.calls.some(call => call[0] === 'navigate'), false);
+  const composer = await s.mount(h(s.f.chatModule.default));
+  await Renderer.act(async () => button(composer, LABEL).props.onPress());
+  assert.equal(panels(composer).length, 1);
+  await Renderer.act(async () => panels(composer)[0].props.onRequestClose());
+  assert.equal(panels(composer).length, 0); assert.deepEqual(Array.from(target.api.jsonStorage.cache.hiddenServerIds), [GUILD]);
 });

@@ -717,6 +717,19 @@
             }
           }
         },
+        "1.0.0-beta14": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta14.zip",
+          "sha256": "a834fd4424a78eb9a18ccee2d708ab69a3f5f876d128210c8fe19f18a687c99d",
+          "size": 31545,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.0-beta2": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta2.zip",
           "sha256": "c1910a82f8a6e848111ebae0074f0ca21ae54288cf9aa7ca632e8bb1fe2eeb48",
@@ -823,8 +836,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.0-beta13",
-        "beta": "1.0.0-beta13"
+        "latest": "1.0.0-beta14",
+        "beta": "1.0.0-beta14"
       },
       "name": "HideBlockedAndIgnoredMessages (Valenced)",
       "description": "Valenced preview. Hides blocked and ignored users, plus messages, channels and icons from selected server IDs. Explicit message search stays available.",
@@ -2436,6 +2449,19 @@
             }
           }
         },
+        "1.0.11": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.11.zip",
+          "sha256": "f97c592ac1e7bf666549b9eb30a2a388833929045ce866b1bdfe2f5d81469aa9",
+          "size": 36170,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.7": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.7.zip",
           "sha256": "aa5112979c7e4038a7306bd0f24496b38e61d6420243d049ce1276a2beed2d42",
@@ -2477,8 +2503,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.10",
-        "beta": "1.0.10"
+        "latest": "1.0.11",
+        "beta": "1.0.11"
       },
       "name": "Chat Buttons",
       "description": "Puts the chat bar buttons in one menu, with a shortcut to Hidden users & servers settings.",

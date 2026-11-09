@@ -12,8 +12,7 @@ import {
 	useState,
 } from 'react'
 import { View } from 'react-native'
-import { EmojiIcon, MenuIcon, HiddenSettingsIcon } from './icons'
-import { hiddenSettingsId, hiddenSettingsLabel, openHiddenSettings } from './hidden-settings'
+import { EmojiIcon, MenuIcon } from './icons'
 import { createBar, storage, isActive, useActive } from './store'
 import type { ComponentType, ReactNode } from 'react'
 import type { Bar as BarType, Entry } from './store'
@@ -367,21 +366,6 @@ const isRight = (x: any) => {
 	return Array.isArray(kids) ? kids.some(hasExpr) : hasExpr(kids)
 }
 
-function HiddenSettings() {
-	const kept = useHeld({
-		id: hiddenSettingsId,
-		label: hiddenSettingsLabel,
-		Icon: HiddenSettingsIcon,
-		press: openHiddenSettings,
-	})
-	return kept ? (
-		<Free.Provider value>
-			<Button keep accessibilityLabel={hiddenSettingsLabel}
-				IconComponent={HiddenSettingsIcon} onPress={openHiddenSettings} />
-		</Free.Provider>
-	) : null
-}
-
 function Menu({ bar }: { bar: BarType }) {
 	const { ContextMenu } = Design as any
 	const [items] = useState(() => [{ label: 'Buttons', bar }])
@@ -409,7 +393,7 @@ export function Row({ as: As, menu, children, ...props }: any) {
 	const out = list.map(x => swap(x, As))
 	if (!menu) return <As {...props}>{out}</As>
 
-	out.splice(Math.max(0, list.findIndex(isRight)), 0, <HiddenSettings key="hidden-settings" />, <Menu key="menu" bar={bar} />)
+	out.splice(Math.max(0, list.findIndex(isRight)), 0, <Menu key="menu" bar={bar} />)
 	return (
 		<Bar.Provider value={bar}>
 			<As {...props}>{out}</As>

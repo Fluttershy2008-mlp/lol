@@ -291,3 +291,12 @@ optional pluginSettings helper, or where it is added after startup. It can open
 the same native settings route as the target plugin's gear button directly.
 Update Chat Buttons and restart once; the hider itself does not need reinstalling.
 Saved IDs, visibility settings and button customizations stay intact.
+
+### Hider beta14 + Chat Buttons 1.0.11 — direct settings panel
+
+Update **both plugins** and restart Discord. **Buttons → Hidden users & servers**
+now opens the hider's live settings as an in-chat native panel, supplied by the
+hider's own composer button. It no longer depends on a cross-plugin settings
+helper or navigation route. Existing saved IDs, switches, nicknames and pinning
+remain in place. Tests verify that the panel actually mounts and edits live
+settings, including when navigation silently does nothing.

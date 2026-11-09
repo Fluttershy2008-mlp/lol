@@ -35,7 +35,7 @@
         value: true
       }), mod);
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/index.ts
+      // direct-settings/valenced/plugins/chat-buttons/source/js/index.ts
       var index_exports = {};
       __export(index_exports, {
         default: () => index_default,
@@ -93,7 +93,7 @@
       var jsxs = valenced.react.ReactJSXRuntime.jsxs;
       var Fragment = valenced.react.ReactJSXRuntime.Fragment;
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/icons.tsx
+      // direct-settings/valenced/plugins/chat-buttons/source/js/icons.tsx
       var asset = name => ({
         style
       }) => /* @__PURE__ */jsx(Image, {
@@ -105,7 +105,6 @@
       });
       var MenuIcon = asset("GridSquareIcon");
       var EmojiIcon = asset("ReactionIcon");
-      var HiddenSettingsIcon = asset("WrenchIcon");
       var EditIcon = asset("PencilIcon");
       var MoreIcon = asset("MoreHorizontalIcon");
       var box = {
@@ -138,11 +137,7 @@
         return Tinted;
       }
 
-      // valenced-api:@valenced/discord/actions
-      var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
-      var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
-
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/store.ts
+      // direct-settings/valenced/plugins/chat-buttons/source/js/store.ts
       var defaults = {
         names: {},
         kept: {},
@@ -227,89 +222,7 @@
         return [...list].sort((a, b) => at(a) - at(b));
       }
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/hidden-settings.tsx
-      var hiddenSettingsId = "dev.fluttershy2008.hide-blocked-and-ignored-messages";
-      var hiddenSettingsLabel = "Hidden users & servers";
-      var host;
-      var cancelReady;
-      var setSettingsHost = api => {
-        cancelReady?.();
-        cancelReady = void 0;
-        host = api;
-      };
-      var optional = read => {
-        try {
-          return read();
-        } catch {}
-      };
-      function rootNavigation(api) {
-        var U = api?.unscoped;
-        var direct = optional(() => U.discord.modules.mainTabsV2.RootNavigationRef.getRootNavigationRef());
-        if (typeof direct?.navigate === "function") return direct;
-        var paths = U?.discord?.utils?.modules?.finders;
-        var imported = optional(() => paths.lookupModuleWithImportedPath("modules/main_tabs_v2/RootNavigationRef.native.tsx")[0]);
-        var fromPath = optional(() => (imported?.default ?? imported)?.getRootNavigationRef?.());
-        if (typeof fromPath?.navigate === "function") return fromPath;
-        var finders = U?.modules?.finders;
-        var found = optional(() => finders.lookupModule(finders.filters.withProps("getRootNavigationRef"), {
-          initialize: false
-        })[0]);
-        return optional(() => (found?.default ?? found)?.getRootNavigationRef?.());
-      }
-      function openHiddenSettings() {
-        if (!isActive() || !host) return;
-        var api = host;
-        var settings = optional(() => api.pluginSettings);
-        try {
-          if (typeof settings?.openPluginSettings === "function" && (typeof settings.hasPluginSettings !== "function" || settings.hasPluginSettings(hiddenSettingsId))) {
-            settings.openPluginSettings(hiddenSettingsId);
-            return;
-          }
-        } catch {}
-        try {
-          var navigation = rootNavigation(api);
-          if (typeof navigation?.navigate === "function") {
-            var open = () => {
-              if (host === api && isActive()) navigation.navigate(hiddenSettingsId);
-            };
-            if (navigation.isReady?.() === false) {
-              if (typeof navigation.addListener !== "function") throw Error("Navigation is not ready");
-              if (!cancelReady) {
-                var remove;
-                var cancel = () => {
-                  if (typeof remove === "function") remove();
-                };
-                var ready = () => {
-                  if (cancelReady !== cancel) return;
-                  cancel();
-                  cancelReady = void 0;
-                  try {
-                    open();
-                  } catch {}
-                };
-                cancelReady = cancel;
-                var unsubscribe = navigation.addListener("ready", ready);
-                remove = typeof unsubscribe === "function" ? unsubscribe : () => navigation.removeListener?.("ready", ready);
-              }
-            } else open();
-            return;
-          }
-        } catch {}
-        var {
-          AlertModal,
-          AlertActionButton
-        } = Design;
-        AlertActionCreators.openAlert("chatbuttons-hidden-settings-unavailable", createElement(AlertModal, {
-          title: hiddenSettingsLabel,
-          content: "Could not open the native settings page. Use the plugin\u2019s gear icon for now.",
-          actions: createElement(AlertActionButton, {
-            text: "OK",
-            variant: "primary"
-          })
-        }));
-      }
-
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/bar.tsx
+      // direct-settings/valenced/plugins/chat-buttons/source/js/bar.tsx
       var Bar = createContext(null);
       var Free = createContext(false);
       var Slot = createContext(null);
@@ -697,23 +610,6 @@
         var kids = c.props.children;
         return Array.isArray(kids) ? kids.some(hasExpr) : hasExpr(kids);
       };
-      function HiddenSettings() {
-        var kept = useHeld({
-          id: hiddenSettingsId,
-          label: hiddenSettingsLabel,
-          Icon: HiddenSettingsIcon,
-          press: openHiddenSettings
-        });
-        return kept ? /* @__PURE__ */jsx(Free.Provider, {
-          value: true,
-          children: /* @__PURE__ */jsx(Button, {
-            keep: true,
-            accessibilityLabel: hiddenSettingsLabel,
-            IconComponent: HiddenSettingsIcon,
-            onPress: openHiddenSettings
-          })
-        }) : null;
-      }
       function Menu({
         bar
       }) {
@@ -754,7 +650,7 @@
           ...props,
           children: out2
         });
-        out2.splice(Math.max(0, list.findIndex(isRight)), 0, /* @__PURE__ */jsx(HiddenSettings, {}, "hidden-settings"), /* @__PURE__ */jsx(Menu, {
+        out2.splice(Math.max(0, list.findIndex(isRight)), 0, /* @__PURE__ */jsx(Menu, {
           bar
         }, "menu"));
         return /* @__PURE__ */jsx(Bar.Provider, {
@@ -796,7 +692,11 @@
         return node;
       }
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/manage.tsx
+      // valenced-api:@valenced/discord/actions
+      var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
+      var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
+
+      // direct-settings/valenced/plugins/chat-buttons/source/js/manage.tsx
       function Nickname({
         id,
         label
@@ -920,7 +820,7 @@
         });
       }
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/menu.tsx
+      // direct-settings/valenced/plugins/chat-buttons/source/js/menu.tsx
       var edge = 12;
       var wide = 244;
       var gap = 8;
@@ -1204,7 +1104,7 @@
         });
       }
 
-      // chat-settings-fix/valenced/plugins/chat-buttons/source/js/index.ts
+      // direct-settings/valenced/plugins/chat-buttons/source/js/index.ts
       function target(mod, name = "default") {
         var holder = mod,
           key = name;
@@ -1237,7 +1137,6 @@
           cleanup(() => {
             active2 = false;
             setActive(false);
-            setSettingsHost(void 0);
             forced.on = false;
             for (var remove of removers.splice(0).reverse()) {
               try {
@@ -1250,7 +1149,6 @@
           if (!jsonStorage.loaded) await jsonStorage.get();
           if (!active2) return;
           setStorage(jsonStorage);
-          setSettingsHost(api);
           setActive(true);
           var watch = (path2, callback) => {
             own(getModuleWithImportedPath(path2, mod => {

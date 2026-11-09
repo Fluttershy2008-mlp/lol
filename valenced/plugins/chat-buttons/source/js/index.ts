@@ -4,7 +4,6 @@ import { afterJSX } from '@valenced/react/jsx-runtime'
 import { createElement, isValidElement } from 'react'
 import { forced, Hold, markOwn, Popup, Row, setButton, setMenu, skips, swapRow } from './bar'
 import { Settings } from './manage'
-import { setSettingsHost } from './hidden-settings'
 import { Sheet, setHaptics } from './menu'
 import { defaults, setStorage, setActive } from './store'
 import type { Options } from './store'
@@ -35,7 +34,6 @@ export default plugin<{ jsonStorage: Options }>({
 		cleanup(() => {
 			active = false
 			setActive(false)
-			setSettingsHost(undefined)
 			forced.on = false
 			for (const remove of removers.splice(0).reverse()) {
 				try { remove() } catch (error) { logger?.warn?.(error) }
@@ -44,7 +42,6 @@ export default plugin<{ jsonStorage: Options }>({
 		if (!jsonStorage.loaded) await jsonStorage.get()
 		if (!active) return
 		setStorage(jsonStorage)
-		setSettingsHost(api)
 		setActive(true)
 		const watch = (path: string, callback: (mod: any) => void) => {
 			own(getModuleWithImportedPath<any>(path, mod => {

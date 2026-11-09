@@ -15,7 +15,6 @@ const asset =
 
 export const MenuIcon = asset('GridSquareIcon')
 export const EmojiIcon = asset('ReactionIcon')
-export const HiddenSettingsIcon = asset('WrenchIcon')
 export const EditIcon = asset('PencilIcon')
 export const MoreIcon = asset('MoreHorizontalIcon')
 

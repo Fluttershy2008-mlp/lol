@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { installChatSettings } from './chat-settings.js';
 import { installGuildIcons } from './guild-icons.js';
 import { installChannelLists } from './channel-lists.js';
 import { createServerFilter, normalizeServerIds } from './servers.js';
@@ -80,6 +81,7 @@ export function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      cleanup.push(installChatSettings(V, refresh));
       guildIcons = installGuildIcons(V, servers);
       cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);

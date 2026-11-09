@@ -20,7 +20,21 @@ The checks use React and Valenced patcher fixtures; they do not replace testing 
 
 The loader receives a plain options object during preInit; React/Discord imports are evaluated at startup. The final generated bundle is transformed for Hermes function scoping. This prevents the export getters from all capturing the last loop key, which made the 1.0.7 default export resolve to a function instead of the plugin options object. Refresh the repository, update Chat Buttons, and fully restart Discord.
 
-## Settings shortcut (1.0.9)
+## Direct settings panel (1.0.11)
+
+Update **HideBlockedAndIgnoredMessages to beta14** and **Chat Buttons to 1.0.11**,
+then fully restart Discord. The hider now supplies its own composer action, and
+Chat Buttons collects it into **Buttons → Hidden users & servers**. Tapping opens
+the hider's live settings in a native Modal attached to the composer, without
+settings-route navigation or cross-plugin API helpers. There is only one entry,
+and existing nicknames/pinning use the same ID. The shortcut disappears when the
+hider stops; it also works directly on the composer without Chat Buttons.
+
+Regression checks require the actual settings panel to render with navigation
+silently doing nothing. They edit the live icon switch and server IDs, close and
+reopen the panel, and cover both plugin load orders and cleanup.
+
+## Previous settings shortcut (1.0.9)
 
 Adds **Buttons → Hidden users & servers**, using Valenced's public
 `api.pluginSettings.openPluginSettings` API to open the existing native settings
