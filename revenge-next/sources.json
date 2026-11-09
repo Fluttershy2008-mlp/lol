@@ -51,8 +51,8 @@
     },
     "dev.fluttershy2008.hide-blocked-and-ignored-messages": {
       "path": "hide-blocked-and-ignored-messages/index.js",
-      "sha256": "3198816245ddcaddbed4cef4cf4a954562818dbd9f43bf9d39e4741627bbe37c",
-      "originalVersion": "1.5.0",
+      "sha256": "6717523554f7b81f7d0c98afaecfeb5ef847584d350eb755f4233aa1c8052dc9",
+      "originalVersion": "1.5.1",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },
