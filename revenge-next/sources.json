@@ -101,9 +101,9 @@
       "kind": "compatibility-preview"
     },
     "dev.fluttershy2008.relationship-notifier": {
-      "path": "relationship-notifier/index-v1.1.6.js",
-      "sha256": "0776b38ac201c45bd1b60be526360e6d3a7e6ee54d79429dc45c0f3649702e50",
-      "originalVersion": "1.1.6",
+      "path": "relationship-notifier/index-v1.2.0.js",
+      "sha256": "5c2e31ab34fbf7312d689d28a5d518c37902e9c18ab34dd7f8709ae4a2ca7a4b",
+      "originalVersion": "1.2.0",
       "kind": "compatibility-preview"
     },
     "dev.fluttershy2008.save-as-sticker": {
