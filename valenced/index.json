@@ -1796,11 +1796,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.relationship-notifier@1.0.0-beta4.zip",
+          "sha256": "c5c031d0aed78e374823a1f1860fb7f68ea832228f898957ac3ddf4737b90649",
+          "size": 40059,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "RelationshipNotifier (Valenced)",
       "description": "Valenced preview. Alerts when friends, incoming requests, servers or group chats disappear. Includes reconnect checks and notification history. Adapted from Vencord.",

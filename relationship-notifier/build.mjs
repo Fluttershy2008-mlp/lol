@@ -6,13 +6,15 @@ const root = new URL('.', import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL('manifest.json', root), 'utf8'));
 // Fixed, dependency-free module list. These modules only use named exports and
 // relative imports from one another; no runtime require or external packages.
-const sources = ['tracker', 'settings', 'shortcut', 'plugin'].map(name => {
+const profiles = readFileSync(new URL('../compatibility/user-profile.mjs', root), 'utf8');
+const sources = [profiles.replace(/^export /gm, ''), ...['tracker', 'settings', 'shortcut', 'plugin'].map(name => {
   const source = readFileSync(new URL(`src/${name}.js`, root), 'utf8')
     .replace(/^import \{[^\n]+\} from '\.\/(tracker|settings|shortcut)\.js';\n/gm, '')
+    .replace(/^import \{ findUserProfileOpener \} from '\.\.\/\.\.\/compatibility\/user-profile\.mjs';\n/gm, '')
     .replace(/^export (?=(function|const) )/gm, '');
   if (/^\s*(import|export)\b/m.test(source)) throw new Error(`Unsupported module syntax in ${name}`);
   return source;
-}).join('\n');
+})].join('\n');
 const banner = `/*! RelationshipNotifier for Revenge ${manifest.version}
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.

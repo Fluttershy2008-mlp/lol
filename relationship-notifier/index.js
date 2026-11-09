@@ -196,13 +196,81 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! RelationshipNotifier for Revenge 1.2.0
+/*! RelationshipNotifier for Revenge 1.2.1
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Source and license: https://github.com/Fluttershy2008-mlp/lol/tree/main/relationship-notifier
  */
 'use strict';
+// SPDX-License-Identifier: MIT
+const USER_PROFILE_MODULE_PATH = 'modules/user_profile/native/showUserProfileActionSheet.tsx';
+const profileTry = callback => { try { return callback(); } catch { return undefined; } };
+
+function profileClientAPI() {
+    const valencedAPI = profileTry(() => typeof valenced !== 'undefined' ? valenced : undefined);
+    if (valencedAPI?.modules?.finders) return valencedAPI;
+    return profileTry(() => typeof revenge !== 'undefined' && revenge.modules?.finders ? revenge : undefined);
+}
+
+function profileCallable(module) {
+    if (typeof module === 'function') return { owner: undefined, call: module };
+    if (typeof module?.showUserProfileActionSheet === 'function')
+        return { owner: module, call: module.showUserProfileActionSheet };
+    if (typeof module?.default === 'function') return { owner: module, call: module.default };
+}
+
+function findUserProfileOpener(legacy, client = profileClientAPI()) {
+    const metro = legacy?.metro;
+    const imported = profileTry(() => metro?.findByImportedPath?.(USER_PROFILE_MODULE_PATH))
+        ?? profileTry(() => client?.discord?.utils?.modules?.finders?.lookupModuleWithImportedPath(USER_PROFILE_MODULE_PATH)?.[0]);
+    let opener = profileCallable(imported);
+    if (opener) return opener;
+
+    const { finders } = client?.modules ?? {};
+    const filters = finders?.filters;
+    const namespace = profileTry(() => metro?.findByProps?.('USER_PROFILE_ACTION_SHEET_KEY_PREFIX', 'getUserProfileActionSheetKey'))
+        ?? profileTry(() => finders?.lookupModule(filters.withProps('USER_PROFILE_ACTION_SHEET_KEY_PREFIX', 'getUserProfileActionSheetKey'),
+            { initialize: false, returnNamespace: true })?.[0]);
+    opener = profileCallable(namespace);
+    if (opener) return opener;
+
+    // Valenced's own profile action uses this dependency fingerprint to load
+    // the opener on demand. Do not initialize unrelated Metro factories.
+    const cold = profileTry(() => {
+        if (!filters?.withDependencies || !client.discord?.flux?.withStoreName) return;
+        const loggerId = client.discord.common?.logger?.LoggerModuleId;
+        const trackerId = client.discord.common?.importTracker?.ImportTrackerModuleId;
+        const userStoreId = finders.lookupModule(client.discord.flux.withStoreName('UserStore'), { initialize: false })[1];
+        if (![loggerId, trackerId, userStoreId].every(id => Number.isInteger(id) && id >= 0)) return;
+        const { ordered, relative } = filters.withDependencies;
+        const named = filters.withName('showUserProfileActionSheet');
+        const marked = filters.withProps('USER_PROFILE_ACTION_SHEET_KEY_PREFIX', 'getUserProfileActionSheetKey');
+        const identity = typeof named.or === 'function' ? named.or(marked) : named;
+        const fingerprint = filters.withDependencies(ordered([
+            loggerId, userStoreId, relative(1), relative(2), relative(3), trackerId,
+        ]));
+        return finders.lookupModule(identity.and(fingerprint), { initialize: true, returnNamespace: true })[0];
+    });
+    opener = profileCallable(cold);
+    if (opener) return opener;
+
+    const named = profileTry(() => metro?.findByName?.('showUserProfileActionSheet'));
+    if (typeof named === 'function') return { owner: undefined, call: named };
+    for (const method of ['showUserProfileActionSheet', 'openUserProfileModal', 'openUserProfile', 'showUserProfile']) {
+        const module = profileTry(() => metro?.findByProps?.(method));
+        if (typeof module?.[method] === 'function') return { owner: module, call: module[method] };
+    }
+}
+
+async function openUserProfile(legacy, options, isCurrent = () => true) {
+    if (!isCurrent()) return false;
+    const opener = findUserProfileOpener(legacy);
+    if (!opener || !isCurrent()) return false;
+    await Reflect.apply(opener.call, opener.owner, [options, 'stack']);
+    return true;
+}
+
 /*
  * RelationshipNotifier for Revenge, adapted from Vencord RelationshipNotifier.
  * Copyright (c) 2023 Vendicated and contributors; original plugin by nick.
@@ -346,7 +414,7 @@ function createTracker({ storage, notify, changed = () => {}, now = Date.now }) 
 const HISTORY_FILTERS = [['all', 'All'], ['friends', 'Friends'], ['requests', 'Requests'], ['guilds', 'Servers'], ['groups', 'Groups']];
 const HISTORY_LABELS = { friends: 'Lost friend', requests: 'Request cancelled', guilds: 'Server removal', groups: 'Group removal' };
 
-function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile }) {
+function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile, profileSession }) {
   const h = React.createElement;
   const Pressable = RN.Pressable ?? RN.TouchableOpacity;
   const choices = [
@@ -381,6 +449,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
     const history = tracker.history();
     const counts = tracker.counts();
     const owner = tracker.getAccountId();
+    const profileContext = profileSession?.();
     // Account changes must never keep a previous account's search or pagination.
     const activeQuery = view.owner === owner ? view.query : '';
     const activeFilter = view.owner === owner ? view.filter : 'all';
@@ -411,7 +480,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
           mention ? h(Pressable, {
             accessibilityRole: 'button', accessibilityLabel: `Open profile for ${entry.name || entry.id}`,
             accessibilityHint: 'Opens the Discord profile. Long-press to copy the user mention.',
-            onPress: () => openProfile(entry.id), onLongPress: () => copyMention(mention), style: { paddingVertical: 10, minHeight: 44 },
+            onPress: () => openProfile(entry.id, profileContext), onLongPress: () => copyMention(mention), style: { paddingVertical: 10, minHeight: 44 },
           }, text(`User ID: ${mention}`, { color: colors.accent, fontSize: 13 }, { selectable: true }), text('View profile ›', { color: colors.accent, fontWeight: '700', fontSize: 13 })) : null,
           mention ? button('Copy mention', () => copyMention(mention), { accessibilityLabel: `Copy ${mention}`, style: { alignSelf: 'flex-start', marginBottom: 10 } }) : null,
           note(`${Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${entry.offline ? ' · After reconnecting' : ' · While connected'}`, { fontSize: 12 }),
@@ -457,7 +526,7 @@ function createSettings({ React, RN, tracker, getStatus, subscribe, testNotifica
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { if (tracker.getAccountId() === owner) tracker.clearHistory(); } },
       ]), { style: { marginTop: 16 } }) : null,
       note('Alerts appear inside Discord. Reconnect checks catch changes while you were away. Discord does not reveal whether a server removal was a kick, ban or deletion.', { marginTop: 20 }),
-      note('Version 1.2.0 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { fontSize: 11, marginTop: 16 }),
+      note('Version 1.2.1 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { fontSize: 11, marginTop: 16 }),
     );
   };
 }
@@ -957,37 +1026,47 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
     setStatus('Plugin is disabled');
   }
 
-  async function openProfile(id) {
-    if (!running || typeof id !== 'string' || !/^\d+$/.test(id)) return;
+  async function openProfile(id, context = { run: generation, owner: currentUserId() }) {
+    const isCurrent = () => running && context.run === generation && context.owner === currentUserId();
+    if (!isCurrent() || typeof id !== 'string' || !/^\d+$/.test(id)) return;
     let failure;
-    // Prefer Discord's native mobile profile sheet; some builds expose only
-    // the older profile action modules. Discord handles fetching uncached users.
+    const tried = new Set();
+    async function attempt(fn, target) {
+      if (!isCurrent() || tried.has(fn)) return false;
+      tried.add(fn);
+      try {
+        const result = await fn.call(target, { userId: id }, 'stack');
+        if (result === false) throw new Error('Discord could not open this profile.');
+        return true;
+      } catch (error) { failure = error; if (isCurrent()) log(error); return false; }
+    }
+    // Modern mobile builds export an anonymous default function. Resolve it by
+    // imported path, namespace markers or Valenced's narrow dependency filter.
+    // This is the same resolver used by Friends List and Blocked User List.
+    const native = findUserProfileOpener(V);
+    if (native && await attempt(native.call, native.owner)) return;
+    if (!isCurrent()) return;
     for (const method of ['showUserProfileActionSheet', 'showUserProfileActionSheetPostConnection', 'openUserProfile', 'showUserProfile', 'openUserProfileModal']) {
-      const candidates = [];
       if (method.startsWith('showUserProfileActionSheet')) {
         try {
           const named = V.metro.findByName?.(method);
           const fn = typeof named === 'function' ? named : named?.default;
-          if (typeof fn === 'function') candidates.push({ fn, target: named });
-        } catch {}
+          if (typeof fn === 'function' && await attempt(fn, named)) return;
+        } catch (error) { failure = error; }
       }
+      if (!isCurrent()) return;
       const module = byProps(method);
-      if (typeof module?.[method] === 'function') candidates.push({ fn: module[method], target: module });
-      for (const { fn, target } of candidates) {
-        try {
-          const result = await fn.call(target, { userId: id });
-          if (result === false) throw new Error('Discord could not open this profile.');
-          return;
-        } catch (error) { failure = error; log(error); }
-        if (!running) return;
-      }
+      if (typeof module?.[method] === 'function' && await attempt(module[method], module)) return;
+      if (!isCurrent()) return;
     }
-    try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+    if (isCurrent()) {
+      try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+    }
   }
 
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
-    openProfile,
+    openProfile, profileSession: () => ({ run: generation, owner: currentUserId() }),
     copyMention: async mention => {
       try {
         let clipboard = V.metro.common.clipboard;

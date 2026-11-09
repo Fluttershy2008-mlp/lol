@@ -21,7 +21,7 @@
     "valid-user": "1.0.0-beta4",
     "hide-blocked-and-ignored-messages": "1.0.0-beta14",
     "auto-text": "1.0.0-beta3",
-    "relationship-notifier": "1.0.0-beta3"
+    "relationship-notifier": "1.0.0-beta4"
   },
   "sourceRefs": {
     "save-as-sticker": "main",

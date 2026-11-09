@@ -4,7 +4,7 @@ import { userMention } from './tracker.js';
 const HISTORY_FILTERS = [['all', 'All'], ['friends', 'Friends'], ['requests', 'Requests'], ['guilds', 'Servers'], ['groups', 'Groups']];
 const HISTORY_LABELS = { friends: 'Lost friend', requests: 'Request cancelled', guilds: 'Server removal', groups: 'Group removal' };
 
-export function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile }) {
+export function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile, profileSession }) {
   const h = React.createElement;
   const Pressable = RN.Pressable ?? RN.TouchableOpacity;
   const choices = [
@@ -39,6 +39,7 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
     const history = tracker.history();
     const counts = tracker.counts();
     const owner = tracker.getAccountId();
+    const profileContext = profileSession?.();
     // Account changes must never keep a previous account's search or pagination.
     const activeQuery = view.owner === owner ? view.query : '';
     const activeFilter = view.owner === owner ? view.filter : 'all';
@@ -69,7 +70,7 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
           mention ? h(Pressable, {
             accessibilityRole: 'button', accessibilityLabel: `Open profile for ${entry.name || entry.id}`,
             accessibilityHint: 'Opens the Discord profile. Long-press to copy the user mention.',
-            onPress: () => openProfile(entry.id), onLongPress: () => copyMention(mention), style: { paddingVertical: 10, minHeight: 44 },
+            onPress: () => openProfile(entry.id, profileContext), onLongPress: () => copyMention(mention), style: { paddingVertical: 10, minHeight: 44 },
           }, text(`User ID: ${mention}`, { color: colors.accent, fontSize: 13 }, { selectable: true }), text('View profile ›', { color: colors.accent, fontWeight: '700', fontSize: 13 })) : null,
           mention ? button('Copy mention', () => copyMention(mention), { accessibilityLabel: `Copy ${mention}`, style: { alignSelf: 'flex-start', marginBottom: 10 } }) : null,
           note(`${Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${entry.offline ? ' · After reconnecting' : ' · While connected'}`, { fontSize: 12 }),
@@ -115,7 +116,7 @@ export function createSettings({ React, RN, tracker, getStatus, subscribe, testN
         { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { if (tracker.getAccountId() === owner) tracker.clearHistory(); } },
       ]), { style: { marginTop: 16 } }) : null,
       note('Alerts appear inside Discord. Reconnect checks catch changes while you were away. Discord does not reveal whether a server removal was a kick, ban or deletion.', { marginTop: 20 }),
-      note('Version 1.2.0 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { fontSize: 11, marginTop: 16 }),
+      note('Version 1.2.1 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { fontSize: 11, marginTop: 16 }),
     );
   };
 }

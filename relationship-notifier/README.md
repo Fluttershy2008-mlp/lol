@@ -3,6 +3,14 @@
 Mobile adaptation of Vencord's **RelationshipNotifier**, originally by nick and
 the Vencord contributors. Built for Revenge's Vendetta-compatible plugin loader.
 
+## Profile fix (Valenced 1.0.0-beta4 / source 1.2.1)
+
+The history profile button now uses the same mobile profile resolver as Friends
+List and Blocked User List, including anonymous/default exports and an unopened
+profile module. It opens in Discord's stack and keeps IDs as exact strings.
+Pending profile actions stop after unloading or changing accounts. Refresh the
+repository, update RelationshipNotifier and fully restart Discord.
+
 ## Valenced settings update (1.0.0-beta3)
 
 Refresh your Valenced repository, update **RelationshipNotifier (Valenced)** and

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+import { findUserProfileOpener } from '../../compatibility/user-profile.mjs';
 import { createTracker, formatNotification } from './tracker.js';
 import { createSettings } from './settings.js';
 import { registerSettingsShortcut } from './shortcut.js';
@@ -346,37 +347,47 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
     setStatus('Plugin is disabled');
   }
 
-  async function openProfile(id) {
-    if (!running || typeof id !== 'string' || !/^\d+$/.test(id)) return;
+  async function openProfile(id, context = { run: generation, owner: currentUserId() }) {
+    const isCurrent = () => running && context.run === generation && context.owner === currentUserId();
+    if (!isCurrent() || typeof id !== 'string' || !/^\d+$/.test(id)) return;
     let failure;
-    // Prefer Discord's native mobile profile sheet; some builds expose only
-    // the older profile action modules. Discord handles fetching uncached users.
+    const tried = new Set();
+    async function attempt(fn, target) {
+      if (!isCurrent() || tried.has(fn)) return false;
+      tried.add(fn);
+      try {
+        const result = await fn.call(target, { userId: id }, 'stack');
+        if (result === false) throw new Error('Discord could not open this profile.');
+        return true;
+      } catch (error) { failure = error; if (isCurrent()) log(error); return false; }
+    }
+    // Modern mobile builds export an anonymous default function. Resolve it by
+    // imported path, namespace markers or Valenced's narrow dependency filter.
+    // This is the same resolver used by Friends List and Blocked User List.
+    const native = findUserProfileOpener(V);
+    if (native && await attempt(native.call, native.owner)) return;
+    if (!isCurrent()) return;
     for (const method of ['showUserProfileActionSheet', 'showUserProfileActionSheetPostConnection', 'openUserProfile', 'showUserProfile', 'openUserProfileModal']) {
-      const candidates = [];
       if (method.startsWith('showUserProfileActionSheet')) {
         try {
           const named = V.metro.findByName?.(method);
           const fn = typeof named === 'function' ? named : named?.default;
-          if (typeof fn === 'function') candidates.push({ fn, target: named });
-        } catch {}
+          if (typeof fn === 'function' && await attempt(fn, named)) return;
+        } catch (error) { failure = error; }
       }
+      if (!isCurrent()) return;
       const module = byProps(method);
-      if (typeof module?.[method] === 'function') candidates.push({ fn: module[method], target: module });
-      for (const { fn, target } of candidates) {
-        try {
-          const result = await fn.call(target, { userId: id });
-          if (result === false) throw new Error('Discord could not open this profile.');
-          return;
-        } catch (error) { failure = error; log(error); }
-        if (!running) return;
-      }
+      if (typeof module?.[method] === 'function' && await attempt(module[method], module)) return;
+      if (!isCurrent()) return;
     }
-    try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+    if (isCurrent()) {
+      try { RN.Alert.alert('Could not open profile', failure?.message ?? 'Profile opening is unavailable on this Discord version. You can still copy the mention.'); } catch {}
+    }
   }
 
   const settings = createSettings({
     React, RN, tracker, getStatus: () => status,
-    openProfile,
+    openProfile, profileSession: () => ({ run: generation, owner: currentUserId() }),
     copyMention: async mention => {
       try {
         let clipboard = V.metro.common.clipboard;
