@@ -10,8 +10,8 @@
     },
     "dev.fluttershy2008.auto-text": {
       "path": "auto-text/index.js",
-      "sha256": "2a831b21dd6bfb53fd83981ab3d41f6e622fcceade7c820a1df7c700ba94603e",
-      "originalVersion": "1.2.6",
+      "sha256": "4c158810fca3b8244821e73b34b635cb54a5b466d31dbda3cd1c861107fe4f1a",
+      "originalVersion": "1.2.7",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

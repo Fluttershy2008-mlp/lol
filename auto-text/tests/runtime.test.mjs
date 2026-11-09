@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 function runtime({ missing = false, missingSend = false, sendBehavior = 'clear', silentNative = false,
-  staleCache = false, delayFlush = false, delayInitial = false, dropInsert = false, wrapper = 'plain' } = {}) {
+  staleCache = false, delayFlush = false, delayInitial = false, dropInsert = false, wrapper = 'plain', imported = false } = {}) {
   let hooks = null, index = 0, jobs = [], timerId = 0, clock = 0;
   const timers = new Map(), intervals = new Map(), storage = {}, patches = new Set(), appListeners = new Set();
   const appState = { currentState: 'active', addEventListener(event, callback) {
@@ -30,7 +30,7 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
   };
   function host(component, props = {}) {
     const state = [];
-    return { render() { hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
+    return { render(nextProps = props) { props = nextProps; hooks = state; index = 0; const ret = component(props); const effects = jobs; jobs = []; effects.forEach(fn => fn()); return ret; } };
   }
   let draft = '', cached = '', editId = '0', cachedEditId = '0', account = 'user1', channel = 'channel1', sendCount = 0;
   const inserted = [], pendingFlushes = [], nativeHandle = {};
@@ -90,6 +90,13 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
           }))))),
   };
   const original = holder.default;
+  let title = 'Appeal title';
+  const forum = { default: () => React.createElement('View', {},
+    React.createElement('Title', { multiline: true, value: title, onChange(next) { title = next; } }),
+    React.createElement('TextInput', { multiline: true, children: draft,
+      onChangeText(next) { draft = cached = next; }, onSelectionChange() {} }, draft)) };
+  const originalForum = forum.default;
+  const imports = new Map();
   if (wrapper === 'memo') holder.default = { $$typeof: Symbol.for('react.memo'), type: original };
   if (wrapper === 'forward') holder.default = { $$typeof: Symbol.for('react.forward_ref'), render: original };
   if (wrapper === 'nested') holder.default = { $$typeof: Symbol.for('react.memo'), type: { $$typeof: Symbol.for('react.forward_ref'), render: original } };
@@ -102,7 +109,7 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
     plugin: { storage },
     metro: {
       common: { React, ReactNative: { ...Object.fromEntries(['Text', 'View', 'TextInput', 'ScrollView', 'TouchableOpacity', 'Switch', 'Modal', 'SafeAreaView', 'KeyboardAvoidingView'].map(name => [name, name])), AppState: appState }, clipboard: { setString() {} } },
-      findByName: () => missing ? undefined : holder,
+      findByName: name => !missing && name === 'ChatInputGuardWrapper' ? holder : undefined,
       findByTypeName: () => undefined,
       findByProps: (...props) => props.includes('flushText') ? nativeCommands : { getMaxMessageLength: () => 2000 },
       findByStoreName: name => name === 'SelectedChannelStore' ? { getChannelId: () => channel } : name === 'UserStore' ? { getCurrentUser: () => ({ id: account }) } : null,
@@ -119,6 +126,10 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
     ui: { toasts: { showToast() {} } },
   };
   const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  if (imported) api.metro.getModuleWithImportedPath = (path, callback) => {
+    imports.set(path, callback);
+    return () => imports.delete(path);
+  };
   const plugin = vm.runInNewContext('(' + source + ')', {
     vendetta: api,
     Date: class extends Date { static now() { return clock; } },
@@ -126,6 +137,8 @@ function runtime({ missing = false, missingSend = false, sendBehavior = 'clear',
     setInterval: fn => { intervals.set(++timerId, fn); return timerId; }, clearInterval: id => intervals.delete(id),
   });
   return { plugin, holder, original, patches, storage, host, timers, intervals, read: () => draft,
+    imports, forum, originalForum, title: () => title,
+    openForum: () => forum.default({ parentChannel: { id: channel } }),
     open() {
       liveTree = renderGuard({ channel: { id: channel } });
       const field = nodes(liveTree, n => n.type === 'NativeInput')[0];
@@ -400,4 +413,39 @@ for (const wrapper of ['memo', 'forward', 'nested']) test('composer ' + wrapper 
   assert.equal(component, r.original);
   assert.equal(r.patches.size, 0);
   assert.equal(r.timers.size, 0);
+});
+
+test('lazy forum module adds a separate toolbar, types a draft, and preserves the title and chat hook', () => {
+  const r = runtime({ imported: true });
+  r.storage.autoSend = true;
+  r.plugin.onLoad();
+  r.imports.get('modules/chat_input/native/ChatInput.tsx')(r.holder);
+  r.imports.get('modules/forums/native/composer/ForumComposer.tsx')(r.forum);
+  assert.equal(r.patches.size, 2);
+  const wrapper = r.openForum().props.children[1];
+  const editor = r.host(wrapper.type, wrapper.props);
+  let view = editor.render();
+  const bar = view.props.children[0].props.children;
+  const toolbar = r.host(bar.type, bar.props);
+  let buttons = toolbar.render();
+  nodes(buttons, n => n.props?.accessibilityLabel === 'AutoType')[0].props.onPress();
+  buttons = toolbar.render();
+  assert.equal(nodes(buttons, n => n.props?.accessibilityLabel === 'Auto-send when finished').length, 0);
+  nodes(buttons, n => n.props?.accessibilityLabel === 'Message to type')[0].props.onChangeText('Hello\n- appeal');
+  buttons = toolbar.render();
+  nodes(buttons, n => n.props?.accessibilityLabel === 'Start typing')[0].props.onPress();
+  for (let i = 0; i < 150; i++) {
+    r.flush();
+    view = editor.render(r.openForum().props.children[1].props);
+  }
+  assert.equal(r.read(), 'Hello\n- appeal');
+  assert.equal(r.title(), 'Appeal title');
+  assert.equal(r.sent(), 0);
+  assert.equal(r.storage.autoSend, true, 'forum does not change the normal chat preference');
+  assert(r.open().props.children.length, 'normal chat is still decorated');
+  r.plugin.onUnload();
+  assert.equal(r.patches.size, 0);
+  assert.equal(r.imports.size, 0);
+  assert.equal(r.forum.default, r.originalForum);
+  assert.equal(r.intervals.size, 0);
 });

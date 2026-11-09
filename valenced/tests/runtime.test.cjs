@@ -362,3 +362,38 @@ test('an owner-profile action from a stopped plugin cannot initialize or open a 
     assert.equal(w.calls.filter(c => c[0] === 'profileOpened').length, 0);
     assert.equal(cold.initializedFactories(), 0);
 });
+
+test('AutoText supports the separate late-loaded forum body through the Valenced package', async t => {
+    const w = scenario(t);
+    const item = await w.start('auto-text');
+    await w.advance(60000);
+    let draft = '', posts = 0;
+    function ForumComposer() {
+        const [text, setText] = React.useState('');
+        return h(w.RN.View, null,
+            h(w.RN.TextInput, { testID: 'forum-title', multiline: true, value: 'My appeal', onChange() {} }),
+            h(w.RN.TextInput, { testID: 'forum-body', multiline: true,
+                onChangeText(next) { draft = next; setText(next); }, onSelectionChange() {} }, text),
+            h(w.RN.View, { text, onPressAutocompleteItem() {} }),
+            h(w.RN.TouchableOpacity, { accessibilityLabel: 'Post', onPress() { posts++; } }));
+    }
+    const ns = { default: React.memo(ForumComposer) };
+    w.addModule(ns, 'modules/forums/native/composer/ForumComposer.tsx');
+    const ui = await w.mount(h(ns.default, { parentChannel: { id: CHANNEL } }));
+    assert.ok(button(ui, 'AutoType'));
+    assert.ok(button(ui, 'Phrases'));
+    await Renderer.act(async () => button(ui, 'Start bullet list').props.onPress());
+    assert.equal(draft, '- ');
+    await Renderer.act(async () => button(ui, 'AutoType').props.onPress());
+    assert.equal(ui.root.findAll(n => n.props.accessibilityLabel === 'Auto-send when finished').length, 0);
+    const field = ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Message to type')[0];
+    await Renderer.act(async () => field.props.onChangeText('One\n- Two'));
+    await Renderer.act(async () => button(ui, 'Start typing').props.onPress());
+    for (let n = 0; n < 80; n++) await Renderer.act(async () => w.advance(100));
+    assert.equal(draft, '- One\n- Two');
+    assert.equal(ui.root.findAll(n => n.type === 'TextInput' && n.props.testID === 'forum-title')[0].props.value, 'My appeal');
+    assert.equal(posts, 0);
+    await Renderer.act(async () => w.stop(item));
+    assert.equal(ns.default.type, ForumComposer);
+    assert.equal(w.pathWaiters.size, 0);
+});

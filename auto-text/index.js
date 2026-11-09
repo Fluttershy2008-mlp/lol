@@ -805,6 +805,75 @@ function decorateComposer(React, RN, root, { toolbar, onNativeEvent, nativeReade
 
 /* SPDX-License-Identifier: MIT */
 
+// ForumComposer uses a React Native TextInput, not ChatInput's native commands.
+// Only inspect this specific composer's tree. Its autocomplete holds the raw
+// message (including mention markup); the title uses onChange, not onChangeText.
+function decorateForumComposer(React, root, renderInput) {
+  let input = null, text = null, visited = 0;
+  function scan(node) {
+    if (++visited > 1500 || !node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(scan); return; }
+    const props = node.props;
+    if (!props) return;
+    if (props.multiline && typeof props.onChangeText === 'function'
+      && typeof props.onSelectionChange === 'function') {
+      // Ambiguous layouts must not attach to an arbitrary field.
+      input = input === null ? node : false;
+    }
+    if (typeof props.onPressAutocompleteItem === 'function' && typeof props.text === 'string') text = props.text;
+    scan(props.children);
+  }
+  scan(root);
+  if (!input) return root;
+  if (text === null) {
+    if (typeof input.props.value === 'string') text = input.props.value;
+    else if (typeof input.props.children === 'string') text = input.props.children;
+  }
+  if (text === null) return root;
+  visited = 0;
+  function map(node) {
+    if (++visited > 1500 || !node || typeof node !== 'object') return node;
+    if (node === input) return renderInput(node, text);
+    if (Array.isArray(node)) {
+      const next = node.map(map);
+      return next.every((child, i) => child === node[i]) ? node : next;
+    }
+    if (!node.props) return node;
+    const children = map(node.props.children);
+    return children === node.props.children ? node : React.cloneElement(node, { children });
+  }
+  return map(root);
+}
+
+function createForumTarget() {
+  let input = null, text = '', desiredSelection = null;
+  const target = {
+    getText: () => text,
+    focus() { input?.ref?.current?.focus?.(); },
+    insertText(insert, start, space, nodes, end = start) {
+      const next = text.slice(0, start) + insert + text.slice(end);
+      desiredSelection = { text: next, selection: { start: start + insert.length, end: start + insert.length } };
+      // Use Discord's own change handler to update its React state and draft.
+      // Confirmation comes from the subsequent render, never this request.
+      input.onChangeText(next);
+    },
+  };
+  return {
+    target,
+    update(props, next) { input = props; text = next; },
+    observe(next) { text = next; desiredSelection = null; },
+    commit() {
+      const selection = desiredSelection?.text === text ? desiredSelection.selection : null;
+      desiredSelection = null;
+      const ref = input?.ref?.current;
+      if (selection && typeof ref?.setSelection === 'function') ref.setSelection(selection.start, selection.end);
+      else if (selection) ref?.setNativeProps?.({ selection });
+    },
+  };
+}
+
+/* SPDX-License-Identifier: MIT */
+
 function createPlugin(api) {
   const { React, ReactNative: RN } = api.metro.common;
   const h = React.createElement;
@@ -812,6 +881,7 @@ function createPlugin(api) {
   const Button = RN.TouchableOpacity;
   let active = false, rootUnpatch = null, retry = null, attempts = 0, appStateSubscription = null;
   const moduleSubscriptions = [];
+  let forumUnpatch = null;
   let generation = 0;
   let connection = 'Open a chat after enabling AutoText.';
   const listeners = new Set(), sessions = new Set(), mountCleanups = new Set();
@@ -952,11 +1022,11 @@ function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version ' + (api.plugin.version ?? api.plugin.manifest?.version ?? '1.2.6')),
+        small('Version ' + (api.plugin.version ?? api.plugin.manifest?.version ?? '1.2.7')),
       ));
   }
 
-  function AssistBar({ inputRef, channelId, nativeReader }) {
+  function AssistBar({ inputRef, channelId, nativeReader, draftOnly = false }) {
     useUpdates();
     const [, render] = React.useState(0);
     const [open, setOpen] = React.useState(false);
@@ -964,7 +1034,7 @@ function createPlugin(api) {
     const [prepared, setPrepared] = React.useState('');
     const [typingSpeed, setTypingSpeed] = React.useState(() => [500, 150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
     const [typingError, setTypingError] = React.useState('');
-    const [autoSend, setAutoSend] = React.useState(() => storage.autoSend === true);
+    const [autoSend, setAutoSend] = React.useState(() => !draftOnly && storage.autoSend === true);
     const sessionRef = React.useRef(null);
     const colors = palette(), options = getOptions();
     const ownerAccount = accountNow();
@@ -1022,7 +1092,7 @@ function createPlugin(api) {
         if (!session) throw new Error('The chat composer is not connected. Reopen this chat and try again.');
         session.startTyping(prepared, typingSpeed, { autoSend });
         storage.typingInterval = typingSpeed;
-        storage.autoSend = autoSend;
+        if (!draftOnly) storage.autoSend = autoSend;
         setTypingError(''); setTypingOpen(false);
       } catch (error) { setTypingError(error.message || 'Could not start typing.'); }
     }
@@ -1066,10 +1136,10 @@ function createPlugin(api) {
                 ...[[500, 'Very slow'], [150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
                   () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
                     accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
-              h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },
+              !draftOnly ? h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },
                 label('Auto-send when finished', colors, { flex: 1, fontWeight: '700' }),
-                h(RN.Switch, { value: autoSend, onValueChange: setAutoSend, accessibilityLabel: 'Auto-send when finished' })),
-              label(autoSend
+                h(RN.Switch, { value: autoSend, onValueChange: setAutoSend, accessibilityLabel: 'Auto-send when finished' })) : null,
+              label(draftOnly ? 'Leaves the finished message here. Review your title and message, then tap Post.' : autoSend
                 ? 'Sends the entire draft once after the final character, including existing text, replies and attachments. Stop cancels it before sending starts.'
                 : 'Leaves the finished message in the box so you can tap Send yourself.', colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
               autoSend && session && !session.canAutoSend ? label('Auto-send is unavailable here. Turn it off to type normally.', colors, { color: colors.accent, marginTop: 8 }) : null,
@@ -1088,6 +1158,48 @@ function createPlugin(api) {
     static getDerivedStateFromError() { return { failed: true }; }
     componentDidCatch() { issue(); }
     render() { return this.state.failed ? null : this.props.children; }
+  }
+  function ForumInput({ input, text, channelId }) {
+    const bridgeRef = React.useRef(null);
+    if (!bridgeRef.current) bridgeRef.current = createForumTarget();
+    const bridge = bridgeRef.current;
+    const inputRef = React.useRef(bridge.target);
+    const originalRef = Object.getOwnPropertyDescriptor(input.props, 'ref')?.value
+      ?? Object.getOwnPropertyDescriptor(input, 'ref')?.value;
+    bridge.update({ ...input.props, ref: originalRef }, text);
+    React.useEffect(() => {
+      if (!active) return;
+      bridge.commit();
+      sessionsByRef.get(inputRef)?.observeNative({ text });
+    }, [text]);
+    const field = React.cloneElement(input, {
+      onChangeText(next) {
+        const result = input.props.onChangeText(next);
+        bridge.observe(next);
+        if (active) sessionsByRef.get(inputRef)?.observeNative({ text: next });
+        return result;
+      },
+      onSelectionChange(event) {
+        const result = input.props.onSelectionChange(event);
+        const selection = event?.nativeEvent?.selection;
+        if (active && selection) sessionsByRef.get(inputRef)?.observeNative({ text: bridge.target.getText(), ...selection });
+        return result;
+      },
+    });
+    return h(React.Fragment, null,
+      h(BarBoundary, null, h(AssistBar, { inputRef, channelId, draftOnly: true })), field);
+  }
+  function connectForum(holder, method) {
+    if (!active || forumUnpatch || typeof holder?.[method] !== 'function') return;
+    forumUnpatch = api.patcher.after(method, holder, (args, result) => {
+      if (!active || !result) return;
+      try {
+        const channelId = channelNow();
+        const owner = args[0]?.channel?.id ?? args[0]?.parentChannel?.id ?? channelId ?? '';
+        return decorateForumComposer(React, result, (input, text) =>
+          h(ForumInput, { key: 'auto-text-forum-' + owner + '-' + (args[0]?.message?.id ?? ''), input, text, channelId }));
+      } catch { /* Preserve the original forum editor if its layout changes. */ }
+    });
   }
   function findInput(root) {
     const queue = [root], seen = new Set();
@@ -1149,6 +1261,10 @@ function createPlugin(api) {
       const target = composerTarget(module);
       if (target) connectComposer(target.holder, target.method);
     });
+    watch('modules/forums/native/composer/ForumComposer.tsx', module => {
+      const target = composerTarget(module);
+      if (target) connectForum(target.holder, target.method);
+    });
     connection = rootUnpatch ? connection : 'Waiting for the chat composer. Open a chat to connect AutoText.';
     tell();
     return true;
@@ -1171,6 +1287,11 @@ function createPlugin(api) {
     if (attempts < 30) retry = setTimeout(hookComposer, 1000);
     else { connection = 'Live composer not found on this Discord version. Use the practice editor to prepare and copy a draft.'; tell(); }
   }
+  function hookForum() {
+    const found = composerTarget(tryFind('findByName', 'ForumComposer', false))
+      ?? composerTarget(tryFind('findByTypeName', 'ForumComposer'));
+    if (found) connectForum(found.holder, found.method);
+  }
   return {
     onLoad() {
       if (active) return;
@@ -1186,6 +1307,7 @@ function createPlugin(api) {
       } catch {}
       active = true; generation++; attempts = 0;
       if (!connectImportedComposer()) hookComposer();
+      hookForum();
       tell();
     },
     onUnload() {
@@ -1204,6 +1326,8 @@ function createPlugin(api) {
       sessionsByRef.clear();
       nativeReaders = new WeakMap();
       try { rootUnpatch?.(); } catch {}
+      try { forumUnpatch?.(); } catch {}
+      forumUnpatch = null;
       rootUnpatch = null; tell(); listeners.clear();
     },
     settings: Settings,

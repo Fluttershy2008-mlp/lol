@@ -1,5 +1,13 @@
 # AutoText for Revenge
 
+### Valenced thread and forum support (AutoText 1.2.7 / Valenced 1.0.0-beta3)
+
+The AutoType, bullet list, numbered list, saved phrases and Pause controls now also appear above the message body in **New Forum Post**. The forum title and Post button remain Discord's own controls. AutoType leaves the completed forum message as a draft: review it and tap **Post** yourself. Existing thread replies continue to use the normal chat toolbar.
+
+Update AutoText in the Valenced repository, restart Valenced, and reopen the post editor. This update preserves saved phrases and the normal chat auto-send preference. Forum typing always uses draft mode.
+
+The forum adapter uses Discord's message change handler and waits for its rendered text to confirm each edit. It supports late-loaded forum modules, keeps raw mention markup from the forum autocomplete, and removes hooks and typing sessions when disabled. Automated regression tests pass; physical Android testing is still needed.
+
 Automatically type a prepared message into Discord **letter by letter**. Paste your full message, choose a speed, and watch it appear in the chat composer. Bullet points, emojis and line breaks are preserved. Choose whether to leave the result as a draft or automatically send the complete message once when typing finishes.
 
 Built for Revenge's Vendetta-compatible mobile plugins. No AI service, account token or API key is needed.
