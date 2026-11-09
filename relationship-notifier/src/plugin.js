@@ -72,7 +72,14 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
     let user = embedded;
     try { user = stores.UserStore?.getUser?.(id) ?? embedded; } catch {}
     const suffix = user?.discriminator && user.discriminator !== '0' ? `#${user.discriminator}` : '';
-    return { name: user?.username ? `${user.username}${suffix}` : user?.globalName ?? user?.global_name ?? id };
+    let icon = null;
+    try {
+      if (typeof user?.getAvatarURL === 'function') icon = user.getAvatarURL(undefined, 64, false);
+    } catch {}
+    if (typeof icon !== 'string' || !/^https:\/\//.test(icon)) {
+      icon = user?.avatar ? `https://cdn.discordapp.com/avatars/${id}/${user.avatar}.png?size=64` : null;
+    }
+    return { name: user?.username ? `${user.username}${suffix}` : user?.globalName ?? user?.global_name ?? id, icon };
   }
 
   function snapshot() {
@@ -96,7 +103,7 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
         const id = String(guild?.id ?? key);
         if (guild?.unavailable) { unavailable.add(id); continue; }
         if (!guild || typeof guild !== 'object' || guild.isMember === false) continue;
-        result.guilds[id] = { id, name: guild.name || id };
+        result.guilds[id] = { id, name: guild.name || id, icon: guild.icon ? `https://cdn.discordapp.com/icons/${id}/${guild.icon}.png?size=64` : null };
       }
     }
     const privateChannels = readFirst(stores.ChannelStore, ['getPrivateChannels', 'getSortedPrivateChannels', 'getMutablePrivateChannels']);
@@ -109,7 +116,7 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
         if (Number(channel?.type) !== 3) continue;
         const recipients = channel.rawRecipients ?? channel.recipients ?? [];
         const names = Array.isArray(recipients) ? recipients.map(user => userInfo(String(user?.id ?? user), typeof user === 'object' ? user : null).name) : [];
-        result.groups[id] = { id, name: channel.name || names.join(', ') || 'Unnamed group' };
+        result.groups[id] = { id, name: channel.name || names.join(', ') || 'Unnamed group', icon: channel.icon ? `https://cdn.discordapp.com/channel-icons/${id}/${channel.icon}.png?size=64` : null };
       }
     }
     // Preserve unavailable servers even when GuildStore temporarily drops them.
@@ -130,6 +137,7 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
       offlinePending = new Set(['friends', 'requests', 'guilds', 'groups']);
       readyAfter = Math.max(readyAfter, clock.now() + 5000);
       unavailable.clear();
+      setStatus('Waiting for Discord to connect…');
     }
     if (!owner || !isConnected()) { setStatus('Waiting for Discord to connect…'); return; }
     if (clock.now() < readyAfter) { schedule(readyAfter - clock.now()); return; }
@@ -254,6 +262,13 @@ export function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeou
     try { icon = V.ui?.assets?.getAssetIDByName('FriendsIcon'); } catch {}
     try {
       patchManualActions();
+      // Refresh an open history page when the account changes, before the next
+      // periodic check. The five-second list hydration guard still applies.
+      if (typeof stores.UserStore.addChangeListener === 'function') {
+        const onUserChange = () => { if (String(currentUserId() || '') !== String(activeAccount || '')) schedule(0); };
+        stores.UserStore.addChangeListener(onUserChange);
+        disposers.push(() => stores.UserStore.removeChangeListener?.(onUserChange));
+      }
       for (const type of ['RELATIONSHIP_ADD', 'RELATIONSHIP_UPDATE', 'RELATIONSHIP_REMOVE', 'CHANNEL_CREATE', 'CHANNEL_UPDATE', 'CHANNEL_DELETE', 'CHANNEL_RECIPIENT_ADD', 'CHANNEL_RECIPIENT_REMOVE', 'GUILD_UPDATE']) subscribeEvent(type, () => schedule());
       subscribeEvent('GUILD_DELETE', event => {
         const guild = event.guild ?? event;

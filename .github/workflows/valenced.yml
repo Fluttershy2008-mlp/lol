@@ -89,5 +89,5 @@ jobs:
       - name: Check ZIP integrity and catalogue metadata
         run: python3 -m unittest discover -s valenced/tests -p 'test_*.py'
       - name: Check requested plugins' source regressions
-        run: node --test compatibility/expression-upload.test.mjs save-as-sticker/tests/*.test.mjs stealmoji/tests/*.test.mjs compatibility/user-profile.test.mjs server-leaver/tests/*.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs auto-text/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs
+        run: node --test compatibility/expression-upload.test.mjs save-as-sticker/tests/*.test.mjs stealmoji/tests/*.test.mjs compatibility/user-profile.test.mjs server-leaver/tests/*.test.mjs more-alts/tests/*.test.mjs friends-list/tests/*.test.mjs blocked-user-list/tests/*.test.mjs addonList/tests/*.test.mjs copy-user-id/tests/*.test.mjs auto-text/tests/*.test.mjs info-commands/tests/*.test.mjs valid-user/tests/*.test.mjs relationship-notifier/tests/*.test.mjs
 

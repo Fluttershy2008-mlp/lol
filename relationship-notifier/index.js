@@ -1,8 +1,6 @@
 (() => {
 // SPDX-License-Identifier: CC0-1.0
 // Shared by the separately installable Revenge bundles; no global API changes.
-// SPDX-License-Identifier: CC0-1.0
-// Shared by the separately installable Revenge bundles; no global API changes.
 function withRevengeCompatibility(api, factory, pluginName) {
     var active = true;
     var generation = 0;
@@ -195,9 +193,10 @@ function withRevengeCompatibility(api, factory, pluginName) {
     };
     return result;
 }
+
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! RelationshipNotifier for Revenge 1.1.5
+/*! RelationshipNotifier for Revenge 1.2.0
  * Adapted from Vencord RelationshipNotifier by nick, Vendicated and contributors.
  * Mobile adaptation Copyright (c) 2026 Fluttershy2008-mlp.
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -344,75 +343,124 @@ function createTracker({ storage, notify, changed = () => {}, now = Date.now }) 
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+const HISTORY_FILTERS = [['all', 'All'], ['friends', 'Friends'], ['requests', 'Requests'], ['guilds', 'Servers'], ['groups', 'Groups']];
+const HISTORY_LABELS = { friends: 'Lost friend', requests: 'Request cancelled', guilds: 'Server removal', groups: 'Group removal' };
+
 function createSettings({ React, RN, tracker, getStatus, subscribe, testNotification, getTheme, copyMention, openProfile }) {
   const h = React.createElement;
   const Pressable = RN.Pressable ?? RN.TouchableOpacity;
   const choices = [
-    ['friends', 'Lost friends', 'Notify when someone is no longer on your friends list.'],
-    ['friendRequestCancels', 'Cancelled friend requests', 'Watch incoming friend requests that disappear.'],
-    ['servers', 'Server removals', 'Notify when you are no longer in a server.'],
-    ['groups', 'Group chat removals', 'Notify when you are no longer in a group DM.'],
-    ['offlineRemovals', 'Check after reconnecting', 'Compare with your last saved list after Discord connects.'],
-    ['notices', 'Keep an alert on screen', 'Also show a popup that stays until you dismiss it.'],
+    ['friends', 'Lost friends', 'When someone leaves your friends list.'],
+    ['friendRequestCancels', 'Cancelled requests', 'When an incoming request disappears.'],
+    ['servers', 'Server removals', 'When you are no longer in a server.'],
+    ['groups', 'Group removals', 'When you are no longer in a group DM.'],
+    ['offlineRemovals', 'Check after reconnecting', 'Include changes made while Discord was offline.'],
+    ['notices', 'Persistent popup', 'Keep an alert visible until you dismiss it.'],
   ];
 
   return function RelationshipNotifierSettings() {
     const [, refresh] = React.useState(0);
+    const [view, setView] = React.useState({ owner: tracker.getAccountId(), filter: 'all', query: '', limit: 20 });
     React.useEffect(() => subscribe(() => refresh(value => value + 1)), []);
     const scheme = typeof RN.useColorScheme === 'function' ? RN.useColorScheme() : 'dark';
     const dark = (getTheme() ?? scheme) !== 'light';
     const colors = dark
-      ? { bg: '#18191c', card: '#27292e', text: '#f3f4f6', muted: '#b6bcc7', accent: '#8992ff', border: '#4e535c' }
-      : { bg: '#f2f3f5', card: '#ffffff', text: '#202227', muted: '#5b626f', accent: '#4752c4', border: '#c3c7cf' };
-    const text = (value, style = {}) => h(RN.Text, { style: { color: colors.text, fontSize: 15, lineHeight: 21, ...style } }, value);
-    const note = value => text(value, { color: colors.muted, marginTop: 6 });
-    const action = (label, onPress) => h(Pressable, {
-      accessibilityRole: 'button', onPress,
-      style: { padding: 14, marginTop: 12, backgroundColor: colors.card, borderRadius: 10, borderColor: colors.border, borderWidth: 1 },
-    }, text(label, { color: colors.accent, fontWeight: '700', textAlign: 'center' }));
+      ? { bg: '#15161b', card: '#22242c', inset: '#1b1d24', text: '#f3f4fa', muted: '#adb3c4', accent: '#a7afff', selected: '#343c69', border: '#353947', green: '#88dfb0', danger: '#ffb0b9' }
+      : { bg: '#f2f3f8', card: '#ffffff', inset: '#e9ecf5', text: '#202332', muted: '#596277', accent: '#454fbd', selected: '#e4e7ff', border: '#d7dce8', green: '#206d48', danger: '#b12d46' };
+    const text = (value, style = {}, props = {}) => h(RN.Text, { ...props, style: { color: colors.text, fontSize: 15, lineHeight: 21, ...style } }, value);
+    const note = (value, style = {}) => text(value, { color: colors.muted, fontSize: 13, lineHeight: 19, ...style });
+    const card = { backgroundColor: colors.card, borderRadius: 16, overflow: 'hidden' };
+    const button = (label, onPress, props = {}) => h(Pressable, {
+      accessibilityRole: 'button', accessibilityLabel: label, onPress,
+      ...props, style: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10, backgroundColor: colors.inset, ...props.style },
+    }, text(label, { color: colors.accent, fontWeight: '700', textAlign: 'center', fontSize: 13 }));
+    const heading = (title, detail) => h(RN.View, { style: { marginTop: 24, marginBottom: 10 } },
+      text(title, { fontSize: 18, lineHeight: 24, fontWeight: '800' }), detail ? note(detail, { marginTop: 3 }) : null);
     const status = getStatus();
     const options = tracker.options();
     const history = tracker.history();
     const counts = tracker.counts();
-    return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, contentContainerStyle: { padding: 16, paddingBottom: 60 } },
-      text('RelationshipNotifier', { fontSize: 24, lineHeight: 30, fontWeight: '800' }),
-      note('Version 1.1.5 · Tap a User ID to open their profile. Long-press to copy <@ID>.'),
-      note('See changes to your friends, requests, servers and group chats.'),
-      h(RN.View, { style: { padding: 16, marginVertical: 16, borderRadius: 12, backgroundColor: colors.card } },
-        text(status.message, { fontWeight: '700' }),
-        note(`${counts.friends} friends · ${counts.requests} requests · ${counts.guilds} servers · ${counts.groups} groups`),
-        ...status.warnings.map((warning, i) => h(RN.Text, { key: i, style: { color: colors.muted, marginTop: 8, lineHeight: 20 } }, warning)),
+    const owner = tracker.getAccountId();
+    // Account changes must never keep a previous account's search or pagination.
+    const activeQuery = view.owner === owner ? view.query : '';
+    const activeFilter = view.owner === owner ? view.filter : 'all';
+    const updateSearch = (nextFilter, nextQuery) => {
+      setView({ owner, filter: nextFilter, query: nextQuery, limit: 20 });
+    };
+    const term = activeQuery.trim().toLocaleLowerCase();
+    const filtered = history.filter(entry => (activeFilter === 'all' || entry.category === activeFilter)
+      && (!term || [entry.name, entry.id, entry.text, HISTORY_LABELS[entry.category]].some(value => String(value ?? '').toLocaleLowerCase().includes(term))));
+    const limit = view.owner === owner ? view.limit : 20;
+    const visible = filtered.slice(0, limit);
+    const colorFor = category => category === 'friends' ? colors.danger : category === 'requests' ? colors.accent : colors.green;
+    let lastDay = null;
+    const historyNodes = visible.map((entry, index) => {
+      const date = new Date(entry.at);
+      const day = Number.isNaN(date.getTime()) ? 'Earlier' : date.toLocaleDateString();
+      const dayHeading = day !== lastDay ? note(day, { fontWeight: '700', marginTop: 14, marginBottom: 8 }) : null;
+      lastDay = day;
+      const mention = userMention(entry);
+      return h(RN.View, { key: `${entry.at}:${entry.category}:${entry.id}:${index}` }, dayHeading,
+        h(RN.View, { style: { ...card, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: colorFor(entry.category) } },
+          h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 } },
+            entry.icon && RN.Image ? h(RN.Image, { source: { uri: entry.icon }, accessibilityIgnoresInvertColors: true, style: { width: 36, height: 36, borderRadius: 12, marginRight: 10 } })
+              : h(RN.View, { style: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.inset, alignItems: 'center', justifyContent: 'center', marginRight: 10 } }, text((entry.name || '?').slice(0, 1).toUpperCase(), { color: colorFor(entry.category), fontWeight: '800' })),
+            h(RN.View, { style: { flex: 1 } }, text(entry.name || HISTORY_LABELS[entry.category] || 'Relationship change', { fontWeight: '700' }),
+              note(HISTORY_LABELS[entry.category] || 'Relationship change', { color: colorFor(entry.category), fontSize: 12 }))),
+          text(entry.text),
+          mention ? h(Pressable, {
+            accessibilityRole: 'button', accessibilityLabel: `Open profile for ${entry.name || entry.id}`,
+            accessibilityHint: 'Opens the Discord profile. Long-press to copy the user mention.',
+            onPress: () => openProfile(entry.id), onLongPress: () => copyMention(mention), style: { paddingVertical: 10, minHeight: 44 },
+          }, text(`User ID: ${mention}`, { color: colors.accent, fontSize: 13 }, { selectable: true }), text('View profile ›', { color: colors.accent, fontWeight: '700', fontSize: 13 })) : null,
+          mention ? button('Copy mention', () => copyMention(mention), { accessibilityLabel: `Copy ${mention}`, style: { alignSelf: 'flex-start', marginBottom: 10 } }) : null,
+          note(`${Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${entry.offline ? ' · After reconnecting' : ' · While connected'}`, { fontSize: 12 }),
+        ));
+    });
+    const rows = list => h(RN.View, { style: card }, ...list.map(([key, title, detail], index) => h(RN.View, {
+      key, style: { paddingHorizontal: 14, paddingVertical: 13, borderTopWidth: index ? 1 : 0, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center' },
+    }, h(RN.View, { style: { flex: 1, paddingRight: 12 } }, text(title, { fontWeight: '700' }), note(detail, { marginTop: 3 })),
+    h(RN.Switch, { accessibilityLabel: title, value: Boolean(options[key]), onValueChange: value => tracker.setOption(key, value), trackColor: { true: '#5865f2', false: colors.border } }))));
+
+    return h(RN.ScrollView, { style: { flex: 1, backgroundColor: colors.bg }, keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 80 } },
+      text('Relationship Notifier', { fontSize: 26, lineHeight: 32, fontWeight: '800' }),
+      note('Your friends, requests and communities — in one place.', { marginTop: 4 }),
+      h(RN.View, { style: { ...card, padding: 16, marginTop: 16 } },
+        h(RN.View, { style: { flexDirection: 'row', alignItems: 'center' } },
+          h(RN.View, { style: { width: 8, height: 8, borderRadius: 4, backgroundColor: status.message.startsWith('Monitoring') ? colors.green : colors.muted, marginRight: 8 } }),
+          text(status.message, { fontWeight: '700', fontSize: 13, flex: 1 }, { accessibilityLiveRegion: 'polite' })),
+        h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 } },
+          ...[['friends', 'Friends'], ['requests', 'Requests'], ['guilds', 'Servers'], ['groups', 'Groups']].map(([key, label]) => h(RN.View, { key, style: { width: '50%', padding: 8 } },
+            text(String(counts[key]), { fontSize: 24, lineHeight: 30, fontWeight: '800' }), note(label)))),
+        ...status.warnings.map((warning, i) => h(RN.View, { key: i, style: { marginTop: 8 } }, note(warning, { color: colors.danger }))),
       ),
-      ...choices.map(([key, title, detail]) => h(RN.View, { key, style: { padding: 14, marginBottom: 8, borderRadius: 10, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center' } },
-        h(RN.View, { style: { flex: 1, paddingRight: 12 } }, text(title, { fontWeight: '700' }), note(detail)),
-        h(RN.Switch, { accessibilityLabel: title, value: Boolean(options[key]), onValueChange: value => tracker.setOption(key, value), trackColor: { true: '#5865f2', false: colors.border } }),
-      )),
-      action('Test notification', testNotification),
-      text('Recent notifications', { fontSize: 20, fontWeight: '700', marginTop: 24, marginBottom: 8 }),
-      note('Saved on this device for the current account. The latest 100 are kept.'),
-      history.length ? null : note('No changes detected yet. The first check saves your starting list.'),
-      ...history.map((entry, index) => h(RN.View, { key: `${entry.at}:${index}`, style: { padding: 14, marginTop: 10, borderRadius: 10, backgroundColor: colors.card } },
-        text(entry.text),
-        userMention(entry) ? h(Pressable, {
-          accessibilityRole: 'button', accessibilityLabel: `Open profile for ${entry.name || entry.id}`,
-          accessibilityHint: 'Opens the Discord profile. Long-press to copy the user mention.',
-          onPress: () => openProfile(entry.id), onLongPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
-        }, h(RN.Text, { selectable: true, style: { color: colors.accent, fontSize: 15, lineHeight: 21 } }, `User ID: ${userMention(entry)}`)) : null,
-        userMention(entry) ? h(Pressable, {
-          accessibilityRole: 'button', accessibilityLabel: `Copy ${userMention(entry)}`,
-          onPress: () => copyMention(userMention(entry)), style: { paddingVertical: 6 },
-        }, text('Copy mention', { color: colors.muted, fontSize: 13 })) : null,
-        note(`${new Date(entry.at).toLocaleString()}${entry.offline ? ' · Detected after reconnecting' : ''}`),
-      )),
-      history.length ? action('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
-        { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => tracker.clearHistory() },
-      ])) : null,
-      note('Alerts appear inside Discord. Android may pause the plugin when the app is closed. Changes made on another device can also appear here; Discord does not reveal whether a server removal was a kick, ban or deletion.'),
-      text('1.1.5 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { color: colors.muted, fontSize: 12, marginTop: 24 }),
+      heading('What to watch', 'Choose which changes send you an alert.'), rows(choices.slice(0, 4)),
+      heading('How to notify'), rows(choices.slice(4)),
+      button('Test notification', testNotification, { style: { backgroundColor: colors.selected, marginTop: 12 } }),
+      heading('Recent notifications', `${history.length} / 100 saved · Current account only`),
+      RN.TextInput ? h(RN.TextInput, {
+        accessibilityLabel: 'Search notification history', placeholder: 'Search names, IDs or notifications', placeholderTextColor: colors.muted,
+        value: activeQuery, onChangeText: value => updateSearch(activeFilter, value), autoCorrect: false, autoCapitalize: 'none', clearButtonMode: 'while-editing',
+        style: { color: colors.text, backgroundColor: colors.card, borderRadius: 12, minHeight: 48, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+      }) : null,
+      h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 } }, ...HISTORY_FILTERS.map(([key, label]) => button(label, () => updateSearch(key, activeQuery), {
+        key, accessibilityLabel: `Filter ${label.toLowerCase()} notifications`, accessibilityState: { selected: activeFilter === key },
+        style: { backgroundColor: activeFilter === key ? colors.selected : colors.card, marginRight: 6, marginBottom: 6 },
+      }))),
+      activeQuery ? button('Clear search', () => updateSearch(activeFilter, '')) : null,
+      filtered.length ? note(`Showing ${Math.min(limit, filtered.length)} of ${filtered.length}`, { marginTop: 8 }) : h(RN.View, { style: { ...card, padding: 20, marginTop: 12 } },
+        text(history.length ? 'No matching notifications' : 'All quiet for now', { fontWeight: '700', textAlign: 'center' }),
+        note(history.length ? 'Try another search or category.' : 'Your first check saves a starting list. Future changes appear here.', { textAlign: 'center', marginTop: 6 })),
+      ...historyNodes,
+      filtered.length > limit ? button('Show more notifications', () => setView({ owner, filter: activeFilter, query: activeQuery, limit: limit + 20 }), { style: { marginTop: 8 } }) : null,
+      history.length ? button('Clear notification history', () => RN.Alert.alert('Clear history?', 'This removes the saved notifications for this account.', [
+        { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { if (tracker.getAccountId() === owner) tracker.clearHistory(); } },
+      ]), { style: { marginTop: 16 } }) : null,
+      note('Alerts appear inside Discord. Reconnect checks catch changes while you were away. Discord does not reveal whether a server removal was a kick, ban or deletion.', { marginTop: 20 }),
+      note('Version 1.2.0 · Adapted from Vencord by nick and contributors · GPL-3.0-or-later', { fontSize: 11, marginTop: 16 }),
     );
   };
 }
-
 
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
@@ -635,7 +683,14 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
     let user = embedded;
     try { user = stores.UserStore?.getUser?.(id) ?? embedded; } catch {}
     const suffix = user?.discriminator && user.discriminator !== '0' ? `#${user.discriminator}` : '';
-    return { name: user?.username ? `${user.username}${suffix}` : user?.globalName ?? user?.global_name ?? id };
+    let icon = null;
+    try {
+      if (typeof user?.getAvatarURL === 'function') icon = user.getAvatarURL(undefined, 64, false);
+    } catch {}
+    if (typeof icon !== 'string' || !/^https:\/\//.test(icon)) {
+      icon = user?.avatar ? `https://cdn.discordapp.com/avatars/${id}/${user.avatar}.png?size=64` : null;
+    }
+    return { name: user?.username ? `${user.username}${suffix}` : user?.globalName ?? user?.global_name ?? id, icon };
   }
 
   function snapshot() {
@@ -659,7 +714,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
         const id = String(guild?.id ?? key);
         if (guild?.unavailable) { unavailable.add(id); continue; }
         if (!guild || typeof guild !== 'object' || guild.isMember === false) continue;
-        result.guilds[id] = { id, name: guild.name || id };
+        result.guilds[id] = { id, name: guild.name || id, icon: guild.icon ? `https://cdn.discordapp.com/icons/${id}/${guild.icon}.png?size=64` : null };
       }
     }
     const privateChannels = readFirst(stores.ChannelStore, ['getPrivateChannels', 'getSortedPrivateChannels', 'getMutablePrivateChannels']);
@@ -672,7 +727,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
         if (Number(channel?.type) !== 3) continue;
         const recipients = channel.rawRecipients ?? channel.recipients ?? [];
         const names = Array.isArray(recipients) ? recipients.map(user => userInfo(String(user?.id ?? user), typeof user === 'object' ? user : null).name) : [];
-        result.groups[id] = { id, name: channel.name || names.join(', ') || 'Unnamed group' };
+        result.groups[id] = { id, name: channel.name || names.join(', ') || 'Unnamed group', icon: channel.icon ? `https://cdn.discordapp.com/channel-icons/${id}/${channel.icon}.png?size=64` : null };
       }
     }
     // Preserve unavailable servers even when GuildStore temporarily drops them.
@@ -693,6 +748,7 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
       offlinePending = new Set(['friends', 'requests', 'guilds', 'groups']);
       readyAfter = Math.max(readyAfter, clock.now() + 5000);
       unavailable.clear();
+      setStatus('Waiting for Discord to connect…');
     }
     if (!owner || !isConnected()) { setStatus('Waiting for Discord to connect…'); return; }
     if (clock.now() < readyAfter) { schedule(readyAfter - clock.now()); return; }
@@ -817,6 +873,13 @@ function createPlugin(V, clock = { now: Date.now, setTimeout, clearTimeout, setI
     try { icon = V.ui?.assets?.getAssetIDByName('FriendsIcon'); } catch {}
     try {
       patchManualActions();
+      // Refresh an open history page when the account changes, before the next
+      // periodic check. The five-second list hydration guard still applies.
+      if (typeof stores.UserStore.addChangeListener === 'function') {
+        const onUserChange = () => { if (String(currentUserId() || '') !== String(activeAccount || '')) schedule(0); };
+        stores.UserStore.addChangeListener(onUserChange);
+        disposers.push(() => stores.UserStore.removeChangeListener?.(onUserChange));
+      }
       for (const type of ['RELATIONSHIP_ADD', 'RELATIONSHIP_UPDATE', 'RELATIONSHIP_REMOVE', 'CHANNEL_CREATE', 'CHANNEL_UPDATE', 'CHANNEL_DELETE', 'CHANNEL_RECIPIENT_ADD', 'CHANNEL_RECIPIENT_REMOVE', 'GUILD_UPDATE']) subscribeEvent(type, () => schedule());
       subscribeEvent('GUILD_DELETE', event => {
         const guild = event.guild ?? event;

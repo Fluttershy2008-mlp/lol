@@ -1,7 +1,7 @@
 {
   "name": "RelationshipNotifier",
   "description": "Alerts when friends, incoming requests, servers or group chats disappear. Includes reconnect checks and notification history. Adapted from Vencord.",
-  "version": "1.1.6",
+  "version": "1.2.0",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -15,9 +15,9 @@
       "name": "Vendicated and Vencord contributors"
     }
   ],
-  "main": "index-v1.1.6.js",
+  "main": "index-v1.2.0.js",
   "vendetta": {
     "icon": "FriendsIcon"
   },
-  "hash": "0776b38ac201c45bd1b60be526360e6d3a7e6ee54d79429dc45c0f3649702e50"
+  "hash": "5c2e31ab34fbf7312d689d28a5d518c37902e9c18ab34dd7f8709ae4a2ca7a4b"
 }

@@ -20,7 +20,8 @@
     "info-commands": "1.0.0-beta7",
     "valid-user": "1.0.0-beta4",
     "hide-blocked-and-ignored-messages": "1.0.0-beta14",
-    "auto-text": "1.0.0-beta3"
+    "auto-text": "1.0.0-beta3",
+    "relationship-notifier": "1.0.0-beta3"
   },
   "sourceRefs": {
     "save-as-sticker": "main",
@@ -35,7 +36,8 @@
     "info-commands": "main",
     "auto-text": "main",
     "valid-user": "main",
-    "hide-blocked-and-ignored-messages": "main"
+    "hide-blocked-and-ignored-messages": "main",
+    "relationship-notifier": "main"
   },
   "settingsShortcuts": {
     "blocked-user-list": {

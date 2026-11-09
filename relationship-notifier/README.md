@@ -1,7 +1,27 @@
-# RelationshipNotifier for Revenge
+# RelationshipNotifier for Valenced and Revenge
 
 Mobile adaptation of Vencord's **RelationshipNotifier**, originally by nick and
 the Vencord contributors. Built for Revenge's Vendetta-compatible plugin loader.
+
+## Valenced settings update (1.0.0-beta3)
+
+Refresh your Valenced repository, update **RelationshipNotifier (Valenced)** and
+fully restart Discord. The existing plugin ID and account history are preserved.
+The source release is 1.2.0; the Valenced package version is 1.0.0-beta3.
+
+- Compact **What to watch** and **How to notify** sections with all six Vencord
+  options, a monitoring summary and a test alert.
+- Search the last 100 notifications by name, ID or message, or filter by friends,
+  requests, servers and groups. History loads 20 matches at a time.
+- Date groups, category labels, saved avatars/server icons and clear profile and
+  copy-mention actions. Existing notifications without images use an initial.
+- Light/dark layouts, wrapping filter buttons and accessible switch labels.
+
+Compared with the upstream Vencord plugin, the mobile adaptation retains removal
+alerts, per-account reconnect snapshots, suppression of your own removal/leave
+commands and temporary server outage handling. Desktop notices become optional
+native mobile popups alongside Discord toasts. Android can suspend the plugin
+while Discord is closed; reconnect checks compare against the last saved lists.
 
 ## Install
 
@@ -26,7 +46,7 @@ updates enabled and restart Discord to download them.
 
 If the screen still shows plain numbers, open **Revenge → Plugins**, open the
 RelationshipNotifier plugin card's menu and tap **Refetch**, then reopen its
-settings. The page should say **Version 1.1.4** near the top and display
+settings. The page should say **Version 1.2.0** near the top and display
 `User ID: <@123456789012345678>`. Refetch updates the existing installation and
 preserves its locally saved history. This release uses a versioned download
 filename to avoid receiving an older cached bundle.
