@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.1
+# HideBlockedAndIgnoredMessages 1.5.2
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,24 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Hide server icons too (1.0.0-beta11)
+
+**Hide selected server icons** now hides the saved server IDs from the server bar,
+including expanded folders and collapsed folder previews. Existing IDs carry over,
+and icon hiding starts enabled. Disable this switch or remove an ID in **Manage
+hidden server IDs** to restore an icon. The main server hiding switch pauses all
+server filters. Refresh the repository, update and fully restart Discord once.
+
+Server bar lists are filtered before native layout. Guild membership, raw channel
+metadata, permissions, and Discord's folder-save getters remain intact. Empty
+folder shells are retained to keep native folder references valid. This does not
+leave servers or mute notifications. Physical device verification is still needed.
+
+Interface references used to identify the mobile display paths:
+- [SortedGuildStore display and persistence methods](https://github.com/bleelblep/revenge-next-plugins/blob/main/plugins/hide-servers-drawer/js/patches/sortedGuilds.ts)
+- [Mobile server bar notes](https://github.com/bleelblep/revenge-next-plugins/blob/main/plugins/hide-servers-drawer/js/patches/guildsBar.ts)
+
 
 ### Hide channel lists too (1.0.0-beta10)
 

@@ -33,5 +33,6 @@ export function createServerFilter(storage, getChannel = () => undefined) {
       : guildForChannel(message.channel_id ?? message.channelId));
   }
   return { isChannelHidden, isServerMessageHidden,
+    isGuildIconHidden: id => storage.hideServerIcons !== false && hiddenGuild(id),
     isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
 }

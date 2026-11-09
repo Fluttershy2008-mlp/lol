@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { installGuildIcons } from './guild-icons.js';
 import { installChannelLists } from './channel-lists.js';
 import { createServerFilter, normalizeServerIds } from './servers.js';
 import { createMessageFilter } from './filter.js';
@@ -12,7 +13,7 @@ import { installSearch } from './search.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, search, channelLists, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, channelLists, guildIcons, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -25,6 +26,7 @@ export function createPlugin(V) {
     search?.clear();
     pagination?.reset();
     channelLists?.refresh();
+    guildIcons?.refresh();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -44,6 +46,7 @@ export function createPlugin(V) {
     storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
     if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;
     storage.hiddenServerIds = normalizeServerIds(storage.hiddenServerIds);
+    if (typeof storage.hideServerIcons !== 'boolean') storage.hideServerIcons = true;
     if (typeof storage.hideServerChannels !== 'boolean') storage.hideServerChannels = true;
     messageStore = byStore('MessageStore');
     if (!method(messageStore, 'getMessages') || !method(messageStore, 'getMessage')) {
@@ -77,6 +80,8 @@ export function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      guildIcons = installGuildIcons(V, servers);
+      cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
@@ -148,7 +153,7 @@ export function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = search = channelLists = undefined;
+    filter = lists = mentions = pagination = search = channelLists = guildIcons = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

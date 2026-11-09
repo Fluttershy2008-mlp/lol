@@ -249,3 +249,12 @@ in selected servers** controls this separately from message filtering. Existing
 IDs carry over; refreshing the repository, updating and restarting Discord is
 all that is needed. The actual ShowHiddenChannels package was tested in both
 load orders. Server icons and headers stay visible; search remains available.
+
+### HideBlockedAndIgnoredMessages beta11 — hide the server icons
+
+**Hide selected server icons** uses the same saved server IDs to remove their
+icons from the server bar and folder previews. The switch is enabled by default.
+Restore an icon by disabling it or removing the server ID in plugin settings.
+Refresh the repository, update to beta11 and fully restart Discord. Existing
+message and channel filters remain available. Membership and synced folder order
+stay intact; empty folder shells may remain. Phone verification is still needed.
