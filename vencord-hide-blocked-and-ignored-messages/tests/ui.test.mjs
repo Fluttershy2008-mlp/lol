@@ -9,15 +9,18 @@ const { build } = upstreamRequire('esbuild');
 const React = require('react');
 const Renderer = require('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-async function loadPlugin() {
-    const bridge = { modal: undefined, settings: undefined };
+async function loadPlugin({ legacy = false } = {}) {
+    const bridge = { modal: undefined, settings: undefined, settingsHost: legacy ? { customSections: [] } : { customEntries: [], customSections: [] } };
     globalThis.__HBIM_TEST__ = { React, bridge };
     const bundle = await build({ entryPoints: [fileURLToPath(new URL('../hideBlockedAndIgnoredMessages/index.tsx', import.meta.url))],
         bundle: true, format: 'cjs', platform: 'node', write: false, jsx: 'automatic',
         plugins: [{ name: 'vencord-test-host', setup(build) {
+            build.onResolve({ filter: /^\.\/runtime\.js$/ }, () => ({ path: 'desktop-runtime', namespace: 'host' }));
             build.onResolve({ filter: /^(?:@|react)/ }, args => ({ path: args.path, namespace: 'host' }));
             build.onLoad({ filter: /.*/, namespace: 'host' }, ({ path: id }) => {
                 const prefix = 'Object.defineProperty(exports,"__esModule",{value:true});const {React,bridge}=globalThis.__HBIM_TEST__;';
+                if (id === 'desktop-runtime') return { contents: 'export const createDesktopRuntime=()=>({start(){},stop(){},refresh(){}});' };
+                if (id === '@plugins/_core/settings') return { contents: 'export default globalThis.__HBIM_TEST__.bridge.settingsHost;' };
                 if (id === 'react/jsx-runtime') return { contents: prefix + 'exports.jsx=exports.jsxs=(type,props,key)=>React.createElement(type,{...props,key});exports.Fragment=React.Fragment;' };
                 if (id === '@api/Settings') return { contents: prefix + `exports.definePluginSettings=def=>{
                     const listeners=new Set();let revision=0;
@@ -68,4 +71,30 @@ test('notification policy source patch suppresses hidden-server alerts while pre
     assert.equal(policy({ guild_id: 'hidden' }, 'normal'), false);
     assert.equal(policy({ guild_id: 'visible' }, 'normal'), true);
     assert.equal(policy({ guild_id: 'visible' }, 'muted'), false);
+});
+
+for (const legacy of [false, true]) test(`Vencord sidebar opens the live settings page and cleans up on disable (${legacy ? 'legacy' : 'current'})`, async t => {
+    const { plugin, bridge } = await loadPlugin({ legacy }); let page, modal;
+    t.after(async () => { await Renderer.act(async () => { page?.unmount(); modal?.unmount(); }); plugin.stop(); });
+    bridge.settings.store.hiddenServerIds = '400000000000000001';
+    plugin.start();
+    const entries = legacy ? bridge.settingsHost.customSections : bridge.settingsHost.customEntries;
+    assert.equal(entries.length, 1);
+    const Page = legacy ? entries[0]({}).element : entries[0].Component;
+    await Renderer.act(async () => { page = Renderer.create(React.createElement(Page)); });
+    const field = page.root.findAllByType('textarea').find(n => n.props['aria-label'] === 'Hidden server IDs');
+    assert.equal(field.props.value, '400000000000000001');
+    const icons = page.root.findAllByType('input').find(n => n.props['aria-label'] === 'Hide selected server icons');
+    await Renderer.act(async () => icons.props.onChange({ target: { checked: false } }));
+    assert.equal(bridge.settings.store.hideServerIcons, false); assert.equal(bridge.settings.store.hideServerPings, true);
+    await Renderer.act(async () => field.props.onChange({ currentTarget: { value: '400000000000000002' } }));
+    const save = page.root.findAllByType('button').find(n => n.props.children === 'Save IDs');
+    await Renderer.act(async () => save.props.onClick());
+    assert.equal(bridge.settings.store.hiddenServerIds, '400000000000000002');
+    plugin.toolboxActions['Hidden users & servers']();
+    await Renderer.act(async () => { modal = Renderer.create(bridge.modal({ onClose() {} })); });
+    assert.equal(modal.root.findAllByType('textarea').find(n => n.props['aria-label'] === 'Hidden server IDs').props.value, '400000000000000002');
+    plugin.stop(); assert.equal(entries.length, 0);
+    plugin.start(); assert.equal(entries.length, 1);
+    assert.equal(bridge.settings.store.hiddenServerIds, '400000000000000002');
 });

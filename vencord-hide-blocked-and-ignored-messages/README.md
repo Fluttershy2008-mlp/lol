@@ -1,7 +1,18 @@
 # HideBlockedAndIgnoredMessages for Vencord
 
-Version **1.0.0-beta1**. Desktop port of Fluttershy2008-mlp's Valenced plugin,
+Version **1.0.0-beta2**. Desktop port of Fluttershy2008-mlp's Valenced plugin,
 including the beta16 filtering optimisations.
+
+## Vencord settings sidebar
+
+Open **User Settings → Vencord Settings → Hidden users & servers** to manage
+server IDs, whitelist exceptions and all hiding switches directly in settings.
+The sidebar button uses Vencord's custom-entry API and supports older builds'
+custom-section API. It opens the same saved settings as the chat button. Plugin
+shutdown removes only this entry; other Vencord settings entries remain intact.
+
+Update from beta1 by running the installer again and restarting Discord. Your
+existing server IDs and switches are retained.
 
 ## Windows CMD installation
 
@@ -25,9 +36,16 @@ pnpm dependencies, builds Vencord with `--dev`, then uses Vencord's official CLI
 installer with `--branch auto`. Discord may close during the installation. Keep
 the CMD window open until **SUCCESS**, then reopen Discord.
 
+If you use **PowerShell** (your prompt starts with `PS`), use this instead:
+
+```powershell
+curl.exe -fL "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd" -o "$env:TEMP\Install-Hidden.cmd"
+if ($LASTEXITCODE -eq 0) { & "$env:TEMP\Install-Hidden.cmd" }
+```
+
 Enable **HideBlockedAndIgnoredMessages** under **Settings → Vencord → Plugins**.
-Restart Discord when Vencord asks. Open the plugin settings or the new **Hidden
-users & servers** chat button and paste your server IDs. Mobile settings are
+Restart Discord when Vencord asks. Open **Vencord Settings → Hidden users &
+servers**, the plugin settings, or the **Hidden users & servers** chat button and paste your server IDs. Mobile settings are
 separate; server IDs must be added once on desktop. The same panel is available
 from Vencord Toolbox. Turn off the built-in **NoBlockedMessages** plugin if you
 use this replacement, so it does not independently hide whitelist exceptions.
@@ -90,7 +108,7 @@ Checked against Vencord **1.15.17**, commit
 `795ed0ff5b7e6b8db7488d0fcc95512a58edc919`: `pnpm test:ts` and
 `pnpm build --dev`. Automated checks cover desktop store integration, preserved
 history/search, whitelist and switch restoration, native cache invalidation,
-repeat-read overhead, the actual settings panel and chat button, notification
+repeat-read overhead, the actual settings panel, chat button and sidebar (current and older layouts), notification
 policy replacement, installer backups/rollback, payload hashes, failure handling
 and the embedded CMD launcher. Windows execution and a signed-in desktop Discord
 session were not available; actual patch matching and client behaviour still

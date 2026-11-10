@@ -10,6 +10,7 @@ import { Button } from "@components/Button";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { FormSwitch } from "@components/FormSwitch";
 import { Paragraph } from "@components/Paragraph";
+import SettingsPlugin from "@plugins/_core/settings";
 import { Logger } from "@utils/Logger";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
 import { RenderModalProps } from "@vencord/discord-types";
@@ -17,9 +18,11 @@ import { filters, find, waitFor, waitForSubscriptions } from "@webpack";
 import { ChannelStore, FluxDispatcher, GuildChannelStore, GuildReadStateStore, MessageActions, MessageStore, Modal, openModal, ReadStateStore, RelationshipStore, SelectedChannelStore, SortedGuildStore, useState } from "@webpack/common";
 
 import { createDesktopRuntime } from "./runtime.js";
+import { registerSettingsSidebar } from "./settings-sidebar.js";
 import { normalizeWhitelist } from "./whitelist.js";
 
 let runtime: ReturnType<typeof createDesktopRuntime> | undefined;
+let removeSidebar: (() => void) | undefined;
 const toggles = {
     blocked: "Hide blocked users", ignored: "Hide ignored users",
     removeReplies: "Hide replies to hidden users", removeBotCommands: "Hide commands run by hidden users",
@@ -90,6 +93,10 @@ const SettingsPanel = ErrorBoundary.wrap(function SettingsPanel() {
         {(Object.entries(toggles) as [ToggleKey, string][]).map(([key, title]) => <FormSwitch key={key} title={title} value={values[key]} onChange={value => { settings.store[key] = value; changed(); }} />)}
     </div>;
 }, { noop: false });
+const SettingsPage = ErrorBoundary.wrap(() => <section>
+    <h2 style={{ color: "var(--header-primary)", marginBottom: 20 }}>Hidden users &amp; servers</h2>
+    <SettingsPanel />
+</section>, { noop: false });
 const SettingsModal = ErrorBoundary.wrap((props: RenderModalProps) => <Modal {...props} title="Hidden users & servers"><SettingsPanel /></Modal>, { noop: false });
 function openSettings() { openModal(props => <SettingsModal {...props} />); }
 
@@ -124,8 +131,10 @@ export default definePlugin({
             MessageActions, FluxDispatcher, SortedGuildStore, GuildReadStateStore, ReadStateStore, GuildChannelStore,
             find, filters, waitFor, waitForSubscriptions, logger: new Logger("HideBlockedAndIgnoredMessages") }, storage);
         runtime.start();
+        removeSidebar?.();
+        removeSidebar = registerSettingsSidebar(SettingsPlugin, SettingsPage, Icon);
     },
-    stop() { runtime?.stop(); runtime = undefined; },
+    stop() { removeSidebar?.(); removeSidebar = undefined; runtime?.stop(); runtime = undefined; },
     hiddenNode: node => runtime?.hiddenNode(node) ?? false,
     visibleGuildIds: ids => runtime?.visibleGuildIds(ids) ?? ids,
     suppressPing: message => runtime?.suppressPing(message) ?? false,

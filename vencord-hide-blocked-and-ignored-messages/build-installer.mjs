@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 process.chdir(fileURLToPath(new URL(".", import.meta.url)));
 const directory = new URL("hideBlockedAndIgnoredMessages/", import.meta.url);
-const manifest = { version: "1.0.0-beta1", files: {}, content: {} };
+const manifest = { version: "1.0.0-beta2", files: {}, content: {} };
 for (const name of readdirSync(directory).sort()) {
     const bytes = readFileSync(new URL(name, directory));
     manifest.files[name] = createHash("sha256").update(bytes).digest("hex");
