@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
+import { installHiddenPings } from './notifications.js';
 import { installChatSettings } from './chat-settings.js';
 import { installGuildIcons } from './guild-icons.js';
 import { installChannelLists } from './channel-lists.js';
@@ -14,7 +15,7 @@ import { installSearch } from './search.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, search, channelLists, guildIcons, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, channelLists, guildIcons, hiddenPings, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -28,6 +29,7 @@ export function createPlugin(V) {
     pagination?.reset();
     channelLists?.refresh();
     guildIcons?.refresh();
+    hiddenPings?.refresh();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -47,6 +49,7 @@ export function createPlugin(V) {
     storage.whitelistedIds = normalizeWhitelist(storage.whitelistedIds);
     if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;
     storage.hiddenServerIds = normalizeServerIds(storage.hiddenServerIds);
+    if (typeof storage.hideServerPings !== 'boolean') storage.hideServerPings = true;
     if (typeof storage.hideServerIcons !== 'boolean') storage.hideServerIcons = true;
     if (typeof storage.hideServerChannels !== 'boolean') storage.hideServerChannels = true;
     messageStore = byStore('MessageStore');
@@ -81,6 +84,8 @@ export function createPlugin(V) {
     }, mentions.project);
     active = true;
     try {
+      hiddenPings = installHiddenPings(V, servers);
+      cleanup.push(hiddenPings.stop);
       cleanup.push(installChatSettings(V, refresh));
       guildIcons = installGuildIcons(V, servers);
       cleanup.push(guildIcons.stop);
@@ -131,7 +136,7 @@ export function createPlugin(V) {
         // including when a history action dispatches its loading/success event.
         cleanup.push(V.patcher.instead('dispatch', dispatcher, function (args, original) {
           if (!active) return original.apply(this, args);
-          try { filter.observe(args[0]); } catch {}
+          try { filter.observe(args[0]); hiddenPings?.observe(args[0]); } catch {}
           const result = pagination.runDisplay(() => search.dispatch(args[0], () => original.apply(this, args)));
           try { pagination.observe(args[0]); } catch {}
           return result;
@@ -155,7 +160,7 @@ export function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = search = channelLists = guildIcons = undefined;
+    filter = lists = mentions = pagination = search = channelLists = guildIcons = hiddenPings = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

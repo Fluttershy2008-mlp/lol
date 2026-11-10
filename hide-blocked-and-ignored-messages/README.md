@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.5
+# HideBlockedAndIgnoredMessages 1.5.6
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,33 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Hidden-server pings (1.0.0-beta15)
+
+**Hide pings from selected servers** is enabled by default and reuses your saved
+hidden server IDs. It removes their messages from Recent Activity/recent mentions,
+zeros their channel/thread/server mention badges, and suppresses their foreground
+in-app notification banners and sounds. Other servers, DMs, friend requests and
+explicit message search remain available. It works independently of the message,
+channel-list and icon switches.
+
+The switch is in the regular settings page and the **Hidden users & servers**
+in-chat panel. OFF restores cached mention/activity entries. The plugin projects
+native display getters, preserving original message/notification caches,
+pagination cursors, persisted store snapshots and read/ack state. It does not
+send mark-read, delete, mute or account-settings requests. Android system push
+notifications delivered while Discord is closed are outside these JavaScript
+hooks and still depend on Discord's notification settings.
+
+Update the hider to beta15 and restart Discord once. Chat Buttons 1.0.11 does not
+need updating for this feature. Device verification remains needed.
+
+Mobile interfaces used for compatibility:
+- [NotificationCenterItemsStore display accessors](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/main/discord_app/modules/notification_center/NotificationCenterItemsStore.tsx)
+- [RecentMentionsStore](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/main/discord_app/modules/inbox/RecentMentionsStore.tsx)
+- [Guild mention count fields](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/main/discord_app/stores/GuildReadStateStore.tsx)
+- [Foreground notification policy](https://github.com/Wumpus-Central/discord-mobile-datamining/blob/main/discord_app/stores/native/InAppNotificationStore.tsx)
+
 
 ### Direct in-chat settings panel (1.0.0-beta14)
 

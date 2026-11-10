@@ -14,7 +14,9 @@ export function createServerFilter(storage, getChannel = () => undefined) {
       let channel;
       try { channel = getChannel(id); } catch { return undefined; }
       if (!channel) return undefined;
-      const guild = channel.guild_id ?? channel.guildId;
+      let guild;
+      try { guild = channel.guild_id ?? channel.guildId ?? (typeof channel.getGuildId === 'function' ? channel.getGuildId() : undefined); }
+      catch { return undefined; }
       if (typeof guild === 'string' && guild) return guild;
       id = channel.parent_id ?? channel.parentId;
     }
@@ -34,6 +36,9 @@ export function createServerFilter(storage, getChannel = () => undefined) {
       : guildForChannel(message.channel_id ?? message.channelId));
   }
   return { isChannelHidden, isServerMessageHidden,
+    isGuildPingHidden: id => storage.hideServerPings !== false && selectedGuild(id),
+    isChannelPingHidden: id => storage.hideServerPings !== false && selectedGuild(guildForChannel(id)),
+    pingGuildIds: () => storage.hideServerPings === false ? [] : normalizeServerIds(storage.hiddenServerIds),
     isGuildIconHidden: id => storage.hideServerIcons !== false && selectedGuild(id),
     isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
 }

@@ -300,3 +300,13 @@ hider's own composer button. It no longer depends on a cross-plugin settings
 helper or navigation route. Existing saved IDs, switches, nicknames and pinning
 remain in place. Tests verify that the panel actually mounts and edits live
 settings, including when navigation silently does nothing.
+
+### HideBlockedAndIgnoredMessages beta15 — hide server pings
+
+**Hide pings from selected servers** reuses saved server IDs and starts enabled.
+It filters their Recent Activity/mention entries, channel/server/thread mention
+badges and foreground notification banners/sounds. OFF restores cached entries;
+other servers, DMs and friend requests remain visible. It preserves native caches,
+pagination and read state. Android push while Discord is closed is not covered.
+Update only the hider and restart once. The new switch is also available in the
+existing **Hidden users & servers** chat settings panel.
