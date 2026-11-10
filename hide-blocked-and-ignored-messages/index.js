@@ -196,7 +196,7 @@ function withRevengeCompatibility(api, factory, pluginName) {
 
 return withRevengeCompatibility(vendetta, function(vendetta) {
 return (() => {
-/*! HideBlockedAndIgnoredMessages 1.5.6, CC0-1.0.
+/*! HideBlockedAndIgnoredMessages 1.5.7, CC0-1.0.
  * Adapted from shipwr3ckd/revengeplugin; original authors Zykrah and シグマ siguma.
  * https://github.com/Fluttershy2008-mlp/lol/tree/main/hide-blocked-and-ignored-messages
  */
@@ -232,7 +232,27 @@ function parseServerIds(value) {
   return { ids: [...new Set(tokens.filter(isDiscordUserId))], invalid: tokens.filter(id => !isDiscordUserId(id)) };
 }
 function createServerFilter(storage, getChannel = () => undefined) {
+  let source, sourceLength = -1, ids = [], selected = new Set();
+  let channels = new Map(), channelRevision = 0, revision, revisionIds, revisionEnabled, revisionChannels;
+  function selectedIds() {
+    const next = storage.hiddenServerIds;
+    if (source !== next || sourceLength !== next?.length) {
+      source = next; sourceLength = next?.length;
+      ids = normalizeServerIds(next); selected = new Set(ids);
+    }
+    return ids;
+  }
+  function clearChannels() { channels = new Map(); channelRevision++; }
+  function pingRevision() {
+    const current = selectedIds(), enabled = storage.hideServerPings !== false;
+    if (!revision || revisionIds !== current || revisionEnabled !== enabled || revisionChannels !== channelRevision) {
+      revisionIds = current; revisionEnabled = enabled; revisionChannels = channelRevision; revision = {};
+    }
+    return revision;
+  }
   function guildForChannel(id) {
+    if (channels.has(id)) return channels.get(id);
+    const start = id;
     const seen = new Set();
     while (typeof id === 'string' && id && !seen.has(id) && seen.size < 8) {
       seen.add(id);
@@ -242,16 +262,22 @@ function createServerFilter(storage, getChannel = () => undefined) {
       let guild;
       try { guild = channel.guild_id ?? channel.guildId ?? (typeof channel.getGuildId === 'function' ? channel.getGuildId() : undefined); }
       catch { return undefined; }
-      if (typeof guild === 'string' && guild) return guild;
+      if (typeof guild === 'string' && guild) {
+        if (channels.size >= 4096) channels.delete(channels.keys().next().value);
+        channels.set(start, guild); return guild;
+      }
       id = channel.parent_id ?? channel.parentId;
+      if (!id) {
+        if (channels.size >= 4096) channels.delete(channels.keys().next().value);
+        channels.set(start, undefined); return undefined;
+      }
     }
   }
   function selectedGuild(id) {
-    return isDiscordUserId(id)
-      && Array.isArray(storage.hiddenServerIds) && storage.hiddenServerIds.includes(id);
+    selectedIds(); return selected.has(id);
   }
   function hiddenGuild(id) { return storage.hideServers !== false && selectedGuild(id); }
-  function isChannelHidden(id) { return hiddenGuild(guildForChannel(id)); }
+  function isChannelHidden(id) { return storage.hideServers !== false && selectedIds().length > 0 && selectedGuild(guildForChannel(id)); }
   function isServerMessageHidden(message) {
     if (!message || storage.hideServers === false || !storage.hiddenServerIds?.length) return false;
     // Never use the selected server or a reply's server: DMs and crossposts must
@@ -260,18 +286,32 @@ function createServerFilter(storage, getChannel = () => undefined) {
     return hiddenGuild(typeof guild === 'string' && guild ? guild
       : guildForChannel(message.channel_id ?? message.channelId));
   }
-  return { isChannelHidden, isServerMessageHidden,
+  return { isChannelHidden, isServerMessageHidden, clearChannels, pingRevision,
+    pingsEnabled: () => storage.hideServerPings !== false && selectedIds().length > 0,
+    iconsEnabled: () => storage.hideServerIcons !== false && selectedIds().length > 0,
     isGuildPingHidden: id => storage.hideServerPings !== false && selectedGuild(id),
-    isChannelPingHidden: id => storage.hideServerPings !== false && selectedGuild(guildForChannel(id)),
-    pingGuildIds: () => storage.hideServerPings === false ? [] : normalizeServerIds(storage.hiddenServerIds),
+    isChannelPingHidden: id => storage.hideServerPings !== false && selectedIds().length > 0 && selectedGuild(guildForChannel(id)),
+    pingGuildIds: () => storage.hideServerPings === false ? [] : selectedIds(),
     isGuildIconHidden: id => storage.hideServerIcons !== false && selectedGuild(id),
     isGuildChannelListHidden: id => storage.hideServerChannels !== false && hiddenGuild(id) };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
 function createPingProjection(servers) {
-  let arrays = new WeakMap();
-  function hidden(entry, seen = new Set(), depth = 0) {
+  let arrays = new WeakMap(), entries = new WeakMap(), revision;
+  function clear() { arrays = new WeakMap(); entries = new WeakMap(); }
+  function enabled() {
+    const next = servers.pingRevision?.();
+    if (revision !== next) { revision = next; clear(); }
+    return servers.pingsEnabled?.() !== false;
+  }
+  function hidden(entry) {
+    if (!enabled() || !entry || typeof entry !== 'object') return false;
+    if (entries.has(entry)) return entries.get(entry);
+    const result = classify(entry, new Set(), 0);
+    entries.set(entry, result); return result;
+  }
+  function classify(entry, seen, depth) {
     if (!entry || typeof entry !== 'object' || depth > 6 || seen.has(entry)) return false;
     seen.add(entry);
     // A notification's own message/channel determines its server. Never follow
@@ -297,27 +337,42 @@ function createPingProjection(servers) {
         if (match) return servers.isGuildPingHidden(match[1]);
       }
       for (const key of ['notification', 'item', 'data', 'metadata']) {
-        if (hidden(entry[key], seen, depth + 1)) return true;
+        if (classify(entry[key], seen, depth + 1)) return true;
       }
     } catch {}
     return false;
   }
-  function list(value) {
-    if (!Array.isArray(value)) return value;
-    const next = value.filter(item => !hidden(item));
-    if (next.length === value.length) return value;
-    const cached = arrays.get(value);
-    if (cached && cached.length === next.length && next.every((item, i) => item === cached[i])) return cached;
-    arrays.set(value, next); return next;
+  // Native store change signals invalidate trusted snapshots. For callers without
+  // change signals, compare row references too (including in-place appends).
+  function snapshot(value, trusted) {
+    let cached = arrays.get(value);
+    if (cached && cached.length === value.length
+      && (trusted || value.every((row, i) => row === cached.source[i]))) return cached;
+    cached = { length: value.length, source: value.slice(), view: undefined, ids: undefined };
+    arrays.set(value, cached); return cached;
   }
-  return { hidden, list, clear() { arrays = new WeakMap(); } };
+  function list(value, trusted = false) {
+    if (!enabled() || !Array.isArray(value) || !value.length) return value;
+    const cached = snapshot(value, trusted);
+    if (cached.view) return cached.view;
+    const next = value.filter(item => !hidden(item));
+    cached.view = next.length === value.length ? value : next;
+    return cached.view;
+  }
+  function hasHiddenId(value, id, trusted = false) {
+    if (!enabled() || !Array.isArray(value)) return false;
+    const cached = snapshot(value, trusted);
+    if (!cached.ids) cached.ids = new Map(value.map(row => [row?.id, row]));
+    return hidden(cached.ids.get(id));
+  }
+  return { hidden, list, hasHiddenId, clear };
 }
 
 function installHiddenPings(V, servers) {
   let active = true, totalsDepth = 0;
   const observed = new Map();
   const projection = createPingProjection(servers), disposers = [], stores = new Set(), patched = new WeakMap();
-  let recentRaw;
+  let recentRaw, recentTrusted = false;
   function method(object, key, callback) {
     if (!object || typeof object[key] !== 'function') return;
     const keys = patched.get(object) ?? new Set();
@@ -345,21 +400,28 @@ function installHiddenPings(V, servers) {
     const store = module?.default ?? module;
     if (!store || stores.has(store)) return;
     stores.add(store);
-    if (name === 'RecentMentionsStore' && typeof store.getMentions === 'function') recentRaw = store.getMentions.bind(store);
+    const trusted = ['RecentMentionsStore', 'NotificationsInboxStore', 'NotificationCenterItemsStore'].includes(name)
+      && typeof store.addChangeListener === 'function' && typeof store.removeChangeListener === 'function';
+    if (trusted) {
+      const changed = () => projection.clear();
+      store.addChangeListener(changed);
+      disposers.push(() => store.removeChangeListener(changed));
+    }
+    const projectRows = rows => projection.list(rows, trusted);
+    if (name === 'RecentMentionsStore' && typeof store.getMentions === 'function') { recentRaw = store.getMentions.bind(store); recentTrusted = trusted; }
     if (['RecentMentionsStore', 'NotificationsInboxStore'].includes(name)) {
       for (const key of ['getMentions', 'getSettingsFilteredMentions', 'getInboxMessages']) {
-        method(store, key, function (args, original) { const result = original.apply(this, args); return active ? projection.list(result) : result; });
+        method(store, key, function (args, original) { const result = original.apply(this, args); return active ? projectRows(result) : result; });
       }
       for (const key of ['getMentionCountForChannel']) {
         method(store, key, function (args, original) { return active && !totalsDepth && servers.isChannelPingHidden(args[0]) ? 0 : original.apply(this, args); });
       }
       method(store, 'hasMention', function (args, original) {
-        if (active) {
-          const rows = safeRawMentions();
-          if (projection.hidden(observed.get(args[0]))) return false;
-          if (Array.isArray(rows) && rows.some(row => row?.id === args[0] && projection.hidden(row))) return false;
-        }
-        return original.apply(this, args);
+        const result = original.apply(this, args);
+        if (!active || !result) return result;
+        const known = observed.get(args[0]);
+        if (known) return projection.hidden(known) ? false : result;
+        return projection.hasHiddenId(safeRawMentions(), args[0], recentTrusted) ? false : result;
       });
       method(store, 'getNotifyingChannelIds', function (args, original) {
         const ids = original.apply(this, args);
@@ -367,14 +429,14 @@ function installHiddenPings(V, servers) {
       });
     }
     if (name === 'NotificationCenterItemsStore') {
-      getter(store, 'items', projection.list); getter(store, 'localItems', projection.list);
+      getter(store, 'items', projectRows); getter(store, 'localItems', projectRows);
       for (const key of ['getItems', 'getLocalItems']) method(store, key, function (args, original) {
-        const rows = original.apply(this, args); return active ? projection.list(rows) : rows;
+        const rows = original.apply(this, args); return active ? projectRows(rows) : rows;
       });
     }
     if (name === 'NotificationCenterStore') method(store, 'hasNewMentions', function (args, original) {
       const result = original.apply(this, args), rows = safeRawMentions();
-      return active && result && Array.isArray(rows) && rows.length && !projection.list(rows).length ? false : result;
+      return active && result && Array.isArray(rows) && rows.length && !projection.list(rows, recentTrusted).length ? false : result;
     });
     if (name === 'ReadStateStore') {
       method(store, 'getMentionCount', function (args, original) { return active && !totalsDepth && servers.isChannelPingHidden(args[0]) ? 0 : original.apply(this, args); });
@@ -444,7 +506,8 @@ function installHiddenPings(V, servers) {
     }
   }
   function observe(event) {
-    if (event?.type === 'LOGOUT' || event?.type === 'CONNECTION_OPEN') { observed.clear(); return; }
+    if (event?.type === 'LOGOUT' || event?.type === 'CONNECTION_OPEN') { observed.clear(); projection.clear(); return; }
+    if (servers.pingsEnabled?.() === false) return;
     if (!['MESSAGE_CREATE', 'MESSAGE_UPDATE'].includes(event?.type) || typeof event.message?.id !== 'string') return;
     const message = event.message, before = observed.get(message.id) ?? {};
     observed.delete(message.id);
@@ -479,7 +542,7 @@ function installHiddenPings(V, servers) {
     watch('modules/notifications/native/playInAppMessageSound.tsx', attachSound);
     watch('modules/notification_center/useNotificationCenterItemsLoader.tsx', attachLoader);
   } catch (error) { stop(); throw error; }
-  return { refresh, observe, stop };
+  return { refresh, invalidate: projection.clear, observe, stop };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
@@ -497,7 +560,7 @@ function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn => fn())
   const names = ['GuildsBar', 'GuildsBarGuild', 'GuildsBarGuildItem', 'GuildsBarItem',
     'GuildsBarFolder', 'GuildsBarAnimatedItemWrapper', 'GuildIcon'];
   function hidden(value) {
-    if (stopped || !value || typeof value !== 'object') return false;
+    if (stopped || servers.iconsEnabled?.() === false || !value || typeof value !== 'object') return false;
     for (const id of [value.guildId, value.guild_id, value.guild?.id, value.id,
       value.item?.guildId, value.item?.guild_id, value.item?.guild?.id, value.item?.id,
       value.node?.guildId, value.node?.id]) {
@@ -513,7 +576,7 @@ function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn => fn())
     return callbacks.get(fn);
   }
   function projectProps(props) {
-    if (!props || typeof props !== 'object' || stopped || rawRenderDepth) return props;
+    if (!props || typeof props !== 'object' || stopped || rawRenderDepth || servers.iconsEnabled?.() === false) return props;
     const next = {};
     for (const key of ['data', 'items', 'guilds', 'guildFolders', 'fastListGuildFolders', 'guildIds', 'guild_ids']) {
       if (Array.isArray(props[key])) {
@@ -536,7 +599,7 @@ function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn => fn())
     return Object.keys(next).length ? { ...props, ...next } : props;
   }
   function projectElement(element, depth = 0, seen = new Set()) {
-    if (stopped || depth > 16 || element == null || typeof element !== 'object') return element;
+    if (stopped || servers.iconsEnabled?.() === false || depth > 16 || element == null || typeof element !== 'object') return element;
     if (seen.has(element)) return element;
     if (Array.isArray(element)) {
       seen.add(element);
@@ -738,7 +801,7 @@ function installGuildIcons(V, servers) {
       if (typeof store[key] !== 'function') continue;
       cleanups.push(V.patcher.instead(key, store, function (args, original) {
         const result = original.apply(this, args);
-        if (stopped || unfilteredDepth) return result;
+        if (stopped || unfilteredDepth || servers.iconsEnabled?.() === false) return result;
         try { return project(result); } catch { return result; }
       }));
     }
@@ -1601,14 +1664,11 @@ function createPlugin(V) {
   const byStore = name => { try { return V.metro.findByStoreName?.(name); } catch {} };
   const method = (object, name) => { try { return typeof object?.[name] === 'function'; } catch { return false; } };
 
-  function refresh() {
+  function refreshMessages() {
     lists?.clear();
     mentions?.clear();
     search?.clear();
     pagination?.reset();
-    channelLists?.refresh();
-    guildIcons?.refresh();
-    hiddenPings?.refresh();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -1616,6 +1676,13 @@ function createPlugin(V) {
       try { messageStore?.emitChange?.(); } catch {}
       search?.refresh();
     }, 0);
+  }
+
+  function refresh() {
+    refreshMessages();
+    channelLists?.refresh();
+    guildIcons?.refresh();
+    hiddenPings?.refresh();
   }
 
   function onLoad() {
@@ -1671,7 +1738,7 @@ function createPlugin(V) {
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refresh);
+      search = installSearch(V, refreshMessages);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
@@ -1721,11 +1788,20 @@ function createPlugin(V) {
           return result;
         }));
       }
-      for (const store of new Set([blockedStore, ignoredStore, channelStore])) {
+      for (const store of new Set([blockedStore, ignoredStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
-          store.addChangeListener(refresh);
-          cleanup.push(() => store.removeChangeListener(refresh));
+          store.addChangeListener(refreshMessages);
+          cleanup.push(() => store.removeChangeListener(refreshMessages));
         }
+      }
+      if (method(channelStore, 'addChangeListener') && method(channelStore, 'removeChangeListener')) {
+        const changed = () => {
+          servers.clearChannels();
+          hiddenPings?.invalidate();
+          refreshMessages();
+        };
+        channelStore.addChangeListener(changed);
+        cleanup.push(() => channelStore.removeChangeListener(changed));
       }
       refresh();
     } catch (error) { onUnload(); throw error; }

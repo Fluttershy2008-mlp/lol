@@ -301,6 +301,14 @@ helper or navigation route. Existing saved IDs, switches, nicknames and pinning
 remain in place. Tests verify that the panel actually mounts and edits live
 settings, including when navigation silently does nothing.
 
+### HideBlockedAndIgnoredMessages beta16 — reduce filtering overhead
+
+Caches notification snapshots, mention-ID lookups and channel/thread ownership
+between native changes. Channel and relationship updates no longer force unrelated
+inbox/server-bar/sidebar redraws. Settings switches still update live. Automated
+checks cover repeated reads of 2,000-row inboxes, in-place native updates and
+cleanup; on-device performance still needs checking. Update and restart once.
+
 ### HideBlockedAndIgnoredMessages beta15 — hide server pings
 
 **Hide pings from selected servers** reuses saved server IDs and starts enabled.

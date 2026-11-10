@@ -32,3 +32,27 @@ test('projection preserves frozen originals, stable snapshots, new rows and imme
   assert.deepEqual(p.list(arriving), [visible, next]);
   const cycle = {}; cycle.data = cycle; assert.equal(p.hidden(cycle), false);
 });
+
+test('unchanged native activity snapshots and mention-ID lookups do not rescan history', () => {
+  let classified = 0, reads = 0;
+  const servers = createServerFilter({ hiddenServerIds: [GUILD] });
+  const p = createPingProjection(servers);
+  const data = Array.from({ length: 2000 }, (_, i) => ({ id: String(i),
+    get guild_id() { classified++; return i % 2 ? OTHER : GUILD; } }));
+  const rows = new Proxy(data, { get(target, key) {
+    if (typeof key === 'string' && /^\d+$/.test(key)) reads++;
+    return Reflect.get(target, key);
+  } });
+  assert.equal(p.list(rows, true).length, 1000);
+  assert.equal(p.hasHiddenId(rows, '0', true), true);
+  const initial = { reads, classified };
+  for (let i = 0; i < 500; i++) {
+    assert.equal(p.list(rows, true).length, 1000);
+    assert.equal(p.hasHiddenId(rows, '0', true), true);
+    assert.equal(p.hasHiddenId(rows, 'missing', true), false);
+  }
+  assert.deepEqual({ reads, classified }, initial, 'no further row reads or server classification on unchanged native snapshots');
+  data[0] = { id: '0', guild_id: OTHER }; p.clear();
+  assert.equal(p.list(rows, true).length, 1001);
+  assert.equal(p.hasHiddenId(rows, '0', true), false);
+});

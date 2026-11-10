@@ -22,14 +22,11 @@ export function createPlugin(V) {
   const byStore = name => { try { return V.metro.findByStoreName?.(name); } catch {} };
   const method = (object, name) => { try { return typeof object?.[name] === 'function'; } catch { return false; } };
 
-  function refresh() {
+  function refreshMessages() {
     lists?.clear();
     mentions?.clear();
     search?.clear();
     pagination?.reset();
-    channelLists?.refresh();
-    guildIcons?.refresh();
-    hiddenPings?.refresh();
     if (!active || refreshTimer !== undefined) return;
     refreshTimer = setTimeout(() => {
       refreshTimer = undefined;
@@ -37,6 +34,13 @@ export function createPlugin(V) {
       try { messageStore?.emitChange?.(); } catch {}
       search?.refresh();
     }, 0);
+  }
+
+  function refresh() {
+    refreshMessages();
+    channelLists?.refresh();
+    guildIcons?.refresh();
+    hiddenPings?.refresh();
   }
 
   function onLoad() {
@@ -92,7 +96,7 @@ export function createPlugin(V) {
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refresh);
+      search = installSearch(V, refreshMessages);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
@@ -142,11 +146,20 @@ export function createPlugin(V) {
           return result;
         }));
       }
-      for (const store of new Set([blockedStore, ignoredStore, channelStore])) {
+      for (const store of new Set([blockedStore, ignoredStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
-          store.addChangeListener(refresh);
-          cleanup.push(() => store.removeChangeListener(refresh));
+          store.addChangeListener(refreshMessages);
+          cleanup.push(() => store.removeChangeListener(refreshMessages));
         }
+      }
+      if (method(channelStore, 'addChangeListener') && method(channelStore, 'removeChangeListener')) {
+        const changed = () => {
+          servers.clearChannels();
+          hiddenPings?.invalidate();
+          refreshMessages();
+        };
+        channelStore.addChangeListener(changed);
+        cleanup.push(() => channelStore.removeChangeListener(changed));
       }
       refresh();
     } catch (error) { onUnload(); throw error; }

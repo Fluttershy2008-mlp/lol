@@ -19,3 +19,20 @@ test('classifies only the owning guild; missing channels and cyclic parents stay
   storage.hideServers = false;
   assert.equal(filter.shouldHide({ guild_id: GUILD }), false);
 });
+
+test('badge checks reuse channel ownership, invalidate on channel changes, and skip lookup when disabled or empty', () => {
+  let lookups = 0;
+  const storage = { hiddenServerIds: [GUILD] }, channels = { channel: { guild_id: GUILD }, thread: { parent_id: 'channel' }, dm: { type: 1 } };
+  const server = createServerFilter(storage, id => { lookups++; return channels[id]; });
+  for (let i = 0; i < 1000; i++) {
+    assert.equal(server.isChannelPingHidden('thread'), true);
+    assert.equal(server.isChannelPingHidden('dm'), false);
+  }
+  assert.equal(lookups, 3);
+  channels.channel = { guild_id: '400000000000000002' }; server.clearChannels();
+  assert.equal(server.isChannelPingHidden('thread'), false);
+  const before = lookups; storage.hideServerPings = false;
+  assert.equal(server.isChannelPingHidden('unknown'), false);
+  storage.hideServerPings = true; storage.hiddenServerIds = [];
+  assert.equal(server.isChannelPingHidden('unknown'), false); assert.equal(lookups, before);
+});

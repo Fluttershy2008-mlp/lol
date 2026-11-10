@@ -13,7 +13,7 @@ export function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn =
   const names = ['GuildsBar', 'GuildsBarGuild', 'GuildsBarGuildItem', 'GuildsBarItem',
     'GuildsBarFolder', 'GuildsBarAnimatedItemWrapper', 'GuildIcon'];
   function hidden(value) {
-    if (stopped || !value || typeof value !== 'object') return false;
+    if (stopped || servers.iconsEnabled?.() === false || !value || typeof value !== 'object') return false;
     for (const id of [value.guildId, value.guild_id, value.guild?.id, value.id,
       value.item?.guildId, value.item?.guild_id, value.item?.guild?.id, value.item?.id,
       value.node?.guildId, value.node?.id]) {
@@ -29,7 +29,7 @@ export function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn =
     return callbacks.get(fn);
   }
   function projectProps(props) {
-    if (!props || typeof props !== 'object' || stopped || rawRenderDepth) return props;
+    if (!props || typeof props !== 'object' || stopped || rawRenderDepth || servers.iconsEnabled?.() === false) return props;
     const next = {};
     for (const key of ['data', 'items', 'guilds', 'guildFolders', 'fastListGuildFolders', 'guildIds', 'guild_ids']) {
       if (Array.isArray(props[key])) {
@@ -52,7 +52,7 @@ export function installGuildBarRenderer(V, servers, filter, runUnfiltered = fn =
     return Object.keys(next).length ? { ...props, ...next } : props;
   }
   function projectElement(element, depth = 0, seen = new Set()) {
-    if (stopped || depth > 16 || element == null || typeof element !== 'object') return element;
+    if (stopped || servers.iconsEnabled?.() === false || depth > 16 || element == null || typeof element !== 'object') return element;
     if (seen.has(element)) return element;
     if (Array.isArray(element)) {
       seen.add(element);

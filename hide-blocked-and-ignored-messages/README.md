@@ -1,4 +1,4 @@
-# HideBlockedAndIgnoredMessages 1.5.6
+# HideBlockedAndIgnoredMessages 1.5.7
 
 Revenge/Vendetta-compatible update of the plugin supplied from
 [shipwr3ckd/revengeplugin](https://github.com/shipwr3ckd/revengeplugin/tree/master/plugins/HideBlockedAndIgnoredMessages).
@@ -20,6 +20,24 @@ Do not append `index.js` or `manifest.json` to the install URL. The folder
 contains both files, ready to install; no GitHub Actions build is required.
 
 ## Valenced update
+
+### Performance update (1.0.0-beta16)
+
+Notification display snapshots and mention-ID lookups are cached between native
+store changes instead of rescanning the entire inbox on every read. Per-entry
+classification and channel/thread ownership are reused; native notification and
+channel changes invalidate them, including same-length in-place inbox updates.
+Disabled or empty server filters bypass the extra work.
+
+Relationship and channel updates refresh message filtering without forcing
+unrelated server bars, channel sidebars and notification stores to redraw. Settings
+changes still refresh the visibility switches immediately. IDs, chat settings,
+search exceptions and the beta15 ping-hiding behaviour carry over.
+
+Automated workload checks cover 2,000 inbox rows with 500 repeated reads and ID
+lookups without additional row scans, badge lookups, native cache invalidation,
+unload cleanup and live switch restoration. Phone frame rates have not been
+measured. Update to beta16 and restart Discord once.
 
 ### Hidden-server pings (1.0.0-beta15)
 

@@ -123,3 +123,40 @@ test('notification modules loaded after the plugin starts are filtered, and disa
   assert.equal(f.items.items, f.allItems); assert.equal(f.guild.getTotalMentionCount(), 10);
   await w.stop(next); assert.deepEqual(w.errors, []); assert.equal(w.pathWaiters.size, 0);
 });
+
+test('channel and relationship updates do not redraw the notification inbox; channel ownership still invalidates', async () => {
+  const w = createWorld(), f = fixture(w);
+  const item = await w.start('hide-blocked-and-ignored-messages', { hiddenServerIds: [GUILD] });
+  assert.equal(f.read.getMentionCount(CHANNEL), 0);
+  const before = f.counts().emits;
+  for (let i = 0; i < 50; i++) {
+    w.stores.ChannelStore.emitChange(); w.stores.RelationshipStore.emitChange();
+  }
+  assert.equal(f.counts().emits, before, 'unrelated store changes must not fan out to the inbox');
+  w.channels[CHANNEL] = { id: CHANNEL, guild_id: KEEP }; w.stores.ChannelStore.emitChange();
+  assert.equal(f.read.getMentionCount(CHANNEL), 5, 'a cached channel moving guild must not remain suppressed');
+  await w.stop(item); assert.deepEqual(w.errors, []); assert.equal(w.timers.size, 0);
+});
+
+test('packaged mobile inbox reuses unchanged snapshots and follows same-length in-place updates after native change signals', async () => {
+  const w = createWorld(), listeners = new Set(); let reads = 0;
+  const data = Array.from({ length: 2000 }, (_, i) => ({ id: String(i), guild_id: i % 2 ? KEEP : GUILD }));
+  const rows = new Proxy(data, { get(target, key) { if (typeof key === 'string' && /^\d+$/.test(key)) reads++; return Reflect.get(target, key); } });
+  class Items {
+    get items() { return rows; }
+    emitChange() { for (const fn of listeners) fn(); }
+    addChangeListener(fn) { listeners.add(fn); } removeChangeListener(fn) { listeners.delete(fn); }
+  }
+  const inbox = new Items(); w.stores.NotificationCenterItemsStore = inbox;
+  const recent = { getMentions: () => rows, hasMention: () => true,
+    addChangeListener: fn => listeners.add(fn), removeChangeListener: fn => listeners.delete(fn), emitChange() { for (const fn of listeners) fn(); } };
+  w.stores.RecentMentionsStore = recent;
+  const item = await w.start('hide-blocked-and-ignored-messages', { hiddenServerIds: [GUILD] });
+  assert.equal(inbox.items.length, 1000); assert.equal(recent.hasMention('0'), false);
+  const firstReads = reads;
+  for (let i = 0; i < 500; i++) { assert.equal(inbox.items.length, 1000); assert.equal(recent.hasMention('0'), false); }
+  assert.equal(reads, firstReads, '500 repeated native reads do not walk the 2,000-row inbox again');
+  data[0].guild_id = KEEP; inbox.emitChange();
+  assert.equal(inbox.items.length, 1001); assert.equal(recent.hasMention('0'), true);
+  await w.stop(item); assert.equal(listeners.size, 0); assert.equal(inbox.items, rows); assert.deepEqual(w.errors, []);
+});

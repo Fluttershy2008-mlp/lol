@@ -108,7 +108,7 @@ export function installGuildIcons(V, servers) {
       if (typeof store[key] !== 'function') continue;
       cleanups.push(V.patcher.instead(key, store, function (args, original) {
         const result = original.apply(this, args);
-        if (stopped || unfilteredDepth) return result;
+        if (stopped || unfilteredDepth || servers.iconsEnabled?.() === false) return result;
         try { return project(result); } catch { return result; }
       }));
     }
