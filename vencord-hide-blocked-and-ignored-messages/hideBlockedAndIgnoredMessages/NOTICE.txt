@@ -1,0 +1,4 @@
+HideBlockedAndIgnoredMessages for Vencord, by Fluttershy2008-mlp.
+Portable CC0 filters from the matching Valenced plugin (Zykrah and シグマ siguma original plugin lineage).
+Desktop integration and installer: GPL-3.0-or-later. Portable .js filter modules retain CC0-1.0.
+No Valenced/Android settings are imported automatically; add IDs in the desktop settings.
