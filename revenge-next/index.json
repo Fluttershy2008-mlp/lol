@@ -176,11 +176,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta8": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.auto-text@1.0.0-beta8.zip",
+          "sha256": "7f26dfa7973dc113756a3a7ceccb5fb81512f535b0671dc5816b1de18c355754",
+          "size": 30007,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta7",
-        "beta": "1.0.0-beta7"
+        "latest": "1.0.0-beta8",
+        "beta": "1.0.0-beta8"
       },
       "name": "AutoText (Next preview)",
       "description": "Revenge Next preview. Type a prepared message letter by letter with speed controls, Stop, bullet points and optional auto-send once the full message is finished.",

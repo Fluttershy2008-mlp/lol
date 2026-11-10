@@ -1,5 +1,24 @@
 /* SPDX-License-Identifier: MIT */
 
+export const TYPING_SPEEDS = Object.freeze([
+  { name: 'Very slow', wpm: 15 },
+  { name: 'Slow', wpm: 30 },
+  { name: 'Normal', wpm: 40 },
+  { name: 'Fast', wpm: 60 },
+  { name: 'Very fast', wpm: 85 },
+  { name: 'Elite', wpm: 120 },
+].map(Object.freeze));
+export const DEFAULT_TYPING_WPM = 40;
+// Standard WPM uses five characters per word, including spaces.
+export function typingIntervalForWpm(wpm) {
+  return 60000 / (5 * wpm);
+}
+export function savedTypingWpm(storage) {
+  if (TYPING_SPEEDS.some(speed => speed.wpm === storage.typingWpm)) return storage.typingWpm;
+  // Preserve the old named selection when upgrading from millisecond presets.
+  return new Map([[500, 15], [150, 30], [70, 40], [25, 60]]).get(storage.typingInterval) ?? DEFAULT_TYPING_WPM;
+}
+
 export function typingCharacters(text) {
   if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
     return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), item => item.segment);
@@ -23,7 +42,7 @@ export function typingCharacters(text) {
 
 export function createTyper({ read, insert, send, refresh, prepare, allowed, maxLength, changed = () => {}, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let disposed = false, timer = null, status = 'idle', message = '', chunks = [], position = 0, total = 0;
-  let expected = '', pending = null, interval = 70;
+  let expected = '', pending = null, interval = typingIntervalForWpm(DEFAULT_TYPING_WPM);
   let autoSend = false, sendIssued = false, sendStarted = 0, runId = 0;
   let verification = null, prepared = false;
   const state = () => ({ status, message, position, total, autoSend,
@@ -166,7 +185,7 @@ export function createTyper({ read, insert, send, refresh, prepare, allowed, max
   }
   return {
     get state() { return state(); },
-    start(text, milliseconds = 70, settings = {}) {
+    start(text, milliseconds = typingIntervalForWpm(DEFAULT_TYPING_WPM), settings = {}) {
       if (disposed) throw new Error('Reopen the chat before starting AutoType.');
       if (status === 'running' || status === 'sending') throw new Error('Wait for the current run to finish or stop it first.');
       if (!allowed()) throw new Error('Open the chat and resume AutoText before starting.');
@@ -177,7 +196,7 @@ export function createTyper({ read, insert, send, refresh, prepare, allowed, max
       if (initial.length + normalized.length > maxLength()) throw new Error('Your message plus the current draft exceeds the message limit. Shorten it or clear the message box first.');
       if (settings.autoSend === true && typeof send !== 'function') throw new Error('Auto-send is unavailable on this Discord version. Turn it off to type normally.');
       const speed = Number(milliseconds);
-      interval = Number.isFinite(speed) ? Math.max(25, Math.min(500, speed)) : 70;
+      interval = Number.isFinite(speed) ? Math.max(25, Math.min(1000, speed)) : typingIntervalForWpm(DEFAULT_TYPING_WPM);
       clearTimer(); clearVerification(); runId++; prepared = false; autoSend = settings.autoSend === true; sendIssued = false;
       chunks = typingCharacters(normalized); position = 0; total = chunks.length;
       expected = initial; pending = null; status = 'running'; message = 'Typing your prepared message…';

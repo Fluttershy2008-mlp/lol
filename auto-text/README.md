@@ -1,5 +1,9 @@
 # AutoText for Revenge
 
+### WPM typing presets (AutoText 1.2.8 / Valenced 1.0.0-beta4)
+
+AutoType now shows six WPM presets, with Normal set to 40 WPM. Refresh the repository, update AutoText, and restart Valenced. Thread/forum editor support is retained.
+
 ### Valenced thread and forum support (AutoText 1.2.7 / Valenced 1.0.0-beta3)
 
 The AutoType, bullet list, numbered list, saved phrases and Pause controls now also appear above the message body in **New Forum Post**. The forum title and Post button remain Discord's own controls. AutoType leaves the completed forum message as a draft: review it and tap **Post** yourself. Existing thread replies continue to use the normal chat toolbar.
@@ -29,19 +33,23 @@ Updating from an earlier version: update the plugin to **1.2.2**, then fully res
 1. Open the chat where you want to type.
 2. Tap **▶ AutoType** in the message box.
 3. Paste or enter your full message in **Message to type**. Multiline bullet lists work as entered.
-4. Choose **Very slow**, **Slow**, **Normal**, or **Fast**.
+4. Choose a WPM preset: **Very slow**, **Slow**, **Normal**, **Fast**, **Very fast**, or **Elite**.
 5. For automatic sending, turn on **Auto-send when finished**, then tap **Start typing & send**. Otherwise tap **Start typing**.
 6. Watch the message appear character by character. Tap **■ Stop** to stop early and cancel pending auto-send.
 7. With auto-send on, the full draft is submitted once after the last character. With it off, tap Discord's **Send** button yourself.
 
 The text is appended to the end of the current draft; clear the message box first if you want to start empty. Stopping keeps the partial draft. Starting again begins a new run with the prepared text, so clear or edit the message box before repeating it.
 
-| Speed | Time per visible character |
-| --- | --- |
-| Very slow | 500 ms (half a second) |
-| Slow | 150 ms |
-| Normal | 70 ms |
-| Fast | 25 ms |
+| Speed | WPM | Time per visible character |
+| --- | --- | --- |
+| Very slow | 15 | 800 ms |
+| Slow | 30 | 400 ms |
+| Normal (default) | 40 | 300 ms |
+| Fast | 60 | 200 ms |
+| Very fast | 85 | About 141 ms |
+| Elite | 120 | 100 ms |
+
+WPM means words per minute and uses the standard five-character word, including spaces. These are target rates for ordinary text; emoji are inserted as whole visible characters. Existing speed selections migrate by name. Saved WPM selections take priority on later launches.
 
 There is a short initial delay so the editor can close. Discord's native updates may slow this down. AutoType waits for confirmation before inserting another character. Version 1.2.2 reads the native message box when Discord's cached text or change event lags, uses the latest native edit revision, and allows up to five seconds for a delayed edit. Each character is inserted once; a failed edit is never blindly retried. If the native field cannot confirm it, typing stops and auto-send is cancelled.
 

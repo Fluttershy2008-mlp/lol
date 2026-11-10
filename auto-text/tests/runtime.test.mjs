@@ -238,7 +238,7 @@ test('settings can add a multiline phrase without a network or Discord send API'
   assert.equal(r.storage.phrases.find(p => p.shortcut === ';test').text, '- One\n- Two');
   r.plugin.onUnload();
 });
-function openAutoType(r, source, autoSend = false) {
+function openAutoType(r, source, autoSend = false, wpm) {
   r.plugin.onLoad();
   const tree = r.open();
   const box = nodes(tree, n => n.props?.testID === 'floating-box')[0];
@@ -250,6 +250,13 @@ function openAutoType(r, source, autoSend = false) {
   view = host.render();
   nodes(view, n => n.props?.accessibilityLabel === 'Message to type')[0].props.onChangeText(source);
   view = host.render();
+  if (wpm !== undefined) {
+    assert.equal(nodes(view, n => n.props?.accessibilityRole === 'radio').length, 6);
+    nodes(view, n => n.props?.accessibilityLabel?.endsWith(`typing speed, ${wpm} words per minute`))[0].props.onPress();
+    view = host.render();
+    assert.equal(nodes(view, n => n.props?.accessibilityState?.checked === true && n.props?.accessibilityRole === 'radio').length, 1);
+    assert.equal(nodes(view, n => n.props?.accessibilityLabel?.endsWith(`typing speed, ${wpm} words per minute`))[0].props.accessibilityState.checked, true);
+  }
   if (autoSend) {
     nodes(view, n => n.props?.accessibilityLabel === 'Auto-send when finished')[0].props.onValueChange(true);
     view = host.render();
@@ -257,6 +264,21 @@ function openAutoType(r, source, autoSend = false) {
   nodes(view, n => n.props?.accessibilityLabel === (autoSend ? 'Start typing & send' : 'Start typing'))[0].props.onPress();
   return host;
 }
+test('all six WPM options can be selected and persist across composer mounts', () => {
+  for (const wpm of [15, 30, 40, 60, 85, 120]) {
+    const r = runtime();
+    openAutoType(r, 'abc', false, wpm);
+    assert.equal(r.storage.typingWpm, wpm);
+    for (let i = 0; i < 30; i++) r.flush();
+    assert.equal(r.read(), 'abc');
+    r.plugin.onUnload();
+    openAutoType(r, 'def');
+    assert.equal(r.storage.typingWpm, wpm);
+    for (let i = 0; i < 30; i++) r.flush();
+    assert.equal(r.read(), 'abcdef');
+    r.plugin.onUnload();
+  }
+});
 test('AutoType screen runs a multiline message without shortcut expansion or extra bullets', () => {
   const r = runtime(); const source = '- One\n- Two\n;brb 🍓';
   const host = openAutoType(r, source);
@@ -266,7 +288,7 @@ test('AutoType screen runs a multiline message without shortcut expansion or ext
   for (let i = 0; i < 60; i++) r.flush();
   assert.equal(r.read(), source);
   assert.equal(nodes(host.render(), n => n.props?.accessibilityLabel === 'Stop automatic typing').length, 0);
-  assert.equal(r.storage.typingInterval, 70);
+  assert.equal(r.storage.typingWpm, 40);
   assert.equal(r.sent(), 0, 'AutoType never sends the prepared message');
   assert(!Object.values(r.storage).includes(source), 'prepared message is not persisted');
   r.plugin.onUnload(); assert.equal(r.appListeners.size, 0); assert.equal(r.timers.size, 0);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTyper, typingCharacters } from '../src/typer.mjs';
+import { createTyper, typingCharacters, TYPING_SPEEDS, savedTypingWpm, typingIntervalForWpm } from '../src/typer.mjs';
 
 function harness({ initial = '', delayed = false, reject = false, limit = 2000, sendBehavior = 'clear', hasSend = true } = {}) {
   let text = initial, allowed = true, clock = 0, nextId = 0;
@@ -50,6 +50,25 @@ test('speed setting controls the interval and existing drafts are preserved', ()
     assert.equal(h.read(), 'Hello world');
     assert.equal(h.inserted[0].time, 400);
     assert.equal(h.inserted[1].time - h.inserted[0].time, speed);
+  }
+});
+test('WPM presets produce the requested sustained rate, including the 800ms slowest preset', () => {
+  for (const { wpm } of TYPING_SPEEDS) {
+    const h = harness();
+    h.typer.start('word '.repeat(10), typingIntervalForWpm(wpm)); h.all();
+    const elapsed = h.inserted.at(-1).time - h.inserted[0].time;
+    const measuredWpm = (h.inserted.length - 1) / 5 * 60000 / elapsed;
+    assert(Math.abs(measuredWpm - wpm) < 0.0001, `${wpm} WPM, measured ${measuredWpm}`);
+    assert.equal(h.read(), 'word '.repeat(10));
+  }
+});
+test('saved WPM takes priority; legacy named speeds migrate and invalid settings use Normal', () => {
+  for (const [typingInterval, wpm] of [[500, 15], [150, 30], [70, 40], [25, 60]]) {
+    assert.equal(savedTypingWpm({ typingInterval }), wpm);
+  }
+  for (const { wpm } of TYPING_SPEEDS) assert.equal(savedTypingWpm({ typingWpm: wpm, typingInterval: 500 }), wpm);
+  for (const value of [undefined, null, NaN, Infinity, -1, '__proto__']) {
+    assert.equal(savedTypingWpm({ typingWpm: value, typingInterval: value }), 40);
   }
 });
 test('stop cancels future writes and leaves the partial text', () => {

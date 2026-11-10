@@ -213,8 +213,19 @@ test('AutoText types a full prepared multiline message through the imported comp
     await Renderer.act(async () => button(ui, 'AutoType').props.onPress());
     const field = ui.root.findAll(n => n.type === 'TextInput' && n.props.accessibilityLabel === 'Message to type')[0];
     await Renderer.act(async () => field.props.onChangeText('- One\n- Two'));
+    assert.equal(button(ui, 'Normal typing speed, 40 words per minute').props.accessibilityState.checked, true);
+    for (const [name, wpm] of [['Very slow', 15], ['Slow', 30], ['Normal', 40], ['Fast', 60], ['Very fast', 85], ['Elite', 120]]) {
+        assert.ok(button(ui, `${name} typing speed, ${wpm} words per minute`));
+    }
+    await Renderer.act(async () => button(ui, 'Very slow typing speed, 15 words per minute').props.onPress());
     await Renderer.act(async () => button(ui, 'Start typing').props.onPress());
-    await Renderer.act(async () => w.advance(5000));
+    await Renderer.act(async () => w.advance(400));
+    assert.equal(draft, '-');
+    await Renderer.act(async () => w.advance(799));
+    assert.equal(draft, '-', '15 WPM waits the full 800ms between characters');
+    await Renderer.act(async () => w.advance(1));
+    assert.equal(draft, '- ');
+    await Renderer.act(async () => w.advance(12000));
     assert.equal(draft, '- One\n- Two');
     assert.equal(sends, 0);
 });

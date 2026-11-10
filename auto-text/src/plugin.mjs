@@ -4,6 +4,7 @@ import { createSession } from './session.mjs';
 import { decorateComposer } from './composer.mjs';
 import { createNativeReader } from './native.mjs';
 import { decorateForumComposer, createForumTarget } from './forum.mjs';
+import { TYPING_SPEEDS, savedTypingWpm, typingIntervalForWpm } from './typer.mjs';
 
 export function createPlugin(api) {
   const { React, ReactNative: RN } = api.metro.common;
@@ -153,7 +154,7 @@ export function createPlugin(api) {
           }, colors)),
         small('Supports -, *, +, •, numbered items and nested indentation. Uses the current message limit (2,000 characters if unavailable).'),
         small('Automatic changes apply only when typing at the end of the draft. Pasted text, code blocks and earlier-line edits are left alone. Suggestions use your saved phrases; they do not generate new sentences.'),
-        small('Version ' + (api.plugin.version ?? api.plugin.manifest?.version ?? '1.2.7')),
+        small('Version ' + (api.plugin.version ?? api.plugin.manifest?.version ?? '1.2.8')),
       ));
   }
 
@@ -163,7 +164,7 @@ export function createPlugin(api) {
     const [open, setOpen] = React.useState(false);
     const [typingOpen, setTypingOpen] = React.useState(false);
     const [prepared, setPrepared] = React.useState('');
-    const [typingSpeed, setTypingSpeed] = React.useState(() => [500, 150, 70, 25].includes(storage.typingInterval) ? storage.typingInterval : 70);
+    const [typingSpeed, setTypingSpeed] = React.useState(() => savedTypingWpm(storage));
     const [typingError, setTypingError] = React.useState('');
     const [autoSend, setAutoSend] = React.useState(() => !draftOnly && storage.autoSend === true);
     const sessionRef = React.useRef(null);
@@ -221,8 +222,8 @@ export function createPlugin(api) {
     function startTyping() {
       try {
         if (!session) throw new Error('The chat composer is not connected. Reopen this chat and try again.');
-        session.startTyping(prepared, typingSpeed, { autoSend });
-        storage.typingInterval = typingSpeed;
+        session.startTyping(prepared, typingIntervalForWpm(typingSpeed), { autoSend });
+        storage.typingWpm = typingSpeed;
         if (!draftOnly) storage.autoSend = autoSend;
         setTypingError(''); setTypingOpen(false);
       } catch (error) { setTypingError(error.message || 'Could not start typing.'); }
@@ -264,9 +265,11 @@ export function createPlugin(api) {
               label(`${prepared.length} characters · ${text.length} already in the message box`, colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
               label('Typing speed', colors, { fontWeight: '700', marginTop: 20 }),
               h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap' } },
-                ...[[500, 'Very slow'], [150, 'Slow'], [70, 'Normal'], [25, 'Fast']].map(([speed, name]) => button((typingSpeed === speed ? '✓ ' : '') + name,
-                  () => setTypingSpeed(speed), colors, { key: speed, accessibilityLabel: name + ' typing speed',
-                    accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === speed } }))),
+                ...TYPING_SPEEDS.map(({ wpm, name }) => button((typingSpeed === wpm ? '✓ ' : '') + name + ' · ' + wpm + ' WPM',
+                  () => setTypingSpeed(wpm), colors, { key: wpm, accessibilityLabel: name + ' typing speed, ' + wpm + ' words per minute',
+                    accessibilityRole: 'radio', accessibilityState: { checked: typingSpeed === wpm } }))),
+              label('WPM = words per minute. Normal is 40 WPM. Each word counts as 5 characters, including spaces; Discord may type more slowly while confirming updates.',
+                colors, { color: colors.sub, fontSize: 13, marginTop: 6 }),
               !draftOnly ? h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', marginTop: 20 } },
                 label('Auto-send when finished', colors, { flex: 1, fontWeight: '700' }),
                 h(RN.Switch, { value: autoSend, onValueChange: setAutoSend, accessibilityLabel: 'Auto-send when finished' })) : null,
