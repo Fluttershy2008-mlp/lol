@@ -1772,7 +1772,10 @@ ${frames}`;
           TableSwitchRow,
           TableRow
         } = rev.discord.design.Design;
+        var [refreshStatus, setRefreshStatus] = rev.react.React.useState(null);
         var summaries = inbox.use()?.summaries ?? {};
+        var checkedAt = currentId ? summaries[currentId]?.checkedAt : void 0;
+        var refreshMessage = refreshStatus?.accountId === currentId && (refreshStatus?.saved || refreshStatus?.previousCheck === checkedAt) ? refreshStatus?.message : void 0;
         var saved = accounts.filter(account => !account.isBot);
         var current = saved.find(account => account.id === currentId);
         var ordered = current ? [current, ...saved.filter(account => account !== current)] : saved;
@@ -1797,15 +1800,36 @@ ${frames}`;
           label: "Save inbox summaries",
           subLabel: "Keep counts on this device.",
           value: enabled,
-          onValueChange: setEnabled
+          onValueChange: value => {
+            setRefreshStatus(null);
+            return setEnabled(value);
+          }
         }), enabled && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
           label: "Refresh active account",
           disabled: !current,
           arrow: true,
           onPress: async () => {
-            if (!(await inbox.refresh())) Alert.alert("Inbox unavailable", "Open a chat on your added account and wait for Discord to connect.");
+            var result = await inbox.refresh();
+            var message = {
+              saved: "Inbox summary updated.",
+              connecting: "Waiting for Discord to reconnect.",
+              switching: "Waiting for this account to finish switching.",
+              unavailable: "Discord hasn\u2019t provided unread counts yet. Try again after your chats load."
+            }[result];
+            setRefreshStatus({
+              accountId: currentId,
+              saved: result === "saved",
+              previousCheck: checkedAt,
+              message
+            });
           }
-        })), enabled && (ordered.length ? /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+        })), enabled && refreshMessage ? /* @__PURE__ */valenced.react.React.createElement(Text, {
+          accessibilityLiveRegion: "polite",
+          style: {
+            color: colors.muted,
+            fontSize: 14
+          }
+        }, refreshMessage) : null, enabled && (ordered.length ? /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Added accounts"
         }, ordered.map(account => {
           var summary = summaries[account.id];
@@ -1991,7 +2015,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           style: ({
             pressed
           }) => ({
-            flex: 1,
+            flex: name === "Preferences" ? 1.2 : name === "Inbox" ? 0.8 : 1,
             minHeight: 44,
             borderRadius: 12,
             flexDirection: "row",
@@ -2006,6 +2030,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           color: tab === name ? colors.text : colors.muted,
           size: 17
         }), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          numberOfLines: 1,
           style: {
             color: tab === name ? colors.text : colors.muted,
             fontSize: 14,
@@ -2230,6 +2255,14 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           return void 0;
         }
       }
+      function resolveConnection(rev, stores) {
+        var gateway = attempt(() => stores.GatewayConnectionStore);
+        if (typeof gateway?.isConnected === "function") return gateway;
+        var exports = attempt(() => rev.discord.utils?.modules?.finders?.lookupModuleWithImportedPath?.("modules/gateway/GatewayConnectionStore.tsx")?.[0]);
+        var imported = exports?.default ?? exports;
+        if (typeof imported?.isConnected === "function") return imported;
+        return attempt(() => stores.ConnectionStore);
+      }
       function values(value) {
         if (!value || typeof value !== "object") return void 0;
         return typeof value.values === "function" ? [...value.values()] : Object.values(value);
@@ -2275,8 +2308,9 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           }
         });
         var stores = rev.discord.flux.Stores;
+        var connection = resolveConnection(rev, stores);
         var currentId = () => stores.UserStore?.getCurrentUser?.()?.id;
-        var isConnected = () => stores.ConnectionStore?.isConnected?.() === true;
+        var isConnected = () => attempt(() => connection?.isConnected?.()) === true;
         var cleanups = [];
         var active = true;
         var enabled = storage.cache?.sharedInboxEnabled === true;
@@ -2364,7 +2398,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           store.addChangeListener(fn);
           cleanups.push(() => store.removeChangeListener(fn));
         }
-        listen(stores.ConnectionStore, () => {
+        listen(connection, () => {
           if (!isConnected()) disconnected();else if (!connected) connectedSession();
         });
         listen(stores.UserStore, () => {
@@ -2385,7 +2419,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             dispatcher.subscribe(event, fn);
             cleanups.push(() => dispatcher.unsubscribe(event, fn));
           };
-          for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
+          for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_RESUMED", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
             _loop3(event, fn);
           }
         }
@@ -2403,9 +2437,11 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         if (enabled) schedule(true);else void clear().catch(() => {});
         return {
           use: () => file.use(),
-          refresh: () => {
+          async refresh() {
+            if (!isConnected()) return "connecting";
+            if (currentId() !== readyId) return "switching";
             cancel();
-            return capture(true);
+            return (await capture(true)) ? "saved" : "unavailable";
           },
           clear,
           async remove(id) {

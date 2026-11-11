@@ -9,10 +9,11 @@ export interface InboxSummary {
 }
 
 type InboxData = { summaries: Record<string, InboxSummary> }
+type RefreshResult = 'saved' | 'connecting' | 'switching' | 'unavailable'
 
 export interface SharedInbox {
 	use: () => InboxData | undefined
-	refresh: () => Promise<boolean>
+	refresh: () => Promise<RefreshResult>
 	clear: () => Promise<void>
 	remove: (id: string) => Promise<void>
 	stop: () => void
@@ -20,6 +21,17 @@ export interface SharedInbox {
 
 function attempt<T>(read: () => T): T | undefined {
 	try { return read() } catch { return undefined }
+}
+
+function resolveConnection(rev: any, stores: any) {
+	const gateway = attempt(() => stores.GatewayConnectionStore)
+	if (typeof gateway?.isConnected === 'function') return gateway
+	const exports = attempt(() => rev.discord.utils?.modules?.finders?.lookupModuleWithImportedPath?.(
+		'modules/gateway/GatewayConnectionStore.tsx',
+	)?.[0])
+	const imported = exports?.default ?? exports
+	if (typeof imported?.isConnected === 'function') return imported
+	return attempt(() => stores.ConnectionStore)
 }
 
 function values(value: any): any[] | undefined {
@@ -69,8 +81,9 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		default: { summaries: {} },
 	}) as JsonStorage<InboxData>
 	const stores = rev.discord.flux.Stores
+	const connection = resolveConnection(rev, stores)
 	const currentId = () => stores.UserStore?.getCurrentUser?.()?.id
-	const isConnected = () => stores.ConnectionStore?.isConnected?.() === true
+	const isConnected = () => attempt(() => connection?.isConnected?.()) === true
 	const cleanups: Array<() => void> = []
 	let active = true
 	let enabled = storage.cache?.sharedInboxEnabled === true
@@ -154,7 +167,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		store.addChangeListener(fn)
 		cleanups.push(() => store.removeChangeListener(fn))
 	}
-	listen(stores.ConnectionStore, () => {
+	listen(connection, () => {
 		if (!isConnected()) disconnected()
 		else if (!connected) connectedSession()
 	})
@@ -170,7 +183,10 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 	const dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher
 	const onConnectionOpen = () => { void Promise.resolve().then(connectedSession) }
 	if (dispatcher?.subscribe && dispatcher?.unsubscribe) {
-		for (const [event, fn] of [['CONNECTION_OPEN', onConnectionOpen], ['CONNECTION_CLOSED', disconnected], ['LOGOUT', disconnected]] as const) {
+		for (const [event, fn] of [
+			['CONNECTION_OPEN', onConnectionOpen], ['CONNECTION_RESUMED', onConnectionOpen],
+			['CONNECTION_CLOSED', disconnected], ['LOGOUT', disconnected],
+		] as const) {
 			dispatcher.subscribe(event, fn)
 			cleanups.push(() => dispatcher.unsubscribe(event, fn))
 		}
@@ -191,7 +207,12 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 
 	return {
 		use: () => file.use(),
-		refresh: () => { cancel(); return capture(true) },
+		async refresh() {
+			if (!isConnected()) return 'connecting'
+			if (currentId() !== readyId) return 'switching'
+			cancel()
+			return await capture(true) ? 'saved' : 'unavailable'
+		},
 		clear,
 		async remove(id) {
 			await enqueue(data => {

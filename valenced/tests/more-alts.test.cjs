@@ -128,8 +128,17 @@ test('account names use Discord’s theme text color in the dashboard and switch
     assert.equal(find(switcher, 'Text', 'children', 'Test Friend').props.style.color, '#4b3046');
 });
 
-test('Shared inbox keeps local, opt-in counts for the last connected session of each added account', async t => {
+for (const source of ['mobile store name', 'mobile module path', 'legacy store name']) test(`Shared inbox uses the ${source} to save each added account’s connected session`, async t => {
     const { w } = fixture(t);
+    const gateway = w.stores.ConnectionStore;
+    let connected = true;
+    gateway.isConnected = () => connected;
+    if (source !== 'legacy store name') {
+        delete w.stores.ConnectionStore;
+        if (source === 'mobile store name') w.stores.GatewayConnectionStore = gateway;
+        else w.U.discord.utils.modules.finders.lookupModuleWithImportedPath = path =>
+            path === 'modules/gateway/GatewayConnectionStore.tsx' ? [{ default: gateway }, 1] : [];
+    }
     const dm = '550000000000000001', group = '550000000000000002';
     const listeners = new Set();
     const file = {
@@ -162,6 +171,7 @@ test('Shared inbox keeps local, opt-in counts for the last connected session of 
     w.stores.GuildReadStateStore = { getTotalMentionCount: () => mentions };
     const owner = { id: ACCOUNT, username: 'test-owner', displayName: 'Test Owner', token: 'owner-session' };
     const { ui, item } = await w.open({ accounts: { [ACCOUNT]: owner, [FRIEND]: saved }, accountOrder: [ACCOUNT, FRIEND] });
+    assert.equal(find(ui, 'Text', 'children', 'Preferences').props.numberOfLines, 1);
     await openTab(ui, 'Inbox');
     await Renderer.act(async () => { await w.advance(1000); });
     assert.deepEqual(file.cache.summaries, {});
@@ -174,25 +184,40 @@ test('Shared inbox keeps local, opt-in counts for the last connected session of 
     assert.equal(first.mentions, 5);
     assert.equal(file.cache.summaries[FRIEND], undefined);
     assert.match(find(ui, 'TableRow', 'label', 'Test Owner · Active').props.subLabel, /2 unread DM chats · 5 server mentions/);
+    const refresh = () => Renderer.act(() => find(ui, 'TableRow', 'label', 'Refresh active account').props.onPress());
+    await refresh();
+    assert.ok(find(ui, 'Text', 'children', 'Inbox summary updated.'));
+    const ownerSummary = file.cache.summaries[ACCOUNT];
 
     // A user change alone can precede replacement of Discord's old read states.
     await Renderer.act(async () => { w.setAccount(FRIEND); w.stores.ReadStateStore.emitChange(); await w.advance(1000); });
     assert.equal(file.cache.summaries[FRIEND], undefined);
+    await refresh();
+    assert.ok(find(ui, 'Text', 'children', 'Waiting for this account to finish switching.'));
     unread = new Set([group]); mentions = 1;
     await Renderer.act(async () => { await w.dispatcher.dispatch({ type: 'CONNECTION_OPEN' }); await w.advance(1000); });
     assert.equal(file.cache.summaries[FRIEND].unreadDms, 1);
     assert.equal(file.cache.summaries[FRIEND].mentions, 1);
-    assert.deepEqual(file.cache.summaries[ACCOUNT], first);
+    assert.deepEqual(file.cache.summaries[ACCOUNT], ownerSummary);
     assert.match(find(ui, 'TableRow', 'label', 'Test Owner').props.subLabel, /Checked/);
     assert.deepEqual(Object.keys(file.cache.summaries[FRIEND]).sort(), ['checkedAt', 'mentions', 'unreadDms']);
     assert.equal(item.api.jsonStorage.cache.accounts[FRIEND].token, saved.token);
     assert.equal(w.calls.some(([kind]) => kind === 'http' || kind === 'fetch'), false);
 
     unread = new Set(); mentions = 0;
+    connected = false;
+    await Renderer.act(() => w.dispatcher.dispatch({ type: 'CONNECTION_CLOSED' }));
+    await refresh();
+    assert.ok(find(ui, 'Text', 'children', 'Waiting for Discord to reconnect.'));
+    assert.equal(file.cache.summaries[FRIEND].unreadDms, 1);
+    connected = true;
+    await Renderer.act(() => w.dispatcher.dispatch({ type: 'CONNECTION_RESUMED' }));
     await Renderer.act(async () => { w.stores.ReadStateStore.emitChange(); await w.advance(1000); });
     assert.equal(file.cache.summaries[FRIEND].unreadDms, 0);
     assert.equal(file.cache.summaries[FRIEND].mentions, 0);
+    assert.equal(find(ui, 'Text', 'children', 'Waiting for Discord to reconnect.'), undefined);
     await Renderer.act(() => find(ui, 'TableSwitchRow', 'label', 'Save inbox summaries').props.onValueChange(false));
     assert.deepEqual(file.cache.summaries, {});
     assert.equal(w.timers.size, 0);
+    assert.equal(w.alerts.length, 0);
 });

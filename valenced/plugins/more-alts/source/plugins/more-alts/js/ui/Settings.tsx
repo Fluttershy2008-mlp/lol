@@ -171,12 +171,12 @@ export default function Settings({
 				{(['Accounts', 'Inbox', 'Preferences'] as const).map(name => (
 					<Pressable key={name} accessibilityRole="tab" accessibilityLabel={name}
 						accessibilityState={{ selected: tab === name }} onPress={() => setTab(name)}
-						style={({ pressed }: { pressed: boolean }) => ({ flex: 1, minHeight: 44, borderRadius: 12,
+						style={({ pressed }: { pressed: boolean }) => ({ flex: name === 'Preferences' ? 1.2 : name === 'Inbox' ? 0.8 : 1, minHeight: 44, borderRadius: 12,
 							flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 6,
 							backgroundColor: tab === name ? colors.selected : pressed ? colors.mutedPanel : 'transparent' })}>
 						<Glyph names={name === 'Accounts' ? ['UserMultipleIcon', 'FriendsIcon'] : name === 'Inbox' ? ['InboxIcon', 'EnvelopeIcon'] : ['SettingsIcon', 'CogIcon']}
 							color={tab === name ? colors.text : colors.muted} size={17} />
-						<Text style={{ color: tab === name ? colors.text : colors.muted, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'center' }}>{name}</Text>
+						<Text numberOfLines={1} style={{ color: tab === name ? colors.text : colors.muted, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'center' }}>{name}</Text>
 					</Pressable>
 				))}
 			</View>
