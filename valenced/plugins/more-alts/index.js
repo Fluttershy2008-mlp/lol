@@ -56,6 +56,9 @@
         } catch {}
         return null;
       }
+      function otherAccountPushEnabled(storage) {
+        return storage?.enableNativeSwitcher !== false && storage?.blockOtherAccountNotifications === false;
+      }
       function syncNativeVault(storage) {
         try {
           var current = storage.cache ?? {};
@@ -149,12 +152,7 @@
             try {
               var descriptor = Object.getOwnPropertyDescriptor(store, "canUseMultiAccountNotifications");
               Object.defineProperty(store, "canUseMultiAccountNotifications", {
-                get: () => {
-                  if (storage.cache?.blockOtherAccountNotifications !== false) {
-                    return false;
-                  }
-                  return storage.cache?.enableNativeSwitcher !== false;
-                },
+                get: () => otherAccountPushEnabled(storage.cache),
                 configurable: true
               });
               cleanups.push(() => {
@@ -181,6 +179,12 @@
           }
           var Stores = rev.discord?.flux?.Stores;
           var MultiAccountStore = Stores?.MultiAccountStore;
+          var stopWatching = rev.discord?.utils?.modules?.finders?.getModuleWithImportedPath?.("modules/multi_account/MultiAccountStore.tsx", module2 => {
+            if (!module2?.default) return;
+            MultiAccountStore = module2.default;
+            hookStore(MultiAccountStore);
+          });
+          if (stopWatching) cleanups.push(stopWatching);
           var UserStore = Stores?.UserStore;
           if (MultiAccountStore) {
             hookStore(MultiAccountStore);
@@ -188,7 +192,7 @@
           var syncActiveUserToNative = () => {
             var currentUserId = UserStore?.getCurrentUser?.()?.id;
             void callNative("setActiveUser", [currentUserId ?? null]);
-            var shouldBlock = storage.cache?.blockOtherAccountNotifications !== false;
+            var shouldBlock = !otherAccountPushEnabled(storage.cache);
             void callNative("setBlockNotifications", [shouldBlock]);
             try {
               MultiAccountStore?.emitChange?.();
@@ -209,7 +213,7 @@
           var Dispatcher = rev.discord?.flux?.Dispatcher ?? rev.discord?.common?.flux?.Dispatcher;
           if (Dispatcher?.subscribe) {
             var handleNotification = event => {
-              if (storage.cache?.blockOtherAccountNotifications === false) return;
+              if (otherAccountPushEnabled(storage.cache)) return;
               var currentUserId = UserStore?.getCurrentUser?.()?.id;
               if (!currentUserId) return;
               var notifUserId = event?.accountId ?? event?.account_id ?? event?.recipientId ?? event?.recipient_id;
@@ -234,6 +238,165 @@
               fn();
             } catch {}
           }
+        };
+      }
+
+      // source/plugins/more-alts/js/patches/accountPush.ts
+      var TOKEN_MANAGER = "modules/notifications/native/NotificationTokenManager.tsx";
+      var ACCOUNT_STORE = "modules/multi_account/MultiAccountStore.tsx";
+      var YOU_BAR_AVATAR = "modules/main_tabs_v2/native/you_bar/YouBarAvatar.tsx";
+      var DOT_POLL_MS = 3e3;
+      function startOtherAccountPush(api) {
+        var rev = api.unscoped;
+        var storage = api.jsonStorage;
+        var stores = rev.discord?.flux?.Stores;
+        var finders = rev.discord?.utils?.modules?.finders;
+        var {
+          React: React2,
+          ReactNative: {
+            AppState,
+            View: View2
+          }
+        } = rev.react;
+        var cleanups = [];
+        var listeners = /* @__PURE__ */new Set();
+        var accountStore = stores?.MultiAccountStore;
+        var tokenManager;
+        var pushEnabled = false;
+        var configuredIds;
+        var appliedIds;
+        var pending = false;
+        var stopped = false;
+        var interval;
+        var refreshing = false;
+        var state = AppState?.currentState;
+        var revision = 0;
+        var setPending = value => {
+          if (pending === value) return;
+          pending = value;
+          for (var listener of listeners) listener();
+        };
+        var refreshDot = async () => {
+          if (refreshing || stopped || !pushEnabled || !appliedIds || appliedIds !== configuredIds || appliedIds === "[]") return;
+          refreshing = true;
+          var current = revision;
+          try {
+            var value = await callNative("hasOtherAccountPush");
+            if (!stopped && current === revision) setPending(value === true);
+          } finally {
+            refreshing = false;
+          }
+        };
+        var updatePolling = () => {
+          if (interval !== void 0) clearInterval(interval);
+          interval = void 0;
+          if (pushEnabled && appliedIds === configuredIds && appliedIds && appliedIds !== "[]" && (state === "active" || state == null)) {
+            void refreshDot();
+            interval = setInterval(refreshDot, DOT_POLL_MS);
+          }
+        };
+        var syncBadgeAccounts = () => {
+          var active = stores?.UserStore?.getCurrentUser?.()?.id;
+          if (pushEnabled && !active) return;
+          var users = pushEnabled ? accountStore?.getValidUsers?.() : void 0;
+          if (pushEnabled && (!Array.isArray(users) || !users.some(user => user?.id === active))) return;
+          var ids = JSON.stringify((Array.isArray(users) ? users : []).map(user => user?.id).filter(id => typeof id === "string" && id !== active).sort());
+          if (ids === configuredIds) return;
+          configuredIds = ids;
+          var current = ++revision;
+          setPending(false);
+          updatePolling();
+          void callNative("configureOtherAccountPush", [ids]).then(result => {
+            if (stopped || current !== revision) return;
+            if (result === true) appliedIds = ids;else configuredIds = void 0;
+            updatePolling();
+          });
+        };
+        var registerToken = () => {
+          if (stopped || !tokenManager?.canSync) return;
+          try {
+            tokenManager.registerToken?.();
+          } catch {}
+        };
+        var onPreferences = () => {
+          var enabled = otherAccountPushEnabled(storage.cache);
+          if (enabled === pushEnabled && configuredIds !== void 0) return;
+          var changed = enabled !== pushEnabled;
+          pushEnabled = enabled;
+          syncBadgeAccounts();
+          if (changed) registerToken();
+        };
+        var observe = store => {
+          if (!store?.addChangeListener || !store?.removeChangeListener) return;
+          store.addChangeListener(syncBadgeAccounts);
+          cleanups.push(() => store.removeChangeListener(syncBadgeAccounts));
+        };
+        var watch = (path, callback) => {
+          var cleanup = finders?.getModuleWithImportedPath?.(path, module2 => {
+            if (!stopped) callback(module2);
+          });
+          if (cleanup) cleanups.push(cleanup);
+        };
+        onPreferences();
+        cleanups.push(storage.subscribe(onPreferences));
+        observe(stores?.UserStore);
+        observe(accountStore);
+        watch(ACCOUNT_STORE, module2 => {
+          var store = module2?.default;
+          if (!store || store === accountStore) return;
+          accountStore = store;
+          observe(store);
+          syncBadgeAccounts();
+        });
+        watch(TOKEN_MANAGER, module2 => {
+          tokenManager = module2?.default;
+          if (pushEnabled) registerToken();
+        });
+        var appState = AppState?.addEventListener?.("change", next => {
+          state = next;
+          updatePolling();
+        });
+        if (appState) cleanups.push(() => appState.remove());
+        var subscribe = listener => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        };
+        var snapshot = () => pending;
+        function OtherAccountDot() {
+          if (!React2.useSyncExternalStore(subscribe, snapshot, snapshot)) return null;
+          return React2.createElement(View2, {
+            pointerEvents: "none",
+            accessible: true,
+            accessibilityLabel: "New notifications on another account",
+            style: {
+              position: "absolute",
+              top: -2,
+              right: -2,
+              width: 11,
+              height: 11,
+              borderRadius: 6,
+              borderWidth: 1.5,
+              borderColor: "#fff",
+              backgroundColor: "#ed4245"
+            }
+          });
+        }
+        watch(YOU_BAR_AVATAR, module2 => {
+          var avatar = module2?.default;
+          if (typeof avatar?.type !== "function") return;
+          cleanups.push(rev.patcher.after(avatar, "type", result => result && React2.createElement(View2, {
+            style: {
+              position: "relative"
+            }
+          }, result, React2.createElement(OtherAccountDot))));
+        });
+        return () => {
+          stopped = true;
+          if (interval !== void 0) clearInterval(interval);
+          setPending(false);
+          listeners.clear();
+          void callNative("configureOtherAccountPush", ["[]"]);
+          for (var cleanup of cleanups.reverse()) cleanup();
         };
       }
 
@@ -2224,7 +2387,15 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           }
         }, "Shared inbox is unavailable on this Valenced version.") : /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Switching"
-        }, toggle("enableNativeSwitcher", "Native Account Switcher", "Show Discord\u2019s built-in switcher on the You tab."), toggle("blockOtherAccountNotifications", "Block Background Notifications", "Mute notifications from your other accounts."), toggle("enableCLI", "Show Full Username Tag", "Show the #1234 suffix when an account has one.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+        }, toggle("enableNativeSwitcher", "Native Account Switcher", "Show Discord\u2019s built-in switcher on the You tab."), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
+          label: "Other Account Push Notifications",
+          subLabel: storage.enableNativeSwitcher === false ? "Turn on Native Account Switcher to use this setting." : "Get alerts from your Discord switcher accounts. Tap a message alert to switch and open it.",
+          disabled: storage.enableNativeSwitcher === false,
+          value: storage.enableNativeSwitcher !== false && storage.blockOtherAccountNotifications === false,
+          onValueChange: value => api.jsonStorage.set({
+            blockOtherAccountNotifications: !value
+          })
+        }), toggle("enableCLI", "Show Full Username Tag", "Show the #1234 suffix when an account has one.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Storage & backup"
         }, toggle("persistentStorageVault", "Persistent Storage Vault", "Keep a local backup of saved Discord sessions."), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
           label: "Import Accounts from Clipboard",
@@ -2478,6 +2649,12 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           });
           await upgradeLegacyStorage(api.jsonStorage);
           if (!active) return;
+          try {
+            api.cleanup(patchNativeSwitcher(api.jsonStorage));
+            api.cleanup(startOtherAccountPush(api));
+          } catch (error) {
+            api.logger?.warn?.(`[MoreAlts] Native account notifications unavailable: ${error}`);
+          }
           await restoreFromNativeVault(api.jsonStorage, () => active);
           if (!active) return;
           syncNativeVault(api.jsonStorage);
@@ -2501,12 +2678,6 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             getStatus: () => api.plugin?.status,
             getErrors: () => api.plugin?.errors
           });
-          var unpatchNative = () => {};
-          try {
-            unpatchNative = patchNativeSwitcher(api.jsonStorage);
-          } catch (e) {
-            api.logger?.error(`[MoreAlts] Failed to apply native switcher patch: ${e}`);
-          }
           var unpatchLongPress = () => {};
           try {
             unpatchLongPress = patchTabBarLongPress(api.jsonStorage);
@@ -2523,10 +2694,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           } catch (error) {
             api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`);
           }
-          api.cleanup(() => {
-            unpatchNative();
-            unpatchLongPress();
-          });
+          api.cleanup(unpatchLongPress);
         },
         SettingsComponent(props) {
           return props.api.unscoped.react.React.createElement(Settings, {

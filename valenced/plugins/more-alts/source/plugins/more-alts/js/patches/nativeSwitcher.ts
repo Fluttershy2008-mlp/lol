@@ -8,7 +8,7 @@ function getValenced(): any {
 	return (globalThis as any).valenced
 }
 
-async function callNative(method: string, args: any[] = []): Promise<any> {
+export async function callNative(method: string, args: any[] = []): Promise<any> {
 	try {
 		const rev = getValenced()
 		if (typeof rev?.modules?.native?.callNativeMethod === 'function') {
@@ -16,6 +16,10 @@ async function callNative(method: string, args: any[] = []): Promise<any> {
 		}
 	} catch {}
 	return null
+}
+
+export function otherAccountPushEnabled(storage: MoreAltsStorage | undefined): boolean {
+	return storage?.enableNativeSwitcher !== false && storage?.blockOtherAccountNotifications === false
 }
 
 export function syncNativeVault(storage: JsonStorage<MoreAltsStorage>) {
@@ -142,12 +146,7 @@ export default function patchNativeSwitcher(
 			try {
 				const descriptor = Object.getOwnPropertyDescriptor(store, 'canUseMultiAccountNotifications')
 				Object.defineProperty(store, 'canUseMultiAccountNotifications', {
-					get: () => {
-						if (storage.cache?.blockOtherAccountNotifications !== false) {
-							return false
-						}
-						return storage.cache?.enableNativeSwitcher !== false
-					},
+					get: () => otherAccountPushEnabled(storage.cache),
 					configurable: true,
 				})
 				cleanups.push(() => {
@@ -179,7 +178,16 @@ export default function patchNativeSwitcher(
 		}
 
 		const Stores = rev.discord?.flux?.Stores
-		const MultiAccountStore = Stores?.MultiAccountStore
+		let MultiAccountStore = Stores?.MultiAccountStore
+		const stopWatching = rev.discord?.utils?.modules?.finders?.getModuleWithImportedPath?.(
+			'modules/multi_account/MultiAccountStore.tsx',
+			(module: any) => {
+				if (!module?.default) return
+				MultiAccountStore = module.default
+				hookStore(MultiAccountStore)
+			},
+		)
+		if (stopWatching) cleanups.push(stopWatching)
 		const UserStore = Stores?.UserStore
 
 		if (MultiAccountStore) {
@@ -189,7 +197,7 @@ export default function patchNativeSwitcher(
 		const syncActiveUserToNative = () => {
 			const currentUserId = UserStore?.getCurrentUser?.()?.id
 			void callNative('setActiveUser', [currentUserId ?? null])
-			const shouldBlock = storage.cache?.blockOtherAccountNotifications !== false
+			const shouldBlock = !otherAccountPushEnabled(storage.cache)
 			void callNative('setBlockNotifications', [shouldBlock])
 			try {
 				MultiAccountStore?.emitChange?.()
@@ -213,7 +221,7 @@ export default function patchNativeSwitcher(
 			rev.discord?.flux?.Dispatcher ?? rev.discord?.common?.flux?.Dispatcher
 		if (Dispatcher?.subscribe) {
 			const handleNotification = (event: any) => {
-				if (storage.cache?.blockOtherAccountNotifications === false) return
+				if (otherAccountPushEnabled(storage.cache)) return
 				const currentUserId = UserStore?.getCurrentUser?.()?.id
 				if (!currentUserId) return
 

@@ -25,7 +25,8 @@ function fixture(t, options = {}) {
     w.U.modules.native.callNativeMethod = async (method, args) => {
         if (!method.startsWith(`${id}.`)) return callNative(method, args);
         native.push([method.slice(id.length + 1), args]);
-        return method.endsWith('loadAccounts') ? JSON.stringify(options.vault ?? []) : true;
+        if (method.endsWith('loadAccounts')) return JSON.stringify(options.vault ?? []);
+        return options.handleNative?.(method.slice(id.length + 1), args) ?? true;
     };
     w.mount = async Component => {
         let ui;
@@ -126,6 +127,62 @@ test('account names use Discord’s theme text color in the dashboard and switch
     await Renderer.act(() => find(ui, 'Pressable', 'accessibilityLabel', 'Switch account').props.onPress());
     const switcher = await w.sheet('more-alts-quick-switcher');
     assert.equal(find(switcher, 'Text', 'children', 'Test Friend').props.style.color, '#4b3046');
+});
+
+test('Other account push uses Discord registration and clears the profile dot when its account becomes active', async t => {
+    let recipients = [], registrations = 0;
+    const pending = new Set();
+    const { w, native } = fixture(t, {
+        handleNative(method, args) {
+            if (method === 'configureOtherAccountPush') {
+                recipients = JSON.parse(args[0]);
+                for (const account of pending) if (!recipients.includes(account)) pending.delete(account);
+            }
+            if (method === 'hasOtherAccountPush') return pending.size > 0;
+        },
+    });
+    const accountStore = {
+        getValidUsers: () => [{ id: ACCOUNT }, { id: FRIEND }],
+        getUsers: () => [],
+    };
+    w.addModule({ default: accountStore }, 'modules/multi_account/MultiAccountStore.tsx');
+    w.addModule({ default: {
+        canSync: true,
+        registerToken() { registrations++; },
+    } }, 'modules/notifications/native/NotificationTokenManager.tsx');
+    const avatar = React.memo(() => React.createElement('View', { testID: 'discord-avatar' }));
+    const originalAvatar = avatar.type;
+    w.addModule({ default: avatar }, 'modules/main_tabs_v2/native/you_bar/YouBarAvatar.tsx');
+    const { ui, item } = await w.open({ ...initial(), settings: { enableNativeSwitcher: true } });
+    const profile = await w.mount(avatar);
+    assert.ok(find(profile, 'View', 'testID', 'discord-avatar'));
+    const dot = () => find(profile, 'View', 'accessibilityLabel', 'New notifications on another account');
+    assert.equal(dot(), undefined);
+    assert.equal(registrations, 0);
+    await openTab(ui, 'Preferences');
+    const pushSwitch = () => find(ui, 'TableSwitchRow', 'label', 'Other Account Push Notifications');
+    assert.equal(pushSwitch().props.value, false);
+    await Renderer.act(() => pushSwitch().props.onValueChange(true));
+    assert.equal(accountStore.canUseMultiAccountNotifications, true);
+    assert.equal(registrations, 1);
+    assert.deepEqual(recipients, [FRIEND]);
+    assert.ok(native.some(([method, args]) => method === 'setBlockNotifications' && args[0] === false));
+
+    pending.add(FRIEND);
+    await Renderer.act(() => w.advance(3000));
+    assert.equal(dot().props.pointerEvents, 'none');
+    await Renderer.act(() => w.setAccount(FRIEND));
+    assert.equal(dot(), undefined);
+    assert.deepEqual(recipients, [ACCOUNT]);
+
+    await Renderer.act(() => pushSwitch().props.onValueChange(false));
+    assert.equal(registrations, 2);
+    assert.equal(accountStore.canUseMultiAccountNotifications, false);
+    assert.deepEqual(recipients, []);
+    await Renderer.act(() => w.stop(item));
+    assert.equal(avatar.type, originalAvatar);
+    assert.equal(accountStore.canUseMultiAccountNotifications, undefined);
+    assert.equal(w.appListeners.size, 0);
 });
 
 for (const source of ['mobile store name', 'mobile module path', 'legacy store name']) test(`Shared inbox uses the ${source} to save each added account’s connected session`, async t => {

@@ -157,7 +157,7 @@ export default function Settings({
 		],
 	)
 
-	const toggle = (key: 'enableNativeSwitcher' | 'blockOtherAccountNotifications' | 'enableCLI' |
+	const toggle = (key: 'enableNativeSwitcher' | 'enableCLI' |
 		'persistentStorageVault' | 'enableUnsafeFeatures' | 'confirmBeforeDelete', label: string, subLabel: string) => (
 		<TableSwitchRow label={label} subLabel={subLabel} value={storage[key]}
 			onValueChange={(value: boolean) => api.jsonStorage.set({ [key]: value })} />
@@ -240,7 +240,13 @@ export default function Settings({
 					<>
 						<TableRowGroup title="Switching">
 							{toggle('enableNativeSwitcher', 'Native Account Switcher', 'Show Discord’s built-in switcher on the You tab.')}
-							{toggle('blockOtherAccountNotifications', 'Block Background Notifications', 'Mute notifications from your other accounts.')}
+							<TableSwitchRow label="Other Account Push Notifications"
+								subLabel={storage.enableNativeSwitcher === false
+									? 'Turn on Native Account Switcher to use this setting.'
+									: 'Get alerts from your Discord switcher accounts. Tap a message alert to switch and open it.'}
+								disabled={storage.enableNativeSwitcher === false}
+								value={storage.enableNativeSwitcher !== false && storage.blockOtherAccountNotifications === false}
+								onValueChange={(value: boolean) => api.jsonStorage.set({ blockOtherAccountNotifications: !value })} />
 							{toggle('enableCLI', 'Show Full Username Tag', 'Show the #1234 suffix when an account has one.')}
 						</TableRowGroup>
 						<TableRowGroup title="Storage & backup">

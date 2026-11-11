@@ -138,9 +138,9 @@
   },
   "channels": {
     "dev.fluttershy2008.more-alts": {
-      "latest": "1.1.7",
-      "stable": "1.1.7",
-      "beta": "1.1.7"
+      "latest": "1.1.8",
+      "stable": "1.1.8",
+      "beta": "1.1.8"
     }
   }
 }

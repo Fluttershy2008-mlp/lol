@@ -4,6 +4,8 @@ Open **Discord Settings → Valenced → More Alts!**. The **Accounts** tab show
 
 Open **Inbox** and turn on **Save inbox summaries** to see unread DM chat and server mention counts across your added accounts. Each account updates while it is active and connected. The saved counts have timestamps, and tapping an inactive account switches to it. Summaries stay on this device. Turn the setting off or tap **Clear saved summaries** to erase them.
 
+In **Preferences → Switching**, enable **Native Account Switcher** and **Other Account Push Notifications**. Discord registers accounts in its built-in switcher for push delivery, up to its five-account limit. If a saved account is missing there, sign in to it through Discord’s switcher. Tapping a Discord message notification switches to the receiving account and opens the message. The red dot on your You-bar profile picture marks recent pushes from another account. Opening that account clears its dot. Android notification permission and Discord’s notification settings still apply.
+
 The update keeps the plugin ID and upgrades the old saved-account records in place. The Android vault is an app-private local copy of saved sessions. Turn on **Enable Account Export** to show **Export Accounts**, which copies session tokens to the clipboard. Treat exported JSON as sign-in credentials.
 
 The `source` tree contains Rosie's linked More Alts implementation, its changelog helpers, and compile-only Valenced API sources. The app provides the API and Kotlin standard library at runtime.

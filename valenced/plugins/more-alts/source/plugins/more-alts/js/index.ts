@@ -1,4 +1,5 @@
 import patchNativeSwitcher, { restoreFromNativeVault, syncNativeVault } from './patches/nativeSwitcher'
+import startOtherAccountPush from './patches/accountPush'
 import patchTabBarLongPress from './patches/tabBarLongPress'
 import { setupChangelog } from '../../../shared/changelog'
 import { CHANGELOG } from './changelog'
@@ -19,6 +20,12 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 		api.cleanup(() => { active = false })
 		await upgradeLegacyStorage(api.jsonStorage)
 		if (!active) return
+		try {
+			api.cleanup(patchNativeSwitcher(api.jsonStorage))
+			api.cleanup(startOtherAccountPush(api))
+		} catch (error) {
+			api.logger?.warn?.(`[MoreAlts] Native account notifications unavailable: ${error}`)
+		}
 		await restoreFromNativeVault(api.jsonStorage, () => active)
 		if (!active) return
 		syncNativeVault(api.jsonStorage)
@@ -50,13 +57,6 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 			getErrors: () => api.plugin?.errors,
 		})
 
-		let unpatchNative = () => {}
-		try {
-			unpatchNative = patchNativeSwitcher(api.jsonStorage)
-		} catch (e) {
-			api.logger?.error(`[MoreAlts] Failed to apply native switcher patch: ${e}`)
-		}
-
 		let unpatchLongPress = () => {}
 		try {
 			unpatchLongPress = patchTabBarLongPress(api.jsonStorage)
@@ -74,10 +74,7 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 			api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`)
 		}
 
-		api.cleanup(() => {
-			unpatchNative()
-			unpatchLongPress()
-		})
+		api.cleanup(unpatchLongPress)
 	},
 
 	SettingsComponent(props) {
