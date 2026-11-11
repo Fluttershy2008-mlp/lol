@@ -1527,12 +1527,25 @@
               "version": "*"
             }
           }
+        },
+        "1.1.4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.1.4.zip",
+          "sha256": "d211516142d69e89f5dff3f1774a5f8e84196cb94c2dab63a99d353840f891d4",
+          "size": 68335,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.1.3",
-        "beta": "1.1.3",
-        "stable": "1.1.3"
+        "latest": "1.1.4",
+        "beta": "1.1.4",
+        "stable": "1.1.4"
       },
       "name": "More Alts! (Valenced)",
       "description": "Manage and switch Discord accounts with Rosie's account switcher, native Android session vault, and notification preferences.",

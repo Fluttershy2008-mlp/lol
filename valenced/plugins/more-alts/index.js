@@ -25,14 +25,14 @@
       };
       var __copyProps = (to, from, except, desc) => {
         if (from && typeof from === "object" || typeof from === "function") {
-          var _loop = function (key) {
-            if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
-              get: () => from[key],
-              enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+          var _loop = function (key2) {
+            if (!__hasOwnProp.call(to, key2) && key2 !== except) __defProp(to, key2, {
+              get: () => from[key2],
+              enumerable: !(desc = __getOwnPropDesc(from, key2)) || desc.enumerable
             });
           };
-          for (var key of __getOwnPropNames(from)) {
-            _loop(key);
+          for (var key2 of __getOwnPropNames(from)) {
+            _loop(key2);
           }
         }
         return to;
@@ -670,13 +670,280 @@
         }
       }
 
-      // source/plugins/more-alts/js/ui/AddAccountSheet.tsx
-      function getValenced3() {
-        try {
-          if (typeof valenced !== "undefined") return valenced;
-        } catch {}
-        return globalThis.valenced;
+      // valenced:@valenced/externals/react-native-safe-area-context
+      var react_native_safe_area_context_exports = {};
+      __export(react_native_safe_area_context_exports, {
+        useSafeAreaInsets: () => useSafeAreaInsets
+      });
+      function useSafeAreaInsets() {
+        return valenced.externals?.ReactNativeSafeAreaContext?.ReactNativeSafeAreaContext?.useSafeAreaInsets?.();
       }
+
+      // source/shared/ui/safeArea.ts
+      function useBottomPadding(base = 16) {
+        try {
+          var mod = react_native_safe_area_context_exports;
+          var insets = mod?.useSafeAreaInsets?.();
+          if (typeof insets?.bottom === "number") return insets.bottom + base;
+        } catch {}
+        return base;
+      }
+
+      // source/plugins/more-alts/js/ui/AccountUi.tsx
+      function getValenced3() {
+        return typeof valenced !== "undefined" ? valenced : globalThis.valenced;
+      }
+      function useCurrentAccount() {
+        var rev = getValenced3();
+        var [, refresh] = rev.react.React.useReducer(version => version + 1, 0);
+        rev.react.React.useEffect(() => {
+          var stores = rev.discord.flux?.Stores;
+          var observed = [stores?.UserStore, stores?.MultiAccountStore].filter(store => store?.addChangeListener && store?.removeChangeListener);
+          for (var store of observed) store.addChangeListener(refresh);
+          return () => {
+            for (var _store of observed) _store.removeChangeListener(refresh);
+          };
+        }, [rev]);
+        return getCurrentUser();
+      }
+      var DARK = {
+        page: "#17151a",
+        panel: "#242127",
+        mutedPanel: "#2d2730",
+        selected: "#3e303c",
+        line: "#443b45",
+        text: "#f9f0f7",
+        muted: "#c6b5c4",
+        danger: "#ffadb7"
+      };
+      var LIGHT = {
+        page: "#f8f3f7",
+        panel: "#ffffff",
+        mutedPanel: "#f0e8ef",
+        selected: "#f1dce9",
+        line: "#e1d3df",
+        text: "#2d202c",
+        muted: "#655662",
+        danger: "#a21e34"
+      };
+      var HERO = {
+        background: "#302131",
+        line: "#66445d",
+        text: "#fff6fc",
+        muted: "#dfc7db",
+        accent: "#f7c8e2",
+        ink: "#36172c",
+        active: "#a6e6c1"
+      };
+      var useTokenStyles;
+      function usePalette() {
+        var rev = getValenced3();
+        var fallback = rev.react.ReactNative.useColorScheme?.() === "light" ? LIGHT : DARK;
+        if (!useTokenStyles) {
+          var tokens = rev.discord?.common?.tokens?.Tokens;
+          var colors = (tokens?.default ?? tokens)?.colors;
+          var design = rev.discord?.design?.Design;
+          var styles = colors && design?.createStyles?.({
+            page: {
+              color: colors.BACKGROUND_BASE_LOWER
+            },
+            panel: {
+              color: colors.BACKGROUND_SURFACE_HIGHEST
+            },
+            mutedPanel: {
+              color: colors.BACKGROUND_MOD_SUBTLE
+            },
+            selected: {
+              color: colors.BACKGROUND_MOD_STRONG
+            },
+            line: {
+              color: colors.BORDER_SUBTLE
+            },
+            text: {
+              color: colors.TEXT_DEFAULT
+            },
+            muted: {
+              color: colors.TEXT_MUTED
+            },
+            danger: {
+              color: colors.TEXT_DANGER
+            }
+          });
+          useTokenStyles = typeof styles === "function" ? styles : () => styles ?? {};
+        }
+        var themed = useTokenStyles();
+        return {
+          page: themed.page?.color ?? fallback.page,
+          panel: themed.panel?.color ?? fallback.panel,
+          mutedPanel: themed.mutedPanel?.color ?? fallback.mutedPanel,
+          selected: themed.selected?.color ?? fallback.selected,
+          line: themed.line?.color ?? fallback.line,
+          text: themed.text?.color ?? fallback.text,
+          muted: themed.muted?.color ?? fallback.muted,
+          danger: themed.danger?.color ?? fallback.danger
+        };
+      }
+      function Glyph({
+        names,
+        color,
+        size = 18
+      }) {
+        var rev = getValenced3();
+        var {
+          Image
+        } = rev.react.ReactNative;
+        for (var name of names) {
+          var source = rev.assets?.getAssetIdByName?.(name);
+          if (source != null) return /* @__PURE__ */valenced.react.React.createElement(Image, {
+            accessible: false,
+            source,
+            style: {
+              width: size,
+              height: size,
+              tintColor: color
+            }
+          });
+        }
+        return null;
+      }
+      function Avatar({
+        user,
+        size = 42,
+        border,
+        active = false
+      }) {
+        var {
+          Image,
+          View: View2
+        } = getValenced3().react.ReactNative;
+        var uri = user?.id && user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128` : "https://cdn.discordapp.com/embed/avatars/0.png";
+        return /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            width: size,
+            height: size
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Image, {
+          accessible: false,
+          source: {
+            uri
+          },
+          style: {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth: 2,
+            borderColor: border
+          }
+        }), active && /* @__PURE__ */valenced.react.React.createElement(View2, {
+          accessible: false,
+          style: {
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            width: 15,
+            height: 15,
+            borderRadius: 8,
+            backgroundColor: HERO.active,
+            borderColor: HERO.background,
+            borderWidth: 3
+          }
+        }));
+      }
+      function AccountRow({
+        account,
+        colors,
+        showTag,
+        detail,
+        trailing,
+        onPress,
+        active = false,
+        divider = false,
+        actionLabel
+      }) {
+        var {
+          View: View2,
+          Text,
+          Pressable: Pressable2
+        } = getValenced3().react.ReactNative;
+        var name = account.displayName || account.username;
+        var tag = showTag && account.discriminator && account.discriminator !== "0" ? `#${account.discriminator}` : "";
+        var handle = `@${account.username}${tag}`;
+        return /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
+          accessibilityRole: onPress ? "button" : void 0,
+          accessibilityLabel: [name, handle, account.isBot ? "Bot" : "", trailing, onPress && actionLabel].filter(Boolean).join(", "),
+          accessibilityState: active ? {
+            selected: true
+          } : void 0,
+          onPress,
+          style: ({
+            pressed
+          }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            padding: 12,
+            minHeight: 68,
+            borderTopWidth: divider ? 1 : 0,
+            borderColor: colors.line,
+            backgroundColor: active || pressed ? colors.mutedPanel : colors.panel
+          })
+        }, /* @__PURE__ */valenced.react.React.createElement(Avatar, {
+          user: account,
+          border: colors.line
+        }), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flex: 1,
+            minWidth: 0,
+            gap: 3
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 7
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+          numberOfLines: 2,
+          style: {
+            flexShrink: 1,
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "700"
+          }
+        }, name), account.isBot && /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            backgroundColor: colors.selected,
+            color: colors.text,
+            borderRadius: 5,
+            paddingHorizontal: 5,
+            paddingVertical: 2,
+            fontSize: 11,
+            fontWeight: "700"
+          }
+        }, "BOT")), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          numberOfLines: 2,
+          style: {
+            color: colors.muted,
+            fontSize: 13
+          }
+        }, detail ? `${handle} \xB7 ${detail}` : handle)), trailing && /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.text,
+            backgroundColor: colors.selected,
+            borderRadius: 12,
+            paddingHorizontal: 8,
+            paddingVertical: 5,
+            fontSize: 12,
+            fontWeight: "600"
+          }
+        }, trailing), onPress && /* @__PURE__ */valenced.react.React.createElement(Glyph, {
+          names: actionLabel === "Account actions" ? ["MoreHorizontalIcon", "ic_more_24px"] : ["ChevronSmallRightIcon", "ChevronRightIcon"],
+          color: colors.muted
+        }));
+      }
+
+      // source/plugins/more-alts/js/ui/AddAccountSheet.tsx
+      var sheetKey = "more-alts-add-account";
       function openAddAccountSheet(storage, onDone) {
         var rev = getValenced3();
         var actions = rev?.discord?.actions?.ActionSheetActionCreators;
@@ -686,7 +953,8 @@
             var React2 = rev.react.React;
             var {
               View: View2,
-              ScrollView: ScrollView2
+              ScrollView: ScrollView2,
+              Text
             } = rev.react.ReactNative;
             var {
               ActionSheet,
@@ -696,7 +964,6 @@
               TableRow,
               Stack,
               Button,
-              Text,
               TextInput
             } = rev.discord.design.Design;
             var [mode, setMode] = React2.useState("choose");
@@ -705,6 +972,10 @@
             var [token, setToken] = React2.useState("");
             var [statusMsg, setStatusMsg] = React2.useState(null);
             var [loading, setLoading] = React2.useState(false);
+            var colors = usePalette();
+            var currentUser = useCurrentAccount();
+            var bottomPadding = useBottomPadding(16);
+            var close = () => actions.hideActionSheet(sheetKey);
             var handleAddCurrent = async () => {
               setLoading(true);
               setStatusMsg(null);
@@ -712,7 +983,7 @@
               setLoading(false);
               if (res.success) {
                 onDone?.();
-                actions.hideActionSheet();
+                close();
               } else {
                 setStatusMsg(res.message);
               }
@@ -724,7 +995,7 @@
               setLoading(false);
               if (res.success) {
                 onDone?.();
-                actions.hideActionSheet();
+                close();
               } else {
                 setStatusMsg(res.message);
               }
@@ -736,7 +1007,7 @@
               setLoading(false);
               if (res.success) {
                 onDone?.();
-                actions.hideActionSheet();
+                close();
               } else {
                 setStatusMsg(res.message);
               }
@@ -753,41 +1024,58 @@
             return /* @__PURE__ */valenced.react.React.createElement(ActionSheet, null, /* @__PURE__ */valenced.react.React.createElement(BottomSheetTitleHeader, {
               title: "Add Account",
               trailing: /* @__PURE__ */valenced.react.React.createElement(ActionSheetCloseButton, {
-                onPress: () => actions.hideActionSheet()
+                onPress: close
               })
             }), /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
               style: {
                 maxHeight: 520
               },
+              keyboardShouldPersistTaps: "handled",
               contentContainerStyle: {
-                padding: 16
+                padding: 16,
+                paddingTop: 4,
+                paddingBottom: bottomPadding
               }
             }, /* @__PURE__ */valenced.react.React.createElement(Stack, {
               spacing: 16
             }, statusMsg && /* @__PURE__ */valenced.react.React.createElement(View2, {
               style: {
-                backgroundColor: "rgba(237, 66, 69, 0.15)",
-                borderRadius: 8,
+                backgroundColor: colors.mutedPanel,
+                borderRadius: 12,
                 padding: 12,
                 borderWidth: 1,
-                borderColor: "rgba(237, 66, 69, 0.4)"
+                borderColor: colors.line
               }
             }, /* @__PURE__ */valenced.react.React.createElement(Text, {
-              variant: "text-sm/medium",
-              color: "text-danger"
+              accessibilityLiveRegion: "polite",
+              style: {
+                color: colors.danger,
+                fontSize: 14,
+                fontWeight: "600"
+              }
             }, statusMsg)), mode === "choose" && /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-              title: "CURRENT SESSION"
+              title: "Current Discord session"
             }, /* @__PURE__ */valenced.react.React.createElement(TableRow, {
               label: "Save Currently Logged-in Account",
-              subLabel: "Adds the active account to your switcher vault",
+              subLabel: currentUser?.username ? `@${currentUser.username}` : "Save the account active in Discord.",
+              icon: /* @__PURE__ */valenced.react.React.createElement(Avatar, {
+                user: currentUser,
+                size: 34,
+                border: colors.line
+              }),
               onPress: handleAddCurrent,
               disabled: loading,
               arrow: true
             })), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-              title: "NEW ACCOUNT"
+              title: "Other sign-in options"
             }, /* @__PURE__ */valenced.react.React.createElement(TableRow, {
               label: "Sign in with Email & Password",
-              subLabel: "Log in with Discord credentials directly",
+              subLabel: "Use an email address or phone number.",
+              icon: /* @__PURE__ */valenced.react.React.createElement(Glyph, {
+                names: ["EnvelopeIcon", "MailIcon"],
+                color: colors.muted
+              }),
+              disabled: loading,
               onPress: () => {
                 setStatusMsg(null);
                 setMode("credentials");
@@ -795,14 +1083,19 @@
               arrow: true
             }), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
               label: "Add with Token",
-              subLabel: "Paste a Discord user or bot token",
+              subLabel: "Use a Discord user or bot token.",
+              icon: /* @__PURE__ */valenced.react.React.createElement(Glyph, {
+                names: ["KeyIcon", "LockIcon"],
+                color: colors.muted
+              }),
+              disabled: loading,
               onPress: () => {
                 setStatusMsg(null);
                 setMode("token");
               },
               arrow: true
             }))), mode === "credentials" && /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-              title: "DISCORD CREDENTIALS"
+              title: "Discord credentials"
             }, /* @__PURE__ */valenced.react.React.createElement(View2, {
               style: {
                 paddingHorizontal: 16,
@@ -844,7 +1137,7 @@
                 flex: 2
               }
             }))), mode === "token" && /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-              title: "AUTHENTICATION TOKEN"
+              title: "Authentication token"
             }, /* @__PURE__ */valenced.react.React.createElement(View2, {
               style: {
                 paddingHorizontal: 16,
@@ -885,147 +1178,109 @@
               }
             }))))));
           }
-        }), "more-alts-add-account", {}, "replaceTopSheet");
+        }), sheetKey, {}, "replaceTopSheet");
       }
 
       // source/plugins/more-alts/js/ui/AccountSwitcherSheet.tsx
-      function getValenced4() {
-        try {
-          if (typeof valenced !== "undefined") return valenced;
-        } catch {}
-        return globalThis.valenced;
-      }
+      var key = "more-alts-quick-switcher";
       function openAccountSwitcherSheet(storage) {
-        var rev = getValenced4();
+        var rev = getValenced3();
         var actions = rev.discord.actions.ActionSheetActionCreators;
         if (!actions?.openLazy) return;
-        actions.openLazy(Promise.resolve({
-          default: () => {
-            var React2 = rev.react.React;
-            var {
-              View: View2,
-              ScrollView: ScrollView2,
-              Image,
-              Alert
-            } = rev.react.ReactNative;
-            var {
-              ActionSheet,
-              BottomSheetTitleHeader,
-              ActionSheetCloseButton,
-              TableRowGroup,
-              TableRow,
-              Stack,
-              Button,
-              Text
-            } = rev.discord.design.Design;
-            var [loadingToken, setLoadingToken] = React2.useState(null);
-            var cached = storage.cache ?? {};
-            var currentUser = getCurrentUser();
-            var currentUserId = currentUser?.id;
-            var accounts = getAllAccounts(storage);
-            var handleSwitch = async account => {
-              if (account.id === currentUserId) return;
-              var target = account.id;
-              setLoadingToken(target);
-              var ok = await switchToAccount(account);
-              setLoadingToken(null);
-              if (ok) {
-                actions.hideActionSheet("more-alts-quick-switcher");
-              } else {
-                Alert.alert("Could not switch accounts", "Sign into this account again in Discord, then add it to More Alts.");
-              }
-            };
-            return /* @__PURE__ */valenced.react.React.createElement(ActionSheet, {
-              header: /* @__PURE__ */valenced.react.React.createElement(BottomSheetTitleHeader, {
-                title: "Switch Account",
-                subtitle: "Select an account to switch to",
-                trailing: /* @__PURE__ */valenced.react.React.createElement(ActionSheetCloseButton, {
-                  onPress: () => actions.hideActionSheet("more-alts-quick-switcher")
-                })
+        function Switcher() {
+          var React2 = rev.react.React;
+          var {
+            View: View2,
+            ScrollView: ScrollView2,
+            Text,
+            Alert
+          } = rev.react.ReactNative;
+          var {
+            ActionSheet,
+            BottomSheetTitleHeader,
+            ActionSheetCloseButton,
+            Button
+          } = rev.discord.design.Design;
+          var colors = usePalette();
+          var bottomPadding = useBottomPadding(16);
+          var [switchingId, setSwitchingId] = React2.useState(null);
+          var inFlight = React2.useRef(false);
+          var prefs = storage.use();
+          var currentId = useCurrentAccount()?.id;
+          var accounts = getAllAccounts(storage);
+          var current = accounts.find(account => account.id === currentId);
+          var sorted = current ? [current, ...accounts.filter(account => account !== current)] : accounts;
+          var close = () => actions.hideActionSheet(key);
+          var handleSwitch = async account => {
+            if (account.id === currentId || inFlight.current) return;
+            inFlight.current = true;
+            setSwitchingId(account.id);
+            try {
+              if (await switchToAccount(account)) close();else Alert.alert("Could not switch accounts", "Sign into this account again in Discord, then add it to More Alts.");
+            } finally {
+              inFlight.current = false;
+              setSwitchingId(null);
+            }
+          };
+          return /* @__PURE__ */valenced.react.React.createElement(ActionSheet, {
+            header: /* @__PURE__ */valenced.react.React.createElement(BottomSheetTitleHeader, {
+              title: "Switch account",
+              trailing: /* @__PURE__ */valenced.react.React.createElement(ActionSheetCloseButton, {
+                onPress: close
               })
-            }, /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
-              contentContainerStyle: {
-                padding: 16,
-                paddingBottom: 32
-              },
-              keyboardShouldPersistTaps: "handled"
-            }, /* @__PURE__ */valenced.react.React.createElement(Stack, {
-              spacing: 16
-            }, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-              title: `Accounts (${accounts.length})`
-            }, accounts.length === 0 ? /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-              label: "No Saved Accounts",
-              subLabel: "Tap '+ Add Account' below to save accounts for quick switching."
-            }) : accounts.map(acc => {
-              var isCurrent = acc.id === currentUserId;
-              var target = acc.id;
-              var isLoading = loadingToken === target;
-              var avatarUrl = acc.avatar ? `https://cdn.discordapp.com/avatars/${acc.id}/${acc.avatar}.png?size=80` : "https://cdn.discordapp.com/embed/avatars/0.png";
-              var displayName = cached.enableCLI !== false ? `${acc.username}${acc.discriminator && acc.discriminator !== "0" ? `#${acc.discriminator}` : ""}` : acc.displayName || acc.username;
-              return /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-                key: acc.id,
-                icon: /* @__PURE__ */valenced.react.React.createElement(Image, {
-                  source: {
-                    uri: avatarUrl
-                  },
-                  style: {
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    borderWidth: isCurrent ? 2 : 0,
-                    borderColor: "#23A55A"
-                  }
-                }),
-                label: /* @__PURE__ */valenced.react.React.createElement(View2, {
-                  style: {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6
-                  }
-                }, /* @__PURE__ */valenced.react.React.createElement(Text, {
-                  variant: "text-md/semibold"
-                }, displayName), acc.isBot && /* @__PURE__ */valenced.react.React.createElement(View2, {
-                  style: {
-                    backgroundColor: "#5865F2",
-                    borderRadius: 4,
-                    paddingHorizontal: 5,
-                    paddingVertical: 1
-                  }
-                }, /* @__PURE__ */valenced.react.React.createElement(Text, {
-                  style: {
-                    color: "#FFFFFF",
-                    fontSize: 9,
-                    fontWeight: "bold"
-                  }
-                }, "BOT"))),
-                subLabel: isCurrent ? "\u2713 Active Account" : acc.isNative ? "Discord Account" : `@${acc.username}`,
-                onPress: isCurrent || !!loadingToken ? void 0 : () => handleSwitch(acc),
-                trailing: isLoading ? /* @__PURE__ */valenced.react.React.createElement(Text, {
-                  variant: "text-sm/normal",
-                  color: "text-muted"
-                }, "Switching...") : null
-              });
-            })), /* @__PURE__ */valenced.react.React.createElement(View2, {
-              style: {
-                flexDirection: "row",
-                gap: 8
-              }
-            }, /* @__PURE__ */valenced.react.React.createElement(Button, {
-              variant: "secondary",
-              text: "+ Add Account",
-              style: {
-                flex: 1
-              },
-              onPress: () => {
-                openAddAccountSheet(storage);
-              }
-            })))));
-          }
-        }), "more-alts-quick-switcher", {});
+            })
+          }, /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
+            style: {
+              maxHeight: 480
+            },
+            contentContainerStyle: {
+              paddingHorizontal: 16,
+              paddingTop: 4,
+              paddingBottom: bottomPadding,
+              gap: 13
+            },
+            keyboardShouldPersistTaps: "handled"
+          }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+            style: {
+              borderRadius: 17,
+              overflow: "hidden",
+              backgroundColor: colors.panel,
+              borderWidth: 1,
+              borderColor: colors.line
+            }
+          }, sorted.length ? sorted.map((account, index) => {
+            var active = account.id === currentId;
+            return /* @__PURE__ */valenced.react.React.createElement(AccountRow, {
+              key: account.id,
+              account,
+              colors,
+              showTag: prefs?.enableCLI !== false,
+              active,
+              divider: index > 0,
+              trailing: active ? "Active" : switchingId === account.id ? "Switching\u2026" : void 0,
+              actionLabel: "Switch account",
+              onPress: !active && switchingId == null ? () => handleSwitch(account) : void 0
+            });
+          }) : /* @__PURE__ */valenced.react.React.createElement(Text, {
+            style: {
+              color: colors.muted,
+              padding: 16,
+              fontSize: 14
+            }
+          }, "Add an account to start switching.")), /* @__PURE__ */valenced.react.React.createElement(Button, {
+            variant: "secondary",
+            text: "Add account",
+            onPress: () => openAddAccountSheet(storage),
+            disabled: switchingId != null
+          })));
+        }
+        actions.openLazy(Promise.resolve({
+          default: Switcher
+        }), key, {});
       }
 
       // source/plugins/more-alts/js/patches/tabBarLongPress.tsx
-      function getValenced5() {
+      function getValenced4() {
         try {
           if (typeof valenced !== "undefined") return valenced;
         } catch {}
@@ -1033,7 +1288,7 @@
       }
       function patchTabBarLongPress(storage) {
         var cleanups = [];
-        var rev = getValenced5();
+        var rev = getValenced4();
         var React2 = rev.react.React;
         var patched = /* @__PURE__ */new WeakSet();
         var patchTabItem = target => {
@@ -1099,25 +1354,6 @@
         };
       }
 
-      // valenced:@valenced/externals/react-native-safe-area-context
-      var react_native_safe_area_context_exports = {};
-      __export(react_native_safe_area_context_exports, {
-        useSafeAreaInsets: () => useSafeAreaInsets
-      });
-      function useSafeAreaInsets() {
-        return valenced.externals?.ReactNativeSafeAreaContext?.ReactNativeSafeAreaContext?.useSafeAreaInsets?.();
-      }
-
-      // source/shared/ui/safeArea.ts
-      function useBottomPadding(base = 16) {
-        try {
-          var mod = react_native_safe_area_context_exports;
-          var insets = mod?.useSafeAreaInsets?.();
-          if (typeof insets?.bottom === "number") return insets.bottom + base;
-        } catch {}
-        return base;
-      }
-
       // valenced:@valenced/externals/react-navigation
       var ReactNavigationNative = valenced.externals?.ReactNavigation?.ReactNavigationNative;
 
@@ -1178,9 +1414,9 @@
       var seen = /* @__PURE__ */new Set();
       function reportError(context, error) {
         var wrapped = withContext(context, error);
-        var key = wrapped instanceof Error ? wrapped.message : String(wrapped);
-        if (seen.has(key)) return;
-        seen.add(key);
+        var key2 = wrapped instanceof Error ? wrapped.message : String(wrapped);
+        if (seen.has(key2)) return;
+        seen.add(key2);
         if (reporter) send(wrapped);else if (queued.length < MAX_QUEUED) queued.push(wrapped);
       }
       function send(error) {
@@ -1202,7 +1438,7 @@ ${frames}`;
       }
 
       // source/shared/changelog.tsx
-      function getValenced6() {
+      function getValenced5() {
         try {
           if (typeof valenced !== "undefined") return valenced;
         } catch {}
@@ -1277,7 +1513,7 @@ ${frames}`;
           plugin2.pending = plugin2.latestOnly ? fresh.slice(0, 1) : fresh;
           showWhatsNew(plugin2, plugin2.pending, () => {
             try {
-              var rev = getValenced6();
+              var rev = getValenced5();
               var nav = rev?.discord?.modules?.mainTabsV2?.RootNavigationRef?.getRootNavigationRef?.() ?? globalThis?.valenced?.discord?.modules?.mainTabsV2?.RootNavigationRef?.getRootNavigationRef?.();
               nav?.navigate?.(changelogRoute(plugin2.id));
             } catch {}
@@ -1294,7 +1530,7 @@ ${frames}`;
       function Bullets({
         changes
       }) {
-        var rev = getValenced6();
+        var rev = getValenced5();
         var rn = rev?.react?.ReactNative ?? globalThis.ReactNative ?? react_native_exports;
         var View2 = rn.View ?? "View";
         var design = rev?.discord?.design?.Design ?? Design ?? {};
@@ -1326,7 +1562,7 @@ ${frames}`;
         return entry.title ? `${entry.version} \xB7 ${entry.title}` : entry.version;
       }
       function showWhatsNew(plugin2, entries, openChangelog) {
-        var rev = getValenced6();
+        var rev = getValenced5();
         var rn = rev?.react?.ReactNative ?? globalThis.ReactNative ?? react_native_exports;
         var ScrollView2 = rn.ScrollView ?? "ScrollView";
         var View2 = rn.View ?? "View";
@@ -1343,8 +1579,8 @@ ${frames}`;
         } = design;
         var alerts = rev?.discord?.actions?.AlertActionCreators ?? AlertActionCreators;
         if (!alerts?.openAlert) return;
-        var key = `rosie-whats-new-${plugin2.id}`;
-        var close = () => alerts.dismissAlert(key);
+        var key2 = `rosie-whats-new-${plugin2.id}`;
+        var close = () => alerts.dismissAlert(key2);
         var shown = entries.slice(0, DIALOG_VERSIONS);
         var more = entries.length - shown.length;
         var content = /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
@@ -1371,7 +1607,7 @@ ${frames}`;
           color: "text-muted"
         }, "And ", more, " more version", more === 1 ? "" : "s", " in the full changelog.") : null));
         try {
-          alerts.openAlert(key, /* @__PURE__ */valenced.react.React.createElement(AlertModal, {
+          alerts.openAlert(key2, /* @__PURE__ */valenced.react.React.createElement(AlertModal, {
             title: `What's new in ${plugin2.name} ${plugin2.current}`,
             extraContent: content,
             actions: /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(AlertActionButton, {
@@ -1427,7 +1663,7 @@ ${frames}`;
         };
       }
       function ChangelogPage() {
-        var rev = getValenced6();
+        var rev = getValenced5();
         var rn = rev?.react?.ReactNative ?? globalThis.ReactNative ?? react_native_exports;
         var ScrollView2 = rn.ScrollView ?? "ScrollView";
         var View2 = rn.View ?? "View";
@@ -1477,6 +1713,9 @@ ${frames}`;
         changes: ["Manage and switch between multiple Discord accounts, plus unlocks Discord's own native multi-account switcher."]
       }];
 
+      // valenced:react
+      var react_default = valenced.react.React;
+
       // source/plugins/more-alts/js/lib/types.ts
       var DEFAULT_STORAGE = {
         accounts: {},
@@ -1512,12 +1751,6 @@ ${frames}`;
       }
 
       // source/plugins/more-alts/js/ui/Settings.tsx
-      function getValenced7() {
-        try {
-          if (typeof valenced !== "undefined") return valenced;
-        } catch {}
-        return globalThis.valenced;
-      }
       function formatDate(ts) {
         return new Date(ts).toLocaleDateString("en-US", {
           month: "short",
@@ -1528,30 +1761,30 @@ ${frames}`;
       function Settings({
         api
       }) {
-        var rev = getValenced7();
+        var rev = getValenced3();
         var {
           ScrollView: ScrollView2,
           View: View2,
-          Image,
-          Alert
+          Alert,
+          Text,
+          Pressable: Pressable2
         } = rev.react.ReactNative;
         var {
           TableRowGroup,
           TableSwitchRow,
-          TableRow,
-          Stack,
-          Text,
-          Button
+          TableRow
         } = rev.discord.design.Design;
-        var rawStorage = api.jsonStorage.use();
+        var [tab, setTab] = react_default.useState("Accounts");
+        var colors = usePalette();
+        var bottomPadding = useBottomPadding(24);
         var storage = {
           ...DEFAULT_STORAGE,
-          ...(rawStorage ?? {})
+          ...api.jsonStorage.use()
         };
-        var currentUser = getCurrentUser();
+        var currentUser = useCurrentAccount();
         var currentUserId = currentUser?.id;
         var accounts = getAllAccounts(api.jsonStorage);
-        var currentAvatarUrl = currentUser?.avatar ? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=80` : "https://cdn.discordapp.com/embed/avatars/0.png";
+        var otherAccounts = accounts.filter(account => account.id !== currentUserId);
         var handleSwitch = async account => {
           if (account.id === currentUserId) return;
           if (!(await switchToAccount(account))) {
@@ -1621,170 +1854,264 @@ ${frames}`;
             Alert.alert("Import Error", e?.message ?? String(e));
           }
         };
-        return /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
+        var confirmLogout = () => Alert.alert("Force Logout", "This signs you out of the current Discord session. Your other saved accounts stay in More Alts.", [{
+          text: "Cancel",
+          style: "cancel"
+        }, {
+          text: "Force Logout",
+          style: "destructive",
+          onPress: () => forceLogout()
+        }]);
+        var toggle = (key2, label, subLabel) => /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
+          label,
+          subLabel,
+          value: storage[key2],
+          onValueChange: value => api.jsonStorage.set({
+            [key2]: value
+          })
+        });
+        return /* @__PURE__ */valenced.react.React.createElement(View2, {
           style: {
             flex: 1,
-            backgroundColor: "#111214"
+            backgroundColor: colors.page
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          accessibilityRole: "tablist",
+          style: {
+            flexDirection: "row",
+            gap: 4,
+            padding: 4,
+            marginHorizontal: 16,
+            marginTop: 12,
+            marginBottom: 4,
+            borderRadius: 16,
+            backgroundColor: colors.panel,
+            borderWidth: 1,
+            borderColor: colors.line
+          }
+        }, ["Accounts", "Preferences"].map(name => /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
+          key: name,
+          accessibilityRole: "tab",
+          accessibilityLabel: name,
+          accessibilityState: {
+            selected: tab === name
+          },
+          onPress: () => setTab(name),
+          style: ({
+            pressed
+          }) => ({
+            flex: 1,
+            minHeight: 44,
+            borderRadius: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
+            paddingHorizontal: 6,
+            backgroundColor: tab === name ? colors.selected : pressed ? colors.mutedPanel : "transparent"
+          })
+        }, /* @__PURE__ */valenced.react.React.createElement(Glyph, {
+          names: name === "Accounts" ? ["UserMultipleIcon", "FriendsIcon"] : ["SettingsIcon", "CogIcon"],
+          color: tab === name ? colors.text : colors.muted,
+          size: 17
+        }), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: tab === name ? colors.text : colors.muted,
+            fontSize: 14,
+            fontWeight: "700"
+          }
+        }, name)))), /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
+          key: tab,
+          style: {
+            flex: 1
           },
           contentContainerStyle: {
             padding: 16,
-            paddingBottom: 64
+            paddingBottom: bottomPadding,
+            gap: 20
           },
           keyboardShouldPersistTaps: "handled"
-        }, /* @__PURE__ */valenced.react.React.createElement(Stack, {
-          spacing: 16
-        }, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-          title: "CURRENT ACCOUNT"
-        }, /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-          icon: /* @__PURE__ */valenced.react.React.createElement(Image, {
-            source: {
-              uri: currentAvatarUrl
-            },
-            style: {
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              borderWidth: 2,
-              borderColor: "#23a55a"
-            }
-          }),
-          label: /* @__PURE__ */valenced.react.React.createElement(Text, {
-            variant: "text-md/semibold",
-            color: "text-normal"
-          }, currentUser?.globalName || currentUser?.username || "Current User"),
-          subLabel: currentUser?.username ? `@${currentUser.username} \u2022 Active Session` : "Active Session",
-          trailing: /* @__PURE__ */valenced.react.React.createElement(Button, {
-            size: "sm",
-            variant: "secondary",
-            text: "Switch",
-            onPress: () => openAccountSwitcherSheet(api.jsonStorage)
+        }, tab === "Accounts" ? /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            overflow: "hidden",
+            padding: 16,
+            gap: 17,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: HERO.line,
+            backgroundColor: HERO.background
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          pointerEvents: "none",
+          style: {
+            position: "absolute",
+            right: -41,
+            top: -65,
+            width: 187,
+            height: 187,
+            borderRadius: 100,
+            backgroundColor: "#493047",
+            borderColor: "#5b3c55",
+            borderWidth: 1
+          }
+        }), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          pointerEvents: "none",
+          style: {
+            position: "absolute",
+            right: -21,
+            top: -46,
+            width: 149,
+            height: 149,
+            borderRadius: 80,
+            borderColor: "#63425c",
+            borderWidth: 1
+          }
+        }), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 13
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Avatar, {
+          user: currentUser,
+          size: 62,
+          border: HERO.line,
+          active: !!currentUserId
+        }), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flex: 1,
+            minWidth: 0,
+            gap: 3
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: HERO.accent,
+            fontSize: 11,
+            fontWeight: "700",
+            letterSpacing: 1.2
+          }
+        }, "CURRENT ACCOUNT"), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          numberOfLines: 2,
+          style: {
+            color: HERO.text,
+            fontSize: 23,
+            lineHeight: 28,
+            fontWeight: "800"
+          }
+        }, currentUser?.globalName || currentUser?.username || "No active session"), currentUser?.username && /* @__PURE__ */valenced.react.React.createElement(Text, {
+          numberOfLines: 1,
+          style: {
+            color: HERO.muted,
+            fontSize: 13
+          }
+        }, "@", currentUser.username))), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flexDirection: "row",
+            gap: 9
+          }
+        }, [["Switch account", ["SwapHorizontalIcon", "ArrowLeftRightIcon"], () => openAccountSwitcherSheet(api.jsonStorage)], ["Add account", ["PlusIcon", "ic_add_24px"], () => openAddAccountSheet(api.jsonStorage)]].map(([label, icons, onPress], index) => /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
+          key: label,
+          accessibilityRole: "button",
+          accessibilityLabel: label,
+          onPress,
+          style: ({
+            pressed
+          }) => ({
+            flex: 1,
+            minHeight: 46,
+            borderRadius: 13,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingHorizontal: 5,
+            opacity: pressed ? 0.77 : 1,
+            backgroundColor: index ? "#453045" : HERO.accent,
+            borderWidth: index ? 1 : 0,
+            borderColor: HERO.line
           })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-          label: "Add Another Account",
-          subLabel: "Sign in with credentials, user token, or bot account",
-          arrow: true,
-          onPress: () => openAddAccountSheet(api.jsonStorage)
-        })), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-          title: `SAVED ACCOUNTS (${accounts.length})`
-        }, accounts.length === 0 ? /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-          label: "No Accounts Saved",
-          subLabel: "Tap 'Add Another Account' above or hold the YouBar tab to save accounts."
-        }) : accounts.map((acc, index) => {
-          var isCurrent = acc.id === currentUserId;
-          var avatarUrl = acc.avatar ? `https://cdn.discordapp.com/avatars/${acc.id}/${acc.avatar}.png?size=80` : "https://cdn.discordapp.com/embed/avatars/0.png";
-          var displayName = storage.enableCLI ? `${acc.username}${acc.discriminator && acc.discriminator !== "0" ? `#${acc.discriminator}` : ""}` : acc.displayName || acc.username;
-          return /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-            key: acc.id,
-            icon: /* @__PURE__ */valenced.react.React.createElement(Image, {
-              source: {
-                uri: avatarUrl
-              },
-              style: {
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                borderWidth: isCurrent ? 2 : 0,
-                borderColor: "#23a55a"
-              }
-            }),
-            label: /* @__PURE__ */valenced.react.React.createElement(View2, {
-              style: {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6
-              }
-            }, /* @__PURE__ */valenced.react.React.createElement(Text, {
-              variant: "text-md/semibold",
-              color: "text-normal"
-            }, `${index + 1}. ${displayName}`), acc.isBot && /* @__PURE__ */valenced.react.React.createElement(View2, {
-              style: {
-                backgroundColor: "#5865f2",
-                borderRadius: 4,
-                paddingHorizontal: 5,
-                paddingVertical: 1
-              }
-            }, /* @__PURE__ */valenced.react.React.createElement(Text, {
-              style: {
-                color: "#ffffff",
-                fontSize: 9,
-                fontWeight: "bold"
-              }
-            }, "BOT"))),
-            subLabel: isCurrent ? "\u2713 Active Account" : acc.isNative ? "Discord Account \u2022 Tap to switch" : `Added: ${formatDate(acc.addedAt)} \u2022 Tap to switch`,
-            arrow: !isCurrent,
-            onPress: () => handleAccountPress(acc)
-          });
-        })), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-          title: "MULTI-ACCOUNT SETTINGS"
-        }, /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Native Account Switcher",
-          subLabel: "Automatically unlocks Discord's built-in multi-account switcher in the YouBar",
-          value: storage.enableNativeSwitcher !== false,
-          onValueChange: v => api.jsonStorage.set({
-            enableNativeSwitcher: v
-          })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Block Background Notifications",
-          subLabel: "Stop notifications from leaking from accounts you are not currently signed into",
-          value: storage.blockOtherAccountNotifications !== false,
-          onValueChange: v => api.jsonStorage.set({
-            blockOtherAccountNotifications: v
-          })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Persistent Storage Vault",
-          subLabel: "Protects accounts from clearing themselves on restart or cache wipes",
-          value: storage.persistentStorageVault !== false,
-          onValueChange: v => api.jsonStorage.set({
-            persistentStorageVault: v
-          })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Show Full Username Tag",
-          subLabel: "Display username#0000 discriminator in the accounts list",
-          value: storage.enableCLI !== false,
-          onValueChange: v => api.jsonStorage.set({
-            enableCLI: v
-          })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Confirm Before Removing",
-          subLabel: "Ask for confirmation before deleting an account from storage",
-          value: storage.confirmBeforeDelete !== false,
-          onValueChange: v => api.jsonStorage.set({
-            confirmBeforeDelete: v
-          })
-        }), /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
-          label: "Enable Unsafe Features",
-          subLabel: "Allow token copying and advanced account export",
-          value: !!storage.enableUnsafeFeatures,
-          onValueChange: v => api.jsonStorage.set({
-            enableUnsafeFeatures: v
-          })
-        })), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
-          title: "BACKUP & SESSIONS"
-        }, storage.enableUnsafeFeatures && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-          label: "Export Accounts",
-          subLabel: "Copy all saved accounts and tokens to clipboard (JSON)",
-          arrow: true,
-          onPress: handleExport
-        }), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+        }, /* @__PURE__ */valenced.react.React.createElement(Glyph, {
+          names: icons,
+          color: index ? HERO.text : HERO.ink,
+          size: 17
+        }), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: index ? HERO.text : HERO.ink,
+            fontSize: 14,
+            fontWeight: "700",
+            flexShrink: 1,
+            textAlign: "center"
+          }
+        }, label))))), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            gap: 10
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            paddingHorizontal: 2
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+          accessibilityRole: "header",
+          style: {
+            color: colors.text,
+            fontSize: 18,
+            fontWeight: "700"
+          }
+        }, currentUserId ? "Other accounts" : "Accounts"), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.muted,
+            fontSize: 13
+          }
+        }, otherAccounts.length)), /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            borderRadius: 17,
+            overflow: "hidden",
+            borderWidth: 1,
+            borderColor: colors.line,
+            backgroundColor: colors.panel
+          }
+        }, otherAccounts.length ? otherAccounts.map((account, index) => /* @__PURE__ */valenced.react.React.createElement(AccountRow, {
+          key: account.id,
+          account,
+          colors,
+          showTag: storage.enableCLI,
+          detail: account.isNative ? "Discord account" : Number.isFinite(account.addedAt) ? `Added ${formatDate(account.addedAt)}` : void 0,
+          divider: index > 0,
+          actionLabel: "Account actions",
+          onPress: () => handleAccountPress(account)
+        })) : /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.muted,
+            fontSize: 14,
+            padding: 16
+          }
+        }, "Add another account to switch between your Discord sessions.")))) : /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+          title: "Switching"
+        }, toggle("enableNativeSwitcher", "Native Account Switcher", "Show Discord\u2019s built-in switcher on the You tab."), toggle("blockOtherAccountNotifications", "Block Background Notifications", "Mute notifications from your other accounts."), toggle("enableCLI", "Show Full Username Tag", "Show the #1234 suffix when an account has one.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+          title: "Storage & backup"
+        }, toggle("persistentStorageVault", "Persistent Storage Vault", "Keep a local backup of saved Discord sessions."), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
           label: "Import Accounts from Clipboard",
-          subLabel: "Restore accounts from previously copied export JSON",
+          subLabel: "Restore saved accounts from JSON.",
           arrow: true,
           onPress: handleImport
-        }), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
-          label: "Force Logout Session",
-          subLabel: "Invalidate current session while preserving saved switcher accounts",
+        }), toggle("enableUnsafeFeatures", "Enable Account Export", "Allow copying saved sessions and tokens as JSON."), storage.enableUnsafeFeatures && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Export Accounts",
+          subLabel: "Copy saved sessions and tokens as JSON.",
           arrow: true,
-          onPress: () => {
-            Alert.alert("Force Logout", "This will log you out of your current session. Your saved accounts will remain safe in the vault.", [{
-              text: "Cancel",
-              style: "cancel"
-            }, {
-              text: "Force Logout",
-              style: "destructive",
-              onPress: () => forceLogout()
-            }]);
-          }
-        }))));
+          onPress: handleExport
+        })), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+          title: "Account management"
+        }, toggle("confirmBeforeDelete", "Confirm Before Removing", "Ask before removing an account from More Alts."), /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Force Logout Session",
+          subLabel: "Sign out of the active Discord session.",
+          variant: "danger",
+          arrow: true,
+          onPress: confirmLogout
+        })))));
       }
 
       // source/plugins/more-alts/js/index.ts

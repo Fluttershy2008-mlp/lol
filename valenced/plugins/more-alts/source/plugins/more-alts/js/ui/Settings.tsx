@@ -3,7 +3,6 @@ import type { PluginApi } from '@valenced/plugins/types'
 import { DEFAULT_STORAGE } from '../lib/types'
 import type { MoreAltsStorage, Account } from '../lib/types'
 import {
-	getCurrentUser,
 	getAllAccounts,
 	switchToAccount,
 	removeAccount,
@@ -13,15 +12,10 @@ import {
 } from '../lib/accountActions'
 import { openAddAccountSheet } from './AddAccountSheet'
 import { openAccountSwitcherSheet } from './AccountSwitcherSheet'
+import { useBottomPadding } from '../../../../shared/ui/safeArea'
+import { AccountRow, Avatar, getValenced, Glyph, HERO, useCurrentAccount, usePalette } from './AccountUi'
 
 export { openAddAccountSheet, openAccountSwitcherSheet }
-
-function getValenced(): any {
-	try {
-		if (typeof valenced !== 'undefined') return valenced
-	} catch {}
-	return (globalThis as any).valenced
-}
 
 function formatDate(ts: number): string {
 	return new Date(ts).toLocaleDateString('en-US', {
@@ -37,29 +31,16 @@ export default function Settings({
 	api: PluginApi<{ jsonStorage: MoreAltsStorage }>
 }) {
 	const rev = getValenced()
-	const { ScrollView, View, Image, Alert } = rev.react.ReactNative
-	const {
-		TableRowGroup,
-		TableSwitchRow,
-		TableRow,
-		Stack,
-		Text,
-		Button,
-	} = rev.discord.design.Design as any
-
-	const rawStorage = api.jsonStorage.use() as Partial<MoreAltsStorage> | undefined
-	const storage: MoreAltsStorage = {
-		...DEFAULT_STORAGE,
-		...(rawStorage ?? {}),
-	}
-
-	const currentUser = getCurrentUser()
+	const { ScrollView, View, Alert, Text, Pressable } = rev.react.ReactNative
+	const { TableRowGroup, TableSwitchRow, TableRow } = rev.discord.design.Design
+	const [tab, setTab] = React.useState<'Accounts' | 'Preferences'>('Accounts')
+	const colors = usePalette()
+	const bottomPadding = useBottomPadding(24)
+	const storage = { ...DEFAULT_STORAGE, ...api.jsonStorage.use() } as MoreAltsStorage
+	const currentUser = useCurrentAccount()
 	const currentUserId = currentUser?.id
 	const accounts = getAllAccounts(api.jsonStorage)
-
-	const currentAvatarUrl = currentUser?.avatar
-		? `https://cdn.discordapp.com/avatars/${currentUser.id}/${currentUser.avatar}.png?size=80`
-		: 'https://cdn.discordapp.com/embed/avatars/0.png'
+	const otherAccounts = accounts.filter(account => account.id !== currentUserId)
 
 	const handleSwitch = async (account: Account) => {
 		if (account.id === currentUserId) return
@@ -159,219 +140,110 @@ export default function Settings({
 		}
 	}
 
+	const confirmLogout = () => Alert.alert(
+		'Force Logout',
+		'This signs you out of the current Discord session. Your other saved accounts stay in More Alts.',
+		[
+			{ text: 'Cancel', style: 'cancel' },
+			{ text: 'Force Logout', style: 'destructive', onPress: () => forceLogout() },
+		],
+	)
+
+	const toggle = (key: 'enableNativeSwitcher' | 'blockOtherAccountNotifications' | 'enableCLI' |
+		'persistentStorageVault' | 'enableUnsafeFeatures' | 'confirmBeforeDelete', label: string, subLabel: string) => (
+		<TableSwitchRow label={label} subLabel={subLabel} value={storage[key]}
+			onValueChange={(value: boolean) => api.jsonStorage.set({ [key]: value })} />
+	)
+
 	return (
-		<ScrollView
-			style={{ flex: 1, backgroundColor: '#111214' }}
-			contentContainerStyle={{ padding: 16, paddingBottom: 64 }}
-			keyboardShouldPersistTaps="handled"
-		>
-			<Stack spacing={16}>
-				<TableRowGroup title="CURRENT ACCOUNT">
-					<TableRow
-						icon={
-							<Image
-								source={{ uri: currentAvatarUrl }}
-								style={{
-									width: 38,
-									height: 38,
-									borderRadius: 19,
-									borderWidth: 2,
-									borderColor: '#23a55a',
-								}}
-							/>
-						}
-						label={
-							<Text variant="text-md/semibold" color="text-normal">
-								{currentUser?.globalName || currentUser?.username || 'Current User'}
-							</Text>
-						}
-						subLabel={
-							currentUser?.username
-								? `@${currentUser.username} • Active Session`
-								: 'Active Session'
-						}
-						trailing={
-							<Button
-								size="sm"
-								variant="secondary"
-								text="Switch"
-								onPress={() => openAccountSwitcherSheet(api.jsonStorage)}
-							/>
-						}
-					/>
-					<TableRow
-						label="Add Another Account"
-						subLabel="Sign in with credentials, user token, or bot account"
-						arrow
-						onPress={() => openAddAccountSheet(api.jsonStorage)}
-					/>
-				</TableRowGroup>
-
-				<TableRowGroup title={`SAVED ACCOUNTS (${accounts.length})`}>
-					{accounts.length === 0 ? (
-						<TableRow
-							label="No Accounts Saved"
-							subLabel="Tap 'Add Another Account' above or hold the YouBar tab to save accounts."
-						/>
-					) : (
-						accounts.map((acc, index) => {
-							const isCurrent = acc.id === currentUserId
-							const avatarUrl = acc.avatar
-								? `https://cdn.discordapp.com/avatars/${acc.id}/${acc.avatar}.png?size=80`
-								: 'https://cdn.discordapp.com/embed/avatars/0.png'
-
-							const displayName = storage.enableCLI
-								? `${acc.username}${acc.discriminator && acc.discriminator !== '0' ? `#${acc.discriminator}` : ''}`
-								: acc.displayName || acc.username
-
-							return (
-								<TableRow
-									key={acc.id}
-									icon={
-										<Image
-											source={{ uri: avatarUrl }}
-											style={{
-												width: 36,
-												height: 36,
-												borderRadius: 18,
-												borderWidth: isCurrent ? 2 : 0,
-												borderColor: '#23a55a',
-											}}
-										/>
-									}
-									label={
-										<View
-											style={{
-												flexDirection: 'row',
-												alignItems: 'center',
-												gap: 6,
-											}}
-										>
-											<Text variant="text-md/semibold" color="text-normal">
-												{`${index + 1}. ${displayName}`}
-											</Text>
-											{acc.isBot && (
-												<View
-													style={{
-														backgroundColor: '#5865f2',
-														borderRadius: 4,
-														paddingHorizontal: 5,
-														paddingVertical: 1,
-													}}
-												>
-													<Text
-														style={{
-															color: '#ffffff',
-															fontSize: 9,
-															fontWeight: 'bold',
-														}}
-													>
-														BOT
-													</Text>
-												</View>
-											)}
-										</View>
-									}
-									subLabel={
-										isCurrent
-											? '✓ Active Account'
-											: acc.isNative
-												? 'Discord Account • Tap to switch'
-												: `Added: ${formatDate(acc.addedAt)} • Tap to switch`
-									}
-									arrow={!isCurrent}
-									onPress={() => handleAccountPress(acc)}
-								/>
-							)
-						})
-					)}
-				</TableRowGroup>
-
-				<TableRowGroup title="MULTI-ACCOUNT SETTINGS">
-					<TableSwitchRow
-						label="Native Account Switcher"
-						subLabel="Automatically unlocks Discord's built-in multi-account switcher in the YouBar"
-						value={storage.enableNativeSwitcher !== false}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ enableNativeSwitcher: v })
-						}
-					/>
-					<TableSwitchRow
-						label="Block Background Notifications"
-						subLabel="Stop notifications from leaking from accounts you are not currently signed into"
-						value={storage.blockOtherAccountNotifications !== false}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ blockOtherAccountNotifications: v })
-						}
-					/>
-					<TableSwitchRow
-						label="Persistent Storage Vault"
-						subLabel="Protects accounts from clearing themselves on restart or cache wipes"
-						value={storage.persistentStorageVault !== false}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ persistentStorageVault: v })
-						}
-					/>
-					<TableSwitchRow
-						label="Show Full Username Tag"
-						subLabel="Display username#0000 discriminator in the accounts list"
-						value={storage.enableCLI !== false}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ enableCLI: v })
-						}
-					/>
-					<TableSwitchRow
-						label="Confirm Before Removing"
-						subLabel="Ask for confirmation before deleting an account from storage"
-						value={storage.confirmBeforeDelete !== false}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ confirmBeforeDelete: v })
-						}
-					/>
-					<TableSwitchRow
-						label="Enable Unsafe Features"
-						subLabel="Allow token copying and advanced account export"
-						value={!!storage.enableUnsafeFeatures}
-						onValueChange={(v: boolean) =>
-							api.jsonStorage.set({ enableUnsafeFeatures: v })
-						}
-					/>
-				</TableRowGroup>
-
-				<TableRowGroup title="BACKUP & SESSIONS">
-					{storage.enableUnsafeFeatures && <TableRow
-						label="Export Accounts"
-						subLabel="Copy all saved accounts and tokens to clipboard (JSON)"
-						arrow
-						onPress={handleExport}
-					/>}
-					<TableRow
-						label="Import Accounts from Clipboard"
-						subLabel="Restore accounts from previously copied export JSON"
-						arrow
-						onPress={handleImport}
-					/>
-					<TableRow
-						label="Force Logout Session"
-						subLabel="Invalidate current session while preserving saved switcher accounts"
-						arrow
-						onPress={() => {
-							Alert.alert(
-								'Force Logout',
-								'This will log you out of your current session. Your saved accounts will remain safe in the vault.',
-								[
-									{ text: 'Cancel', style: 'cancel' },
-									{
-										text: 'Force Logout',
-										style: 'destructive',
-										onPress: () => forceLogout(),
-									},
-								],
-							)
-						}}
-					/>
-				</TableRowGroup>
-			</Stack>
-		</ScrollView>
+		<View style={{ flex: 1, backgroundColor: colors.page }}>
+			<View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4,
+				marginHorizontal: 16, marginTop: 12, marginBottom: 4, borderRadius: 16,
+				backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.line }}>
+				{(['Accounts', 'Preferences'] as const).map(name => (
+					<Pressable key={name} accessibilityRole="tab" accessibilityLabel={name}
+						accessibilityState={{ selected: tab === name }} onPress={() => setTab(name)}
+						style={({ pressed }: { pressed: boolean }) => ({ flex: 1, minHeight: 44, borderRadius: 12,
+							flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 6,
+							backgroundColor: tab === name ? colors.selected : pressed ? colors.mutedPanel : 'transparent' })}>
+						<Glyph names={name === 'Accounts' ? ['UserMultipleIcon', 'FriendsIcon'] : ['SettingsIcon', 'CogIcon']}
+							color={tab === name ? colors.text : colors.muted} size={17} />
+						<Text style={{ color: tab === name ? colors.text : colors.muted, fontSize: 14, fontWeight: '700' }}>{name}</Text>
+					</Pressable>
+				))}
+			</View>
+			<ScrollView key={tab} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: bottomPadding, gap: 20 }}
+				keyboardShouldPersistTaps="handled">
+				{tab === 'Accounts' ? (
+					<>
+						<View style={{ overflow: 'hidden', padding: 16, gap: 17, borderRadius: 22,
+							borderWidth: 1, borderColor: HERO.line, backgroundColor: HERO.background }}>
+							<View pointerEvents="none" style={{ position: 'absolute', right: -41, top: -65, width: 187, height: 187,
+								borderRadius: 100, backgroundColor: '#493047', borderColor: '#5b3c55', borderWidth: 1 }} />
+							<View pointerEvents="none" style={{ position: 'absolute', right: -21, top: -46, width: 149, height: 149,
+								borderRadius: 80, borderColor: '#63425c', borderWidth: 1 }} />
+							<View style={{ flexDirection: 'row', alignItems: 'center', gap: 13 }}>
+								<Avatar user={currentUser} size={62} border={HERO.line} active={!!currentUserId} />
+								<View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+									<Text style={{ color: HERO.accent, fontSize: 11, fontWeight: '700', letterSpacing: 1.2 }}>CURRENT ACCOUNT</Text>
+									<Text numberOfLines={2} style={{ color: HERO.text, fontSize: 23, lineHeight: 28, fontWeight: '800' }}>
+									{currentUser?.globalName || currentUser?.username || 'No active session'}
+									</Text>
+									{currentUser?.username && <Text numberOfLines={1} style={{ color: HERO.muted, fontSize: 13 }}>@{currentUser.username}</Text>}
+								</View>
+							</View>
+							<View style={{ flexDirection: 'row', gap: 9 }}>
+								{([
+									['Switch account', ['SwapHorizontalIcon', 'ArrowLeftRightIcon'], () => openAccountSwitcherSheet(api.jsonStorage)],
+									['Add account', ['PlusIcon', 'ic_add_24px'], () => openAddAccountSheet(api.jsonStorage)],
+								] as const).map(([label, icons, onPress], index) => (
+									<Pressable key={label} accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+										style={({ pressed }: { pressed: boolean }) => ({ flex: 1, minHeight: 46, borderRadius: 13,
+											flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 5,
+											opacity: pressed ? 0.77 : 1, backgroundColor: index ? '#453045' : HERO.accent,
+											borderWidth: index ? 1 : 0, borderColor: HERO.line })}>
+										<Glyph names={icons} color={index ? HERO.text : HERO.ink} size={17} />
+										<Text style={{ color: index ? HERO.text : HERO.ink, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'center' }}>{label}</Text>
+									</Pressable>
+								))}
+							</View>
+						</View>
+						<View style={{ gap: 10 }}>
+							<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 2 }}>
+								<Text accessibilityRole="header" style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>{currentUserId ? 'Other accounts' : 'Accounts'}</Text>
+								<Text style={{ color: colors.muted, fontSize: 13 }}>{otherAccounts.length}</Text>
+							</View>
+							<View style={{ borderRadius: 17, overflow: 'hidden', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.panel }}>
+								{otherAccounts.length ? otherAccounts.map((account, index) => (
+									<AccountRow key={account.id} account={account} colors={colors} showTag={storage.enableCLI}
+										detail={account.isNative ? 'Discord account' : Number.isFinite(account.addedAt) ? `Added ${formatDate(account.addedAt)}` : undefined}
+										divider={index > 0} actionLabel="Account actions" onPress={() => handleAccountPress(account)} />
+								)) : (
+									<Text style={{ color: colors.muted, fontSize: 14, padding: 16 }}>Add another account to switch between your Discord sessions.</Text>
+								)}
+							</View>
+						</View>
+					</>
+				) : (
+					<>
+						<TableRowGroup title="Switching">
+							{toggle('enableNativeSwitcher', 'Native Account Switcher', 'Show Discord’s built-in switcher on the You tab.')}
+							{toggle('blockOtherAccountNotifications', 'Block Background Notifications', 'Mute notifications from your other accounts.')}
+							{toggle('enableCLI', 'Show Full Username Tag', 'Show the #1234 suffix when an account has one.')}
+						</TableRowGroup>
+						<TableRowGroup title="Storage & backup">
+							{toggle('persistentStorageVault', 'Persistent Storage Vault', 'Keep a local backup of saved Discord sessions.')}
+							<TableRow label="Import Accounts from Clipboard" subLabel="Restore saved accounts from JSON." arrow onPress={handleImport} />
+							{toggle('enableUnsafeFeatures', 'Enable Account Export', 'Allow copying saved sessions and tokens as JSON.')}
+							{storage.enableUnsafeFeatures && <TableRow label="Export Accounts" subLabel="Copy saved sessions and tokens as JSON." arrow onPress={handleExport} />}
+						</TableRowGroup>
+						<TableRowGroup title="Account management">
+							{toggle('confirmBeforeDelete', 'Confirm Before Removing', 'Ask before removing an account from More Alts.')}
+							<TableRow label="Force Logout Session" subLabel="Sign out of the active Discord session." variant="danger" arrow onPress={confirmLogout} />
+						</TableRowGroup>
+					</>
+				)}
+			</ScrollView>
+		</View>
 	)
 }

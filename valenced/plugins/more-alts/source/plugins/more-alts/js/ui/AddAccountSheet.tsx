@@ -3,13 +3,10 @@ import {
 	addAccountWithToken,
 	addAccountWithCredentials,
 } from '../lib/accountActions'
+import { useBottomPadding } from '../../../../shared/ui/safeArea'
+import { Avatar, getValenced, Glyph, useCurrentAccount, usePalette } from './AccountUi'
 
-function getValenced(): any {
-	try {
-		if (typeof valenced !== 'undefined') return valenced
-	} catch {}
-	return (globalThis as any).valenced
-}
+const sheetKey = 'more-alts-add-account'
 
 export function openAddAccountSheet(
 	storage: any,
@@ -23,7 +20,7 @@ export function openAddAccountSheet(
 		Promise.resolve({
 			default: () => {
 				const React = rev.react.React
-				const { View, ScrollView } = rev.react.ReactNative
+				const { View, ScrollView, Text } = rev.react.ReactNative
 				const {
 					ActionSheet,
 					BottomSheetTitleHeader,
@@ -32,7 +29,6 @@ export function openAddAccountSheet(
 					TableRow,
 					Stack,
 					Button,
-					Text,
 					TextInput,
 				} = rev.discord.design.Design as any
 
@@ -42,6 +38,10 @@ export function openAddAccountSheet(
 				const [token, setToken] = React.useState('')
 				const [statusMsg, setStatusMsg] = React.useState<string | null>(null)
 				const [loading, setLoading] = React.useState(false)
+				const colors = usePalette()
+				const currentUser = useCurrentAccount()
+				const bottomPadding = useBottomPadding(16)
+				const close = () => actions.hideActionSheet(sheetKey)
 
 				const handleAddCurrent = async () => {
 					setLoading(true)
@@ -50,7 +50,7 @@ export function openAddAccountSheet(
 					setLoading(false)
 					if (res.success) {
 						onDone?.()
-						actions.hideActionSheet()
+						close()
 					} else {
 						setStatusMsg(res.message)
 					}
@@ -63,7 +63,7 @@ export function openAddAccountSheet(
 					setLoading(false)
 					if (res.success) {
 						onDone?.()
-						actions.hideActionSheet()
+						close()
 					} else {
 						setStatusMsg(res.message)
 					}
@@ -76,7 +76,7 @@ export function openAddAccountSheet(
 					setLoading(false)
 					if (res.success) {
 						onDone?.()
-						actions.hideActionSheet()
+						close()
 					} else {
 						setStatusMsg(res.message)
 					}
@@ -98,23 +98,24 @@ export function openAddAccountSheet(
 							title="Add Account"
 							trailing={
 								<ActionSheetCloseButton
-									onPress={() => actions.hideActionSheet()}
+									onPress={close}
 								/>
 							}
 						/>
-						<ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 16 }}>
+						<ScrollView style={{ maxHeight: 520 }} keyboardShouldPersistTaps="handled"
+							contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: bottomPadding }}>
 							<Stack spacing={16}>
 								{statusMsg && (
 									<View
 										style={{
-											backgroundColor: 'rgba(237, 66, 69, 0.15)',
-											borderRadius: 8,
+											backgroundColor: colors.mutedPanel,
+											borderRadius: 12,
 											padding: 12,
 											borderWidth: 1,
-											borderColor: 'rgba(237, 66, 69, 0.4)',
+											borderColor: colors.line,
 										}}
 									>
-										<Text variant="text-sm/medium" color="text-danger">
+										<Text accessibilityLiveRegion="polite" style={{ color: colors.danger, fontSize: 14, fontWeight: '600' }}>
 											{statusMsg}
 										</Text>
 									</View>
@@ -122,20 +123,23 @@ export function openAddAccountSheet(
 
 								{mode === 'choose' && (
 									<>
-										<TableRowGroup title="CURRENT SESSION">
+										<TableRowGroup title="Current Discord session">
 											<TableRow
 												label="Save Currently Logged-in Account"
-												subLabel="Adds the active account to your switcher vault"
+												subLabel={currentUser?.username ? `@${currentUser.username}` : 'Save the account active in Discord.'}
+												icon={<Avatar user={currentUser} size={34} border={colors.line} />}
 												onPress={handleAddCurrent}
 												disabled={loading}
 												arrow
 											/>
 										</TableRowGroup>
 
-										<TableRowGroup title="NEW ACCOUNT">
+										<TableRowGroup title="Other sign-in options">
 											<TableRow
 												label="Sign in with Email & Password"
-												subLabel="Log in with Discord credentials directly"
+												subLabel="Use an email address or phone number."
+												icon={<Glyph names={['EnvelopeIcon', 'MailIcon']} color={colors.muted} />}
+												disabled={loading}
 												onPress={() => {
 													setStatusMsg(null)
 													setMode('credentials')
@@ -144,7 +148,9 @@ export function openAddAccountSheet(
 											/>
 											<TableRow
 												label="Add with Token"
-												subLabel="Paste a Discord user or bot token"
+												subLabel="Use a Discord user or bot token."
+												icon={<Glyph names={['KeyIcon', 'LockIcon']} color={colors.muted} />}
+												disabled={loading}
 												onPress={() => {
 													setStatusMsg(null)
 													setMode('token')
@@ -157,7 +163,7 @@ export function openAddAccountSheet(
 
 								{mode === 'credentials' && (
 									<>
-										<TableRowGroup title="DISCORD CREDENTIALS">
+										<TableRowGroup title="Discord credentials">
 											<View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
 												<TextInput
 													label="Email or Phone"
@@ -198,7 +204,7 @@ export function openAddAccountSheet(
 
 								{mode === 'token' && (
 									<>
-										<TableRowGroup title="AUTHENTICATION TOKEN">
+										<TableRowGroup title="Authentication token">
 											<View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 10 }}>
 												<TextInput
 													label="Discord Token"
@@ -240,7 +246,7 @@ export function openAddAccountSheet(
 				)
 			},
 		}),
-		'more-alts-add-account',
+		sheetKey,
 		{},
 		'replaceTopSheet',
 	)

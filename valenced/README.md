@@ -1,4 +1,4 @@
-**More Alts! 1.1.3** uses Rosie’s full Valenced implementation, including the switch and add-account sheets, settings, and the Android session vault. Update from your existing repo, restart Discord, and open **Discord Settings → Valenced → More Alts!**. [Usage and source](plugins/more-alts/README.md).
+**More Alts! 1.1.4** adds an account dashboard with clearer names and shortcuts to switch or add accounts, a separate Preferences tab, and refreshed account sheets. Update from your existing repo and open **Discord Settings → Valenced → More Alts!**. [Usage and source](plugins/more-alts/README.md).
 
 **AutoText 1.0.0-beta4:** replaces fixed-delay labels with six WPM presets: Very slow (15), Slow (30), Normal (40), Fast (60), Very fast (85), and Elite (120). Existing named selections migrate automatically. Refresh the repository, update AutoText, and restart Valenced. [Usage and timing](../auto-text/README.md#automatic-typing).
 
