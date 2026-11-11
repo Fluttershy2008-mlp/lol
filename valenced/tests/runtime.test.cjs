@@ -38,7 +38,9 @@ function button(ui, title) {
 
 test('every package evaluates through the actual lexical Valenced loader contract', () => {
     for (const slug of fs.readdirSync(path.join(ROOT, '.build/plugins'))) {
-        const script = fs.readFileSync(path.join(ROOT, '.build/plugins', slug, 'index.js'), 'utf8');
+        const directory = path.join(ROOT, '.build/plugins', slug);
+        const script = fs.readFileSync(path.join(directory, 'index.js'), 'utf8');
+        const { dist } = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
         const sandbox = {};
         const factory = vm.runInNewContext('(function(valenced, plugin) { return ' + script + '\n})', sandbox);
         // Native imports can use the lexical API during module evaluation.
@@ -46,7 +48,7 @@ test('every package evaluates through the actual lexical Valenced loader contrac
         if (slug === 'chat-buttons') installChatButtonsHost(world);
         const options = factory(world.U, value => value)?.default;
         assert.ok(options && typeof options === 'object', slug);
-        assert.ok(typeof options.start === 'function' || typeof options.preInit === 'function', slug);
+        assert.ok(typeof options.start === 'function' || typeof options.preInit === 'function' || typeof dist.android?.class === 'string', slug);
         assert.equal(sandbox.valenced, undefined);
         assert.equal(sandbox.vendetta, undefined);
         assert.equal(sandbox.revenge, undefined);

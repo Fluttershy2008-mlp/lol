@@ -1199,6 +1199,31 @@
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "ScienceIcon"
     },
+    "dev.fluttershy2008.message-bubbles": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.message-bubbles@1.0.0-beta1.zip",
+          "sha256": "4caa167cf4863cf95a846354cc90b8208984b9c39f76095c9a128eef22fcedec",
+          "size": 27479,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=352.2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Message Bubbles",
+      "description": "Give Discord chat text rounded purple and indigo bubbles, with your own messages in blue on the right. Android.",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "icon": "ChatIcon"
+    },
     "dev.fluttershy2008.message-logger": {
       "versions": {
         "1.0.0-beta1": {

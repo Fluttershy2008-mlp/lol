@@ -285,6 +285,11 @@ def build(check=False):
             for path in sorted(directory.rglob("*")):
                 if path.is_file() and not any(part in ("__pycache__", "node_modules") for part in path.parts):
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()
+        if slug == "message-bubbles":
+            for path in sorted((directory / "source").rglob("*")):
+                if path.is_file() and "__pycache__" not in path.parts:
+                    files[path.relative_to(directory).as_posix()] = path.read_bytes()
+            files["native-source.json"] = (directory / "native-source.json").read_bytes()
         if slug == "always-animate":
             # Preserve the GPL Android helper's corresponding source, build
             # recipe and regression fixtures in every repository release.

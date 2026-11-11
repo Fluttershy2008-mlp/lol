@@ -1,3 +1,5 @@
+**Message Bubbles 1.0.0-beta1** adds rounded purple and indigo chat bubbles on Android, with your own messages in blue on the right. Refresh this repository, install **Message Bubbles**, and fully restart Discord. [Usage and source](plugins/message-bubbles/README.md).
+
 **More Alts! 1.1.4** adds an account dashboard with clearer names and shortcuts to switch or add accounts, a separate Preferences tab, and refreshed account sheets. Update from your existing repo and open **Discord Settings → Valenced → More Alts!**. [Usage and source](plugins/more-alts/README.md).
 
 **AutoText 1.0.0-beta4:** replaces fixed-delay labels with six WPM presets: Very slow (15), Slow (30), Normal (40), Fast (60), Very fast (85), and Elite (120). Existing named selections migrate automatically. Refresh the repository, update AutoText, and restart Valenced. [Usage and timing](../auto-text/README.md#automatic-typing).

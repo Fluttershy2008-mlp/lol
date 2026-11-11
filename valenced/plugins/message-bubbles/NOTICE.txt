@@ -1,0 +1,5 @@
+Message Bubbles for Valenced
+Copyright 2026 Fluttershy2008-mlp and contributors
+
+Distributed under the GNU General Public License v3. The corresponding
+Android source and build recipe are included under source/.

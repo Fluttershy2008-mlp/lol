@@ -112,6 +112,9 @@
     "chat-buttons": {
       "path": "valenced/plugins/chat-buttons"
     },
+    "message-bubbles": {
+      "path": "valenced/plugins/message-bubbles"
+    },
     "always-animate": {
       "path": "valenced/plugins/always-animate"
     },

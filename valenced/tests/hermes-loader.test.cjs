@@ -39,10 +39,12 @@ test('regression fixture reproduces the 1.0.7 options error with Hermes loop bin
 test('every current catalogue package passes the actual options resolver with Hermes bindings', () => {
     const factory = realLoader(api());
     for (const slug of fs.readdirSync(path.join(root, '.build/plugins'))) {
-        const script = fs.readFileSync(path.join(root, '.build/plugins', slug, 'index.js'), 'utf8');
+        const directory = path.join(root, '.build/plugins', slug);
+        const script = fs.readFileSync(path.join(directory, 'index.js'), 'utf8');
+        const { dist } = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
         const options = factory(slug, hermesScopes(script))();
         assert.equal(typeof options, 'object', slug);
-        assert.ok(options.start || options.preInit, slug + ' has a lifecycle');
+        assert.ok(options.start || options.preInit || dist.android?.class, slug + ' has a lifecycle');
     }
 });
 
