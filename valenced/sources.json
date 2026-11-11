@@ -93,11 +93,16 @@
       "originalVersion": "3.1.20",
       "kind": "compatibility-stable",
       "sourceRef": "main",
+      "settingsLayout": {
+        "path": "valenced/more-alts-settings.cjs",
+        "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts/js/ui/Settings.tsx",
+        "sha256": "caeb88fd8fdaf6228913738a813b02177972e5cfbc66d5793aa6a6af5ffb2073"
+      },
       "settingsShortcut": {
         "path": "valenced/settings-shortcut.cjs",
         "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
         "section": "VALENCED",
-        "title": "Switch accounts"
+        "title": "More Alts!"
       }
     },
     "dev.fluttershy2008.nitro-auto-claim": {

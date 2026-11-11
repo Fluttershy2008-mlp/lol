@@ -12,10 +12,15 @@ const target = isValenced ? 'valenced' : 'revenge-next';
 
 function getButton(ui, title) {
     const button = ui.root.findAll(n => typeof n.type === 'string' &&
-        n.props?.accessibilityLabel === title && typeof n.props.onPress === 'function')[0];
+        (n.props?.accessibilityLabel === title || (isValenced && title === 'Switch account' &&
+            n.type === 'TableRow' && n.props?.accessibilityLabel?.startsWith('Switch to @'))) &&
+        typeof n.props.onPress === 'function')[0];
     assert.ok(button, 'missing button: ' + title);
     return button;
 }
+
+// The native-row fixture exposes icon elements as props, including their owners.
+const snapshot = ui => JSON.stringify(ui.toJSON(), (key, value) => key === 'icon' ? undefined : value);
 
 async function act(action) {
     await Renderer.act(async () => { await action(); for (let i = 0; i < 8; i++) await Promise.resolve(); });
@@ -235,9 +240,9 @@ test('Save current account waits for file readback, saves fresh authentication d
     assert.equal(getButton(ui, 'Save current account').props.disabled, true);
     assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
     await act(async () => { releaseRead(); await pending; });
-    assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
-    assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Updated test-owner/);
-    assert.match(JSON.stringify(ui.toJSON()), /Last saved:/);
+    assert.match(snapshot(ui), /Saved @test-owner successfully/);
+    assert.doesNotMatch(snapshot(ui), /Updated test-owner/);
+    assert.match(snapshot(ui), /Last saved:/);
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.equal(saved.accounts[id].token, token);
     assert.equal(saved.accounts[id].displayName, 'Fresh Profile');
@@ -248,7 +253,7 @@ test('Save current account waits for file readback, saves fresh authentication d
     const restarted = await w.openManager(JSON.parse(fs.readFileSync(file, 'utf8')));
     assert.equal(restarted.item.api.jsonStorage.cache.accounts[id].token, token);
     assert.equal(restarted.item.api.jsonStorage.cache.accounts[id].updatedAt, saved.accounts[id].updatedAt);
-    assert.match(JSON.stringify(restarted.ui.toJSON()), /Fresh Profile/);
+    assert.match(snapshot(restarted.ui), /Fresh Profile/);
     restarted.item.api.jsonStorage.set = async function(value) {
         this.cache = structuredClone(value); await fs.promises.writeFile(file, JSON.stringify(value));
     };
@@ -360,6 +365,13 @@ for (const nativeOnly of [false, true]) test(`Discord native ID switching ${nati
     } });
     w.modules.find(module => typeof module?.switchAccountToken === 'function').switchAccountToken = () => { throw new Error('must not use stale custom login'); };
     const { ui, item } = await w.openManager(nativeOnly ? {} : { accounts: { [id]: { ...w.users[id], token: old } }, accountOrder: [id] });
+    if (isValenced) {
+        await act(() => getButton(ui, 'Back to account switcher').props.onPress());
+        const selected = ui.root.findAll(n => n.type === 'TouchableOpacity' && n.props.accessibilityState?.selected);
+        assert.equal(selected.length, 1);
+        assert.match(snapshot(ui), /Current account · Signed in through Discord/);
+        await act(() => getButton(ui, 'Manage accounts').props.onPress());
+    }
     assert.match(JSON.stringify(ui.toJSON()), /Signed in through Discord/);
     assert.doesNotMatch(JSON.stringify(ui.toJSON()), new RegExp(`${old}|${live}|${push}`));
     await act(() => getButton(ui, 'Switch account').props.onPress());
@@ -379,7 +391,7 @@ test('Valenced settings opens the compact switcher and labels an unsaved current
     const w = scenario(t, { fetch: async () => Response.json(w.users[w.accountId()]) });
     const { ui, item } = await w.openManager(undefined, true);
     const descriptor = w.registeredScreens.get('dev.fluttershy2008.more-alts.valenced-settings');
-    assert.equal(descriptor.useTitle(), 'Switch accounts');
+    assert.equal(descriptor.useTitle(), 'More Alts!');
     assert.match(JSON.stringify(ui.toJSON()), /Switch accounts/);
     assert.match(JSON.stringify(ui.toJSON()), /Current account · Not saved/);
     assert.equal(getButton(ui, '@test-owner, current account').props.disabled, true);
@@ -395,6 +407,34 @@ test('Valenced settings opens the compact switcher and labels an unsaved current
     assert.match(JSON.stringify(ui.toJSON()), /Saved @test-owner successfully/);
     assert.doesNotMatch(JSON.stringify(ui.toJSON()), /Current account · Not saved/);
     assert.equal(item.api.jsonStorage.cache.accounts[w.accountId()].token, 'fake-test-session-token-only');
+});
+
+test('Valenced account preferences stay separate from the account list and preserve saved sessions', { skip: !isValenced }, async t => {
+    const w = scenario(t);
+    const id = w.accountId();
+    const account = { id, username: 'test-owner', token: 'fixture-preferences-saved-session' };
+    const initial = { accounts: { [id]: account }, accountOrder: [id],
+        settings: { enableNativeSwitcher: true, refreshSavedSessions: true } };
+    const { ui, item } = await w.openManager(initial);
+    const find = (type, label) => ui.root.findAll(node => node.type === type && node.props.accessibilityLabel === label)[0];
+    assert.match(JSON.stringify(ui.toJSON()), /Current account/);
+    await act(() => find('TextInput', 'Search saved accounts').props.onChangeText('missing account'));
+    assert.match(JSON.stringify(ui.toJSON()), /No matching accounts/);
+    await act(() => getButton(ui, 'Account preferences').props.onPress());
+    assert.equal(find('TextInput', 'Search saved accounts'), undefined);
+    const refresh = () => find('TableSwitchRow', 'Refresh saved sessions');
+    assert.equal(refresh().props.value, true);
+    await act(() => refresh().props.onValueChange(false));
+    assert.equal(refresh().props.value, false);
+    assert.equal(item.api.jsonStorage.cache.settings.refreshSavedSessions, false);
+    assert.equal(item.api.jsonStorage.cache.settings.enableNativeSwitcher, true);
+    assert.equal(item.api.jsonStorage.cache.accounts[id].token, account.token);
+    assert.ok(getButton(ui, 'Import accounts from old More Alts'));
+    assert.ok(getButton(ui, 'Help with Discord verification'));
+    await act(() => getButton(ui, 'Back to manage accounts').props.onPress());
+    assert.equal(find('TextInput', 'Search saved accounts').props.value, 'missing account');
+    await act(() => getButton(ui, 'Back to account switcher').props.onPress());
+    assert.ok(getButton(ui, '@test-owner, current account'));
 });
 
 test('Valenced picker verifies one tap, blocks duplicate switches, and marks the active account', { skip: !isValenced }, async t => {

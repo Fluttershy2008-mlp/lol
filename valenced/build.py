@@ -199,6 +199,35 @@ def build(check=False):
             storage_adapter = (directory / "native-storage.cjs").read_text().rstrip()
             plugin_runtime = plugin_runtime.replace(marker,
                 "plugin: { persistStorage: " + storage_adapter + ", id:")
+            settings_source = HERE / "more-alts-settings.cjs"
+            plugin_runtime += "\n" + settings_source.read_text()
+            # Discord may already have supplied the active account as a native row.
+            current_row = "if (validId(currentId) && !savedCurrent &&"
+            if transformed.count(current_row) != 1:
+                raise RuntimeError("More Alts account switcher adapter needs updating")
+            transformed = transformed.replace(current_row,
+                "if (validId(currentId) && !rows.some(account => account.id === currentId) &&")
+            # Swap the manager's presentation while keeping the shared account
+            # controller, compact switcher and sign-in dialog on the same state.
+            manager_start = "        const currentId = getSession()?.user?.id;"
+            manager_end = "        return h(RN.KeyboardAvoidingView,"
+            if transformed.count(manager_start) != 1 or transformed.count(manager_end) != 1:
+                raise RuntimeError("More Alts settings adapter needs updating")
+            start = transformed.index(manager_start)
+            end = transformed.index(manager_end, start)
+            transformed = transformed[:start] + """        const contents = view === 'switcher' ? [] : renderMoreAltsSettings({
+            V, view, setView, currentUser: getSession()?.user, accounts: instance.accounts, query, setQuery,
+            busy, error, notice, expiredAccountId, nativeReady, settings: storage.settings,
+            setPreference(key, value) {
+                storage.settings = { ...storage.settings, [key]: value };
+                redraw(x => x + 1);
+                scheduleRefresh();
+            },
+            saveCurrent, addAccount, switchAccount, beginReauth, remove, nativeLoginHelp, input, text, colors,
+            importAccounts: () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)),
+        });
+""" + transformed[end:]
+            manifest.setdefault("contributors", []).append("Rosie")
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + plugin_runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         if shortcut:
@@ -220,6 +249,14 @@ def build(check=False):
             "kind": "compatibility-stable" if slug == "more-alts" else "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
+        if slug == "more-alts":
+            settings_credit = "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts/js/ui/Settings.tsx"
+            files["NOTICE.txt"] += f"Native settings layout adapted from Rosie's More Alts (GPL-3.0): {settings_credit}\n"
+            files["source/more-alts-settings.cjs"] = settings_source.read_bytes()
+            source_info[manifest["id"]]["settingsLayout"] = {
+                "path": settings_source.relative_to(ROOT).as_posix(), "upstream": settings_credit,
+                "sha256": hashlib.sha256(settings_source.read_bytes()).hexdigest(),
+            }
         if shortcut:
             source_info[manifest["id"]]["settingsShortcut"] = {
                 "path": "valenced/settings-shortcut.cjs",
