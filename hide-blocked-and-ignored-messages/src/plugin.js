@@ -3,6 +3,7 @@ import { installHiddenPings } from './notifications.js';
 import { installChatSettings } from './chat-settings.js';
 import { installGuildIcons } from './guild-icons.js';
 import { installChannelLists } from './channel-lists.js';
+import { installChannelMemberList } from './member-list.js';
 import { createServerFilter, normalizeServerIds } from './servers.js';
 import { createMessageFilter } from './filter.js';
 import { createCollectionFilter } from './collection.js';
@@ -15,7 +16,7 @@ import { installSearch } from './search.js';
 
 export function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, search, channelLists, guildIcons, hiddenPings, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, channelLists, channelMembers, guildIcons, hiddenPings, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -39,6 +40,7 @@ export function createPlugin(V) {
   function refresh() {
     refreshMessages();
     channelLists?.refresh();
+    channelMembers?.refresh();
     guildIcons?.refresh();
     hiddenPings?.refresh();
   }
@@ -95,6 +97,8 @@ export function createPlugin(V) {
       cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
+      channelMembers = installChannelMemberList(V, id => channelStore?.getChannel?.(id), filter.isFilteredUser);
+      cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
       search = installSearch(V, refreshMessages);
       cleanup.push(search.stop);
@@ -146,10 +150,11 @@ export function createPlugin(V) {
           return result;
         }));
       }
+      const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };
       for (const store of new Set([blockedStore, ignoredStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
-          store.addChangeListener(refreshMessages);
-          cleanup.push(() => store.removeChangeListener(refreshMessages));
+          store.addChangeListener(relationshipsChanged);
+          cleanup.push(() => store.removeChangeListener(relationshipsChanged));
         }
       }
       if (method(channelStore, 'addChangeListener') && method(channelStore, 'removeChangeListener')) {
@@ -173,7 +178,7 @@ export function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = search = channelLists = guildIcons = hiddenPings = undefined;
+    filter = lists = mentions = pagination = search = channelLists = channelMembers = guildIcons = hiddenPings = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }

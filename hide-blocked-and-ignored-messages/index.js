@@ -930,6 +930,161 @@ function installChannelLists(V, servers) {
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
+
+// Discord's GuildChannelUserList feeds UsersFastList with section lengths
+// and a (sectionIndex, rowIndex) getter. ChannelMemberStore's sparse rows
+// include group headers, so a group's first member is at group.index + 1.
+function projectChannelMemberList(props, data, isFilteredUser, rowHeight, sectionHeight) {
+  const { sections, getItemProps, getSectionProps, onScroll } = props;
+  const { groups, rows } = data ?? {};
+  if (!Array.isArray(groups) || groups.length !== sections.length || !rows
+    || !groups.every((group, i) => Number.isSafeInteger(group?.index) && group.count === sections[i])) return props;
+
+  const hidden = Object.keys(rows).map(Number).filter(index => {
+    const row = rows[index];
+    return Number.isSafeInteger(index) && row?.type === 'MEMBER' && isFilteredUser(row.user?.id);
+  }).sort((a, b) => a - b);
+  if (!hidden.length) return props;
+
+  const visible = [], scrollGaps = [];
+  let cursor = 0, changed = false, y = props.listHeaderSize ?? 0;
+  for (const [index, group] of groups.entries()) {
+    const start = group.index + 1, end = start + group.count, removed = [];
+    while (hidden[cursor] < end) {
+      const rowIndex = hidden[cursor++] - start;
+      if (rowIndex < 0) continue;
+      // The React snapshot and store can differ during a native list update.
+      if (getItemProps(index, rowIndex)?.props?.user?.id === rows[start + rowIndex]?.user?.id) {
+        removed.push(rowIndex);
+      }
+    }
+    const count = group.count - removed.length;
+    changed ||= removed.length > 0;
+    if (count === 0 && removed.length) {
+      scrollGaps.push([y, sectionHeight + group.count * rowHeight]);
+      continue;
+    }
+    if (group.count > 0 && group.title != null) y += sectionHeight;
+    for (const [offset, rowIndex] of removed.entries()) {
+      scrollGaps.push([y + (rowIndex - offset) * rowHeight, rowHeight]);
+    }
+    y += count * rowHeight;
+    visible.push({ index, count, removed });
+  }
+  if (!changed) return props;
+
+  return {
+    ...props,
+    sections: visible.map(section => section.count),
+    getItemProps(sectionIndex, rowIndex) {
+      const section = visible[sectionIndex];
+      if (!section) return undefined;
+      let originalIndex = rowIndex;
+      for (const hiddenIndex of section.removed) {
+        if (hiddenIndex > originalIndex) break;
+        originalIndex++;
+      }
+      const row = getItemProps(section.index, originalIndex);
+      if (!section.removed.length || !row?.props) return row;
+      return { ...row, props: { ...row.props, start: rowIndex === 0, end: rowIndex === section.count - 1 } };
+    },
+    getSectionProps(sectionIndex) {
+      const section = visible[sectionIndex];
+      if (!section) return undefined;
+      const header = getSectionProps(section.index);
+      const title = header?.props?.title;
+      const suffix = ' — ' + groups[section.index].count;
+      if (!section.removed.length || typeof title !== 'string' || !title.endsWith(suffix)) return header;
+      return { ...header, props: { ...header.props, title: title.slice(0, -suffix.length) + ' — ' + section.count } };
+    },
+    onScroll(event) {
+      const native = event?.nativeEvent;
+      const offset = native?.contentOffset;
+      if (typeof onScroll !== 'function' || !rowHeight || !Number.isFinite(offset?.y)) return onScroll?.(event);
+      // Discord requests member pages using the original, unfiltered scroll offset.
+      let extra = 0;
+      for (const [position, height] of scrollGaps) {
+        if (position > offset.y) break;
+        extra += height;
+      }
+      return onScroll(extra ? { ...event, nativeEvent: { ...native, contentOffset: { ...offset, y: offset.y + extra } } } : event);
+    },
+  };
+}
+
+function installChannelMemberList(V, getChannel, isFilteredUser) {
+  const metro = V.metro, React = metro.common.React;
+  const base = 'modules/main_tabs_v2/native/shared_components/user_list/';
+  const listeners = new Set(), cleanups = [];
+  let stopped = false, revision = 0;
+  const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
+  const snapshot = () => revision;
+  const refresh = () => { revision++; for (const listener of listeners) listener(); };
+  const unavailable = { refresh() {}, stop() {} };
+  if (typeof metro.getModuleWithImportedPath !== 'function' || !React?.useSyncExternalStore) return unavailable;
+
+  function MembersList({ list, channelId, guildId, rowHeight = 0, sectionHeight = 0 }) {
+    const version = React.useSyncExternalStore(subscribe, snapshot);
+    return React.useMemo(() => {
+      if (stopped) return list;
+      try {
+        const store = metro.findByImportedPath?.('stores/ChannelMemberStore.tsx')?.default
+          ?? metro.findByStoreName?.('ChannelMemberStore');
+        const data = store?.getProps?.(guildId, channelId);
+        const props = projectChannelMemberList(list.props, data, isFilteredUser, rowHeight, sectionHeight);
+        return props === list.props ? list : React.cloneElement(list, props);
+      } catch { return list; }
+    }, [list, channelId, guildId, version, rowHeight, sectionHeight]);
+  }
+
+  function ScaledMembersList({ useRowHeight, useSectionHeight, ...props }) {
+    return React.createElement(MembersList, { ...props, rowHeight: useRowHeight(), sectionHeight: useSectionHeight() });
+  }
+  function wrapList(source, guildId, channelId) {
+    const children = source?.props?.children;
+    if (!Array.isArray(children)) return source;
+    const index = children.findIndex(child => child?.key === 'guild-channel-user-list'
+      && Array.isArray(child.props?.sections)
+      && typeof child.props.getItemProps === 'function' && typeof child.props.getSectionProps === 'function');
+    if (index < 0) return source;
+    const next = children.slice();
+    const useRowHeight = metro.findByImportedPath?.(base + 'useScaledRowHeight.tsx')?.default;
+    const useSectionHeight = metro.findByImportedPath?.(base + 'useScaledSectionHeight.tsx')?.default;
+    const List = typeof useRowHeight === 'function' && typeof useSectionHeight === 'function' ? ScaledMembersList : MembersList;
+    next[index] = React.createElement(List, { key: next[index].key, list: next[index], guildId, channelId, useRowHeight, useSectionHeight });
+    return React.cloneElement(source, undefined, next);
+  }
+
+  function attach(module) {
+    if (stopped) return;
+    const component = module?.default;
+    const memo = typeof component?.type === 'function';
+    const owner = memo ? component : module, key = memo ? 'type' : 'default';
+    if (typeof owner?.[key] !== 'function') return;
+    cleanups.push(V.patcher.after(key, owner, ([props], result) => {
+      const { channelId, guildId, roleId } = props ?? {};
+      if (stopped || !channelId || !guildId || roleId) return;
+      try {
+        const type = getChannel(channelId)?.type;
+        if (type === 0 || type === 5) return wrapList(result, guildId, channelId);
+      } catch {}
+    }));
+  }
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    for (const cleanup of cleanups.splice(0).reverse()) { try { cleanup(); } catch {} }
+    refresh();
+    listeners.clear();
+  }
+  try {
+    const cancel = metro.getModuleWithImportedPath(base + 'GuildChannelUserList.tsx', attach);
+    if (typeof cancel === 'function') cleanups.push(cancel);
+  } catch (error) { stop(); throw error; }
+  return { refresh, stop };
+}
+
+/* SPDX-License-Identifier: CC0-1.0 */
 // Only interaction initiators count. target_user, mentions and installation
 // owners are NOT the user who ran a command.
 function interactionInfo(message) {
@@ -1463,13 +1618,14 @@ function createSettings(V, refresh) {
     const dark = (RN.useColorScheme?.() ?? 'dark') !== 'light';
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
+    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab too.' : '';
     const rows = [
       ['hideServerPings', 'Hide pings from selected servers', 'Hide their Recent Activity/mentions, mention badges and in-app notification banners. Uses your saved server IDs. OFF restores displayed mentions. Android push notifications while Discord is closed still depend on Discord’s notification settings.'],
       ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
       ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
-      ['blocked', 'Hide blocked users', 'Remove their messages from chat. You can still look them up in search.'],
-      ['ignored', 'Hide ignored users', 'Remove their messages from chat. You can still look them up in search.'],
+      ['blocked', 'Hide blocked users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
+      ['ignored', 'Hide ignored users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
@@ -1657,7 +1813,7 @@ function installChatSettings(V, refresh) {
 
 function createPlugin(V) {
   let active = false;
-  let filter, lists, mentions, pagination, search, channelLists, guildIcons, hiddenPings, messageStore, refreshTimer;
+  let filter, lists, mentions, pagination, search, channelLists, channelMembers, guildIcons, hiddenPings, messageStore, refreshTimer;
   let warned = false;
   const cleanup = [];
   const byProps = (...props) => { try { return V.metro.findByProps(...props); } catch {} };
@@ -1681,6 +1837,7 @@ function createPlugin(V) {
   function refresh() {
     refreshMessages();
     channelLists?.refresh();
+    channelMembers?.refresh();
     guildIcons?.refresh();
     hiddenPings?.refresh();
   }
@@ -1737,6 +1894,8 @@ function createPlugin(V) {
       cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
+      channelMembers = installChannelMemberList(V, id => channelStore?.getChannel?.(id), filter.isFilteredUser);
+      cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
       search = installSearch(V, refreshMessages);
       cleanup.push(search.stop);
@@ -1788,10 +1947,11 @@ function createPlugin(V) {
           return result;
         }));
       }
+      const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };
       for (const store of new Set([blockedStore, ignoredStore])) {
         if (method(store, 'addChangeListener') && method(store, 'removeChangeListener')) {
-          store.addChangeListener(refreshMessages);
-          cleanup.push(() => store.removeChangeListener(refreshMessages));
+          store.addChangeListener(relationshipsChanged);
+          cleanup.push(() => store.removeChangeListener(relationshipsChanged));
         }
       }
       if (method(channelStore, 'addChangeListener') && method(channelStore, 'removeChangeListener')) {
@@ -1815,7 +1975,7 @@ function createPlugin(V) {
     refreshTimer = undefined;
     for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch {} }
     filter?.clear(); lists?.clear(); mentions?.clear();
-    filter = lists = mentions = pagination = search = channelLists = guildIcons = hiddenPings = undefined;
+    filter = lists = mentions = pagination = search = channelLists = channelMembers = guildIcons = hiddenPings = undefined;
     if (wasActive) { try { messageStore?.emitChange?.(); } catch {} }
     messageStore = undefined;
   }
