@@ -24,7 +24,7 @@ def main():
         compiler = [*javac, "-source", "8", "-target", "8", "-Xlint:-options", "-g:none"]
         subprocess.run([*compiler, "-cp", str(kotlin), "-d", abi, *sorted((SOURCE / "abi").rglob("*.java"))], check=True)
         classpath = os.pathsep.join(map(str, (android, xposed, kotlin, abi)))
-        subprocess.run([*compiler, "-cp", classpath, "-d", classes, SOURCE / "MessageBubbles.java"], check=True)
+        subprocess.run([*compiler, "-cp", classpath, "-d", classes, *sorted(SOURCE.glob("*.java"))], check=True)
         dex_jar = build / "dex.jar"
         subprocess.run([
             "java", "-cp", d8, "com.android.tools.r8.D8", "--min-api", "24", "--lib", android,

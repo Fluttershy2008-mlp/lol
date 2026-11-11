@@ -3,9 +3,15 @@ package dev.fluttershy2008.messagebubbles;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.icu.lang.UCharacter;
+import android.icu.lang.UProperty;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Layout;
+import android.text.Spanned;
+import android.text.style.ReplacementSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -62,9 +68,10 @@ public final class MessageBubbles {
     }
 
     private enum Style {
-        PLUM(0xED704B86, 0xF2E8D9F3, false),
-        INDIGO(0xED485681, 0xF2DEE3F7, false),
-        BLUE(0xED3D6684, 0xF2D6EAF7, true);
+        PLUM(0xF1714E78, 0xF2E8D9F3, false),
+        INDIGO(0xF149577E, 0xF2DEE3F7, false),
+        BERRY(0xF1794964, 0xF2F1D9E7, false),
+        BLUE(0xF13D657F, 0xF2D6EAF7, true);
 
         final int dark;
         final int light;
@@ -82,11 +89,19 @@ public final class MessageBubbles {
         private final Map<View, Style> rows = new WeakHashMap<>();
         private final Map<TextView, BodyStyle> bodies = new WeakHashMap<>();
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path shape = new Path();
+        private final RectF bounds = new RectF();
+        private final float[] corners = new float[8];
+        private final OutgoingLayout outgoing = new OutgoingLayout();
         private volatile boolean active;
         private Class<?> bodyClass;
         private Class<?> accessoriesClass;
         private Method ownMessage;
         private Method authorId;
+        private Method messageContent;
+        private Method hasContent;
+        private Method forwardInfo;
+        private Method firstForumPost;
         private boolean reportedAuthorError;
 
         void install(ClassLoader loader) throws ReflectiveOperationException {
@@ -96,6 +111,7 @@ public final class MessageBubbles {
             accessoriesClass = loader.loadClass(PRESENTATION + "MessageAccessoriesView").asSubclass(ViewGroup.class);
             Method bind = findRowBind(rowClass, messageClass);
             ownMessage = messageClass.getMethod("isCurrentUserMessageAuthor");
+            findContentGetters(messageClass);
             for (Method method : messageClass.getMethods()) {
                 String name = method.getName();
                 if (method.getParameterCount() == 0 && (name.equals("getAuthorId") || name.startsWith("getAuthorId-"))) {
@@ -107,18 +123,23 @@ public final class MessageBubbles {
             hooks.add(XposedBridge.hookMethod(bind, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam param) {
                     if (!active || !onMainThread()) return;
-                    rows.put((View) param.thisObject, styleOf(param.args[0]));
+                    ViewGroup row = (ViewGroup) param.thisObject;
+                    outgoing.restoreRow(row);
+                    rows.put(row, styleOf(param.args[0]));
                 }
 
                 @Override protected void afterHookedMethod(MethodHookParam param) {
                     if (!active || !onMainThread() || param.hasThrowable()) return;
                     ViewGroup row = (ViewGroup) param.thisObject;
+                    if (rows.get(row) == Style.BLUE && supportsCompactLayout(param.args[0])) outgoing.applyRow(row);
                     for (int i = 0; i < row.getChildCount(); i++) {
                         View child = row.getChildAt(i);
                         if (!accessoriesClass.isInstance(child)) continue;
                         ViewGroup accessories = (ViewGroup) child;
                         for (int j = 0; j < accessories.getChildCount(); j++) {
-                            updateBody(accessories.getChildAt(j));
+                            View accessory = accessories.getChildAt(j);
+                            updateBody(accessory);
+                            outgoing.updateReaction(accessory);
                         }
                         break;
                     }
@@ -134,6 +155,14 @@ public final class MessageBubbles {
                     }
                 }
             }));
+            hooks.add(XposedBridge.hookMethod(
+                bodyClass.getMethod("setText", CharSequence.class, TextView.BufferType.class),
+                new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam param) {
+                        if (active && !param.hasThrowable() && onMainThread()) updateBody((View) param.thisObject);
+                    }
+                }
+            ));
             hooks.add(XposedBridge.hookMethod(
                 TextView.class.getDeclaredMethod("onMeasure", int.class, int.class),
                 new XC_MethodHook() {
@@ -151,13 +180,47 @@ public final class MessageBubbles {
                         if (!active || !bodyClass.isInstance(param.thisObject) || !onMainThread()) return;
                         TextView view = (TextView) param.thisObject;
                         BodyStyle body = bodies.get(view);
-                        if (body != null && body.style == styleFor(view)) {
+                        if (body != null && !body.emojiOnly && body.style == styleFor(view)) {
                             drawBubble(view, (Canvas) param.args[0], body.style);
                         }
                     }
                 }
             ));
+            outgoing.install(loader, hooks);
             active = true;
+        }
+
+        private void findContentGetters(Class<?> messageClass) {
+            try {
+                messageContent = messageClass.getMethod("getContent");
+                forwardInfo = messageClass.getMethod("getForwardInfo");
+                firstForumPost = messageClass.getMethod("isFirstForumPostMessage");
+                for (Method method : messageContent.getReturnType().getDeclaredMethods()) {
+                    if (Modifier.isAbstract(method.getModifiers()) && method.getParameterCount() == 0
+                            && method.getReturnType() == boolean.class) {
+                        if (hasContent != null) {
+                            hasContent = null;
+                            return;
+                        }
+                        hasContent = method;
+                    }
+                }
+            } catch (NoSuchMethodException error) {
+                XposedBridge.log("[Message Bubbles] Compact rows unavailable: " + error);
+            }
+        }
+
+        private boolean supportsCompactLayout(Object message) {
+            if (hasContent == null) return false;
+            try {
+                Object content = messageContent.invoke(message);
+                return content != null && Boolean.TRUE.equals(hasContent.invoke(content))
+                    && forwardInfo.invoke(message) == null && !Boolean.TRUE.equals(firstForumPost.invoke(message));
+            } catch (ReflectiveOperationException error) {
+                XposedBridge.log("[Message Bubbles] Could not identify a text message: " + error);
+                hasContent = null;
+                return false;
+            }
         }
 
         private Style styleOf(Object message) {
@@ -165,7 +228,14 @@ public final class MessageBubbles {
             try {
                 if (Boolean.TRUE.equals(ownMessage.invoke(message))) return Style.BLUE;
                 Object author = authorId == null ? null : authorId.invoke(message);
-                if (author != null && (author.hashCode() & 1) == 1) return Style.INDIGO;
+                if (author != null) {
+                    int hash = author.hashCode();
+                    switch (Math.floorMod(hash ^ (hash >>> 12), 3)) {
+                        case 1: return Style.INDIGO;
+                        case 2: return Style.BERRY;
+                        default: return Style.PLUM;
+                    }
+                }
             } catch (ReflectiveOperationException error) {
                 if (!reportedAuthorError) {
                     reportedAuthorError = true;
@@ -214,8 +284,8 @@ public final class MessageBubbles {
             }
             if (right <= left) return;
 
-            int horizontal = dp(view, 10);
-            int vertical = dp(view, 6);
+            int horizontal = dp(view, 11);
+            int vertical = dp(view, 7);
             int scrollX = view.getScrollX();
             int scrollY = view.getScrollY();
             int originX = view.getCompoundPaddingLeft();
@@ -226,9 +296,22 @@ public final class MessageBubbles {
             float y2 = Math.min(scrollY + view.getHeight(), originY + layout.getHeight() + vertical);
             if (x2 <= x1 || y2 <= y1) return;
 
-            paint.setColor(Color.luminance(view.getCurrentTextColor()) < 0.35 ? style.light : style.dark);
+            boolean light = Color.luminance(view.getCurrentTextColor()) < 0.35;
             float radius = dp(view, 16);
-            canvas.drawRoundRect(x1, y1, x2, y2, radius, radius, paint);
+            java.util.Arrays.fill(corners, radius);
+            int near = style.outgoing ? 4 : 6;
+            corners[near] = corners[near + 1] = dp(view, 8);
+            // Inset the outline so it stays inside the native text view's clip.
+            bounds.set(x1 + 0.5f, y1 + 0.5f, x2 - 0.5f, y2 - 0.5f);
+            shape.rewind();
+            shape.addRoundRect(bounds, corners, Path.Direction.CW);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(light ? style.light : style.dark);
+            canvas.drawPath(shape, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1f, dp(view, 1) * 0.65f));
+            paint.setColor(light ? 0x240F111A : 0x26FFFFFF);
+            canvas.drawPath(shape, paint);
         }
 
         void close() {
@@ -236,6 +319,7 @@ public final class MessageBubbles {
             for (XC_MethodHook.Unhook hook : hooks) hook.unhook();
             hooks.clear();
             Runnable restore = () -> {
+                outgoing.close();
                 for (Map.Entry<TextView, BodyStyle> entry : bodies.entrySet()) {
                     TextView view = entry.getKey();
                     if (view != null) entry.getValue().restore(view);
@@ -266,11 +350,11 @@ public final class MessageBubbles {
         return match;
     }
 
-    private static boolean onMainThread() {
+    static boolean onMainThread() {
         return Looper.myLooper() == Looper.getMainLooper();
     }
 
-    private static int dp(View view, int dp) {
+    static int dp(View view, int dp) {
         return Math.round(dp * view.getResources().getDisplayMetrics().density);
     }
 
@@ -279,6 +363,7 @@ public final class MessageBubbles {
         private int gravity, alignment;
         private int appliedHorizontal, appliedVertical, appliedGravity, appliedAlignment;
         private Style style;
+        private boolean emojiOnly;
 
         BodyStyle(TextView view) {
             gravity = appliedGravity = view.getGravity();
@@ -297,13 +382,15 @@ public final class MessageBubbles {
             if (view.getPaddingBottom() != bottom + appliedVertical) bottom = view.getPaddingBottom();
             if (view.getGravity() != appliedGravity) gravity = view.getGravity();
             if (view.getTextAlignment() != appliedAlignment) alignment = view.getTextAlignment();
-            appliedHorizontal = dp(view, 10);
-            appliedVertical = dp(view, 6);
+            boolean onlyEmoji = isEmojiOnly(view.getText());
+            appliedHorizontal = onlyEmoji ? 0 : dp(view, 11);
+            appliedVertical = dp(view, onlyEmoji ? 3 : 7);
             appliedGravity = next.outgoing ? (gravity & ~Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK) | Gravity.RIGHT : gravity;
             appliedAlignment = next.outgoing ? View.TEXT_ALIGNMENT_GRAVITY : alignment;
             set(view, appliedHorizontal, appliedVertical, appliedGravity, appliedAlignment);
-            if (style != next) view.invalidate();
+            if (style != next || emojiOnly != onlyEmoji) view.invalidate();
             style = next;
+            emojiOnly = onlyEmoji;
         }
 
         void restore(TextView view) {
@@ -329,5 +416,31 @@ public final class MessageBubbles {
             if (view.getGravity() != gravityValue) view.setGravity(gravityValue);
             if (view.getTextAlignment() != alignmentValue) view.setTextAlignment(alignmentValue);
         }
+    }
+
+    private static boolean isEmojiOnly(CharSequence text) {
+        boolean emoji = false;
+        for (int i = 0; i < text.length();) {
+            int code = Character.codePointAt(text, i);
+            int next = i + Character.charCount(code);
+            if (code == 0x200B || code == 0xFFFC) {
+                if (text instanceof Spanned
+                        && ((Spanned) text).getSpans(i, next, ReplacementSpan.class).length != 0) emoji = true;
+            } else if ((code >= '0' && code <= '9') || code == '#' || code == '*') {
+                int keycap = next < text.length() && text.charAt(next) == 0xFE0F ? next + 1 : next;
+                if (keycap >= text.length() || text.charAt(keycap) != 0x20E3) return false;
+                next = keycap + 1;
+                emoji = true;
+            } else if (UCharacter.hasBinaryProperty(code, UProperty.EMOJI_PRESENTATION)
+                    || (next < text.length() && text.charAt(next) == 0xFE0F
+                        && UCharacter.hasBinaryProperty(code, UProperty.EMOJI))) {
+                emoji = true;
+            } else if (!Character.isWhitespace(code) && code != 0x200D && code != 0xFE0F
+                    && (code < 0xE0020 || code > 0xE007F)) {
+                return false;
+            }
+            i = next;
+        }
+        return emoji;
     }
 }

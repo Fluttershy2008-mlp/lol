@@ -275,7 +275,7 @@
     "dev.fluttershy2008.message-bubbles": {
       "path": "valenced/plugins/message-bubbles/index.js",
       "sha256": "379a1068fd94dad91c7dd05fd2fc88912afeff151861947ba7409bcf7fb46a0c",
-      "originalVersion": "1.0.0-beta1",
+      "originalVersion": "1.0.0-beta2",
       "kind": "native-plugin"
     },
     "fluttershy2008.always-animate": {
