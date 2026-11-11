@@ -791,7 +791,7 @@
             ...(current.accounts ?? {})
           };
           var order = [...(current.accountOrder ?? [])];
-          var imported = 0;
+          var imported2 = 0;
           var skipped = 0;
           for (var acc of accountsArray) {
             if (acc.id && acc.token && acc.username) {
@@ -807,7 +807,7 @@
                   isBot: acc.isBot
                 };
                 if (!order.includes(acc.id)) order.push(acc.id);
-                imported++;
+                imported2++;
               } else {
                 skipped++;
               }
@@ -820,7 +820,7 @@
           syncNativeVault(storage);
           return {
             success: true,
-            imported,
+            imported: imported2,
             skipped
           };
         } catch (e) {
@@ -1921,8 +1921,7 @@ ${frames}`;
         setEnabled,
         accounts,
         currentId,
-        colors,
-        switchAccount
+        colors
       }) {
         var rev = getValenced3();
         var {
@@ -1936,6 +1935,24 @@ ${frames}`;
           TableRow
         } = rev.discord.design.Design;
         var [refreshStatus, setRefreshStatus] = rev.react.React.useState(null);
+        var [opening, setOpening] = rev.react.React.useState(false);
+        var open = async (account, kind) => {
+          setOpening(true);
+          try {
+            var result = await inbox.open(account, kind);
+            var detail = {
+              empty: kind === "dm" ? "This account has no unread DMs." : kind === "mention" ? "This account has no unread server mentions." : "This account has no unread DMs or server mentions.",
+              "switch-failed": "Sign in to this account again, then add it to More Alts.",
+              "timed-out": "Discord is still connecting. Try again once the account has loaded.",
+              unavailable: "Discord couldn\u2019t open the inbox item. Try opening the chat from Discord\u2019s Inbox."
+            };
+            if (result !== "opened" && result !== "cancelled") {
+              Alert.alert(result === "empty" ? "You\u2019re caught up" : "Could not open inbox item", detail[result]);
+            }
+          } finally {
+            setOpening(false);
+          }
+        };
         var summaries = inbox.use()?.summaries ?? {};
         var checkedAt = currentId ? summaries[currentId]?.checkedAt : void 0;
         var refreshMessage = refreshStatus?.accountId === currentId && (refreshStatus?.saved || refreshStatus?.previousCheck === checkedAt) ? refreshStatus?.message : void 0;
@@ -1959,7 +1976,7 @@ ${frames}`;
             fontSize: 14,
             lineHeight: 20
           }
-        }, "See the last recorded unread DM and server mention counts for your added accounts. Each account updates while it\u2019s active.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, null, /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
+        }, "Tap an account to open its newest unread DM or server mention. Counts update while the account is active.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, null, /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
           label: "Save inbox summaries",
           subLabel: "Keep counts on this device.",
           value: enabled,
@@ -1992,25 +2009,50 @@ ${frames}`;
             color: colors.muted,
             fontSize: 14
           }
-        }, refreshMessage) : null, enabled && (ordered.length ? /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+        }, refreshMessage) : null, opening && /* @__PURE__ */valenced.react.React.createElement(Text, {
+          accessibilityLiveRegion: "polite",
+          style: {
+            color: colors.muted,
+            fontSize: 14
+          }
+        }, "Opening inbox\u2026"), enabled && (ordered.length ? /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Added accounts"
-        }, ordered.map(account => {
+        }, ordered.flatMap(account => {
           var summary = summaries[account.id];
           var active = account.id === currentId;
+          var name = account.displayName || account.username;
           var detail = summary ? `${summary.unreadDms ?? "\u2014"} unread DM ${summary.unreadDms === 1 ? "chat" : "chats"} \xB7 ${summary.mentions ?? "\u2014"} server ${summary.mentions === 1 ? "mention" : "mentions"}
 Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the first check";
-          return /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          var rows = [/* @__PURE__ */valenced.react.React.createElement(TableRow, {
             key: account.id,
-            label: `${account.displayName || account.username}${active ? " \xB7 Active" : ""}`,
+            label: `${name}${active ? " \xB7 Active" : ""}`,
             subLabel: detail,
             subLabelLineClamp: 4,
             icon: /* @__PURE__ */valenced.react.React.createElement(Avatar, {
               user: account,
               border: colors.line
             }),
-            arrow: !active,
-            onPress: active ? void 0 : () => switchAccount(account)
-          });
+            arrow: true,
+            disabled: opening,
+            onPress: () => open(account, "any")
+          })];
+          if ((summary?.unreadDms ?? 0) > 0) rows.push(/* @__PURE__ */valenced.react.React.createElement(TableRow, {
+            key: `${account.id}-dm`,
+            label: "Open unread DMs",
+            accessibilityLabel: `Open unread DMs for ${name}`,
+            arrow: true,
+            disabled: opening,
+            onPress: () => open(account, "dm")
+          }));
+          if ((summary?.mentions ?? 0) > 0) rows.push(/* @__PURE__ */valenced.react.React.createElement(TableRow, {
+            key: `${account.id}-mention`,
+            label: "Open server mentions",
+            accessibilityLabel: `Open server mentions for ${name}`,
+            arrow: true,
+            disabled: opening,
+            onPress: () => open(account, "mention")
+          }));
+          return rows;
         })) : /* @__PURE__ */valenced.react.React.createElement(Text, {
           style: {
             color: colors.muted,
@@ -2376,7 +2418,6 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           accounts,
           currentId: currentUserId,
           colors,
-          switchAccount: handleSwitch,
           setEnabled: value => api.jsonStorage.set({
             sharedInboxEnabled: value
           })
@@ -2418,7 +2459,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         })))));
       }
 
-      // source/plugins/more-alts/js/lib/inbox.ts
+      // source/plugins/more-alts/js/lib/inboxNavigation.ts
       function attempt(read) {
         try {
           return read();
@@ -2426,47 +2467,199 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           return void 0;
         }
       }
-      function resolveConnection(rev, stores) {
-        var gateway = attempt(() => stores.GatewayConnectionStore);
-        if (typeof gateway?.isConnected === "function") return gateway;
-        var exports = attempt(() => rev.discord.utils?.modules?.finders?.lookupModuleWithImportedPath?.("modules/gateway/GatewayConnectionStore.tsx")?.[0]);
-        var imported = exports?.default ?? exports;
-        if (typeof imported?.isConnected === "function") return imported;
-        return attempt(() => stores.ConnectionStore);
-      }
       function values(value) {
         if (!value || typeof value !== "object") return void 0;
         return typeof value.values === "function" ? [...value.values()] : Object.values(value);
       }
-      function unreadDmCount(channels, read) {
-        if (typeof read?.hasUnread !== "function") return null;
+      function snowflake(value) {
+        return typeof value === "string" && /^\d{1,20}$/.test(value) ? value : void 0;
+      }
+      function compareIds(left = "", right = "") {
+        return left.length - right.length || left.localeCompare(right);
+      }
+      function unreadDmChannels(channels, read) {
+        if (typeof read?.hasUnread !== "function") return void 0;
         var entries = values(attempt(() => channels?.getMutablePrivateChannels?.()) ?? attempt(() => channels?.getPrivateChannels?.()) ?? attempt(() => channels?.getSortedPrivateChannels?.()));
-        if (!entries) return null;
-        var ids = /* @__PURE__ */new Set();
+        if (!entries) return void 0;
+        var unread = /* @__PURE__ */new Map();
         for (var entry of entries) {
           var item = entry?.channel ?? entry;
           var channel = typeof item === "string" ? channels.getChannel?.(item) : item;
-          if (typeof channel?.id === "string" && (channel.type === 1 || channel.type === 3) && read.hasUnread(channel.id)) ids.add(channel.id);
+          var id = snowflake(channel?.id);
+          if (id && (channel.type === 1 || channel.type === 3) && read.hasUnread(id)) unread.set(id, channel);
         }
-        return ids.size;
+        return unread;
+      }
+      function guildIdFor(channel) {
+        return snowflake(channel?.getGuildId?.() ?? channel?.guild_id ?? channel?.guildId);
+      }
+      function mentionedGuildChannels(channels, read) {
+        var states = values(read?.getAllReadStates?.(true));
+        if (!states || typeof channels?.getChannel !== "function" || typeof read?.getMentionCount !== "function") return void 0;
+        var mentioned = /* @__PURE__ */new Map();
+        for (var state of states) {
+          var id = snowflake(state?.channelId);
+          if (!id || mentioned.has(id) || state.type != null && Number(state.type) !== 0) continue;
+          var channel = channels.getChannel(id);
+          var guildId = guildIdFor(channel) ?? snowflake(state?._guildId);
+          if (!guildId) continue;
+          var count = read.getMentionCount(id);
+          if (Number.isSafeInteger(count) && count > 0) mentioned.set(id, {
+            guildId,
+            channel,
+            count
+          });
+        }
+        return mentioned;
+      }
+      function newestTarget(targets) {
+        var newest;
+        for (var target of targets) {
+          if (!newest || compareIds(target.newest, newest.newest) > 0) newest = target;
+        }
+        return newest;
+      }
+      function imported(rev, path) {
+        return rev.discord?.utils?.modules?.finders?.lookupModuleWithImportedPath?.(path)?.[0];
+      }
+      function lastMessageId(stores, channelId, channel) {
+        return snowflake(stores.ReadStateStore?.lastMessageId?.(channelId)) ?? snowflake(channel?.lastMessageId ?? channel?.last_message_id) ?? snowflake(stores.MessageStore?.getLastMessage?.(channelId)?.id);
+      }
+      function findUnreadDm(stores) {
+        var channels = unreadDmChannels(stores.ChannelStore, stores.ReadStateStore);
+        if (!channels) return void 0;
+        return newestTarget([...channels].map(([channelId, channel]) => {
+          var messageId = lastMessageId(stores, channelId, channel);
+          return {
+            guildId: "@me",
+            channelId,
+            messageId,
+            newest: messageId ?? channelId
+          };
+        }));
+      }
+      function findExactMention(rev, stores, fetched) {
+        var recent = stores.RecentMentionsStore ?? imported(rev, "modules/inbox/RecentMentionsStore.tsx")?.default;
+        var exact = [];
+        for (var message of fetched ?? values(recent?.getMentions?.()) ?? []) {
+          var messageId = snowflake(message?.id);
+          var channelId = snowflake(message?.getChannelId?.() ?? message?.channel_id ?? message?.channelId);
+          if (!messageId || !channelId || !(stores.ReadStateStore?.getMentionCount?.(channelId) > 0)) continue;
+          var guildId = guildIdFor(stores.ChannelStore?.getChannel?.(channelId)) ?? snowflake(message?.guild_id ?? message?.guildId);
+          var ackId = snowflake(stores.ReadStateStore?.ackMessageId?.(channelId));
+          if (!guildId || ackId && compareIds(messageId, ackId) <= 0) continue;
+          exact.push({
+            guildId,
+            channelId,
+            messageId,
+            newest: messageId
+          });
+        }
+        return newestTarget(exact);
+      }
+      async function loadMentions(rev, signal) {
+        var finders = rev.modules?.finders;
+        var module2 = imported(rev, "../discord_common/js/packages/http-utils/HTTPUtils.tsx") ?? attempt(() => finders.lookupModule(finders.filters.withProps("HTTP"))[0]);
+        var http = module2?.HTTP;
+        if (typeof http?.get !== "function") return;
+        var request = async () => {
+          var response = await http.get({
+            url: "/users/@me/mentions",
+            query: {
+              limit: 25,
+              roles: true,
+              everyone: true
+            },
+            retries: 0
+          });
+          return Array.isArray(response?.body) ? response.body : void 0;
+        };
+        var timeout;
+        var stopWaiting;
+        var wait = new Promise(resolve => {
+          stopWaiting = () => resolve(void 0);
+          signal.addEventListener("abort", stopWaiting, {
+            once: true
+          });
+          timeout = setTimeout(stopWaiting, 3e3);
+        });
+        try {
+          return await Promise.race([request(), wait]);
+        } catch {
+          return void 0;
+        } finally {
+          if (timeout !== void 0) clearTimeout(timeout);
+          if (stopWaiting) signal.removeEventListener("abort", stopWaiting);
+        }
+      }
+      async function openInboxDestination(rev, stores, kind, isReady, signal) {
+        if (!isReady()) return "cancelled";
+        var dm = kind === "mention" ? void 0 : findUnreadDm(stores);
+        var mention;
+        var hasMentions = false;
+        if (kind !== "dm") {
+          var channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
+          hasMentions = Boolean(channels?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0;
+          mention = findExactMention(rev, stores);
+          if (!mention && hasMentions) {
+            var fetched = await loadMentions(rev, signal);
+            if (!isReady()) return "cancelled";
+            if (kind === "any") dm = findUnreadDm(stores);
+            var updated = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
+            hasMentions = Boolean(updated?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0;
+            mention = findExactMention(rev, stores, fetched) ?? newestTarget([...(updated ?? [])].map(([channelId, {
+              guildId,
+              channel
+            }]) => ({
+              guildId,
+              channelId,
+              newest: lastMessageId(stores, channelId, channel) ?? channelId
+            })));
+          }
+        }
+        if (!isReady()) return "cancelled";
+        var target = dm && mention ? newestTarget([dm, mention]) : dm ?? mention;
+        if (!target && !hasMentions) return "empty";
+        var modals = imported(rev, "actions/ModalActionCreators.tsx")?.default ?? rev.discord?.actions?.ModalActionCreators;
+        if (!target) {
+          var nav = imported(rev, "modules/main_tabs_v2/helpers/NavigationRouteUtils.native.tsx");
+          if (typeof nav?.navigateToRootTab !== "function") return "unavailable";
+          modals?.popAll?.();
+          var tabs = imported(rev, "modules/notification_center/NotificationCenterItemsTypes.tsx")?.NotificationCenterTabs;
+          imported(rev, "modules/notification_center/NotificationCenterStoreActions.tsx")?.setTab?.(tabs?.Mentions ?? "Mentions");
+          nav.navigateToRootTab({
+            screen: "notifications",
+            forceNavigate: true
+          });
+          return "opened";
+        }
+        var router = imported(rev, "modules/routing/router_utils.tsx");
+        if (typeof router?.transitionToGuild !== "function") return "unavailable";
+        imported(rev, "modules/routing/native/RouteManagerUtils.tsx")?.initializeRouteManagerIfNeeded?.();
+        modals?.popAll?.();
+        router.transitionToGuild(target.guildId, target.channelId, target.messageId, {
+          navigationReplace: true,
+          openChannel: true
+        });
+        return "opened";
+      }
+
+      // source/plugins/more-alts/js/lib/inbox.ts
+      function resolveConnection(rev, stores) {
+        var gateway = attempt(() => stores.GatewayConnectionStore);
+        if (typeof gateway?.isConnected === "function") return gateway;
+        var exports = attempt(() => rev.discord.utils?.modules?.finders?.lookupModuleWithImportedPath?.("modules/gateway/GatewayConnectionStore.tsx")?.[0]);
+        var imported2 = exports?.default ?? exports;
+        if (typeof imported2?.isConnected === "function") return imported2;
+        return attempt(() => stores.ConnectionStore);
       }
       function serverMentionCount(guildRead, channels, read) {
         var total = attempt(() => guildRead?.getTotalMentionCount?.());
         if (Number.isSafeInteger(total) && total >= 0) return total;
-        var states = values(read?.getAllReadStates?.(true));
-        if (!states || typeof channels?.getChannel !== "function" || typeof read?.getMentionCount !== "function") return null;
-        var ids = /* @__PURE__ */new Set();
-        var mentions = 0;
-        for (var state of states) {
-          var id = state?.channelId;
-          if (typeof id !== "string" || ids.has(id) || state.type != null && Number(state.type) !== 0) continue;
-          var channel = channels.getChannel(id);
-          if (!(channel?.guild_id ?? channel?.guildId)) continue;
-          ids.add(id);
-          var count = read.getMentionCount(id);
-          if (Number.isSafeInteger(count) && count > 0) mentions += count;
-        }
-        return mentions;
+        var mentioned = mentionedGuildChannels(channels, read);
+        return mentioned ? [...mentioned.values()].reduce((sum, {
+          count
+        }) => sum + count, 0) : null;
       }
       function startSharedInbox(api) {
         var rev = api.unscoped;
@@ -2490,6 +2683,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         var generation = 0;
         var timer;
         var pendingRefresh = false;
+        var opening;
         var writes = Promise.resolve(file.get()).then(() => {}, () => {});
         function enqueue(update) {
           var write = writes.then(async () => {
@@ -2509,7 +2703,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           var added = () => getAllAccounts(storage).some(account => account.id === id && !account.isBot);
           try {
             if (!added()) return false;
-            var unreadDms = unreadDmCount(stores.ChannelStore, stores.ReadStateStore);
+            var unreadDms = unreadDmChannels(stores.ChannelStore, stores.ReadStateStore)?.size ?? null;
             var mentions = serverMentionCount(stores.GuildReadStateStore, stores.ChannelStore, stores.ReadStateStore);
             if (unreadDms === null && mentions === null) return false;
             var checkedAt = Date.now();
@@ -2559,10 +2753,12 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           if (!active || !isConnected()) return;
           connected = true;
           var id = currentId();
-          if (readyId === id) return;
-          cancel();
-          readyId = id;
-          schedule(true);
+          if (readyId !== id) {
+            cancel();
+            readyId = id;
+            schedule(true);
+          }
+          opening?.check();
         }
         function listen(store, fn) {
           if (!store?.addChangeListener || !store?.removeChangeListener) return;
@@ -2582,16 +2778,60 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           listen(store, () => schedule());
         }
         var dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher;
-        var onConnectionOpen = () => {
-          void Promise.resolve().then(connectedSession);
+        var onConnectionOpen = event => {
+          void Promise.resolve().then(() => {
+            if (!event?.user?.id || event.user.id === currentId()) connectedSession();
+          });
         };
         if (dispatcher?.subscribe && dispatcher?.unsubscribe) {
           var _loop3 = function (event, fn) {
             dispatcher.subscribe(event, fn);
             cleanups.push(() => dispatcher.unsubscribe(event, fn));
           };
-          for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_RESUMED", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
+          for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["POST_CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_RESUMED", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
             _loop3(event, fn);
+          }
+        }
+        async function open(account, kind) {
+          if (!active || !enabled || opening || account.isBot) return "cancelled";
+          var controller = new AbortController();
+          var isReady = () => {
+            if (!active || !enabled || controller.signal.aborted || readyId !== account.id || currentId() !== account.id || !isConnected()) return false;
+            var authenticated = attempt(() => stores.AuthenticationStore?.getId?.());
+            return authenticated == null || authenticated === account.id;
+          };
+          var check = () => {};
+          var ready = new Promise(resolve => {
+            check = () => {
+              if (isReady() || controller.signal.aborted) resolve();
+            };
+          });
+          var finish = _result => {};
+          var interrupted = new Promise(resolve => {
+            finish = result => {
+              controller.abort();
+              resolve(result);
+              check();
+            };
+          });
+          opening = {
+            check,
+            cancel: () => finish("cancelled")
+          };
+          var deadline = setTimeout(() => finish("timed-out"), 15e3);
+          try {
+            return await Promise.race([interrupted, (async () => {
+              if (currentId() !== account.id && !(await switchToAccount(account))) return "switch-failed";
+              check();
+              await ready;
+              return await openInboxDestination(rev, stores, kind, isReady, controller.signal);
+            })()]);
+          } catch {
+            return "unavailable";
+          } finally {
+            controller.abort();
+            clearTimeout(deadline);
+            opening = void 0;
           }
         }
         async function clear() {
@@ -2603,11 +2843,15 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         cleanups.push(storage.subscribe(() => {
           var previous = enabled;
           enabled = storage.cache?.sharedInboxEnabled === true;
-          if (enabled) schedule(!previous);else if (previous) void clear().catch(() => {});
+          if (enabled) schedule(!previous);else if (previous) {
+            opening?.cancel();
+            void clear().catch(() => {});
+          }
         }));
         if (enabled) schedule(true);else void clear().catch(() => {});
         return {
           use: () => file.use(),
+          open,
           async refresh() {
             if (!isConnected()) return "connecting";
             if (currentId() !== readyId) return "switching";
@@ -2629,6 +2873,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           },
           stop() {
             active = false;
+            opening?.cancel();
             cancel();
             for (var cleanup of cleanups) cleanup();
           }

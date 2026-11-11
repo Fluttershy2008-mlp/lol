@@ -1643,12 +1643,25 @@
               "version": "*"
             }
           }
+        },
+        "1.1.9": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.more-alts@1.1.9.zip",
+          "sha256": "d909305145c7303cc6c306697493180f4745bf35bddc8f469777aec25792b924",
+          "size": 93727,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.1.8",
-        "beta": "1.1.8",
-        "stable": "1.1.8"
+        "latest": "1.1.9",
+        "beta": "1.1.9",
+        "stable": "1.1.9"
       },
       "name": "More Alts! (Valenced)",
       "description": "Switch Discord accounts quickly, back up saved sessions on Android, and control notifications from your other accounts.",

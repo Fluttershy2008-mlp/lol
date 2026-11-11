@@ -59,6 +59,33 @@ function fixture(t, options = {}) {
     return { w, native };
 }
 
+function installInboxStorage(w, summaries = {}) {
+    const listeners = new Set();
+    const file = {
+        cache: { summaries },
+        async get() { return this.cache; },
+        async set(data, replace) {
+            assert.equal(replace, true);
+            this.cache = structuredClone(data);
+            for (const listener of listeners) listener();
+        },
+        use() {
+            return React.useSyncExternalStore(listener => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            }, () => this.cache);
+        },
+    };
+    w.U.jsonStorage = {
+        pluginStoragePathFor: (pluginId, name) => `${pluginId}/${name}`,
+        getJsonStorage(path) {
+            assert.equal(path, `${id}/inbox.json`);
+            return file;
+        },
+    };
+    return file;
+}
+
 test('More Alts opens account actions and keeps preferences on their own tab', async t => {
     const { w, native } = fixture(t);
     const { ui, item } = await w.open();
@@ -197,29 +224,7 @@ for (const source of ['mobile store name', 'mobile module path', 'legacy store n
             path === 'modules/gateway/GatewayConnectionStore.tsx' ? [{ default: gateway }, 1] : [];
     }
     const dm = '550000000000000001', group = '550000000000000002';
-    const listeners = new Set();
-    const file = {
-        cache: { summaries: {} },
-        async get() { return this.cache; },
-        async set(data, replace) {
-            assert.equal(replace, true);
-            this.cache = structuredClone(data);
-            for (const listener of listeners) listener();
-        },
-        use() {
-            return React.useSyncExternalStore(listener => {
-                listeners.add(listener);
-                return () => listeners.delete(listener);
-            }, () => this.cache);
-        },
-    };
-    w.U.jsonStorage = {
-        pluginStoragePathFor: (pluginId, name) => `${pluginId}/${name}`,
-        getJsonStorage(path) {
-            assert.equal(path, `${id}/inbox.json`);
-            return file;
-        },
-    };
+    const file = installInboxStorage(w);
     let unread = new Set([dm, group]), mentions = 5;
     w.stores.ChannelStore.getMutablePrivateChannels = () => new Map([
         ['dm', { id: dm, type: 1 }], ['duplicate', { channel: { id: dm, type: 1 } }], ['group', { id: group, type: 3 }],
@@ -277,4 +282,120 @@ for (const source of ['mobile store name', 'mobile module path', 'legacy store n
     assert.deepEqual(file.cache.summaries, {});
     assert.equal(w.timers.size, 0);
     assert.equal(w.alerts.length, 0);
+});
+
+
+function openableInbox(t, summaries) {
+    const { w } = fixture(t);
+    const routes = [], order = [];
+    installInboxStorage(w, summaries);
+    w.addModule({
+        transitionToGuild(guildId, channelId, messageId, options) {
+            assert.equal(options.openChannel, true);
+            assert.equal(options.navigationReplace, true);
+            routes.push([w.accountId(), guildId, channelId, messageId]);
+            order.push('navigate');
+        },
+    }, 'modules/routing/router_utils.tsx');
+    w.addModule({ default: { popAll() { order.push('close settings'); } } }, 'actions/ModalActionCreators.tsx');
+    const owner = { id: ACCOUNT, username: 'test-owner', displayName: 'Test Owner', token: 'owner-session' };
+    const open = async () => {
+        const result = await w.open({
+            accounts: { [ACCOUNT]: owner, [FRIEND]: saved },
+            accountOrder: [ACCOUNT, FRIEND],
+            sharedInboxEnabled: true,
+        });
+        await openTab(result.ui, 'Inbox');
+        return result;
+    };
+    return { w, open, routes, order };
+}
+
+test('an inactive inbox account opens its newest unread DM only after the correct session connects', async t => {
+    const { w, open, routes, order } = openableInbox(t, {
+        [FRIEND]: { checkedAt: 1234, unreadDms: 2, mentions: 0 },
+    });
+    const oldDm = '550000000000000001', firstDm = '550000000000000002', nextDm = '550000000000000003';
+    const firstMessage = '780000000000000008', newestMessage = '780000000000000009';
+    let loaded = false;
+    w.stores.ChannelStore.getMutablePrivateChannels = () => loaded
+        ? [{ id: firstDm, type: 1 }, { id: nextDm, type: 3 }]
+        : [{ id: oldDm, type: 1 }];
+    w.stores.ReadStateStore.hasUnread = () => true;
+    w.stores.ReadStateStore.lastMessageId = id => id === firstDm ? firstMessage : newestMessage;
+    w.modules.find(module => typeof module.switchAccountToken === 'function').switchAccountToken = token => {
+        assert.equal(token, saved.token);
+        w.setAccount(FRIEND);
+    };
+    const { ui } = await open();
+    let press;
+    await Renderer.act(async () => {
+        press = find(ui, 'TableRow', 'label', 'Test Friend').props.onPress();
+    });
+    assert.equal(w.accountId(), FRIEND);
+    assert.ok(find(ui, 'Text', 'children', 'Opening inbox…'));
+    assert.deepEqual(routes, []);
+    await Renderer.act(() => w.dispatcher.dispatch({ type: 'CONNECTION_OPEN', user: { id: ACCOUNT } }));
+    assert.deepEqual(routes, []);
+    loaded = true;
+    await Renderer.act(async () => {
+        await w.dispatcher.dispatch({ type: 'POST_CONNECTION_OPEN', user: { id: FRIEND } });
+        await press;
+    });
+    assert.deepEqual(routes, [[FRIEND, '@me', nextDm, newestMessage]]);
+    assert.deepEqual(order, ['close settings', 'navigate']);
+    assert.equal(w.alerts.length, 0);
+});
+
+test('inbox server mentions open the exact unread message or its channel if the message is unavailable', async t => {
+    const { w, open, routes, order } = openableInbox(t, {
+        [ACCOUNT]: { checkedAt: 1234, unreadDms: 1, mentions: 2 },
+    });
+    const guildId = '410000000000000001', channelId = '550000000000000010';
+    const old = '780000000000000014', ack = '780000000000000015', exact = '780000000000000016';
+    let response = [{ channel_id: channelId, id: old }, { channel_id: channelId, id: exact }];
+    const requests = [];
+    w.stores.ChannelStore.getChannel = id => id === channelId ? { id, guild_id: guildId, type: 0 } : undefined;
+    w.stores.ReadStateStore.getAllReadStates = () => [{ channelId, type: 0 }];
+    w.stores.ReadStateStore.getMentionCount = id => id === channelId ? 2 : 0;
+    w.stores.ReadStateStore.ackMessageId = () => ack;
+    w.addModule({ HTTP: { async get(request) {
+        requests.push([w.accountId(), request.url]);
+        return { body: response };
+    } } }, '../discord_common/js/packages/http-utils/HTTPUtils.tsx');
+    const { ui } = await open();
+    const click = () => find(ui, 'TableRow', 'accessibilityLabel', 'Open server mentions for Test Owner').props.onPress();
+    await Renderer.act(click);
+    assert.deepEqual(routes, [[ACCOUNT, guildId, channelId, exact]]);
+    response = [];
+    await Renderer.act(click);
+    assert.deepEqual(routes.at(-1), [ACCOUNT, guildId, channelId, undefined]);
+    assert.deepEqual(requests, [[ACCOUNT, '/users/@me/mentions'], [ACCOUNT, '/users/@me/mentions']]);
+    w.stores.ReadStateStore.getAllReadStates = () => [];
+    w.stores.GuildReadStateStore = { getTotalMentionCount: () => 2 };
+    w.addModule({ setTab(tab) { order.push(tab); } }, 'modules/notification_center/NotificationCenterStoreActions.tsx');
+    w.addModule({ navigateToRootTab({ screen }) { order.push(screen); } }, 'modules/main_tabs_v2/helpers/NavigationRouteUtils.native.tsx');
+    await Renderer.act(click);
+    assert.deepEqual(order.slice(-3), ['close settings', 'Mentions', 'notifications']);
+    assert.equal(w.alerts.length, 0);
+});
+
+test('an inbox tap that times out cannot open a conversation later', async t => {
+    const { w, open, routes } = openableInbox(t, {});
+    let connected = false;
+    w.stores.ConnectionStore.isConnected = () => connected;
+    const dm = '550000000000000013';
+    w.stores.ChannelStore.getMutablePrivateChannels = () => [{ id: dm, type: 1 }];
+    w.stores.ReadStateStore.hasUnread = () => true;
+    const { ui } = await open();
+    let press;
+    await Renderer.act(async () => {
+        press = find(ui, 'TableRow', 'label', 'Test Owner · Active').props.onPress();
+        await w.advance(15000);
+        await press;
+    });
+    assert.match(w.alerts.at(-1)[1], /still connecting/);
+    connected = true;
+    await Renderer.act(() => w.dispatcher.dispatch({ type: 'CONNECTION_OPEN', user: { id: ACCOUNT } }));
+    assert.deepEqual(routes, []);
 });

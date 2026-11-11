@@ -1,6 +1,7 @@
 import type { JsonStorage } from '@valenced/json-storage'
-import type { MoreAltsStorage } from './types'
-import { getAllAccounts } from './accountActions'
+import type { Account, MoreAltsStorage } from './types'
+import { getAllAccounts, switchToAccount } from './accountActions'
+import { attempt, mentionedGuildChannels, openInboxDestination, unreadDmChannels, type InboxKind, type InboxOpenResult } from './inboxNavigation'
 
 export interface InboxSummary {
 	checkedAt: number
@@ -14,13 +15,10 @@ type RefreshResult = 'saved' | 'connecting' | 'switching' | 'unavailable'
 export interface SharedInbox {
 	use: () => InboxData | undefined
 	refresh: () => Promise<RefreshResult>
+	open: (account: Account, kind: InboxKind) => Promise<InboxOpenResult>
 	clear: () => Promise<void>
 	remove: (id: string) => Promise<void>
 	stop: () => void
-}
-
-function attempt<T>(read: () => T): T | undefined {
-	try { return read() } catch { return undefined }
 }
 
 function resolveConnection(rev: any, stores: any) {
@@ -34,42 +32,11 @@ function resolveConnection(rev: any, stores: any) {
 	return attempt(() => stores.ConnectionStore)
 }
 
-function values(value: any): any[] | undefined {
-	if (!value || typeof value !== 'object') return undefined
-	return typeof value.values === 'function' ? [...value.values()] : Object.values(value)
-}
-
-function unreadDmCount(channels: any, read: any): number | null {
-	if (typeof read?.hasUnread !== 'function') return null
-	const entries = values(attempt(() => channels?.getMutablePrivateChannels?.())
-		?? attempt(() => channels?.getPrivateChannels?.()) ?? attempt(() => channels?.getSortedPrivateChannels?.()))
-	if (!entries) return null
-	const ids = new Set<string>()
-	for (const entry of entries) {
-		const item = entry?.channel ?? entry
-		const channel = typeof item === 'string' ? channels.getChannel?.(item) : item
-		if (typeof channel?.id === 'string' && (channel.type === 1 || channel.type === 3) && read.hasUnread(channel.id)) ids.add(channel.id)
-	}
-	return ids.size
-}
-
 function serverMentionCount(guildRead: any, channels: any, read: any): number | null {
 	const total = attempt(() => guildRead?.getTotalMentionCount?.())
 	if (Number.isSafeInteger(total) && total >= 0) return total
-	const states = values(read?.getAllReadStates?.(true))
-	if (!states || typeof channels?.getChannel !== 'function' || typeof read?.getMentionCount !== 'function') return null
-	const ids = new Set<string>()
-	let mentions = 0
-	for (const state of states) {
-		const id = state?.channelId
-		if (typeof id !== 'string' || ids.has(id) || (state.type != null && Number(state.type) !== 0)) continue
-		const channel = channels.getChannel(id)
-		if (!(channel?.guild_id ?? channel?.guildId)) continue
-		ids.add(id)
-		const count = read.getMentionCount(id)
-		if (Number.isSafeInteger(count) && count > 0) mentions += count
-	}
-	return mentions
+	const mentioned = mentionedGuildChannels(channels, read)
+	return mentioned ? [...mentioned.values()].reduce((sum, { count }) => sum + count, 0) : null
 }
 
 export function startSharedInbox(api: any): SharedInbox | undefined {
@@ -92,6 +59,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 	let generation = 0
 	let timer: ReturnType<typeof setTimeout> | undefined
 	let pendingRefresh = false
+	let opening: { check: () => void; cancel: () => void } | undefined
 	let writes = Promise.resolve(file.get()).then(() => {}, () => {})
 
 	function enqueue(update: (data: InboxData) => InboxData | undefined) {
@@ -111,7 +79,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		const added = () => getAllAccounts(storage).some(account => account.id === id && !account.isBot)
 		try {
 			if (!added()) return false
-			const unreadDms = unreadDmCount(stores.ChannelStore, stores.ReadStateStore)
+			const unreadDms = unreadDmChannels(stores.ChannelStore, stores.ReadStateStore)?.size ?? null
 			const mentions = serverMentionCount(stores.GuildReadStateStore, stores.ChannelStore, stores.ReadStateStore)
 			if (unreadDms === null && mentions === null) return false
 			const checkedAt = Date.now()
@@ -156,10 +124,12 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		if (!active || !isConnected()) return
 		connected = true
 		const id = currentId()
-		if (readyId === id) return
-		cancel()
-		readyId = id
-		schedule(true)
+		if (readyId !== id) {
+			cancel()
+			readyId = id
+			schedule(true)
+		}
+		opening?.check()
 	}
 
 	function listen(store: any, fn: () => void) {
@@ -181,14 +151,57 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		listen(store, () => schedule())
 	}
 	const dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher
-	const onConnectionOpen = () => { void Promise.resolve().then(connectedSession) }
+	const onConnectionOpen = (event: any) => {
+		void Promise.resolve().then(() => {
+			if (!event?.user?.id || event.user.id === currentId()) connectedSession()
+		})
+	}
 	if (dispatcher?.subscribe && dispatcher?.unsubscribe) {
 		for (const [event, fn] of [
-			['CONNECTION_OPEN', onConnectionOpen], ['CONNECTION_RESUMED', onConnectionOpen],
+			['CONNECTION_OPEN', onConnectionOpen], ['POST_CONNECTION_OPEN', onConnectionOpen], ['CONNECTION_RESUMED', onConnectionOpen],
 			['CONNECTION_CLOSED', disconnected], ['LOGOUT', disconnected],
 		] as const) {
 			dispatcher.subscribe(event, fn)
 			cleanups.push(() => dispatcher.unsubscribe(event, fn))
+		}
+	}
+
+	async function open(account: Account, kind: InboxKind): Promise<InboxOpenResult> {
+		if (!active || !enabled || opening || account.isBot) return 'cancelled'
+		const controller = new AbortController()
+		const isReady = () => {
+			if (!active || !enabled || controller.signal.aborted || readyId !== account.id ||
+				currentId() !== account.id || !isConnected()) return false
+			const authenticated = attempt(() => stores.AuthenticationStore?.getId?.())
+			return authenticated == null || authenticated === account.id
+		}
+		let check = () => {}
+		const ready = new Promise<void>(resolve => {
+			check = () => { if (isReady() || controller.signal.aborted) resolve() }
+		})
+		let finish = (_result: InboxOpenResult) => {}
+		const interrupted = new Promise<InboxOpenResult>(resolve => {
+			finish = result => {
+				controller.abort()
+				resolve(result)
+				check()
+			}
+		})
+		opening = { check, cancel: () => finish('cancelled') }
+		const deadline = setTimeout(() => finish('timed-out'), 15000)
+		try {
+			return await Promise.race([interrupted, (async (): Promise<InboxOpenResult> => {
+				if (currentId() !== account.id && !await switchToAccount(account)) return 'switch-failed'
+				check()
+				await ready
+				return await openInboxDestination(rev, stores, kind, isReady, controller.signal)
+			})()])
+		} catch {
+			return 'unavailable'
+		} finally {
+			controller.abort()
+			clearTimeout(deadline)
+			opening = undefined
 		}
 	}
 
@@ -200,13 +213,17 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		const previous = enabled
 		enabled = storage.cache?.sharedInboxEnabled === true
 		if (enabled) schedule(!previous)
-		else if (previous) void clear().catch(() => {})
+		else if (previous) {
+			opening?.cancel()
+			void clear().catch(() => {})
+		}
 	}))
 	if (enabled) schedule(true)
 	else void clear().catch(() => {})
 
 	return {
 		use: () => file.use(),
+		open,
 		async refresh() {
 			if (!isConnected()) return 'connecting'
 			if (currentId() !== readyId) return 'switching'
@@ -224,6 +241,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		},
 		stop() {
 			active = false
+			opening?.cancel()
 			cancel()
 			for (const cleanup of cleanups) cleanup()
 		},

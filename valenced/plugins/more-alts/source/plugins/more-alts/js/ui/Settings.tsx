@@ -234,7 +234,7 @@ export default function Settings({
 					</>
 				) : tab === 'Inbox' ? (
 					inbox ? <InboxTab inbox={inbox} enabled={storage.sharedInboxEnabled} accounts={accounts} currentId={currentUserId}
-						colors={colors} switchAccount={handleSwitch} setEnabled={value => api.jsonStorage.set({ sharedInboxEnabled: value })} />
+						colors={colors} setEnabled={value => api.jsonStorage.set({ sharedInboxEnabled: value })} />
 						: <Text style={{ color: colors.muted, fontSize: 14 }}>Shared inbox is unavailable on this Valenced version.</Text>
 				) : (
 					<>

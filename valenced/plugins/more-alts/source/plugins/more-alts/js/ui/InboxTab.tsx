@@ -1,16 +1,36 @@
 import type { Account } from '../lib/types'
 import type { SharedInbox } from '../lib/inbox'
+import type { InboxKind } from '../lib/inboxNavigation'
 import { Avatar, getValenced } from './AccountUi'
 import type { Palette } from './AccountUi'
 
-export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colors, switchAccount }: {
+export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colors }: {
 	inbox: SharedInbox; enabled: boolean; setEnabled: (value: boolean) => Promise<void>; accounts: Account[];
-	currentId?: string; colors: Palette; switchAccount: (account: Account) => Promise<void>
+	currentId?: string; colors: Palette
 }) {
 	const rev = getValenced()
 	const { View, Text, Alert } = rev.react.ReactNative
 	const { TableRowGroup, TableSwitchRow, TableRow } = rev.discord.design.Design
 	const [refreshStatus, setRefreshStatus] = rev.react.React.useState(null)
+	const [opening, setOpening] = rev.react.React.useState(false)
+	const open = async (account: Account, kind: InboxKind) => {
+		setOpening(true)
+		try {
+			const result = await inbox.open(account, kind)
+			const detail = {
+				empty: kind === 'dm' ? 'This account has no unread DMs.' : kind === 'mention'
+					? 'This account has no unread server mentions.' : 'This account has no unread DMs or server mentions.',
+				'switch-failed': 'Sign in to this account again, then add it to More Alts.',
+				'timed-out': 'Discord is still connecting. Try again once the account has loaded.',
+				unavailable: 'Discord couldn’t open the inbox item. Try opening the chat from Discord’s Inbox.',
+			}
+			if (result !== 'opened' && result !== 'cancelled') {
+				Alert.alert(result === 'empty' ? 'You’re caught up' : 'Could not open inbox item', detail[result])
+			}
+		} finally {
+			setOpening(false)
+		}
+	}
 	const summaries = inbox.use()?.summaries ?? {}
 	const checkedAt = currentId ? summaries[currentId]?.checkedAt : undefined
 	const refreshMessage = refreshStatus?.accountId === currentId &&
@@ -24,7 +44,7 @@ export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colo
 			<View style={{ gap: 6 }}>
 				<Text accessibilityRole="header" style={{ color: colors.text, fontSize: 20, fontWeight: '800' }}>Shared inbox</Text>
 				<Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }}>
-					See the last recorded unread DM and server mention counts for your added accounts. Each account updates while it’s active.
+					Tap an account to open its newest unread DM or server mention. Counts update while the account is active.
 				</Text>
 			</View>
 			<TableRowGroup>
@@ -44,17 +64,30 @@ export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colo
 				}} />}
 			</TableRowGroup>
 			{enabled && refreshMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 14 }}>{refreshMessage}</Text> : null}
+			{opening && <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 14 }}>Opening inbox…</Text>}
 			{enabled && (ordered.length ? (
 				<TableRowGroup title="Added accounts">
-					{ordered.map(account => {
+						{ordered.flatMap(account => {
 						const summary = summaries[account.id]
 						const active = account.id === currentId
+						const name = account.displayName || account.username
 						const detail = summary
 							? `${summary.unreadDms ?? '—'} unread DM ${summary.unreadDms === 1 ? 'chat' : 'chats'} · ${summary.mentions ?? '—'} server ${summary.mentions === 1 ? 'mention' : 'mentions'}\nChecked ${new Date(summary.checkedAt).toLocaleString()}`
 							: 'Waiting for the first check'
-						return <TableRow key={account.id} label={`${account.displayName || account.username}${active ? ' · Active' : ''}`}
-							subLabel={detail} subLabelLineClamp={4} icon={<Avatar user={account} border={colors.line} />}
-							arrow={!active} onPress={active ? undefined : () => switchAccount(account)} />
+						const rows = [
+							<TableRow key={account.id} label={`${name}${active ? ' · Active' : ''}`}
+								subLabel={detail} subLabelLineClamp={4} icon={<Avatar user={account} border={colors.line} />}
+								arrow disabled={opening} onPress={() => open(account, 'any')} />,
+						]
+						if ((summary?.unreadDms ?? 0) > 0) rows.push(
+							<TableRow key={`${account.id}-dm`} label="Open unread DMs" accessibilityLabel={`Open unread DMs for ${name}`}
+								arrow disabled={opening} onPress={() => open(account, 'dm')} />,
+						)
+						if ((summary?.mentions ?? 0) > 0) rows.push(
+							<TableRow key={`${account.id}-mention`} label="Open server mentions" accessibilityLabel={`Open server mentions for ${name}`}
+								arrow disabled={opening} onPress={() => open(account, 'mention')} />,
+						)
+						return rows
 					})}
 				</TableRowGroup>
 			) : <Text style={{ color: colors.muted, fontSize: 14 }}>Add a Discord account to start seeing its inbox summary.</Text>)}
