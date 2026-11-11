@@ -285,8 +285,8 @@ for (const source of ['mobile store name', 'mobile module path', 'legacy store n
 });
 
 
-function openableInbox(t, summaries) {
-    const { w } = fixture(t);
+function openableInbox(t, summaries, options) {
+    const { w, native } = fixture(t, options);
     const routes = [], order = [];
     installInboxStorage(w, summaries);
     w.addModule({
@@ -308,7 +308,7 @@ function openableInbox(t, summaries) {
         await openTab(result.ui, 'Inbox');
         return result;
     };
-    return { w, open, routes, order };
+    return { w, open, routes, order, native };
 }
 
 test('an inactive inbox account opens its newest unread DM only after the correct session connects', async t => {
@@ -402,6 +402,7 @@ test('an inbox tap that times out cannot open a conversation later', async t => 
 
 test('inbox review keeps same-channel mentions queued and advances through DMs and accounts from chat', async t => {
     const { w, open, routes } = openableInbox(t, {});
+    w.RN.Platform.OS = 'ios';
     const guildId = '410000000000000021', mentionChannel = '550000000000000021';
     const ownerDm = '550000000000000022', friendDm = '550000000000000023';
     const newestMention = '780000000000000054', nextMention = '780000000000000053';
@@ -503,6 +504,7 @@ test('inbox review keeps same-channel mentions queued and advances through DMs a
 
 test('stopping an inbox review cancels the pending advance', async t => {
     const { w, open, routes } = openableInbox(t, {});
+    w.RN.Platform.OS = 'ios';
     const dm = '550000000000000024';
     let unread = true;
     w.stores.ChannelStore.getMutablePrivateChannels = () => [{ id: dm, type: 1 }];
@@ -526,4 +528,73 @@ test('stopping an inbox review cancels the pending advance', async t => {
     assert.equal(find(chat, 'Pressable', 'accessibilityLabel', 'Stop inbox review'), undefined);
     assert.equal(w.calls.some(call => call[0] === 'switchAccount'), false);
     assert.equal(w.timers.size, 0);
+});
+
+test('Android review shows native controls without a ChatView module and advances only on the current chat route', async t => {
+    let action = '';
+    const { w, open, routes, native } = openableInbox(t, {}, {
+        handleNative(method, args) {
+            if (method !== 'syncInboxReviewControls' || !args.length) return '';
+            const clicked = action;
+            action = '';
+            return clicked;
+        },
+    });
+    const channels = ['550000000000000031', '550000000000000032', '550000000000000033'];
+    const messages = ['780000000000000073', '780000000000000072', '780000000000000071'];
+    const unread = new Set(channels);
+    let onChat = true;
+    w.stores.ChannelStore.getMutablePrivateChannels = () => channels.map(id => ({ id, type: 1 }));
+    w.stores.ReadStateStore.hasUnread = id => unread.has(id);
+    w.stores.ReadStateStore.lastMessageId = id => messages[channels.indexOf(id)];
+    w.stores.SelectedChannelStore.getCurrentlySelectedChannelId = () => routes.at(-1)?.[2];
+    w.addModule({ getRootNavigationRef: () => ({
+        getCurrentRoute: () => onChat
+            ? { name: 'channel', params: { channelId: routes.at(-1)?.[2] } }
+            : { name: 'settings' },
+    }) }, 'modules/main_tabs_v2/RootNavigationRef.native.tsx');
+
+    const { ui, item } = await open();
+    const controls = () => native.filter(([method]) => method === 'syncInboxReviewControls').at(-1)?.[1];
+    await Renderer.act(() => find(ui, 'TableRow', 'label', 'Review unread across accounts').props.onPress());
+    await Renderer.act(() => w.advance(250));
+    assert.deepEqual(routes.at(-1), [ACCOUNT, '@me', channels[0], messages[0]]);
+    assert.equal(controls()[2], 'Reviewing DMs');
+    assert.equal(controls()[4], false);
+
+    await Renderer.act(async () => {
+        action = 'pause';
+        await w.advance(500);
+        unread.delete(channels[0]);
+        w.stores.ReadStateStore.emitChange();
+        await w.advance(9000);
+    });
+    assert.equal(controls()[4], true);
+    assert.equal(routes.length, 1);
+    await Renderer.act(async () => {
+        onChat = false;
+        action = 'pause';
+        await w.advance(9500);
+    });
+    assert.equal(controls()[4], false);
+    assert.equal(routes.length, 1);
+    await Renderer.act(async () => {
+        onChat = true;
+        await w.advance(8500);
+    });
+    assert.deepEqual(routes.at(-1), [ACCOUNT, '@me', channels[1], messages[1]]);
+    await Renderer.act(async () => {
+        action = 'next';
+        await w.advance(750);
+    });
+    assert.deepEqual(routes.at(-1), [ACCOUNT, '@me', channels[2], messages[2]]);
+    await Renderer.act(async () => {
+        action = 'stop';
+        await w.advance(750);
+    });
+    assert.equal(controls().length, 0);
+    assert.equal(routes.length, 3);
+    await Renderer.act(() => w.stop(item));
+    assert.equal(w.timers.size, 0);
+    assert.equal(w.appListeners.size, 0);
 });

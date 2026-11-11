@@ -45,7 +45,7 @@ export function createInboxReview(
 	accountIsReady: (id: string) => boolean,
 	withAccount: (account: Account, task: InboxAccountTask, signal: AbortSignal) => Promise<InboxOpenResult>,
 ): InboxReview {
-	const { AppState, Keyboard, ToastAndroid } = rev.react.ReactNative
+	const { AppState, Keyboard, Platform, ToastAndroid } = rev.react.ReactNative
 	const listeners = new Set<() => void>()
 	const chats = new Map<symbol, string>()
 	let foreground = AppState?.currentState == null || AppState.currentState === 'active'
@@ -88,6 +88,14 @@ export function createInboxReview(
 		ToastAndroid?.show?.(message, ToastAndroid.SHORT)
 	}
 
+	function isVisible(channelId: string) {
+		if (Platform?.OS !== 'android') return [...chats.values()].includes(channelId)
+		const route = attempt(() => rev.discord?.utils?.modules?.finders?.lookupModuleWithImportedPath?.(
+			'modules/main_tabs_v2/RootNavigationRef.native.tsx',
+		)?.[0]?.getRootNavigationRef?.()?.getCurrentRoute?.())
+		return route?.name === 'channel' && route.params?.channelId === channelId
+	}
+
 	function canAdvance() {
 		const current = run
 		if (!current?.target || !current.account || current.busy || current.paused || !foreground ||
@@ -95,7 +103,7 @@ export function createInboxReview(
 		const channelId = current.target.channelId
 		const selected = attempt(() => stores.SelectedChannelStore?.getCurrentlySelectedChannelId?.())
 			?? attempt(() => stores.SelectedChannelStore?.getChannelId?.())
-		return (selected == null || selected === channelId) && [...chats.values()].includes(channelId)
+		return (selected == null || selected === channelId) && isVisible(channelId)
 			&& attempt(() => isInboxTargetRead(stores, current.target!)) === true
 	}
 

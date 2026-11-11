@@ -15,10 +15,11 @@ find "$plugin_dir/source/valenced-api" -name '*.kt' | sort > "$build_dir/api.txt
 java -cp "$tools_dir/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
     -no-stdlib -no-reflect -jvm-target 21 -language-version 2.0 -api-version 2.0 \
     -classpath "$stdlib:$coroutines:$android" -d "$build_dir/api" "@$build_dir/api.txt"
+find "$plugin_dir/source/plugins/more-alts/src/main/kotlin" -name '*.kt' | sort > "$build_dir/plugin.txt"
 java -cp "$tools_dir/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
     -no-stdlib -no-reflect -jvm-target 21 -language-version 2.0 -api-version 2.0 \
     -classpath "$build_dir/api:$stdlib:$coroutines:$android:$xposed" -d "$build_dir/classes" \
-    "$plugin_dir/source/plugins/more-alts/src/main/kotlin/rosie/morealts/MoreAltsPlugin.kt"
+    "@$build_dir/plugin.txt"
 
 mkdir "$build_dir/dex"
 find "$build_dir/classes" -name '*.class' | sort > "$build_dir/classes.txt"

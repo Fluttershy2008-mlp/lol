@@ -94,9 +94,15 @@ val moreAltsPlugin = plugin {
     var hook2: XC_MethodHook.Unhook? = null
     var pushHook: XC_MethodHook.Unhook? = null
     var running = false
+    var reviewControls: InboxReviewControls? = null
 
     start {
         running = true
+        val controls = InboxReviewControls()
+        reviewControls = controls
+        registerNativeMethod(PREFIX + "syncInboxReviewControls") { args ->
+            controls.sync(args, ::withAppActivity)
+        }
         val push = AtomicReference<OtherAccountPush?>()
         withAppContext { context ->
             if (running) {
@@ -205,6 +211,8 @@ val moreAltsPlugin = plugin {
 
     stop {
         running = false
+        reviewControls?.close()
+        reviewControls = null
         pushHook?.unhook()
         pushHook = null
         hook1?.unhook()

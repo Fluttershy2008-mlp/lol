@@ -1634,6 +1634,72 @@
         };
       }
 
+      // source/plugins/more-alts/js/patches/nativeInboxReviewControls.ts
+      var POLL_MS = 250;
+      function startNativeInboxReviewControls(rev, review) {
+        var {
+          AppState
+        } = rev.react.ReactNative;
+        var foreground = AppState?.currentState == null || AppState.currentState === "active";
+        var active = true;
+        var shown = false;
+        var inFlight = false;
+        var refresh = false;
+        var sequence = 0;
+        var session;
+        var timer;
+        function schedule(delay = 0) {
+          if (timer !== void 0) clearTimeout(timer);
+          timer = setTimeout(poll, delay);
+        }
+        async function poll() {
+          timer = void 0;
+          if (inFlight) {
+            refresh = true;
+            return;
+          }
+          inFlight = true;
+          if (active && foreground) review.sync();
+          var snapshot = active && session ? review.snapshot() : void 0;
+          if (!snapshot && !shown || snapshot && !foreground) {
+            inFlight = false;
+            return;
+          }
+          var currentSession = session;
+          var target = snapshot?.target;
+          var targetKey = target ? `${target.channelId}:${target.messageId ?? ""}` : "";
+          shown = Boolean(snapshot);
+          var args = snapshot ? [currentSession, targetKey, snapshot.busy ? "Opening next item\u2026" : target?.kind === "dm" ? "Reviewing DMs" : "Reviewing mentions", snapshot.paused ? "Paused" : snapshot.autoAdvance ? "Moving to the next item soon" : "Advances when read", snapshot.paused, snapshot.busy] : [];
+          try {
+            var action = await callNative("syncInboxReviewControls", args);
+            if (!active || !foreground || !snapshot || session !== currentSession) return;
+            if (action === "stop") review.stop();else if (action === "pause") review.togglePause();else if (action === "next" && review.snapshot()?.target === target) review.next();
+          } finally {
+            inFlight = false;
+            if (refresh) {
+              refresh = false;
+              schedule();
+            } else if (active && foreground && session) schedule(POLL_MS);
+          }
+        }
+        var unsubscribe = review.subscribe(() => {
+          if (review.snapshot()) session ??= `${Date.now()}-${++sequence}`;else session = void 0;
+          schedule();
+        });
+        var appState = AppState?.addEventListener?.("change", state => {
+          foreground = state === "active";
+          schedule();
+        });
+        return () => {
+          active = false;
+          session = void 0;
+          unsubscribe();
+          appState?.remove();
+          if (timer !== void 0) clearTimeout(timer);
+          return poll();
+        };
+      }
+
       // valenced:@valenced/externals/react-navigation
       var ReactNavigationNative = valenced.externals?.ReactNavigation?.ReactNavigationNative;
 
@@ -2838,6 +2904,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         var {
           AppState,
           Keyboard,
+          Platform,
           ToastAndroid
         } = rev.react.ReactNative;
         var listeners = /* @__PURE__ */new Set();
@@ -2883,12 +2950,17 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           stop();
           ToastAndroid?.show?.(message, ToastAndroid.SHORT);
         }
+        function isVisible(channelId) {
+          if (Platform?.OS !== "android") return [...chats.values()].includes(channelId);
+          var route = attempt(() => rev.discord?.utils?.modules?.finders?.lookupModuleWithImportedPath?.("modules/main_tabs_v2/RootNavigationRef.native.tsx")?.[0]?.getRootNavigationRef?.()?.getCurrentRoute?.());
+          return route?.name === "channel" && route.params?.channelId === channelId;
+        }
         function canAdvance() {
           var current = run;
           if (!current?.target || !current.account || current.busy || current.paused || !foreground || keyboardOpen || Keyboard?.isVisible?.() === true || !accountIsReady(current.account.id)) return false;
           var channelId = current.target.channelId;
           var selected = attempt(() => stores.SelectedChannelStore?.getCurrentlySelectedChannelId?.()) ?? attempt(() => stores.SelectedChannelStore?.getChannelId?.());
-          return (selected == null || selected === channelId) && [...chats.values()].includes(channelId) && attempt(() => isInboxTargetRead(stores, current.target)) === true;
+          return (selected == null || selected === channelId) && isVisible(channelId) && attempt(() => isInboxTargetRead(stores, current.target)) === true;
         }
         function sync() {
           if (run?.target && run.account && !run.busy && currentId() && run.account.id !== currentId()) {
@@ -3305,7 +3377,10 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
               inbox?.stop();
               if (sharedInbox === inbox) sharedInbox = void 0;
             });
-            if (inbox) api.cleanup(patchInboxReviewBar(api.unscoped, inbox.review));
+            if (inbox) {
+              var android = api.unscoped.react.ReactNative.Platform.OS === "android";
+              api.cleanup(android ? startNativeInboxReviewControls(api.unscoped, inbox.review) : patchInboxReviewBar(api.unscoped, inbox.review));
+            }
           } catch (error) {
             api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`);
           }
