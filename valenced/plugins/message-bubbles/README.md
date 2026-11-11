@@ -1,21 +1,20 @@
 # Message Bubbles
 
-Round the text in Discord’s Android chat. Other people’s messages use plum,
-indigo or berry based on their Discord user ID. Your messages use blue and align
-to the right. The palette adjusts for dark text. Discord still renders links,
-mentions and inline emoji inside each bubble.
+Your Discord messages use blue bubbles on the left. Other people’s messages
+use plum, indigo or berry bubbles on the right, based on their Discord user ID.
+The palette adjusts for dark text. Discord renders links, mentions and inline
+emoji inside each bubble.
 
-For your own text messages, the reply preview and reactions sit on the right
-and the repeated profile header is hidden. Emoji-only messages use Discord’s
-large emoji presentation with a little vertical spacing.
+Reply previews and reactions follow their message side for regular text rows.
+Your own text messages use the compact header. Emoji-only messages keep
+Discord’s large emoji presentation.
 
 Refresh Fluttershy’s Valenced repository, install **Message Bubbles**, then fully
 close and reopen Discord. Enable or disable it from **Settings → Valenced → Plugins**.
 
 The plugin targets Discord’s Android message renderer in channels, DMs and threads.
-Incoming messages keep their native avatar and reply preview. Attachments use
-their existing layout. The updated hook targets were checked against Discord
-Android 352.6 Alpha. The beta2 layout still needs phone testing.
+Incoming avatars and attachments use their native layout. The updated hook targets were checked against Discord
+Android 352.6 Alpha. The beta3 layout still needs phone testing.
 
 ## Rebuild the Android payload
 

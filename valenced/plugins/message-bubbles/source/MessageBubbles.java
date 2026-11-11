@@ -75,12 +75,12 @@ public final class MessageBubbles {
 
         final int dark;
         final int light;
-        final boolean outgoing;
+        final boolean own;
 
-        Style(int dark, int light, boolean outgoing) {
+        Style(int dark, int light, boolean own) {
             this.dark = dark;
             this.light = light;
-            this.outgoing = outgoing;
+            this.own = own;
         }
     }
 
@@ -92,7 +92,7 @@ public final class MessageBubbles {
         private final Path shape = new Path();
         private final RectF bounds = new RectF();
         private final float[] corners = new float[8];
-        private final OutgoingLayout outgoing = new OutgoingLayout();
+        private final MessageRowLayout rowLayout = new MessageRowLayout();
         private volatile boolean active;
         private Class<?> bodyClass;
         private Class<?> accessoriesClass;
@@ -124,14 +124,16 @@ public final class MessageBubbles {
                 @Override protected void beforeHookedMethod(MethodHookParam param) {
                     if (!active || !onMainThread()) return;
                     ViewGroup row = (ViewGroup) param.thisObject;
-                    outgoing.restoreRow(row);
+                    rowLayout.restoreRow(row);
                     rows.put(row, styleOf(param.args[0]));
                 }
 
                 @Override protected void afterHookedMethod(MethodHookParam param) {
                     if (!active || !onMainThread() || param.hasThrowable()) return;
                     ViewGroup row = (ViewGroup) param.thisObject;
-                    if (rows.get(row) == Style.BLUE && supportsCompactLayout(param.args[0])) outgoing.applyRow(row);
+                    if (isRegularTextMessage(param.args[0])) {
+                        rowLayout.applyRow(row, rows.get(row).own);
+                    }
                     for (int i = 0; i < row.getChildCount(); i++) {
                         View child = row.getChildAt(i);
                         if (!accessoriesClass.isInstance(child)) continue;
@@ -139,7 +141,7 @@ public final class MessageBubbles {
                         for (int j = 0; j < accessories.getChildCount(); j++) {
                             View accessory = accessories.getChildAt(j);
                             updateBody(accessory);
-                            outgoing.updateReaction(accessory);
+                            rowLayout.updateReaction(accessory);
                         }
                         break;
                     }
@@ -186,7 +188,7 @@ public final class MessageBubbles {
                     }
                 }
             ));
-            outgoing.install(loader, hooks);
+            rowLayout.install(loader, hooks);
             active = true;
         }
 
@@ -210,8 +212,8 @@ public final class MessageBubbles {
             }
         }
 
-        private boolean supportsCompactLayout(Object message) {
-            if (hasContent == null) return false;
+        private boolean isRegularTextMessage(Object message) {
+            if (message == null || hasContent == null) return false;
             try {
                 Object content = messageContent.invoke(message);
                 return content != null && Boolean.TRUE.equals(hasContent.invoke(content))
@@ -299,7 +301,7 @@ public final class MessageBubbles {
             boolean light = Color.luminance(view.getCurrentTextColor()) < 0.35;
             float radius = dp(view, 16);
             java.util.Arrays.fill(corners, radius);
-            int near = style.outgoing ? 4 : 6;
+            int near = style.own ? 6 : 4;
             corners[near] = corners[near + 1] = dp(view, 8);
             // Inset the outline so it stays inside the native text view's clip.
             bounds.set(x1 + 0.5f, y1 + 0.5f, x2 - 0.5f, y2 - 0.5f);
@@ -319,7 +321,7 @@ public final class MessageBubbles {
             for (XC_MethodHook.Unhook hook : hooks) hook.unhook();
             hooks.clear();
             Runnable restore = () -> {
-                outgoing.close();
+                rowLayout.close();
                 for (Map.Entry<TextView, BodyStyle> entry : bodies.entrySet()) {
                     TextView view = entry.getKey();
                     if (view != null) entry.getValue().restore(view);
@@ -385,8 +387,9 @@ public final class MessageBubbles {
             boolean onlyEmoji = isEmojiOnly(view.getText());
             appliedHorizontal = onlyEmoji ? 0 : dp(view, 11);
             appliedVertical = dp(view, onlyEmoji ? 3 : 7);
-            appliedGravity = next.outgoing ? (gravity & ~Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK) | Gravity.RIGHT : gravity;
-            appliedAlignment = next.outgoing ? View.TEXT_ALIGNMENT_GRAVITY : alignment;
+            int side = next.own ? Gravity.LEFT : Gravity.RIGHT;
+            appliedGravity = (gravity & ~Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK) | side;
+            appliedAlignment = View.TEXT_ALIGNMENT_GRAVITY;
             set(view, appliedHorizontal, appliedVertical, appliedGravity, appliedAlignment);
             if (style != next || emojiOnly != onlyEmoji) view.invalidate();
             style = next;

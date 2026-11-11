@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-final class OutgoingLayout {
+final class MessageRowLayout {
     private static final String REACTIONS = "com.discord.reactions.ShortcutsFlexbox";
     private static final int FLEX_END = 1;
     private static final int FLEX_START = 0;
@@ -52,14 +52,17 @@ final class OutgoingLayout {
         if (state.quote != null) state.quote.restore();
     }
 
-    void applyRow(ViewGroup row) {
-        Row state = new Row();
+    void applyRow(ViewGroup row, boolean own) {
+        Row state = new Row(!own);
         rows.put(row, state);
-        for (String name : new String[] {"header", "author_avatar", "author_avatar_decoration"}) {
-            View view = directChild(row, name);
-            if (view == null || view.getVisibility() == View.GONE) continue;
-            state.visibility.put(view, view.getVisibility());
-            view.setVisibility(View.GONE);
+        if (own) {
+            for (String name : new String[] {"header", "author_avatar", "author_avatar_decoration"}) {
+                View view = directChild(row, name);
+                if (view == null || view.getVisibility() == View.GONE) continue;
+                state.visibility.put(view, view.getVisibility());
+                view.setVisibility(View.GONE);
+            }
+            return;
         }
         View preview = directChild(row, "reply_preview_view");
         if (preview instanceof ViewGroup && preview.getVisibility() == View.VISIBLE) {
@@ -70,15 +73,15 @@ final class OutgoingLayout {
     void updateReaction(View view) {
         if (!active || !reactions.isInstance(view) || !MessageBubbles.onMainThread()) return;
         ViewParent accessories = view.getParent();
-        boolean outgoing = accessories != null && rows.containsKey(accessories.getParent());
+        Row row = accessories == null ? null : rows.get(accessories.getParent());
         try {
-            if (!outgoing) {
+            if (row == null) {
                 restoreReaction(view);
                 return;
             }
             int alignment = (Integer) getJustify.invoke(view);
-            // Physical right for both Android layout directions.
-            int desired = endAlignment(view);
+            boolean rtl = view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+            int desired = row.rightAligned != rtl ? FLEX_END : FLEX_START;
             if (alignment != desired) {
                 ReactionAlignment previous = reactionJustification.get(view);
                 int original = previous != null && previous.applied == alignment ? previous.original : alignment;
@@ -96,10 +99,6 @@ final class OutgoingLayout {
         if (state != null && (Integer) getJustify.invoke(view) == state.applied) {
             setJustify.invoke(view, state.original);
         }
-    }
-
-    private static int endAlignment(View view) {
-        return view.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? FLEX_START : FLEX_END;
     }
 
     void close() {
@@ -128,7 +127,12 @@ final class OutgoingLayout {
 
     private static final class Row {
         final Map<View, Integer> visibility = new WeakHashMap<>();
+        final boolean rightAligned;
         Quote quote;
+
+        Row(boolean rightAligned) {
+            this.rightAligned = rightAligned;
+        }
     }
 
     private static final class ReactionAlignment {

@@ -1,4 +1,4 @@
-**Message Bubbles 1.0.0-beta2** groups your replies and reactions with your blue bubbles on the right. It adds a berry tint for incoming messages and leaves emoji-only messages free of bubble backgrounds. Refresh this repository, update **Message Bubbles**, and fully restart Discord. [Usage and source](plugins/message-bubbles/README.md).
+**Message Bubbles 1.0.0-beta3** puts your blue bubbles on the left and everyone else’s bubbles on the right. Refresh this repository, update **Message Bubbles**, and fully restart Discord. [Usage and source](plugins/message-bubbles/README.md).
 
 **More Alts! 1.1.4** adds an account dashboard with clearer names and shortcuts to switch or add accounts, a separate Preferences tab, and refreshed account sheets. Update from your existing repo and open **Discord Settings → Valenced → More Alts!**. [Usage and source](plugins/more-alts/README.md).
 
