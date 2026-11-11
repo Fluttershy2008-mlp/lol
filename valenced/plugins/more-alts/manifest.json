@@ -5,7 +5,7 @@
   "description": "Switch Discord accounts quickly, back up saved sessions on Android, and control notifications from your other accounts.",
   "author": "fluttershy_simper <753962426407452713>",
   "icon": "UserIcon",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }

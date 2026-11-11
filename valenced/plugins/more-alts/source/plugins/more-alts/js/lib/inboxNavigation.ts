@@ -53,10 +53,16 @@ export function mentionedGuildChannels(channels: any, read: any) {
 	return mentioned
 }
 
-type Target = { guildId: string; channelId: string; messageId?: string; newest?: string }
+export type InboxTarget = {
+	kind: 'dm' | 'mention'
+	guildId: string
+	channelId: string
+	messageId?: string
+	newest?: string
+}
 
-function newestTarget(targets: Iterable<Target>) {
-	let newest: Target | undefined
+function newestTarget(targets: Iterable<InboxTarget>) {
+	let newest: InboxTarget | undefined
 	for (const target of targets) {
 		if (!newest || compareIds(target.newest, newest.newest) > 0) newest = target
 	}
@@ -73,18 +79,18 @@ function lastMessageId(stores: any, channelId: string, channel: any) {
 		?? snowflake(stores.MessageStore?.getLastMessage?.(channelId)?.id)
 }
 
-function findUnreadDm(stores: any) {
+function unreadDmTargets(stores: any): InboxTarget[] {
 	const channels = unreadDmChannels(stores.ChannelStore, stores.ReadStateStore)
-	if (!channels) return undefined
-	return newestTarget([...channels].map(([channelId, channel]) => {
+	if (!channels) return []
+	return [...channels].map(([channelId, channel]) => {
 		const messageId = lastMessageId(stores, channelId, channel)
-		return { guildId: '@me', channelId, messageId, newest: messageId ?? channelId }
-	}))
+		return { kind: 'dm', guildId: '@me', channelId, messageId, newest: messageId ?? channelId }
+	})
 }
 
-function findExactMention(rev: any, stores: any, fetched?: any[]) {
+function exactMentionTargets(rev: any, stores: any, fetched?: any[]) {
 	const recent = stores.RecentMentionsStore ?? imported(rev, 'modules/inbox/RecentMentionsStore.tsx')?.default
-	const exact: Target[] = []
+	const exact: InboxTarget[] = []
 	for (const message of fetched ?? values(recent?.getMentions?.()) ?? []) {
 		const messageId = snowflake(message?.id)
 		const channelId = snowflake(message?.getChannelId?.() ?? message?.channel_id ?? message?.channelId)
@@ -93,12 +99,12 @@ function findExactMention(rev: any, stores: any, fetched?: any[]) {
 			?? snowflake(message?.guild_id ?? message?.guildId)
 		const ackId = snowflake(stores.ReadStateStore?.ackMessageId?.(channelId))
 		if (!guildId || (ackId && compareIds(messageId, ackId) <= 0)) continue
-		exact.push({ guildId, channelId, messageId, newest: messageId })
+		exact.push({ kind: 'mention', guildId, channelId, messageId, newest: messageId })
 	}
-	return newestTarget(exact)
+	return exact
 }
 
-async function loadMentions(rev: any, signal: AbortSignal): Promise<any[] | undefined> {
+async function loadMentions(rev: any, signal: AbortSignal, before?: string): Promise<any[] | undefined> {
 	const finders = rev.modules?.finders
 	const module = imported(rev, '../discord_common/js/packages/http-utils/HTTPUtils.tsx')
 		?? attempt(() => finders.lookupModule(finders.filters.withProps('HTTP'))[0])
@@ -106,7 +112,7 @@ async function loadMentions(rev: any, signal: AbortSignal): Promise<any[] | unde
 	if (typeof http?.get !== 'function') return
 	const request = async () => {
 		const response = await http.get({
-			url: '/users/@me/mentions', query: { limit: 25, roles: true, everyone: true }, retries: 0,
+			url: '/users/@me/mentions', query: { limit: 25, roles: true, everyone: true, before }, retries: 0,
 		})
 		return Array.isArray(response?.body) ? response.body : undefined
 	}
@@ -132,32 +138,32 @@ export async function openInboxDestination(
 	rev: any, stores: any, kind: InboxKind, isReady: () => boolean, signal: AbortSignal,
 ): Promise<InboxOpenResult> {
 	if (!isReady()) return 'cancelled'
-	let dm = kind === 'mention' ? undefined : findUnreadDm(stores)
-	let mention: Target | undefined
+	let dm = kind === 'mention' ? undefined : newestTarget(unreadDmTargets(stores))
+	let mention: InboxTarget | undefined
 	let hasMentions = false
 	if (kind !== 'dm') {
 		const channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore)
 		hasMentions = Boolean(channels?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0
-		mention = findExactMention(rev, stores)
+		mention = newestTarget(exactMentionTargets(rev, stores))
 		if (!mention && hasMentions) {
 			const fetched = await loadMentions(rev, signal)
 			if (!isReady()) return 'cancelled'
-			if (kind === 'any') dm = findUnreadDm(stores)
+			if (kind === 'any') dm = newestTarget(unreadDmTargets(stores))
 			const updated = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore)
 			hasMentions = Boolean(updated?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0
-			mention = findExactMention(rev, stores, fetched)
+			mention = newestTarget(exactMentionTargets(rev, stores, fetched))
 				?? newestTarget([...(updated ?? [])]
 					.map(([channelId, { guildId, channel }]) => ({
-						guildId, channelId, newest: lastMessageId(stores, channelId, channel) ?? channelId,
+						kind: 'mention' as const, guildId, channelId, newest: lastMessageId(stores, channelId, channel) ?? channelId,
 					})))
 		}
 	}
 	if (!isReady()) return 'cancelled'
 	const target = dm && mention ? newestTarget([dm, mention]) : dm ?? mention
 	if (!target && !hasMentions) return 'empty'
-	const modals = imported(rev, 'actions/ModalActionCreators.tsx')?.default
-		?? rev.discord?.actions?.ModalActionCreators
 	if (!target) {
+		const modals = imported(rev, 'actions/ModalActionCreators.tsx')?.default
+			?? rev.discord?.actions?.ModalActionCreators
 		const nav = imported(rev, 'modules/main_tabs_v2/helpers/NavigationRouteUtils.native.tsx')
 		if (typeof nav?.navigateToRootTab !== 'function') return 'unavailable'
 		modals?.popAll?.()
@@ -166,10 +172,60 @@ export async function openInboxDestination(
 		nav.navigateToRootTab({ screen: 'notifications', forceNavigate: true })
 		return 'opened'
 	}
+	return navigateToInboxTarget(rev, target)
+}
+
+export function navigateToInboxTarget(rev: any, target: InboxTarget): InboxOpenResult {
 	const router = imported(rev, 'modules/routing/router_utils.tsx')
 	if (typeof router?.transitionToGuild !== 'function') return 'unavailable'
+	const modals = imported(rev, 'actions/ModalActionCreators.tsx')?.default
+		?? rev.discord?.actions?.ModalActionCreators
 	imported(rev, 'modules/routing/native/RouteManagerUtils.tsx')?.initializeRouteManagerIfNeeded?.()
 	modals?.popAll?.()
 	router.transitionToGuild(target.guildId, target.channelId, target.messageId, { navigationReplace: true, openChannel: true })
 	return 'opened'
+}
+
+export function isInboxTargetRead(stores: any, target: InboxTarget): boolean {
+	const read = stores.ReadStateStore
+	const ack = snowflake(read?.ackMessageId?.(target.channelId))
+	if (ack && target.messageId && compareIds(ack, target.messageId) >= 0) return true
+	return target.kind === 'dm'
+		? read?.hasUnread?.(target.channelId) === false
+		: read?.getMentionCount?.(target.channelId) === 0
+}
+
+export async function collectInboxReviewTargets(
+	rev: any, stores: any, isReady: () => boolean, signal: AbortSignal,
+): Promise<InboxTarget[]> {
+	const mentions = new Map<string, InboxTarget>()
+	const add = (targets: InboxTarget[]) => {
+		for (const target of targets) if (target.messageId) mentions.set(target.messageId, target)
+	}
+	let channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore)
+	add(exactMentionTargets(rev, stores))
+	let before: string | undefined
+	// The mobile client requests mentions in pages of 25. Stop once the unread counts are covered.
+	while (channels?.size && isReady()) {
+		const found = new Map<string, number>()
+		for (const item of mentions.values()) found.set(item.channelId, (found.get(item.channelId) ?? 0) + 1)
+		if ([...channels].every(([id, { count }]) => (found.get(id) ?? 0) >= count)) break
+		const page = await loadMentions(rev, signal, before)
+		if (!isReady()) return []
+		add(exactMentionTargets(rev, stores, page ?? []))
+		const oldest = snowflake(page?.at(-1)?.id)
+		if (page?.length !== 25 || !oldest || (before && compareIds(oldest, before) >= 0)) break
+		before = oldest
+	}
+	if (!isReady()) return []
+	channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore)
+	const covered = new Set([...mentions.values()].map(item => item.channelId))
+	const fallback: InboxTarget[] = []
+	for (const [channelId, { guildId, channel }] of channels ?? []) {
+		if (!covered.has(channelId)) fallback.push({
+			kind: 'mention', guildId, channelId, newest: lastMessageId(stores, channelId, channel) ?? channelId,
+		})
+	}
+	return [...unreadDmTargets(stores), ...mentions.values(), ...fallback]
+		.sort((left, right) => compareIds(right.newest, left.newest))
 }

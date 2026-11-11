@@ -1,6 +1,7 @@
 import type { JsonStorage } from '@valenced/json-storage'
 import type { Account, MoreAltsStorage } from './types'
 import { getAllAccounts, switchToAccount } from './accountActions'
+import { createInboxReview, type InboxAccountTask, type InboxReview } from './inboxReview'
 import { attempt, mentionedGuildChannels, openInboxDestination, unreadDmChannels, type InboxKind, type InboxOpenResult } from './inboxNavigation'
 
 export interface InboxSummary {
@@ -13,6 +14,7 @@ type InboxData = { summaries: Record<string, InboxSummary> }
 type RefreshResult = 'saved' | 'connecting' | 'switching' | 'unavailable'
 
 export interface SharedInbox {
+	review: InboxReview
 	use: () => InboxData | undefined
 	refresh: () => Promise<RefreshResult>
 	open: (account: Account, kind: InboxKind) => Promise<InboxOpenResult>
@@ -61,6 +63,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 	let pendingRefresh = false
 	let opening: { check: () => void; cancel: () => void } | undefined
 	let writes = Promise.resolve(file.get()).then(() => {}, () => {})
+	const review = createInboxReview(rev, stores, currentId, accountIsReady, withAccount)
 
 	function enqueue(update: (data: InboxData) => InboxData | undefined) {
 		const write = writes.then(async () => {
@@ -118,6 +121,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		connected = false
 		readyId = undefined
 		cancel()
+		review.sync()
 	}
 
 	function connectedSession() {
@@ -130,6 +134,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 			schedule(true)
 		}
 		opening?.check()
+		review.sync()
 	}
 
 	function listen(store: any, fn: () => void) {
@@ -146,10 +151,12 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 			readyId = undefined
 			cancel()
 		}
+		review.sync()
 	})
 	for (const store of [stores.ChannelStore, stores.ReadStateStore, stores.GuildReadStateStore, stores.MultiAccountStore]) {
-		listen(store, () => schedule())
+		listen(store, () => { schedule(); review.sync() })
 	}
+	listen(stores.SelectedChannelStore, review.sync)
 	const dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher
 	const onConnectionOpen = (event: any) => {
 		void Promise.resolve().then(() => {
@@ -166,15 +173,18 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		}
 	}
 
-	async function open(account: Account, kind: InboxKind): Promise<InboxOpenResult> {
-		if (!active || !enabled || opening || account.isBot) return 'cancelled'
+	function accountIsReady(id: string): boolean {
+		if (!active || !enabled || readyId !== id || currentId() !== id || !isConnected()) return false
+		const authenticated = attempt(() => stores.AuthenticationStore?.getId?.())
+		return authenticated == null || authenticated === id
+	}
+
+	async function withAccount(account: Account, task: InboxAccountTask, signal?: AbortSignal): Promise<InboxOpenResult> {
+		if (!active || !enabled || opening || signal?.aborted) return 'cancelled'
+		const saved = getAllAccounts(storage).find(saved => saved.id === account.id && !saved.isBot)
+		if (!saved) return 'cancelled'
 		const controller = new AbortController()
-		const isReady = () => {
-			if (!active || !enabled || controller.signal.aborted || readyId !== account.id ||
-				currentId() !== account.id || !isConnected()) return false
-			const authenticated = attempt(() => stores.AuthenticationStore?.getId?.())
-			return authenticated == null || authenticated === account.id
-		}
+		const isReady = () => !controller.signal.aborted && accountIsReady(account.id)
 		let check = () => {}
 		const ready = new Promise<void>(resolve => {
 			check = () => { if (isReady() || controller.signal.aborted) resolve() }
@@ -187,19 +197,22 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 				check()
 			}
 		})
-		opening = { check, cancel: () => finish('cancelled') }
+		const abort = () => finish('cancelled')
+		opening = { check, cancel: abort }
+		signal?.addEventListener('abort', abort, { once: true })
 		const deadline = setTimeout(() => finish('timed-out'), 15000)
 		try {
 			return await Promise.race([interrupted, (async (): Promise<InboxOpenResult> => {
-				if (currentId() !== account.id && !await switchToAccount(account)) return 'switch-failed'
+				if (currentId() !== account.id && !await switchToAccount(saved)) return 'switch-failed'
 				check()
 				await ready
-				return await openInboxDestination(rev, stores, kind, isReady, controller.signal)
+				return await task(isReady, controller.signal)
 			})()])
 		} catch {
 			return 'unavailable'
 		} finally {
 			controller.abort()
+			signal?.removeEventListener('abort', abort)
 			clearTimeout(deadline)
 			opening = undefined
 		}
@@ -214,6 +227,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		enabled = storage.cache?.sharedInboxEnabled === true
 		if (enabled) schedule(!previous)
 		else if (previous) {
+			review.stop()
 			opening?.cancel()
 			void clear().catch(() => {})
 		}
@@ -222,8 +236,10 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 	else void clear().catch(() => {})
 
 	return {
+		review,
 		use: () => file.use(),
-		open,
+		open: (account, kind) => withAccount(account, (isReady, signal) =>
+			openInboxDestination(rev, stores, kind, isReady, signal)),
 		async refresh() {
 			if (!isConnected()) return 'connecting'
 			if (currentId() !== readyId) return 'switching'
@@ -241,6 +257,7 @@ export function startSharedInbox(api: any): SharedInbox | undefined {
 		},
 		stop() {
 			active = false
+			review.dispose()
 			opening?.cancel()
 			cancel()
 			for (const cleanup of cleanups) cleanup()

@@ -1517,6 +1517,123 @@
         };
       }
 
+      // source/plugins/more-alts/js/patches/inboxReviewBar.tsx
+      var CHAT_VIEW = "modules/chat/native/ChatView.tsx";
+      function patchInboxReviewBar(rev, review) {
+        var {
+          React: React2,
+          ReactNative: {
+            View: View2,
+            Text,
+            Pressable: Pressable2
+          }
+        } = rev.react;
+        var NavigationContext = rev.externals?.ReactNavigation?.ReactNavigationNative?.NavigationContext ?? React2.createContext(void 0);
+        function ReviewBar({
+          channelId,
+          active
+        }) {
+          var state = React2.useSyncExternalStore(review.subscribe, review.snapshot, review.snapshot);
+          var navigation = React2.useContext(NavigationContext);
+          var [focused, setFocused] = React2.useState(() => navigation?.isFocused?.() ?? true);
+          var colors = usePalette();
+          var enabled = Boolean(state) && active;
+          React2.useEffect(() => {
+            if (!enabled || !navigation?.addListener) return;
+            var syncFocus = () => setFocused(navigation.isFocused?.() ?? true);
+            syncFocus();
+            var removeFocus = navigation.addListener("focus", syncFocus);
+            var removeBlur = navigation.addListener("blur", syncFocus);
+            return () => {
+              removeFocus?.();
+              removeBlur?.();
+            };
+          }, [enabled, navigation]);
+          var watching = enabled && focused;
+          React2.useEffect(() => watching ? review.watchChat(channelId) : void 0, [channelId, watching]);
+          if (!state || !active || !focused) return null;
+          var title = state.busy ? "Opening next item\u2026" : state.target?.kind === "dm" ? "Reviewing DMs" : "Reviewing mentions";
+          var detail = state.paused ? "Paused" : state.autoAdvance ? "Next in 8 seconds" : "Advances when read";
+          var button = (label, onPress, disabled = false) => /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
+            accessibilityRole: "button",
+            accessibilityLabel: `${label} inbox review`,
+            accessibilityState: {
+              disabled
+            },
+            onPress,
+            disabled,
+            style: {
+              minHeight: 44,
+              justifyContent: "center",
+              paddingHorizontal: 8,
+              opacity: disabled ? 0.5 : 1
+            }
+          }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+            style: {
+              color: colors.text,
+              fontWeight: "700",
+              fontSize: 13
+            }
+          }, label));
+          return /* @__PURE__ */valenced.react.React.createElement(View2, {
+            style: {
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 12,
+              gap: 4,
+              backgroundColor: colors.panel,
+              borderBottomColor: colors.line,
+              borderBottomWidth: 1
+            }
+          }, /* @__PURE__ */valenced.react.React.createElement(View2, {
+            style: {
+              flex: 1,
+              minWidth: 0,
+              paddingVertical: 6
+            }
+          }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+            numberOfLines: 1,
+            style: {
+              color: colors.text,
+              fontWeight: "700",
+              fontSize: 13
+            }
+          }, title), /* @__PURE__ */valenced.react.React.createElement(Text, {
+            numberOfLines: 1,
+            style: {
+              color: colors.muted,
+              fontSize: 12
+            }
+          }, detail)), button(state.paused ? "Resume" : "Pause", review.togglePause), button("Next", review.next, state.busy), button("Stop", review.stop));
+        }
+        var unpatch;
+        var running = true;
+        var finders = rev.discord?.utils?.modules?.finders;
+        var watch = finders?.getModuleWithImportedPath?.(CHAT_VIEW, module2 => {
+          if (!running) return;
+          var memo = module2?.default;
+          var holder = typeof memo?.type === "function" ? memo : module2;
+          var key2 = holder === memo ? "type" : "default";
+          if (typeof holder?.[key2] !== "function") return;
+          unpatch = rev.patcher.instead(holder, key2, function (args, original) {
+            var result = original.apply(this, args);
+            var props = args[0];
+            if (!React2.isValidElement(result) || typeof props?.channelId !== "string") return result;
+            var bar = React2.createElement(ReviewBar, {
+              key: "more-alts-review",
+              channelId: props.channelId,
+              active: props.isActive !== false
+            });
+            return React2.cloneElement(result, void 0, bar, result.props.children);
+          });
+        });
+        return () => {
+          running = false;
+          watch?.();
+          unpatch?.();
+        };
+      }
+
       // valenced:@valenced/externals/react-navigation
       var ReactNavigationNative = valenced.externals?.ReactNavigation?.ReactNavigationNative;
 
@@ -1936,7 +2053,9 @@ ${frames}`;
         } = rev.discord.design.Design;
         var [refreshStatus, setRefreshStatus] = rev.react.React.useState(null);
         var [opening, setOpening] = rev.react.React.useState(false);
+        var review = rev.react.React.useSyncExternalStore(inbox.review.subscribe, inbox.review.snapshot, inbox.review.snapshot);
         var open = async (account, kind) => {
+          inbox.review.stop();
           setOpening(true);
           try {
             var result = await inbox.open(account, kind);
@@ -1984,7 +2103,16 @@ ${frames}`;
             setRefreshStatus(null);
             return setEnabled(value);
           }
-        }), enabled && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+        }), enabled && (review ? /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Stop inbox review",
+          onPress: inbox.review.stop
+        }) : /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Review unread across accounts",
+          subLabel: "Automatically open the next DM or mention after it\u2019s read.",
+          disabled: opening || !ordered.length,
+          arrow: true,
+          onPress: () => inbox.review.start(ordered)
+        })), enabled && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
           label: "Refresh active account",
           disabled: !current,
           arrow: true,
@@ -2033,7 +2161,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
               border: colors.line
             }),
             arrow: true,
-            disabled: opening,
+            disabled: opening || review?.busy,
             onPress: () => open(account, "any")
           })];
           if ((summary?.unreadDms ?? 0) > 0) rows.push(/* @__PURE__ */valenced.react.React.createElement(TableRow, {
@@ -2041,7 +2169,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             label: "Open unread DMs",
             accessibilityLabel: `Open unread DMs for ${name}`,
             arrow: true,
-            disabled: opening,
+            disabled: opening || review?.busy,
             onPress: () => open(account, "dm")
           }));
           if ((summary?.mentions ?? 0) > 0) rows.push(/* @__PURE__ */valenced.react.React.createElement(TableRow, {
@@ -2049,7 +2177,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             label: "Open server mentions",
             accessibilityLabel: `Open server mentions for ${name}`,
             arrow: true,
-            disabled: opening,
+            disabled: opening || review?.busy,
             onPress: () => open(account, "mention")
           }));
           return rows;
@@ -2525,20 +2653,21 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
       function lastMessageId(stores, channelId, channel) {
         return snowflake(stores.ReadStateStore?.lastMessageId?.(channelId)) ?? snowflake(channel?.lastMessageId ?? channel?.last_message_id) ?? snowflake(stores.MessageStore?.getLastMessage?.(channelId)?.id);
       }
-      function findUnreadDm(stores) {
+      function unreadDmTargets(stores) {
         var channels = unreadDmChannels(stores.ChannelStore, stores.ReadStateStore);
-        if (!channels) return void 0;
-        return newestTarget([...channels].map(([channelId, channel]) => {
+        if (!channels) return [];
+        return [...channels].map(([channelId, channel]) => {
           var messageId = lastMessageId(stores, channelId, channel);
           return {
+            kind: "dm",
             guildId: "@me",
             channelId,
             messageId,
             newest: messageId ?? channelId
           };
-        }));
+        });
       }
-      function findExactMention(rev, stores, fetched) {
+      function exactMentionTargets(rev, stores, fetched) {
         var recent = stores.RecentMentionsStore ?? imported(rev, "modules/inbox/RecentMentionsStore.tsx")?.default;
         var exact = [];
         for (var message of fetched ?? values(recent?.getMentions?.()) ?? []) {
@@ -2549,15 +2678,16 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           var ackId = snowflake(stores.ReadStateStore?.ackMessageId?.(channelId));
           if (!guildId || ackId && compareIds(messageId, ackId) <= 0) continue;
           exact.push({
+            kind: "mention",
             guildId,
             channelId,
             messageId,
             newest: messageId
           });
         }
-        return newestTarget(exact);
+        return exact;
       }
-      async function loadMentions(rev, signal) {
+      async function loadMentions(rev, signal, before) {
         var finders = rev.modules?.finders;
         var module2 = imported(rev, "../discord_common/js/packages/http-utils/HTTPUtils.tsx") ?? attempt(() => finders.lookupModule(finders.filters.withProps("HTTP"))[0]);
         var http = module2?.HTTP;
@@ -2568,7 +2698,8 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             query: {
               limit: 25,
               roles: true,
-              everyone: true
+              everyone: true,
+              before
             },
             retries: 0
           });
@@ -2594,23 +2725,24 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
       }
       async function openInboxDestination(rev, stores, kind, isReady, signal) {
         if (!isReady()) return "cancelled";
-        var dm = kind === "mention" ? void 0 : findUnreadDm(stores);
+        var dm = kind === "mention" ? void 0 : newestTarget(unreadDmTargets(stores));
         var mention;
         var hasMentions = false;
         if (kind !== "dm") {
           var channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
           hasMentions = Boolean(channels?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0;
-          mention = findExactMention(rev, stores);
+          mention = newestTarget(exactMentionTargets(rev, stores));
           if (!mention && hasMentions) {
             var fetched = await loadMentions(rev, signal);
             if (!isReady()) return "cancelled";
-            if (kind === "any") dm = findUnreadDm(stores);
+            if (kind === "any") dm = newestTarget(unreadDmTargets(stores));
             var updated = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
             hasMentions = Boolean(updated?.size) || stores.GuildReadStateStore?.getTotalMentionCount?.() > 0;
-            mention = findExactMention(rev, stores, fetched) ?? newestTarget([...(updated ?? [])].map(([channelId, {
+            mention = newestTarget(exactMentionTargets(rev, stores, fetched)) ?? newestTarget([...(updated ?? [])].map(([channelId, {
               guildId,
               channel
             }]) => ({
+              kind: "mention",
               guildId,
               channelId,
               newest: lastMessageId(stores, channelId, channel) ?? channelId
@@ -2620,8 +2752,8 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         if (!isReady()) return "cancelled";
         var target = dm && mention ? newestTarget([dm, mention]) : dm ?? mention;
         if (!target && !hasMentions) return "empty";
-        var modals = imported(rev, "actions/ModalActionCreators.tsx")?.default ?? rev.discord?.actions?.ModalActionCreators;
         if (!target) {
+          var modals = imported(rev, "actions/ModalActionCreators.tsx")?.default ?? rev.discord?.actions?.ModalActionCreators;
           var nav = imported(rev, "modules/main_tabs_v2/helpers/NavigationRouteUtils.native.tsx");
           if (typeof nav?.navigateToRootTab !== "function") return "unavailable";
           modals?.popAll?.();
@@ -2633,8 +2765,12 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           });
           return "opened";
         }
+        return navigateToInboxTarget(rev, target);
+      }
+      function navigateToInboxTarget(rev, target) {
         var router = imported(rev, "modules/routing/router_utils.tsx");
         if (typeof router?.transitionToGuild !== "function") return "unavailable";
+        var modals = imported(rev, "actions/ModalActionCreators.tsx")?.default ?? rev.discord?.actions?.ModalActionCreators;
         imported(rev, "modules/routing/native/RouteManagerUtils.tsx")?.initializeRouteManagerIfNeeded?.();
         modals?.popAll?.();
         router.transitionToGuild(target.guildId, target.channelId, target.messageId, {
@@ -2642,6 +2778,220 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           openChannel: true
         });
         return "opened";
+      }
+      function isInboxTargetRead(stores, target) {
+        var read = stores.ReadStateStore;
+        var ack = snowflake(read?.ackMessageId?.(target.channelId));
+        if (ack && target.messageId && compareIds(ack, target.messageId) >= 0) return true;
+        return target.kind === "dm" ? read?.hasUnread?.(target.channelId) === false : read?.getMentionCount?.(target.channelId) === 0;
+      }
+      async function collectInboxReviewTargets(rev, stores, isReady, signal) {
+        var mentions = /* @__PURE__ */new Map();
+        var add = targets => {
+          for (var target of targets) if (target.messageId) mentions.set(target.messageId, target);
+        };
+        var channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
+        add(exactMentionTargets(rev, stores));
+        var before;
+        var _loop3 = async function () {
+            var found = /* @__PURE__ */new Map();
+            for (var item of mentions.values()) found.set(item.channelId, (found.get(item.channelId) ?? 0) + 1);
+            if ([...channels].every(([id, {
+              count
+            }]) => (found.get(id) ?? 0) >= count)) return 0; // break
+            var page = await loadMentions(rev, signal, before);
+            if (!isReady()) return {
+              v: []
+            };
+            add(exactMentionTargets(rev, stores, page ?? []));
+            var oldest = snowflake(page?.at(-1)?.id);
+            if (page?.length !== 25 || !oldest || before && compareIds(oldest, before) >= 0) return 0; // break
+            before = oldest;
+          },
+          _ret;
+        while (channels?.size && isReady()) {
+          _ret = await _loop3();
+          if (_ret === 0) break;
+          if (_ret) return _ret.v;
+        }
+        if (!isReady()) return [];
+        channels = mentionedGuildChannels(stores.ChannelStore, stores.ReadStateStore);
+        var covered = new Set([...mentions.values()].map(item => item.channelId));
+        var fallback = [];
+        for (var [channelId, {
+          guildId,
+          channel
+        }] of channels ?? []) {
+          if (!covered.has(channelId)) fallback.push({
+            kind: "mention",
+            guildId,
+            channelId,
+            newest: lastMessageId(stores, channelId, channel) ?? channelId
+          });
+        }
+        return [...unreadDmTargets(stores), ...mentions.values(), ...fallback].sort((left, right) => compareIds(right.newest, left.newest));
+      }
+
+      // source/plugins/more-alts/js/lib/inboxReview.ts
+      var ADVANCE_DELAY_MS = 8e3;
+      function createInboxReview(rev, stores, currentId, accountIsReady, withAccount) {
+        var {
+          AppState,
+          Keyboard,
+          ToastAndroid
+        } = rev.react.ReactNative;
+        var listeners = /* @__PURE__ */new Set();
+        var chats = /* @__PURE__ */new Map();
+        var foreground = AppState?.currentState == null || AppState.currentState === "active";
+        var keyboardOpen = Keyboard?.isVisible?.() === true;
+        var disposed = false;
+        var run;
+        var state;
+        var timer;
+        var subscriptions = [AppState?.addEventListener?.("change", state2 => {
+          foreground = state2 === "active";
+          sync();
+        }), Keyboard?.addListener?.("keyboardDidShow", () => {
+          keyboardOpen = true;
+          sync();
+        }), Keyboard?.addListener?.("keyboardDidHide", () => {
+          keyboardOpen = false;
+          sync();
+        })];
+        function publish() {
+          var next = run && {
+            paused: run.paused,
+            busy: run.busy,
+            target: run.target,
+            autoAdvance: timer !== void 0
+          };
+          if (state?.paused === next?.paused && state?.busy === next?.busy && state?.target === next?.target && state?.autoAdvance === next?.autoAdvance) return;
+          state = next;
+          for (var listener of listeners) listener();
+        }
+        function clearTimer() {
+          if (timer !== void 0) clearTimeout(timer);
+          timer = void 0;
+        }
+        function stop() {
+          clearTimer();
+          run?.controller.abort();
+          run = void 0;
+          publish();
+        }
+        function finish(message) {
+          stop();
+          ToastAndroid?.show?.(message, ToastAndroid.SHORT);
+        }
+        function canAdvance() {
+          var current = run;
+          if (!current?.target || !current.account || current.busy || current.paused || !foreground || keyboardOpen || Keyboard?.isVisible?.() === true || !accountIsReady(current.account.id)) return false;
+          var channelId = current.target.channelId;
+          var selected = attempt(() => stores.SelectedChannelStore?.getCurrentlySelectedChannelId?.()) ?? attempt(() => stores.SelectedChannelStore?.getChannelId?.());
+          return (selected == null || selected === channelId) && [...chats.values()].includes(channelId) && attempt(() => isInboxTargetRead(stores, current.target)) === true;
+        }
+        function sync() {
+          if (run?.target && run.account && !run.busy && currentId() && run.account.id !== currentId()) {
+            stop();
+            return;
+          }
+          if (!canAdvance()) clearTimer();else if (timer === void 0) timer = setTimeout(() => {
+            timer = void 0;
+            if (canAdvance()) void advance();else publish();
+          }, ADVANCE_DELAY_MS);
+          publish();
+        }
+        async function advance() {
+          var current = run;
+          if (!current || current.busy || !foreground) return;
+          clearTimer();
+          current.busy = true;
+          publish();
+          try {
+            while (run === current) {
+              current.account ??= current.accounts.shift();
+              var account = current.account;
+              if (!account) {
+                finish(current.opened ? "Inbox review complete." : "No unread inbox items to review.");
+                return;
+              }
+              var result = await withAccount(account, async (isReady, signal) => {
+                var canOpen = () => foreground && isReady();
+                if (!canOpen()) return "cancelled";
+                current.queue ??= await collectInboxReviewTargets(rev, stores, canOpen, signal);
+                if (!canOpen()) return "cancelled";
+                var target = current.queue.shift();
+                if (!target) return "empty";
+                var opened = navigateToInboxTarget(rev, target);
+                if (opened === "opened") current.target = target;
+                return opened;
+              }, current.controller.signal);
+              if (run !== current) return;
+              if (result === "opened") {
+                current.opened = true;
+                return;
+              }
+              if (result === "empty") {
+                current.account = void 0;
+                current.queue = void 0;
+                continue;
+              }
+              if (result === "cancelled") stop();else finish("Inbox review stopped because Discord couldn\u2019t open the next item.");
+              return;
+            }
+          } catch {
+            if (run === current) finish("Inbox review stopped because Discord couldn\u2019t open the next item.");
+          } finally {
+            if (run === current) {
+              current.busy = false;
+              sync();
+            }
+          }
+        }
+        return {
+          start(accounts) {
+            if (disposed || run || !accounts.length) return;
+            run = {
+              accounts: [...accounts],
+              controller: new AbortController(),
+              paused: false,
+              busy: false,
+              opened: false
+            };
+            void advance();
+          },
+          next: () => {
+            void advance();
+          },
+          togglePause() {
+            if (!run) return;
+            run.paused = !run.paused;
+            sync();
+          },
+          stop,
+          subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+          },
+          snapshot: () => state,
+          watchChat(channelId) {
+            var key2 = /* @__PURE__ */Symbol();
+            chats.set(key2, channelId);
+            sync();
+            return () => {
+              chats.delete(key2);
+              sync();
+            };
+          },
+          sync,
+          dispose() {
+            disposed = true;
+            stop();
+            for (var subscription of subscriptions) subscription?.remove?.();
+            chats.clear();
+            listeners.clear();
+          }
+        };
       }
 
       // source/plugins/more-alts/js/lib/inbox.ts
@@ -2685,6 +3035,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
         var pendingRefresh = false;
         var opening;
         var writes = Promise.resolve(file.get()).then(() => {}, () => {});
+        var review = createInboxReview(rev, stores, currentId, accountIsReady, withAccount);
         function enqueue(update) {
           var write = writes.then(async () => {
             if (!active) return false;
@@ -2748,6 +3099,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           connected = false;
           readyId = void 0;
           cancel();
+          review.sync();
         }
         function connectedSession() {
           if (!active || !isConnected()) return;
@@ -2759,6 +3111,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             schedule(true);
           }
           opening?.check();
+          review.sync();
         }
         function listen(store, fn) {
           if (!store?.addChangeListener || !store?.removeChangeListener) return;
@@ -2773,10 +3126,15 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
             readyId = void 0;
             cancel();
           }
+          review.sync();
         });
         for (var store of [stores.ChannelStore, stores.ReadStateStore, stores.GuildReadStateStore, stores.MultiAccountStore]) {
-          listen(store, () => schedule());
+          listen(store, () => {
+            schedule();
+            review.sync();
+          });
         }
+        listen(stores.SelectedChannelStore, review.sync);
         var dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher;
         var onConnectionOpen = event => {
           void Promise.resolve().then(() => {
@@ -2784,22 +3142,25 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           });
         };
         if (dispatcher?.subscribe && dispatcher?.unsubscribe) {
-          var _loop3 = function (event, fn) {
+          var _loop4 = function (event, fn) {
             dispatcher.subscribe(event, fn);
             cleanups.push(() => dispatcher.unsubscribe(event, fn));
           };
           for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["POST_CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_RESUMED", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
-            _loop3(event, fn);
+            _loop4(event, fn);
           }
         }
-        async function open(account, kind) {
-          if (!active || !enabled || opening || account.isBot) return "cancelled";
+        function accountIsReady(id) {
+          if (!active || !enabled || readyId !== id || currentId() !== id || !isConnected()) return false;
+          var authenticated = attempt(() => stores.AuthenticationStore?.getId?.());
+          return authenticated == null || authenticated === id;
+        }
+        async function withAccount(account, task, signal) {
+          if (!active || !enabled || opening || signal?.aborted) return "cancelled";
+          var saved = getAllAccounts(storage).find(saved2 => saved2.id === account.id && !saved2.isBot);
+          if (!saved) return "cancelled";
           var controller = new AbortController();
-          var isReady = () => {
-            if (!active || !enabled || controller.signal.aborted || readyId !== account.id || currentId() !== account.id || !isConnected()) return false;
-            var authenticated = attempt(() => stores.AuthenticationStore?.getId?.());
-            return authenticated == null || authenticated === account.id;
-          };
+          var isReady = () => !controller.signal.aborted && accountIsReady(account.id);
           var check = () => {};
           var ready = new Promise(resolve => {
             check = () => {
@@ -2814,22 +3175,27 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
               check();
             };
           });
+          var abort = () => finish("cancelled");
           opening = {
             check,
-            cancel: () => finish("cancelled")
+            cancel: abort
           };
+          signal?.addEventListener("abort", abort, {
+            once: true
+          });
           var deadline = setTimeout(() => finish("timed-out"), 15e3);
           try {
             return await Promise.race([interrupted, (async () => {
-              if (currentId() !== account.id && !(await switchToAccount(account))) return "switch-failed";
+              if (currentId() !== account.id && !(await switchToAccount(saved))) return "switch-failed";
               check();
               await ready;
-              return await openInboxDestination(rev, stores, kind, isReady, controller.signal);
+              return await task(isReady, controller.signal);
             })()]);
           } catch {
             return "unavailable";
           } finally {
             controller.abort();
+            signal?.removeEventListener("abort", abort);
             clearTimeout(deadline);
             opening = void 0;
           }
@@ -2844,14 +3210,16 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           var previous = enabled;
           enabled = storage.cache?.sharedInboxEnabled === true;
           if (enabled) schedule(!previous);else if (previous) {
+            review.stop();
             opening?.cancel();
             void clear().catch(() => {});
           }
         }));
         if (enabled) schedule(true);else void clear().catch(() => {});
         return {
+          review,
           use: () => file.use(),
-          open,
+          open: (account, kind) => withAccount(account, (isReady, signal) => openInboxDestination(rev, stores, kind, isReady, signal)),
           async refresh() {
             if (!isConnected()) return "connecting";
             if (currentId() !== readyId) return "switching";
@@ -2873,6 +3241,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
           },
           stop() {
             active = false;
+            review.dispose();
             opening?.cancel();
             cancel();
             for (var cleanup of cleanups) cleanup();
@@ -2936,6 +3305,7 @@ Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the firs
               inbox?.stop();
               if (sharedInbox === inbox) sharedInbox = void 0;
             });
+            if (inbox) api.cleanup(patchInboxReviewBar(api.unscoped, inbox.review));
           } catch (error) {
             api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`);
           }

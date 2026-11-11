@@ -286,8 +286,8 @@
     },
     "dev.fluttershy2008.more-alts": {
       "path": "valenced/plugins/more-alts/index.js",
-      "sha256": "1bd472a75a862860094b5bef4db44a23f82920f38b857182a118418a9a49ee0b",
-      "originalVersion": "1.1.9",
+      "sha256": "381c792d8ef34615febef01c6f9c0e09f07c7083ddc2a51fbd974538f58f1eed",
+      "originalVersion": "1.2.0",
       "kind": "native-plugin",
       "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts",
       "settingsShortcut": {

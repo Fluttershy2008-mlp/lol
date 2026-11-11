@@ -399,3 +399,131 @@ test('an inbox tap that times out cannot open a conversation later', async t => 
     await Renderer.act(() => w.dispatcher.dispatch({ type: 'CONNECTION_OPEN', user: { id: ACCOUNT } }));
     assert.deepEqual(routes, []);
 });
+
+test('inbox review keeps same-channel mentions queued and advances through DMs and accounts from chat', async t => {
+    const { w, open, routes } = openableInbox(t, {});
+    const guildId = '410000000000000021', mentionChannel = '550000000000000021';
+    const ownerDm = '550000000000000022', friendDm = '550000000000000023';
+    const newestMention = '780000000000000054', nextMention = '780000000000000053';
+    const ownerMessage = '780000000000000052', friendMessage = '780000000000000051';
+    const unread = new Set([ownerDm, friendDm]);
+    let mentions = 2, keyboardVisible = false;
+    const keyboardListeners = new Map();
+    w.RN.Keyboard.isVisible = () => keyboardVisible;
+    w.RN.Keyboard.addListener = (event, callback) => {
+        keyboardListeners.set(event, callback);
+        return { remove: () => keyboardListeners.delete(event) };
+    };
+    const setKeyboard = visible => {
+        keyboardVisible = visible;
+        keyboardListeners.get(visible ? 'keyboardDidShow' : 'keyboardDidHide')();
+    };
+    w.stores.ChannelStore.getMutablePrivateChannels = () => [{ id: w.accountId() === ACCOUNT ? ownerDm : friendDm, type: 1 }];
+    w.stores.ChannelStore.getChannel = id => id === mentionChannel ? { id, guild_id: guildId } : undefined;
+    w.stores.ReadStateStore.getAllReadStates = () => w.accountId() === ACCOUNT ? [{ channelId: mentionChannel, type: 0 }] : [];
+    w.stores.ReadStateStore.getMentionCount = id => id === mentionChannel && w.accountId() === ACCOUNT ? mentions : 0;
+    w.stores.ReadStateStore.hasUnread = id => unread.has(id);
+    w.stores.ReadStateStore.lastMessageId = id => id === ownerDm ? ownerMessage : friendMessage;
+    w.stores.RecentMentionsStore = { getMentions: () => [
+        { id: newestMention, channel_id: mentionChannel }, { id: nextMention, channel_id: mentionChannel },
+    ] };
+    w.stores.SelectedChannelStore.getCurrentlySelectedChannelId = () => routes.at(-1)?.[2];
+    const switchCalls = [];
+    w.modules.find(module => typeof module.switchAccountToken === 'function').switchAccountToken = async token => {
+        switchCalls.push(token);
+        w.setAccount(FRIEND);
+        await w.dispatcher.dispatch({ type: 'POST_CONNECTION_OPEN', user: { id: FRIEND } });
+    };
+    const Chat = React.memo(({ channelId }) => React.createElement('View', null, React.createElement('Text', null, channelId)));
+    const original = Chat.type;
+    w.addModule({ default: Chat }, 'modules/chat/native/ChatView.tsx');
+    const { ui, item } = await open();
+    await Renderer.act(() => find(ui, 'TableRow', 'label', 'Review unread across accounts').props.onPress());
+    assert.deepEqual(routes, [[ACCOUNT, guildId, mentionChannel, newestMention]]);
+    const chatElement = (channelId, isActive = true) => React.createElement(Chat, { channelId, isActive });
+    const chat = await w.mount(() => chatElement(mentionChannel));
+    const press = name => find(chat, 'Pressable', 'accessibilityLabel', `${name} inbox review`).props.onPress();
+    await Renderer.act(async () => { await w.advance(9000); });
+    assert.equal(routes.length, 1);
+
+    await Renderer.act(async () => {
+        press('Pause');
+        mentions = 0;
+        w.stores.ReadStateStore.emitChange();
+        await w.advance(9000);
+    });
+    assert.equal(routes.length, 1);
+    await Renderer.act(async () => {
+        setKeyboard(true);
+        press('Resume');
+        await w.advance(9000);
+    });
+    assert.equal(routes.length, 1);
+    await Renderer.act(async () => {
+        setKeyboard(false);
+        await w.advance(8000);
+    });
+    assert.deepEqual(routes.at(-1), [ACCOUNT, guildId, mentionChannel, nextMention]);
+    await Renderer.act(() => press('Next'));
+    assert.deepEqual(routes.at(-1), [ACCOUNT, '@me', ownerDm, ownerMessage]);
+
+    await Renderer.act(() => chat.update(chatElement(ownerDm, false)));
+    await Renderer.act(async () => {
+        unread.delete(ownerDm);
+        w.stores.ReadStateStore.emitChange();
+        await w.advance(9000);
+    });
+    assert.equal(routes.length, 3);
+    await Renderer.act(() => chat.update(chatElement(ownerDm)));
+    await Renderer.act(async () => {
+        for (const callback of w.appListeners) callback('background');
+        await w.advance(9000);
+    });
+    assert.equal(routes.length, 3);
+    await Renderer.act(async () => {
+        for (const callback of w.appListeners) callback('active');
+        await w.advance(8000);
+    });
+    assert.deepEqual(routes.at(-1), [FRIEND, '@me', friendDm, friendMessage]);
+    assert.deepEqual(switchCalls, [saved.token]);
+    await Renderer.act(() => chat.update(chatElement(friendDm)));
+    await Renderer.act(async () => {
+        unread.delete(friendDm);
+        w.stores.ReadStateStore.emitChange();
+        await w.advance(8000);
+    });
+    assert.equal(w.toasts.at(-1), 'Inbox review complete.');
+    assert.equal(routes.length, 4);
+    assert.equal(find(chat, 'Pressable', 'accessibilityLabel', 'Next inbox review'), undefined);
+    await Renderer.act(() => w.stop(item));
+    assert.equal(Chat.type, original);
+    assert.equal(keyboardListeners.size, 0);
+    assert.equal(w.appListeners.size, 0);
+});
+
+test('stopping an inbox review cancels the pending advance', async t => {
+    const { w, open, routes } = openableInbox(t, {});
+    const dm = '550000000000000024';
+    let unread = true;
+    w.stores.ChannelStore.getMutablePrivateChannels = () => [{ id: dm, type: 1 }];
+    w.stores.ReadStateStore.hasUnread = () => unread;
+    w.stores.SelectedChannelStore.getCurrentlySelectedChannelId = () => dm;
+    const Chat = React.memo(() => React.createElement('View', null));
+    w.addModule({ default: Chat }, 'modules/chat/native/ChatView.tsx');
+    const { ui } = await open();
+    await Renderer.act(() => find(ui, 'TableRow', 'label', 'Review unread across accounts').props.onPress());
+    const chat = await w.mount(() => React.createElement(Chat, { channelId: dm }));
+    await Renderer.act(() => {
+        unread = false;
+        w.stores.ReadStateStore.emitChange();
+    });
+    assert.ok(find(chat, 'Text', 'children', 'Next in 8 seconds'));
+    await Renderer.act(async () => {
+        find(chat, 'Pressable', 'accessibilityLabel', 'Stop inbox review').props.onPress();
+        await w.advance(9000);
+    });
+    assert.equal(routes.length, 1);
+    assert.equal(find(chat, 'Pressable', 'accessibilityLabel', 'Stop inbox review'), undefined);
+    assert.equal(w.calls.some(call => call[0] === 'switchAccount'), false);
+    assert.equal(w.timers.size, 0);
+});

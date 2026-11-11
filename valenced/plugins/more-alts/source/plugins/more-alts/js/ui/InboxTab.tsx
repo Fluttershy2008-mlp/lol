@@ -13,7 +13,9 @@ export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colo
 	const { TableRowGroup, TableSwitchRow, TableRow } = rev.discord.design.Design
 	const [refreshStatus, setRefreshStatus] = rev.react.React.useState(null)
 	const [opening, setOpening] = rev.react.React.useState(false)
+	const review = rev.react.React.useSyncExternalStore(inbox.review.subscribe, inbox.review.snapshot, inbox.review.snapshot)
 	const open = async (account: Account, kind: InboxKind) => {
+		inbox.review.stop()
 		setOpening(true)
 		try {
 			const result = await inbox.open(account, kind)
@@ -52,6 +54,10 @@ export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colo
 					setRefreshStatus(null)
 					return setEnabled(value)
 				}} />
+				{enabled && (review
+					? <TableRow label="Stop inbox review" onPress={inbox.review.stop} />
+					: <TableRow label="Review unread across accounts" subLabel="Automatically open the next DM or mention after it’s read."
+						disabled={opening || !ordered.length} arrow onPress={() => inbox.review.start(ordered)} />)}
 				{enabled && <TableRow label="Refresh active account" disabled={!current} arrow onPress={async () => {
 					const result = await inbox.refresh()
 					const message = {
@@ -77,15 +83,15 @@ export function InboxTab({ inbox, enabled, setEnabled, accounts, currentId, colo
 						const rows = [
 							<TableRow key={account.id} label={`${name}${active ? ' · Active' : ''}`}
 								subLabel={detail} subLabelLineClamp={4} icon={<Avatar user={account} border={colors.line} />}
-								arrow disabled={opening} onPress={() => open(account, 'any')} />,
+								arrow disabled={opening || review?.busy} onPress={() => open(account, 'any')} />,
 						]
 						if ((summary?.unreadDms ?? 0) > 0) rows.push(
 							<TableRow key={`${account.id}-dm`} label="Open unread DMs" accessibilityLabel={`Open unread DMs for ${name}`}
-								arrow disabled={opening} onPress={() => open(account, 'dm')} />,
+								arrow disabled={opening || review?.busy} onPress={() => open(account, 'dm')} />,
 						)
 						if ((summary?.mentions ?? 0) > 0) rows.push(
 							<TableRow key={`${account.id}-mention`} label="Open server mentions" accessibilityLabel={`Open server mentions for ${name}`}
-								arrow disabled={opening} onPress={() => open(account, 'mention')} />,
+								arrow disabled={opening || review?.busy} onPress={() => open(account, 'mention')} />,
 						)
 						return rows
 					})}

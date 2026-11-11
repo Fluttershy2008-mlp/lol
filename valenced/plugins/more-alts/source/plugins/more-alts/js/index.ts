@@ -1,6 +1,7 @@
 import patchNativeSwitcher, { restoreFromNativeVault, syncNativeVault } from './patches/nativeSwitcher'
 import startOtherAccountPush from './patches/accountPush'
 import patchTabBarLongPress from './patches/tabBarLongPress'
+import patchInboxReviewBar from './patches/inboxReviewBar'
 import { setupChangelog } from '../../../shared/changelog'
 import { CHANGELOG } from './changelog'
 import Settings from './ui/Settings'
@@ -70,6 +71,7 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 				inbox?.stop()
 				if (sharedInbox === inbox) sharedInbox = undefined
 			})
+			if (inbox) api.cleanup(patchInboxReviewBar(api.unscoped, inbox.review))
 		} catch (error) {
 			api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`)
 		}
