@@ -110,7 +110,7 @@ function createWorld(options = {}) {
         subscribe(type, fn) { if (!subscriptions.has(type)) subscriptions.set(type, new Set()); subscriptions.get(type).add(fn); },
         unsubscribe(type, fn) { subscriptions.get(type)?.delete(fn); }, isDispatching: () => false,
     };
-    const design = Object.fromEntries(['Button', 'Text', 'TextInput', 'TableRow', 'TableRowGroup', 'TableSwitchRow', 'TableRowIcon',
+    const design = Object.fromEntries(['Button', 'Text', 'TextInput', 'TableRow', 'TableRowGroup', 'TableSwitchRow', 'TableRowIcon', 'Stack',
         'ActionSheet', 'ActionSheetRow', 'ActionSheetRowGroup', 'ActionSheetSwitchRow', 'ActionSheetCloseButton', 'BottomSheetTitleHeader',
         'AlertModal', 'AlertActionButton', 'AlertActions', 'FormSwitch'].map(name => [name, native(name)]));
     design.createStyles = factory => typeof factory === 'function' ? factory() : factory;
@@ -209,12 +209,22 @@ function createWorld(options = {}) {
     async function start(slug, initial = {}) {
         const directory = path.join(process.env.PLUGIN_TEST_PACKAGE_ROOT ?? ROOT, '.build/plugins', slug);
         const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
-        const cleanups = [], writes = [];
+        const cleanups = [], writes = [], storageListeners = new Set();
+        const nativeMoreAlts = HOST_ID === 'valenced' && slug === 'more-alts';
         const api = { unscoped: U, cleanup: fn => cleanups.push(fn),
             logger: { error: (...args) => errors.push([slug, ...args]), warn: (...args) => logs.push([slug, ...args]), log() {} },
             plugin: { manifest, startedLate: false, requireReload: () => calls.push(['requireReload', slug]), reportError: error => errors.push([slug, error]) },
             jsonStorage: { loaded: true, cache: initial, async get() { this.loaded = true; return this.cache; },
-                async set(value, replace) { if (!replace) throw new Error('Expected replace storage write'); this.cache = structuredClone(value); writes.push(this.cache); } },
+                use() {
+                    return React.useSyncExternalStore(listener => this.subscribe(listener), () => this.cache);
+                },
+                subscribe(listener) { storageListeners.add(listener); return () => storageListeners.delete(listener); },
+                async set(value, replace) {
+                    if (!replace && !nativeMoreAlts) throw new Error('Expected replace storage write');
+                    this.cache = structuredClone(replace ? value : { ...this.cache, ...value });
+                    writes.push(this.cache);
+                    for (const notify of storageListeners) notify(this.cache);
+                } },
         };
         options.decorateApi?.(api, slug);
         let plugin;

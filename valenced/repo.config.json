@@ -13,7 +13,6 @@
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
-    "more-alts": "1.0.0-stable21",
     "server-leaver": "1.0.0-beta6",
     "copy-user-id": "1.0.0-beta3",
     "addon-list": "1.0.0-beta3",
@@ -27,7 +26,6 @@
     "save-as-sticker": "main",
     "stealmoji": "main",
     "server-leaver": "main",
-    "more-alts": "main",
     "expression-cloner": "main",
     "blocked-user-list": "main",
     "friends-list": "main",
@@ -52,10 +50,6 @@
       "title": "Friends List",
       "icon": "FriendsIcon",
       "description": "Shows your total Discord friend count, a searchable friends list, and profile buttons. Opens directly from the Valenced settings section."
-    },
-    "more-alts": {
-      "title": "More Alts!",
-      "icon": "UserIcon"
     },
     "server-leaver": {
       "title": "Server Leaver",
@@ -120,6 +114,14 @@
     },
     "always-animate": {
       "path": "valenced/plugins/always-animate"
+    },
+    "more-alts": {
+      "path": "valenced/plugins/more-alts",
+      "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts",
+      "settingsShortcut": {
+        "title": "More Alts!",
+        "icon": "UserIcon"
+      }
     }
   },
   "nativeThemes": {
@@ -133,9 +135,9 @@
   },
   "channels": {
     "dev.fluttershy2008.more-alts": {
-      "latest": "1.0.0-stable21",
-      "stable": "1.0.0-stable21",
-      "beta": "1.0.0-beta11"
+      "latest": "1.1.3",
+      "stable": "1.1.3",
+      "beta": "1.1.3"
     }
   }
 }

@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.more-alts",
+  "name": "More Alts! (Valenced)",
+  "description": "Manage and switch Discord accounts with Rosie's account switcher, native Android session vault, and notification preferences.",
+  "author": "Rosie",
+  "contributors": ["fluttershy_simper <753962426407452713>"],
+  "icon": "UserIcon",
+  "version": "1.1.3",
+  "dependencies": {
+    "valenced.api": { "version": ">=1 <2" },
+    "discord": { "version": "*" }
+  },
+  "dist": {
+    "script": "index.js",
+    "android": { "path": "plugin.jar", "class": "rosie.morealts.MoreAltsPlugin" }
+  }
+}

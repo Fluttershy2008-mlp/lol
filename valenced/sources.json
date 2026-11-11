@@ -87,24 +87,6 @@
       "originalVersion": "2.0.5",
       "kind": "compatibility-preview"
     },
-    "dev.fluttershy2008.more-alts": {
-      "path": "more-alts/index.js",
-      "sha256": "4a577b3f76292a4ef3d8cde4e544534521fcc936fdf5241e7696840613dc61bf",
-      "originalVersion": "3.1.20",
-      "kind": "compatibility-stable",
-      "sourceRef": "main",
-      "settingsLayout": {
-        "path": "valenced/more-alts-settings.cjs",
-        "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts/js/ui/Settings.tsx",
-        "sha256": "caeb88fd8fdaf6228913738a813b02177972e5cfbc66d5793aa6a6af5ffb2073"
-      },
-      "settingsShortcut": {
-        "path": "valenced/settings-shortcut.cjs",
-        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
-        "section": "VALENCED",
-        "title": "More Alts!"
-      }
-    },
     "dev.fluttershy2008.nitro-auto-claim": {
       "path": "nitro-auto-claim/index.js",
       "sha256": "dab8745668cf14dd2674916f0f8e43d72c2cb85b742e5ccb55df3f3ca1761924",
@@ -295,6 +277,19 @@
       "sha256": "53d7b1a9c9b21fca92b1e14579dd1b052c6cfe484187848c155fe466b4c6b6f7",
       "originalVersion": "1.1.0-beta1",
       "kind": "native-plugin"
+    },
+    "dev.fluttershy2008.more-alts": {
+      "path": "valenced/plugins/more-alts/index.js",
+      "sha256": "7e17a569eac8b7bb34684aad3b1a6c26ec816d8c505ebbfb5043d2214aabe221",
+      "originalVersion": "1.1.3",
+      "kind": "native-plugin",
+      "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "More Alts!"
+      }
     }
   }
 }

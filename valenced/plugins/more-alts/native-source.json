@@ -1,0 +1,7 @@
+{
+  "minAndroidApi": 24,
+  "compileAndroidApi": 36,
+  "kotlin": "2.4.10",
+  "r8": "9.1.57",
+  "upstreamCommit": "19b5f3267c05e24c12c65c59c5bcdaf3e21dc104"
+}

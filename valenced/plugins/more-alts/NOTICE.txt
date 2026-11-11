@@ -1,0 +1,6 @@
+Based on Rosie's More Alts! 1.1.3 and its shared helpers at 19b5f3267c05e24c12c65c59c5bcdaf3e21dc104.
+https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts
+
+Adapted for Fluttershy's Valenced repository and the existing dev.fluttershy2008.more-alts installation.
+Changes include the Valenced settings shortcut, local storage migration, native bridge namespacing, and account switch and vault compatibility.
+Distributed under the GNU General Public License, version 3. See LICENSE.

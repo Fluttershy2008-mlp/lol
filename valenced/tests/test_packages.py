@@ -44,12 +44,13 @@ class ValencedPackages(unittest.TestCase):
         config = json.loads((HERE / "repo.config.json").read_text())
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         ports = {str(Path(info["path"]).parent) for info in sources.values() if info["kind"] in ("compatibility-preview", "compatibility-stable")}
-        self.assertEqual(len(ports), 21)
+        self.assertEqual(len(ports), 20)
         self.assertTrue({"info-commands", "auto-text", "valid-user"}.issubset(ports))
         for path in ROOT.glob("*/manifest.json"):
             manifest = json.loads(path.read_text())
             if manifest.get("main") and "authors" in manifest:
-                self.assertTrue(path.parent.name in ports or config["exclude"].get(path.parent.name), path.parent.name)
+                self.assertTrue(path.parent.name in ports or path.parent.name in config["nativePlugins"]
+                                or config["exclude"].get(path.parent.name), path.parent.name)
 
     def test_sources_and_credits_are_preserved(self):
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
@@ -103,11 +104,11 @@ class ValencedPackages(unittest.TestCase):
 
     def test_shortcut_helper_is_bundled_only_with_configured_plugins(self):
         config = json.loads((HERE / "repo.config.json").read_text())
-        wanted = {"custom-rpc", "friends-list", "more-alts", "server-leaver", "blocked-user-list", "relationship-notifier"}
+        wanted = {"custom-rpc", "friends-list", "server-leaver", "blocked-user-list", "relationship-notifier"}
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         native = {slug for slug, entry in config.get("nativePlugins", {}).items()
                   if isinstance(entry, dict) and entry.get("settingsShortcut")}
-        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share", "math-ai"})
+        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share", "math-ai", "more-alts"})
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         digest = hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest()
@@ -141,12 +142,14 @@ class ValencedPackages(unittest.TestCase):
             self.assertEqual(payload, (directory / native["path"]).read_bytes())
             with zipfile.ZipFile(__import__('io').BytesIO(payload)) as jar:
                 dex = jar.read("classes.dex")
-            # D8 emits DEX 039 for API 28+; legacy DX builds use 035.
+            # D8 emits DEX 037 for API 24 and DEX 039 for API 28+.
             # https://source.android.com/docs/core/runtime/dex-format
             supported_magic = {b"dex\n035\0"}
             metadata_path = directory / "native-source.json"
             if metadata_path.exists():
                 metadata = json.loads(metadata_path.read_text())
+                if metadata.get("minAndroidApi", 0) >= 24:
+                    supported_magic.add(b"dex\n037\0")
                 if metadata.get("minAndroidApi", 0) >= 28:
                     supported_magic.add(b"dex\n039\0")
             self.assertIn(dex[:8], supported_magic)

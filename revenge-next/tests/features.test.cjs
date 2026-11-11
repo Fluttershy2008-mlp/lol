@@ -399,7 +399,8 @@ test('Message Logger retains a deletion and opens the channel history using a na
     assert.match(text(ui.toJSON()), /A test message/);
 });
 
-test('More Alts initializes its command before settings and saves the current test session', async t => {
+test('Legacy More Alts initializes its command before settings and saves the current test session',
+    { skip: process.env.PLUGIN_TEST_TARGET === 'valenced' }, async t => {
     const w = scenario(t, { fetch: async (url, init) => {
         assert.equal(url, 'https://discord.com/api/v9/users/@me');
         assert.equal(init.headers.Authorization, 'fake-test-session-token-only');
@@ -532,8 +533,10 @@ test('all 21 ports coexist with curated modules and split HTTP, then stop in a d
     const w = scenario(t, { curatedOnly: true, splitHTTP: true });
     const sources = JSON.parse(fs.readFileSync(path.join(__dirname, '../..', process.env.PLUGIN_TEST_TARGET === 'valenced' ? 'valenced' : 'revenge-next', 'sources.json'), 'utf8')).plugins;
     const items = [];
-    for (const [id, entry] of Object.entries(sources)) if (['compatibility-preview', 'compatibility-stable'].includes(entry.kind))
-        items.push(await w.start(id.slice('dev.fluttershy2008.'.length)));
+    for (const [id, entry] of Object.entries(sources).sort(([a], [b]) => a.localeCompare(b))) {
+        if (['compatibility-preview', 'compatibility-stable'].includes(entry.kind) || id === 'dev.fluttershy2008.more-alts')
+            items.push(await w.start(id.slice('dev.fluttershy2008.'.length)));
+    }
     assert.equal(items.length, 21);
     await w.advance(2000); await w.advance(0);
     const commands = w.commands.getBuiltInCommands(1);

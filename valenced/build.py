@@ -58,7 +58,7 @@ def manifest_for(slug, legacy, version, theme=False):
         dependencies["discord"] = {"version": ">=352.2"}
     manifest = {"format": 1, "id": "dev.fluttershy2008." + slug,
                 "name": legacy["name"] + " (Valenced)",
-                "description": ("" if slug == "more-alts" else "Valenced preview. ") + legacy.get("description", "").replace("Revenge", "Valenced"),
+                "description": "Valenced preview. " + legacy.get("description", "").replace("Revenge", "Valenced"),
                 "author": authors[0], "version": version, "dependencies": dependencies,
                 "icon": "PaintPaletteIcon" if theme else legacy.get("vendetta", {}).get("icon", "PuzzlePieceIcon"),
                 "dist": {"script": "index.js"}}
@@ -129,7 +129,8 @@ def build(check=False):
     source_info = {}
     for directory in sorted(ROOT.iterdir()):
         manifest_path = directory / "manifest.json"
-        if not directory.is_dir() or not manifest_path.exists() or directory.name in config["exclude"]:
+        if (not directory.is_dir() or not manifest_path.exists() or directory.name in config["exclude"]
+                or directory.name in config.get("nativePlugins", {})):
             continue
         legacy = json.loads(manifest_path.read_text())
         if not legacy.get("main") or "authors" not in legacy:
@@ -192,42 +193,6 @@ def build(check=False):
                 if transformed.count(old) != 1:
                     raise RuntimeError("AutoText React key bridge needs updating")
                 transformed = transformed.replace(old, new)
-        if directory.name == "more-alts":
-            marker = "plugin: { id:"
-            if plugin_runtime.count(marker) != 1:
-                raise RuntimeError("More Alts storage adapter needs updating")
-            storage_adapter = (directory / "native-storage.cjs").read_text().rstrip()
-            plugin_runtime = plugin_runtime.replace(marker,
-                "plugin: { persistStorage: " + storage_adapter + ", id:")
-            settings_source = HERE / "more-alts-settings.cjs"
-            plugin_runtime += "\n" + settings_source.read_text()
-            # Discord may already have supplied the active account as a native row.
-            current_row = "if (validId(currentId) && !savedCurrent &&"
-            if transformed.count(current_row) != 1:
-                raise RuntimeError("More Alts account switcher adapter needs updating")
-            transformed = transformed.replace(current_row,
-                "if (validId(currentId) && !rows.some(account => account.id === currentId) &&")
-            # Swap the manager's presentation while keeping the shared account
-            # controller, compact switcher and sign-in dialog on the same state.
-            manager_start = "        const currentId = getSession()?.user?.id;"
-            manager_end = "        return h(RN.KeyboardAvoidingView,"
-            if transformed.count(manager_start) != 1 or transformed.count(manager_end) != 1:
-                raise RuntimeError("More Alts settings adapter needs updating")
-            start = transformed.index(manager_start)
-            end = transformed.index(manager_end, start)
-            transformed = transformed[:start] + """        const contents = view === 'switcher' ? [] : renderMoreAltsSettings({
-            V, view, setView, currentUser: getSession()?.user, accounts: instance.accounts, query, setQuery,
-            busy, error, notice, expiredAccountId, nativeReady, settings: storage.settings,
-            setPreference(key, value) {
-                storage.settings = { ...storage.settings, [key]: value };
-                redraw(x => x + 1);
-                scheduleRefresh();
-            },
-            saveCurrent, addAccount, switchAccount, beginReauth, remove, nativeLoginHelp, input, text, colors,
-            importAccounts: () => run(importOld, result => setNotice(`Imported ${result.added} account${result.added === 1 ? '' : 's'}; skipped ${result.skipped} existing or invalid entries.`)),
-        });
-""" + transformed[end:]
-            manifest.setdefault("contributors", []).append("Rosie")
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + plugin_runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         if shortcut:
@@ -246,17 +211,9 @@ def build(check=False):
             "Classic settings/accounts are not imported automatically.\n")
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
-            "kind": "compatibility-stable" if slug == "more-alts" else "compatibility-preview"}
+            "kind": "compatibility-preview"}
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
-        if slug == "more-alts":
-            settings_credit = "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts/js/ui/Settings.tsx"
-            files["NOTICE.txt"] += f"Native settings layout adapted from Rosie's More Alts (GPL-3.0): {settings_credit}\n"
-            files["source/more-alts-settings.cjs"] = settings_source.read_bytes()
-            source_info[manifest["id"]]["settingsLayout"] = {
-                "path": settings_source.relative_to(ROOT).as_posix(), "upstream": settings_credit,
-                "sha256": hashlib.sha256(settings_source.read_bytes()).hexdigest(),
-            }
         if shortcut:
             source_info[manifest["id"]]["settingsShortcut"] = {
                 "path": "valenced/settings-shortcut.cjs",
@@ -315,12 +272,15 @@ def build(check=False):
         manifest = json.loads((directory / "manifest.json").read_text())
         files = {name: (directory / name).read_bytes()
                  for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt", "README.md")}
-        # Ship the complete corresponding source and build recipe for AGPL ports.
-        if slug == "chat-buttons":
+        # Ship the corresponding source and build recipes for copyleft ports.
+        if slug in ("chat-buttons", "more-alts"):
             files["build.mjs"] = (directory / "build.mjs").read_bytes()
             for path in sorted((directory / "source").rglob("*")):
                 if path.is_file():
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()
+        if slug == "more-alts":
+            for name in ("build-native.sh", "native-source.json"):
+                files[name] = (directory / name).read_bytes()
         if slug == "translate-message":
             for path in sorted(directory.rglob("*")):
                 if path.is_file() and not any(part in ("__pycache__", "node_modules") for part in path.parts):
@@ -344,6 +304,8 @@ def build(check=False):
             "sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
             "originalVersion": manifest["version"], "kind": "native-plugin",
         }
+        if native_config.get("upstream"):
+            source_info[manifest["id"]]["upstream"] = native_config["upstream"]
         shortcut = native_config.get("settingsShortcut")
         if shortcut:
             shortcut_meta = {"id": manifest["id"], "title": shortcut["title"], "icon": shortcut["icon"]}

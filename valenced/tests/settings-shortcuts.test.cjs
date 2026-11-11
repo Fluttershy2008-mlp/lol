@@ -54,7 +54,8 @@ for (const [slug, title] of plugins) test(title + ' opens its real settings from
     assert.equal(item.usePredicate(), true);
     const Page = item.screen.getComponent(), headers = [];
     const ui = await w.mount(h(Page, { navigation: { setOptions: opts => headers.push(opts) } }));
-    assert.ok(JSON.stringify(ui.toJSON()).includes(slug === 'more-alts' ? 'Switch accounts' : title), 'the plugin page rendered');
+    const rendered = JSON.stringify(ui.toJSON(), (key, value) => ['icon', 'trailing', 'label'].includes(key) && React.isValidElement(value) ? undefined : value);
+    assert.ok(rendered.includes(slug === 'more-alts' ? 'CURRENT ACCOUNT' : title), 'the plugin page rendered');
     assert.equal(headers.at(-1).title, title);
     assert.equal(w.calls.some(call => ['leaveGuild', 'login', 'logout'].includes(call[0])), false);
     assert.ok(w.calls.some(call => call[0] === 'refreshSettings'));
