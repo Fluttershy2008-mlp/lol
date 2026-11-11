@@ -22,6 +22,7 @@ export interface MoreAltsStorage {
 	enableNativeSwitcher: boolean
 	blockOtherAccountNotifications: boolean
 	persistentStorageVault: boolean
+	sharedInboxEnabled: boolean
 	exportPasswordHash?: string
 }
 
@@ -35,6 +36,7 @@ export const DEFAULT_STORAGE: MoreAltsStorage = {
 	enableNativeSwitcher: true,
 	blockOtherAccountNotifications: true,
 	persistentStorageVault: true,
+	sharedInboxEnabled: false,
 }
 export async function upgradeLegacyStorage(storage: JsonStorage<MoreAltsStorage>) {
 	const current = storage.cache as (Partial<MoreAltsStorage> & {

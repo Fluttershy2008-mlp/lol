@@ -127,3 +127,72 @@ test('account names use Discord’s theme text color in the dashboard and switch
     const switcher = await w.sheet('more-alts-quick-switcher');
     assert.equal(find(switcher, 'Text', 'children', 'Test Friend').props.style.color, '#4b3046');
 });
+
+test('Shared inbox keeps local, opt-in counts for the last connected session of each added account', async t => {
+    const { w } = fixture(t);
+    const dm = '550000000000000001', group = '550000000000000002';
+    const listeners = new Set();
+    const file = {
+        cache: { summaries: {} },
+        async get() { return this.cache; },
+        async set(data, replace) {
+            assert.equal(replace, true);
+            this.cache = structuredClone(data);
+            for (const listener of listeners) listener();
+        },
+        use() {
+            return React.useSyncExternalStore(listener => {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            }, () => this.cache);
+        },
+    };
+    w.U.jsonStorage = {
+        pluginStoragePathFor: (pluginId, name) => `${pluginId}/${name}`,
+        getJsonStorage(path) {
+            assert.equal(path, `${id}/inbox.json`);
+            return file;
+        },
+    };
+    let unread = new Set([dm, group]), mentions = 5;
+    w.stores.ChannelStore.getMutablePrivateChannels = () => new Map([
+        ['dm', { id: dm, type: 1 }], ['duplicate', { channel: { id: dm, type: 1 } }], ['group', { id: group, type: 3 }],
+    ]);
+    w.stores.ReadStateStore.hasUnread = channelId => unread.has(channelId);
+    w.stores.GuildReadStateStore = { getTotalMentionCount: () => mentions };
+    const owner = { id: ACCOUNT, username: 'test-owner', displayName: 'Test Owner', token: 'owner-session' };
+    const { ui, item } = await w.open({ accounts: { [ACCOUNT]: owner, [FRIEND]: saved }, accountOrder: [ACCOUNT, FRIEND] });
+    await openTab(ui, 'Inbox');
+    await Renderer.act(async () => { await w.advance(1000); });
+    assert.deepEqual(file.cache.summaries, {});
+    const optIn = find(ui, 'TableSwitchRow', 'label', 'Save inbox summaries');
+    assert.equal(optIn.props.value, false);
+    await Renderer.act(() => optIn.props.onValueChange(true));
+    await Renderer.act(async () => { await w.advance(1000); });
+    const first = file.cache.summaries[ACCOUNT];
+    assert.equal(first.unreadDms, 2);
+    assert.equal(first.mentions, 5);
+    assert.equal(file.cache.summaries[FRIEND], undefined);
+    assert.match(find(ui, 'TableRow', 'label', 'Test Owner · Active').props.subLabel, /2 unread DM chats · 5 server mentions/);
+
+    // A user change alone can precede replacement of Discord's old read states.
+    await Renderer.act(async () => { w.setAccount(FRIEND); w.stores.ReadStateStore.emitChange(); await w.advance(1000); });
+    assert.equal(file.cache.summaries[FRIEND], undefined);
+    unread = new Set([group]); mentions = 1;
+    await Renderer.act(async () => { await w.dispatcher.dispatch({ type: 'CONNECTION_OPEN' }); await w.advance(1000); });
+    assert.equal(file.cache.summaries[FRIEND].unreadDms, 1);
+    assert.equal(file.cache.summaries[FRIEND].mentions, 1);
+    assert.deepEqual(file.cache.summaries[ACCOUNT], first);
+    assert.match(find(ui, 'TableRow', 'label', 'Test Owner').props.subLabel, /Checked/);
+    assert.deepEqual(Object.keys(file.cache.summaries[FRIEND]).sort(), ['checkedAt', 'mentions', 'unreadDms']);
+    assert.equal(item.api.jsonStorage.cache.accounts[FRIEND].token, saved.token);
+    assert.equal(w.calls.some(([kind]) => kind === 'http' || kind === 'fetch'), false);
+
+    unread = new Set(); mentions = 0;
+    await Renderer.act(async () => { w.stores.ReadStateStore.emitChange(); await w.advance(1000); });
+    assert.equal(file.cache.summaries[FRIEND].unreadDms, 0);
+    assert.equal(file.cache.summaries[FRIEND].mentions, 0);
+    await Renderer.act(() => find(ui, 'TableSwitchRow', 'label', 'Save inbox summaries').props.onValueChange(false));
+    assert.deepEqual(file.cache.summaries, {});
+    assert.equal(w.timers.size, 0);
+});

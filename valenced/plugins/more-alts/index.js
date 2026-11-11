@@ -1726,7 +1726,8 @@ ${frames}`;
         addToSidebar: true,
         enableNativeSwitcher: true,
         blockOtherAccountNotifications: true,
-        persistentStorageVault: true
+        persistentStorageVault: true,
+        sharedInboxEnabled: false
       };
       async function upgradeLegacyStorage(storage) {
         var current = storage.cache;
@@ -1750,6 +1751,91 @@ ${frames}`;
         }, true);
       }
 
+      // source/plugins/more-alts/js/ui/InboxTab.tsx
+      function InboxTab({
+        inbox,
+        enabled,
+        setEnabled,
+        accounts,
+        currentId,
+        colors,
+        switchAccount
+      }) {
+        var rev = getValenced3();
+        var {
+          View: View2,
+          Text,
+          Alert
+        } = rev.react.ReactNative;
+        var {
+          TableRowGroup,
+          TableSwitchRow,
+          TableRow
+        } = rev.discord.design.Design;
+        var summaries = inbox.use()?.summaries ?? {};
+        var saved = accounts.filter(account => !account.isBot);
+        var current = saved.find(account => account.id === currentId);
+        var ordered = current ? [current, ...saved.filter(account => account !== current)] : saved;
+        return /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(View2, {
+          style: {
+            gap: 6
+          }
+        }, /* @__PURE__ */valenced.react.React.createElement(Text, {
+          accessibilityRole: "header",
+          style: {
+            color: colors.text,
+            fontSize: 20,
+            fontWeight: "800"
+          }
+        }, "Shared inbox"), /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.muted,
+            fontSize: 14,
+            lineHeight: 20
+          }
+        }, "See the last recorded unread DM and server mention counts for your added accounts. Each account updates while it\u2019s active.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, null, /* @__PURE__ */valenced.react.React.createElement(TableSwitchRow, {
+          label: "Save inbox summaries",
+          subLabel: "Keep counts on this device.",
+          value: enabled,
+          onValueChange: setEnabled
+        }), enabled && /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Refresh active account",
+          disabled: !current,
+          arrow: true,
+          onPress: async () => {
+            if (!(await inbox.refresh())) Alert.alert("Inbox unavailable", "Open a chat on your added account and wait for Discord to connect.");
+          }
+        })), enabled && (ordered.length ? /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+          title: "Added accounts"
+        }, ordered.map(account => {
+          var summary = summaries[account.id];
+          var active = account.id === currentId;
+          var detail = summary ? `${summary.unreadDms ?? "\u2014"} unread DM ${summary.unreadDms === 1 ? "chat" : "chats"} \xB7 ${summary.mentions ?? "\u2014"} server ${summary.mentions === 1 ? "mention" : "mentions"}
+Checked ${new Date(summary.checkedAt).toLocaleString()}` : "Waiting for the first check";
+          return /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+            key: account.id,
+            label: `${account.displayName || account.username}${active ? " \xB7 Active" : ""}`,
+            subLabel: detail,
+            subLabelLineClamp: 4,
+            icon: /* @__PURE__ */valenced.react.React.createElement(Avatar, {
+              user: account,
+              border: colors.line
+            }),
+            arrow: !active,
+            onPress: active ? void 0 : () => switchAccount(account)
+          });
+        })) : /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.muted,
+            fontSize: 14
+          }
+        }, "Add a Discord account to start seeing its inbox summary.")), enabled && Object.keys(summaries).length > 0 && /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, null, /* @__PURE__ */valenced.react.React.createElement(TableRow, {
+          label: "Clear saved summaries",
+          variant: "danger",
+          onPress: () => inbox.clear().catch(() => Alert.alert("Could not clear summaries"))
+        })));
+      }
+
       // source/plugins/more-alts/js/ui/Settings.tsx
       function formatDate(ts) {
         return new Date(ts).toLocaleDateString("en-US", {
@@ -1759,7 +1845,8 @@ ${frames}`;
         });
       }
       function Settings({
-        api
+        api,
+        inbox
       }) {
         var rev = getValenced3();
         var {
@@ -1792,6 +1879,10 @@ ${frames}`;
           }
         };
         var handleRemove = account => {
+          var remove = async () => {
+            await removeAccount(api.jsonStorage, account.id);
+            await inbox?.remove(account.id);
+          };
           if (storage.confirmBeforeDelete !== false) {
             Alert.alert("Remove Account", `Are you sure you want to remove "${account.username}" from More Alts?`, [{
               text: "Cancel",
@@ -1800,11 +1891,11 @@ ${frames}`;
               text: "Remove",
               style: "destructive",
               onPress: () => {
-                void removeAccount(api.jsonStorage, account.id);
+                void remove();
               }
             }]);
           } else {
-            void removeAccount(api.jsonStorage, account.id);
+            void remove();
           }
         };
         var handleAccountPress = account => {
@@ -1889,7 +1980,7 @@ ${frames}`;
             borderWidth: 1,
             borderColor: colors.line
           }
-        }, ["Accounts", "Preferences"].map(name => /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
+        }, ["Accounts", "Inbox", "Preferences"].map(name => /* @__PURE__ */valenced.react.React.createElement(Pressable2, {
           key: name,
           accessibilityRole: "tab",
           accessibilityLabel: name,
@@ -1911,14 +2002,16 @@ ${frames}`;
             backgroundColor: tab === name ? colors.selected : pressed ? colors.mutedPanel : "transparent"
           })
         }, /* @__PURE__ */valenced.react.React.createElement(Glyph, {
-          names: name === "Accounts" ? ["UserMultipleIcon", "FriendsIcon"] : ["SettingsIcon", "CogIcon"],
+          names: name === "Accounts" ? ["UserMultipleIcon", "FriendsIcon"] : name === "Inbox" ? ["InboxIcon", "EnvelopeIcon"] : ["SettingsIcon", "CogIcon"],
           color: tab === name ? colors.text : colors.muted,
           size: 17
         }), /* @__PURE__ */valenced.react.React.createElement(Text, {
           style: {
             color: tab === name ? colors.text : colors.muted,
             fontSize: 14,
-            fontWeight: "700"
+            fontWeight: "700",
+            flexShrink: 1,
+            textAlign: "center"
           }
         }, name)))), /* @__PURE__ */valenced.react.React.createElement(ScrollView2, {
           key: tab,
@@ -2089,7 +2182,22 @@ ${frames}`;
             fontSize: 14,
             padding: 16
           }
-        }, "Add another account to switch between your Discord sessions.")))) : /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
+        }, "Add another account to switch between your Discord sessions.")))) : tab === "Inbox" ? inbox ? /* @__PURE__ */valenced.react.React.createElement(InboxTab, {
+          inbox,
+          enabled: storage.sharedInboxEnabled,
+          accounts,
+          currentId: currentUserId,
+          colors,
+          switchAccount: handleSwitch,
+          setEnabled: value => api.jsonStorage.set({
+            sharedInboxEnabled: value
+          })
+        }) : /* @__PURE__ */valenced.react.React.createElement(Text, {
+          style: {
+            color: colors.muted,
+            fontSize: 14
+          }
+        }, "Shared inbox is unavailable on this Valenced version.") : /* @__PURE__ */valenced.react.React.createElement(valenced.react.React.Fragment, null, /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Switching"
         }, toggle("enableNativeSwitcher", "Native Account Switcher", "Show Discord\u2019s built-in switcher on the You tab."), toggle("blockOtherAccountNotifications", "Block Background Notifications", "Mute notifications from your other accounts."), toggle("enableCLI", "Show Full Username Tag", "Show the #1234 suffix when an account has one.")), /* @__PURE__ */valenced.react.React.createElement(TableRowGroup, {
           title: "Storage & backup"
@@ -2114,7 +2222,214 @@ ${frames}`;
         })))));
       }
 
+      // source/plugins/more-alts/js/lib/inbox.ts
+      function attempt(read) {
+        try {
+          return read();
+        } catch {
+          return void 0;
+        }
+      }
+      function values(value) {
+        if (!value || typeof value !== "object") return void 0;
+        return typeof value.values === "function" ? [...value.values()] : Object.values(value);
+      }
+      function unreadDmCount(channels, read) {
+        if (typeof read?.hasUnread !== "function") return null;
+        var entries = values(attempt(() => channels?.getMutablePrivateChannels?.()) ?? attempt(() => channels?.getPrivateChannels?.()) ?? attempt(() => channels?.getSortedPrivateChannels?.()));
+        if (!entries) return null;
+        var ids = /* @__PURE__ */new Set();
+        for (var entry of entries) {
+          var item = entry?.channel ?? entry;
+          var channel = typeof item === "string" ? channels.getChannel?.(item) : item;
+          if (typeof channel?.id === "string" && (channel.type === 1 || channel.type === 3) && read.hasUnread(channel.id)) ids.add(channel.id);
+        }
+        return ids.size;
+      }
+      function serverMentionCount(guildRead, channels, read) {
+        var total = attempt(() => guildRead?.getTotalMentionCount?.());
+        if (Number.isSafeInteger(total) && total >= 0) return total;
+        var states = values(read?.getAllReadStates?.(true));
+        if (!states || typeof channels?.getChannel !== "function" || typeof read?.getMentionCount !== "function") return null;
+        var ids = /* @__PURE__ */new Set();
+        var mentions = 0;
+        for (var state of states) {
+          var id = state?.channelId;
+          if (typeof id !== "string" || ids.has(id) || state.type != null && Number(state.type) !== 0) continue;
+          var channel = channels.getChannel(id);
+          if (!(channel?.guild_id ?? channel?.guildId)) continue;
+          ids.add(id);
+          var count = read.getMentionCount(id);
+          if (Number.isSafeInteger(count) && count > 0) mentions += count;
+        }
+        return mentions;
+      }
+      function startSharedInbox(api) {
+        var rev = api.unscoped;
+        var storage = api.jsonStorage;
+        var files = rev.jsonStorage;
+        if (typeof files?.getJsonStorage !== "function" || typeof files?.pluginStoragePathFor !== "function") return void 0;
+        var file = files.getJsonStorage(files.pluginStoragePathFor(api.plugin.manifest.id, "inbox.json"), {
+          default: {
+            summaries: {}
+          }
+        });
+        var stores = rev.discord.flux.Stores;
+        var currentId = () => stores.UserStore?.getCurrentUser?.()?.id;
+        var isConnected = () => stores.ConnectionStore?.isConnected?.() === true;
+        var cleanups = [];
+        var active = true;
+        var enabled = storage.cache?.sharedInboxEnabled === true;
+        var connected = isConnected();
+        var readyId = connected ? currentId() : void 0;
+        var generation = 0;
+        var timer;
+        var pendingRefresh = false;
+        var writes = Promise.resolve(file.get()).then(() => {}, () => {});
+        function enqueue(update) {
+          var write = writes.then(async () => {
+            if (!active) return false;
+            var next = update({
+              summaries: file.cache?.summaries ?? {}
+            });
+            if (next) await file.set(next, true);
+            return Boolean(next);
+          });
+          writes = write.then(() => {}, () => {});
+          return write;
+        }
+        async function capture(force) {
+          var id = currentId();
+          if (!active || !enabled || !id || id !== readyId || !isConnected()) return false;
+          var added = () => getAllAccounts(storage).some(account => account.id === id && !account.isBot);
+          try {
+            if (!added()) return false;
+            var unreadDms = unreadDmCount(stores.ChannelStore, stores.ReadStateStore);
+            var mentions = serverMentionCount(stores.GuildReadStateStore, stores.ChannelStore, stores.ReadStateStore);
+            if (unreadDms === null && mentions === null) return false;
+            var checkedAt = Date.now();
+            var epoch = generation;
+            return await enqueue(data => {
+              if (!enabled || epoch !== generation || id !== currentId() || !isConnected() || !added()) return void 0;
+              var previous = data.summaries[id];
+              if (!force && previous?.unreadDms === unreadDms && previous?.mentions === mentions) return void 0;
+              return {
+                summaries: {
+                  ...data.summaries,
+                  [id]: {
+                    checkedAt,
+                    unreadDms,
+                    mentions
+                  }
+                }
+              };
+            });
+          } catch {
+            return false;
+          }
+        }
+        function cancel() {
+          if (timer !== void 0) clearTimeout(timer);
+          timer = void 0;
+          pendingRefresh = false;
+          generation++;
+        }
+        function schedule(force = false) {
+          if (!active || !enabled || !readyId) return;
+          pendingRefresh ||= force;
+          if (timer !== void 0) return;
+          timer = setTimeout(() => {
+            timer = void 0;
+            var refresh = pendingRefresh;
+            pendingRefresh = false;
+            void capture(refresh);
+          }, 600);
+        }
+        function disconnected() {
+          connected = false;
+          readyId = void 0;
+          cancel();
+        }
+        function connectedSession() {
+          if (!active || !isConnected()) return;
+          connected = true;
+          var id = currentId();
+          if (readyId === id) return;
+          cancel();
+          readyId = id;
+          schedule(true);
+        }
+        function listen(store, fn) {
+          if (!store?.addChangeListener || !store?.removeChangeListener) return;
+          store.addChangeListener(fn);
+          cleanups.push(() => store.removeChangeListener(fn));
+        }
+        listen(stores.ConnectionStore, () => {
+          if (!isConnected()) disconnected();else if (!connected) connectedSession();
+        });
+        listen(stores.UserStore, () => {
+          if (readyId && readyId !== currentId()) {
+            readyId = void 0;
+            cancel();
+          }
+        });
+        for (var store of [stores.ChannelStore, stores.ReadStateStore, stores.GuildReadStateStore, stores.MultiAccountStore]) {
+          listen(store, () => schedule());
+        }
+        var dispatcher = rev.discord.flux.Dispatcher ?? rev.discord.common?.flux?.Dispatcher;
+        var onConnectionOpen = () => {
+          void Promise.resolve().then(connectedSession);
+        };
+        if (dispatcher?.subscribe && dispatcher?.unsubscribe) {
+          var _loop3 = function (event, fn) {
+            dispatcher.subscribe(event, fn);
+            cleanups.push(() => dispatcher.unsubscribe(event, fn));
+          };
+          for (var [event, fn] of [["CONNECTION_OPEN", onConnectionOpen], ["CONNECTION_CLOSED", disconnected], ["LOGOUT", disconnected]]) {
+            _loop3(event, fn);
+          }
+        }
+        async function clear() {
+          cancel();
+          await enqueue(data => Object.keys(data.summaries).length ? {
+            summaries: {}
+          } : void 0);
+        }
+        cleanups.push(storage.subscribe(() => {
+          var previous = enabled;
+          enabled = storage.cache?.sharedInboxEnabled === true;
+          if (enabled) schedule(!previous);else if (previous) void clear().catch(() => {});
+        }));
+        if (enabled) schedule(true);else void clear().catch(() => {});
+        return {
+          use: () => file.use(),
+          refresh: () => {
+            cancel();
+            return capture(true);
+          },
+          clear,
+          async remove(id) {
+            await enqueue(data => {
+              if (!Object.hasOwn(data.summaries, id)) return void 0;
+              var summaries = {
+                ...data.summaries
+              };
+              delete summaries[id];
+              return {
+                summaries
+              };
+            });
+          },
+          stop() {
+            active = false;
+            cancel();
+            for (var cleanup of cleanups) cleanup();
+          }
+        };
+      }
+
       // source/plugins/more-alts/js/index.ts
+      var sharedInbox;
       var index_default = plugin({
         jsonStorage: {
           load: true,
@@ -2162,12 +2477,27 @@ ${frames}`;
           } catch (e) {
             api.logger?.error(`[MoreAlts] Failed to apply tab bar long press patch: ${e}`);
           }
+          try {
+            var inbox = startSharedInbox(api);
+            sharedInbox = inbox;
+            api.cleanup(() => {
+              inbox?.stop();
+              if (sharedInbox === inbox) sharedInbox = void 0;
+            });
+          } catch (error) {
+            api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`);
+          }
           api.cleanup(() => {
             unpatchNative();
             unpatchLongPress();
           });
         },
-        SettingsComponent: Settings
+        SettingsComponent(props) {
+          return props.api.unscoped.react.React.createElement(Settings, {
+            ...props,
+            inbox: sharedInbox
+          });
+        }
       });
       options = module.exports.default;
     }
@@ -2186,7 +2516,8 @@ ${frames}`;
           "addToSidebar": true,
           "enableNativeSwitcher": true,
           "blockOtherAccountNotifications": true,
-          "persistentStorageVault": true
+          "persistentStorageVault": true,
+          "sharedInboxEnabled": false
         }
       },
       start(api) {

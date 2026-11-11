@@ -14,6 +14,8 @@ import { openAddAccountSheet } from './AddAccountSheet'
 import { openAccountSwitcherSheet } from './AccountSwitcherSheet'
 import { useBottomPadding } from '../../../../shared/ui/safeArea'
 import { AccountRow, Avatar, getValenced, Glyph, HERO, useCurrentAccount, usePalette } from './AccountUi'
+import { InboxTab } from './InboxTab'
+import type { SharedInbox } from '../lib/inbox'
 
 export { openAddAccountSheet, openAccountSwitcherSheet }
 
@@ -27,13 +29,15 @@ function formatDate(ts: number): string {
 
 export default function Settings({
 	api,
+	inbox,
 }: {
 	api: PluginApi<{ jsonStorage: MoreAltsStorage }>
+	inbox?: SharedInbox
 }) {
 	const rev = getValenced()
 	const { ScrollView, View, Alert, Text, Pressable } = rev.react.ReactNative
 	const { TableRowGroup, TableSwitchRow, TableRow } = rev.discord.design.Design
-	const [tab, setTab] = React.useState<'Accounts' | 'Preferences'>('Accounts')
+	const [tab, setTab] = React.useState<'Accounts' | 'Inbox' | 'Preferences'>('Accounts')
 	const colors = usePalette()
 	const bottomPadding = useBottomPadding(24)
 	const storage = { ...DEFAULT_STORAGE, ...api.jsonStorage.use() } as MoreAltsStorage
@@ -50,6 +54,10 @@ export default function Settings({
 	}
 
 	const handleRemove = (account: Account) => {
+		const remove = async () => {
+			await removeAccount(api.jsonStorage, account.id)
+			await inbox?.remove(account.id)
+		}
 		if (storage.confirmBeforeDelete !== false) {
 			Alert.alert(
 				'Remove Account',
@@ -60,13 +68,13 @@ export default function Settings({
 						text: 'Remove',
 						style: 'destructive',
 						onPress: () => {
-							void removeAccount(api.jsonStorage, account.id)
+							void remove()
 						},
 					},
 				],
 			)
 		} else {
-			void removeAccount(api.jsonStorage, account.id)
+			void remove()
 		}
 	}
 
@@ -160,15 +168,15 @@ export default function Settings({
 			<View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 4, padding: 4,
 				marginHorizontal: 16, marginTop: 12, marginBottom: 4, borderRadius: 16,
 				backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.line }}>
-				{(['Accounts', 'Preferences'] as const).map(name => (
+				{(['Accounts', 'Inbox', 'Preferences'] as const).map(name => (
 					<Pressable key={name} accessibilityRole="tab" accessibilityLabel={name}
 						accessibilityState={{ selected: tab === name }} onPress={() => setTab(name)}
 						style={({ pressed }: { pressed: boolean }) => ({ flex: 1, minHeight: 44, borderRadius: 12,
 							flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 6,
 							backgroundColor: tab === name ? colors.selected : pressed ? colors.mutedPanel : 'transparent' })}>
-						<Glyph names={name === 'Accounts' ? ['UserMultipleIcon', 'FriendsIcon'] : ['SettingsIcon', 'CogIcon']}
+						<Glyph names={name === 'Accounts' ? ['UserMultipleIcon', 'FriendsIcon'] : name === 'Inbox' ? ['InboxIcon', 'EnvelopeIcon'] : ['SettingsIcon', 'CogIcon']}
 							color={tab === name ? colors.text : colors.muted} size={17} />
-						<Text style={{ color: tab === name ? colors.text : colors.muted, fontSize: 14, fontWeight: '700' }}>{name}</Text>
+						<Text style={{ color: tab === name ? colors.text : colors.muted, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'center' }}>{name}</Text>
 					</Pressable>
 				))}
 			</View>
@@ -224,6 +232,10 @@ export default function Settings({
 							</View>
 						</View>
 					</>
+				) : tab === 'Inbox' ? (
+					inbox ? <InboxTab inbox={inbox} enabled={storage.sharedInboxEnabled} accounts={accounts} currentId={currentUserId}
+						colors={colors} switchAccount={handleSwitch} setEnabled={value => api.jsonStorage.set({ sharedInboxEnabled: value })} />
+						: <Text style={{ color: colors.muted, fontSize: 14 }}>Shared inbox is unavailable on this Valenced version.</Text>
 				) : (
 					<>
 						<TableRowGroup title="Switching">

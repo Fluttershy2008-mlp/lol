@@ -4,6 +4,9 @@ import { setupChangelog } from '../../../shared/changelog'
 import { CHANGELOG } from './changelog'
 import Settings from './ui/Settings'
 import { DEFAULT_STORAGE, upgradeLegacyStorage, type MoreAltsStorage } from './lib/types'
+import { startSharedInbox, type SharedInbox } from './lib/inbox'
+
+let sharedInbox: SharedInbox | undefined
 
 export default plugin<{ jsonStorage: MoreAltsStorage }>({
 	jsonStorage: {
@@ -60,6 +63,16 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 		} catch (e) {
 			api.logger?.error(`[MoreAlts] Failed to apply tab bar long press patch: ${e}`)
 		}
+		try {
+			const inbox = startSharedInbox(api)
+			sharedInbox = inbox
+			api.cleanup(() => {
+				inbox?.stop()
+				if (sharedInbox === inbox) sharedInbox = undefined
+			})
+		} catch (error) {
+			api.logger?.warn?.(`[MoreAlts] Shared inbox unavailable: ${error}`)
+		}
 
 		api.cleanup(() => {
 			unpatchNative()
@@ -67,5 +80,7 @@ export default plugin<{ jsonStorage: MoreAltsStorage }>({
 		})
 	},
 
-	SettingsComponent: Settings,
+	SettingsComponent(props) {
+		return props.api.unscoped.react.React.createElement(Settings, { ...props, inbox: sharedInbox })
+	},
 })
