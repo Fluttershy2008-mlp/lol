@@ -101,7 +101,7 @@ export function createPlugin(V) {
       channelMembers = installChannelMemberList(V, getChannel, filter.isFilteredUser);
       cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refreshMessages, getChannel, filter.isFilteredUser);
+      search = installSearch(V, refreshMessages, filter.isFilteredUser);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {

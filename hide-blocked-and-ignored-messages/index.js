@@ -1526,19 +1526,10 @@ function createSearchScope() {
   return { run, dispatch, active: () => depth > 0 };
 }
 
-function installSearch(V, notify, getChannel, isFilteredUser) {
+function installSearch(V, notify, isFilteredUser) {
   const scope = createSearchScope();
   const cleanups = [], stores = new Set(), patched = new WeakMap();
-  const memberSearchChannels = new Map();
   let memberResults = new WeakMap(), stopped = false;
-  function isChannelMemberSearch(id) {
-    const channelId = memberSearchChannels.get(id) ?? id;
-    if (typeof channelId !== 'string') return false;
-    try {
-      const type = getChannel(channelId)?.type;
-      return type === 0 || type === 5;
-    } catch { return false; }
-  }
   function visibleMembers(results) {
     if (!Array.isArray(results) || !results.length) return results;
     if (memberResults.has(results)) return memberResults.get(results);
@@ -1551,29 +1542,16 @@ function installSearch(V, notify, getChannel, isFilteredUser) {
     const store = module?.default ?? module;
     if (typeof store?.getResults !== 'function' || patched.get(store)?.has('getResults')) return;
     const getRawResults = store.getResults;
-    patch(store, 'getResults', (object, key) => V.patcher.after(key, object, ([id], results) =>
-      isChannelMemberSearch(id) ? visibleMembers(results) : results));
+    // This store supplies the Members tab for both guild and channel searches.
+    patch(store, 'getResults', (object, key) => V.patcher.after(key, object, (_args, results) => visibleMembers(results)));
     patch(store, 'getCount', (object, key) => V.patcher.after(key, object, function ([id], count) {
-      if (!Number.isFinite(count) || count <= 0 || !isChannelMemberSearch(id)) return count;
+      if (!Number.isFinite(count) || count <= 0) return count;
       const results = getRawResults.call(this, id);
       if (!Array.isArray(results)) return count;
       return Math.max(0, count - (results.length - visibleMembers(results).length));
     }));
     stores.add(store);
     notify();
-  }
-  function observeMemberSearch(event) {
-    const { type, id, channelId } = event ?? {};
-    if (type === 'SEARCH_GUILD_MEMBER_TAB_SEARCH' && typeof id === 'string') {
-      // Channel contexts use the channel ID directly. An in: filter can also
-      // scope a guild context, and Discord supplies that channel in the action.
-      if (typeof channelId === 'string') memberSearchChannels.set(id, channelId);
-      else memberSearchChannels.delete(id);
-    } else if (type === 'SEARCH_GUILD_MEMBER_TAB_CLEANUP') {
-      memberSearchChannels.delete(id);
-    } else if (type === 'LOGOUT') {
-      memberSearchChannels.clear();
-    }
   }
   function patch(object, method, callback) {
     if (stopped || !object || typeof object[method] !== 'function') return;
@@ -1623,7 +1601,7 @@ function installSearch(V, notify, getChannel, isFilteredUser) {
     if (stopped) return;
     stopped = true;
     for (const cleanup of cleanups.splice(0).reverse()) { try { cleanup(); } catch {} }
-    refresh(); stores.clear(); memberSearchChannels.clear();
+    refresh(); stores.clear();
   }
   try {
     try { attachRelationships(V.metro.findByStoreName?.('RelationshipStore')); } catch {}
@@ -1648,11 +1626,7 @@ function installSearch(V, notify, getChannel, isFilteredUser) {
     watch('modules/search/native/components/layout/autocomplete/AutocompleteScreen.tsx', attachScreen);
   } catch (error) { stop(); throw error; }
   return { refresh, clear() { memberResults = new WeakMap(); }, stop,
-    dispatch(event, fn) {
-      if (stopped) return fn();
-      observeMemberSearch(event);
-      return scope.dispatch(event, fn);
-    } };
+    dispatch(event, fn) { return stopped ? fn() : scope.dispatch(event, fn); } };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
@@ -1670,7 +1644,7 @@ function createSettings(V, refresh) {
     const dark = (RN.useColorScheme?.() ?? 'dark') !== 'light';
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
-    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab and its search results.' : '';
+    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in channel member lists and Members search results.' : '';
     const rows = [
       ['hideServerPings', 'Hide pings from selected servers', 'Hide their Recent Activity/mentions, mention badges and in-app notification banners. Uses your saved server IDs. OFF restores displayed mentions. Android push notifications while Discord is closed still depend on Discord’s notification settings.'],
       ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
@@ -1950,7 +1924,7 @@ function createPlugin(V) {
       channelMembers = installChannelMemberList(V, getChannel, filter.isFilteredUser);
       cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refreshMessages, getChannel, filter.isFilteredUser);
+      search = installSearch(V, refreshMessages, filter.isFilteredUser);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {

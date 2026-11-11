@@ -85,11 +85,10 @@ test('late autocomplete modules are patched once and restored on stop', async t 
   assert.deepEqual(screen.type().map(item => item.user.id), [FRIEND]);
 });
 
-test('channel search Members results and count hide blocked and ignored users', async t => {
-  const { w } = setup(), guildSearch = '400000000000000001', voiceSearch = '300000000000000002';
-  w.channels[voiceSearch] = { type: 2 };
+test('channel and server Members search hide blocked and ignored users, including a direct username match', async t => {
+  const { w } = setup(), guildSearch = '400000000000000001';
   const rows = Object.freeze([BLOCKED, IGNORED, FRIEND].map(id => Object.freeze({ record: w.users[id] })));
-  const scoped = new Map([[CHANNEL, rows], [guildSearch, rows], [voiceSearch, rows]]);
+  const scoped = new Map([[CHANNEL, rows], [guildSearch, rows]]);
   let changes = 0;
   class SearchGuildMemberTabStore {
     getResults(id) { return scoped.get(id); }
@@ -112,18 +111,15 @@ test('channel search Members results and count hide blocked and ignored users', 
   assert.deepEqual(ids(CHANNEL), [FRIEND]);
   assert.equal(memberSearch.getResults(CHANNEL), memberSearch.getResults(CHANNEL));
   assert.equal(memberSearch.getCount(CHANNEL), 1);
-  assert.equal(memberSearch.getResults(guildSearch), rows);
-  assert.equal(memberSearch.getResults(voiceSearch), rows);
+  assert.deepEqual(ids(guildSearch), [FRIEND]);
+  assert.equal(memberSearch.getCount(guildSearch), 1);
   assert.equal(memberSearch.getCount('unknown'), null);
 
-  let duringSearch;
-  w.dispatcher.subscribe('SEARCH_GUILD_MEMBER_TAB_SEARCH', ({ id }) => { duringSearch = ids(id); });
-  await w.dispatcher.dispatch({ type: 'SEARCH_GUILD_MEMBER_TAB_SEARCH', id: guildSearch, channelId: CHANNEL });
-  assert.deepEqual(duringSearch, [FRIEND]);
-  assert.equal(memberSearch.getCount(guildSearch), 1);
-  await w.dispatcher.dispatch({ type: 'SEARCH_GUILD_MEMBER_TAB_CLEANUP', id: guildSearch });
-  assert.equal(memberSearch.getResults(guildSearch), rows);
-  assert.equal(memberSearch.getCount(guildSearch), 3);
+  // Server search without an in: filter, where the blocked account is the only match.
+  const directMatch = Object.freeze([rows[0]]);
+  scoped.set(guildSearch, directMatch);
+  assert.deepEqual(ids(guildSearch), []);
+  assert.equal(memberSearch.getCount(guildSearch), 0);
 
   settings = await w.render(item);
   const whitelist = settings.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Show whitelisted users');
@@ -132,6 +128,8 @@ test('channel search Members results and count hide blocked and ignored users', 
     await w.advance(0);
   });
   assert.deepEqual(ids(CHANNEL), [BLOCKED, FRIEND]);
+  assert.equal(memberSearch.getResults(guildSearch), directMatch);
+  assert.equal(memberSearch.getCount(guildSearch), 1);
   assert.equal(memberSearch.getCount(CHANNEL), 2);
   const before = changes;
   w.relationships[FRIEND] = 2;

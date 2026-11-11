@@ -15,7 +15,7 @@ export function createSettings(V, refresh) {
     const dark = (RN.useColorScheme?.() ?? 'dark') !== 'light';
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
-    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab and its search results.' : '';
+    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in channel member lists and Members search results.' : '';
     const rows = [
       ['hideServerPings', 'Hide pings from selected servers', 'Hide their Recent Activity/mentions, mention badges and in-app notification banners. Uses your saved server IDs. OFF restores displayed mentions. Android push notifications while Discord is closed still depend on Discord’s notification settings.'],
       ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
