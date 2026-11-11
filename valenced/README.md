@@ -1,3 +1,5 @@
+**HideBlockedAndIgnoredMessages 1.0.0-beta18** also hides blocked and ignored users in the Members results when searching a text or announcement channel. The Members count follows the visible results. Refresh the repository, update the plugin, and restart Discord.
+
 **HideBlockedAndIgnoredMessages 1.0.0-beta17** hides blocked and ignored users from the Members tab in text and announcement channels. The existing hide switches and user whitelist apply. Refresh the repository, update the plugin, and restart Discord.
 
 **Message Bubbles 1.0.0-beta3** puts your blue bubbles on the left and everyone else’s bubbles on the right. Refresh this repository, update **Message Bubbles**, and fully restart Discord. [Usage and source](plugins/message-bubbles/README.md).

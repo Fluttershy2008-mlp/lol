@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: CC0-1.0 */
-// Search is an explicit way to view blocked users. Keep it separate from chat
-// filtering: no search results, context messages or suggestions are removed.
+// Explicit message search and author suggestions can include blocked users.
 export function createSearchScope() {
   let depth = 0;
   function run(fn) {
@@ -19,10 +18,55 @@ export function createSearchScope() {
   return { run, dispatch, active: () => depth > 0 };
 }
 
-export function installSearch(V, notify = () => {}) {
+export function installSearch(V, notify, getChannel, isFilteredUser) {
   const scope = createSearchScope();
   const cleanups = [], stores = new Set(), patched = new WeakMap();
-  let stopped = false;
+  const memberSearchChannels = new Map();
+  let memberResults = new WeakMap(), stopped = false;
+  function isChannelMemberSearch(id) {
+    const channelId = memberSearchChannels.get(id) ?? id;
+    if (typeof channelId !== 'string') return false;
+    try {
+      const type = getChannel(channelId)?.type;
+      return type === 0 || type === 5;
+    } catch { return false; }
+  }
+  function visibleMembers(results) {
+    if (!Array.isArray(results) || !results.length) return results;
+    if (memberResults.has(results)) return memberResults.get(results);
+    const filtered = results.filter(result => !isFilteredUser(result?.record?.id));
+    const visible = filtered.length === results.length ? results : filtered;
+    memberResults.set(results, visible);
+    return visible;
+  }
+  function attachMemberSearch(module) {
+    const store = module?.default ?? module;
+    if (typeof store?.getResults !== 'function' || patched.get(store)?.has('getResults')) return;
+    const getRawResults = store.getResults;
+    patch(store, 'getResults', (object, key) => V.patcher.after(key, object, ([id], results) =>
+      isChannelMemberSearch(id) ? visibleMembers(results) : results));
+    patch(store, 'getCount', (object, key) => V.patcher.after(key, object, function ([id], count) {
+      if (!Number.isFinite(count) || count <= 0 || !isChannelMemberSearch(id)) return count;
+      const results = getRawResults.call(this, id);
+      if (!Array.isArray(results)) return count;
+      return Math.max(0, count - (results.length - visibleMembers(results).length));
+    }));
+    stores.add(store);
+    notify();
+  }
+  function observeMemberSearch(event) {
+    const { type, id, channelId } = event ?? {};
+    if (type === 'SEARCH_GUILD_MEMBER_TAB_SEARCH' && typeof id === 'string') {
+      // Channel contexts use the channel ID directly. An in: filter can also
+      // scope a guild context, and Discord supplies that channel in the action.
+      if (typeof channelId === 'string') memberSearchChannels.set(id, channelId);
+      else memberSearchChannels.delete(id);
+    } else if (type === 'SEARCH_GUILD_MEMBER_TAB_CLEANUP') {
+      memberSearchChannels.delete(id);
+    } else if (type === 'LOGOUT') {
+      memberSearchChannels.clear();
+    }
+  }
   function patch(object, method, callback) {
     if (stopped || !object || typeof object[method] !== 'function') return;
     const methods = patched.get(object) ?? new Set();
@@ -71,7 +115,7 @@ export function installSearch(V, notify = () => {}) {
     if (stopped) return;
     stopped = true;
     for (const cleanup of cleanups.splice(0).reverse()) { try { cleanup(); } catch {} }
-    refresh(); stores.clear();
+    refresh(); stores.clear(); memberSearchChannels.clear();
   }
   try {
     try { attachRelationships(V.metro.findByStoreName?.('RelationshipStore')); } catch {}
@@ -87,10 +131,18 @@ export function installSearch(V, notify = () => {}) {
       attachStore(store, method);
       watch(path, module => attachStore(module, method));
     }
+    if (typeof V.metro.getModuleWithImportedPath === 'function') {
+      try { attachMemberSearch(V.metro.findByStoreName?.('SearchGuildMemberTabStore')); } catch {}
+      watch('modules/search/native/stores/SearchMemberTabStore.tsx', attachMemberSearch);
+    }
     try { attachScreen(V.metro.findByTypeName?.('AutocompleteScreen')); } catch {}
     try { attachScreen(V.metro.findByName?.('AutocompleteScreen', false)); } catch {}
     watch('modules/search/native/components/layout/autocomplete/AutocompleteScreen.tsx', attachScreen);
   } catch (error) { stop(); throw error; }
-  return { refresh, clear() {}, stop,
-    dispatch(event, fn) { return stopped ? fn() : scope.dispatch(event, fn); } };
+  return { refresh, clear() { memberResults = new WeakMap(); }, stop,
+    dispatch(event, fn) {
+      if (stopped) return fn();
+      observeMemberSearch(event);
+      return scope.dispatch(event, fn);
+    } };
 }

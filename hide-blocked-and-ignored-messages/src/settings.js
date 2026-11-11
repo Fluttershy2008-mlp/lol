@@ -15,14 +15,14 @@ export function createSettings(V, refresh) {
     const dark = (RN.useColorScheme?.() ?? 'dark') !== 'light';
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
-    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab too.' : '';
+    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab and its search results.' : '';
     const rows = [
       ['hideServerPings', 'Hide pings from selected servers', 'Hide their Recent Activity/mentions, mention badges and in-app notification banners. Uses your saved server IDs. OFF restores displayed mentions. Android push notifications while Discord is closed still depend on Discord’s notification settings.'],
       ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
       ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
-      ['blocked', 'Hide blocked users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
-      ['ignored', 'Hide ignored users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
+      ['blocked', 'Hide blocked users', 'Remove their messages from chat.' + memberListNote + ''],
+      ['ignored', 'Hide ignored users', 'Remove their messages from chat.' + memberListNote + ''],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
@@ -121,7 +121,7 @@ export function createSettings(V, refresh) {
         'Whitelisted users appear as normal messages, without a blocked-message bar. Keep Hide blocked users and Hide ignored users enabled to hide everyone else.')
     ) : null,
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
-      'Search includes blocked and ignored users, including from: suggestions and message results. Your chat whitelist does not restrict search.'),
+      'Message search and from: suggestions can show blocked and ignored users.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },

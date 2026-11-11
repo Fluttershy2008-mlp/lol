@@ -70,7 +70,8 @@ export function createPlugin(V) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
     const channelStore = byStore('ChannelStore') ?? byProps('getChannel', 'getChannels');
-    const servers = createServerFilter(storage, id => channelStore?.getChannel?.(id));
+    const getChannel = id => channelStore?.getChannel?.(id);
+    const servers = createServerFilter(storage, getChannel);
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
       getMessage: originalGetMessage, isServerMessageHidden: servers.isServerMessageHidden });
@@ -97,10 +98,10 @@ export function createPlugin(V) {
       cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
-      channelMembers = installChannelMemberList(V, id => channelStore?.getChannel?.(id), filter.isFilteredUser);
+      channelMembers = installChannelMemberList(V, getChannel, filter.isFilteredUser);
       cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refreshMessages);
+      search = installSearch(V, refreshMessages, getChannel, filter.isFilteredUser);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {

@@ -84,3 +84,65 @@ test('late autocomplete modules are patched once and restored on stop', async t 
   assert.equal(screen.type, original);
   assert.deepEqual(screen.type().map(item => item.user.id), [FRIEND]);
 });
+
+test('channel search Members results and count hide blocked and ignored users', async t => {
+  const { w } = setup(), guildSearch = '400000000000000001', voiceSearch = '300000000000000002';
+  w.channels[voiceSearch] = { type: 2 };
+  const rows = Object.freeze([BLOCKED, IGNORED, FRIEND].map(id => Object.freeze({ record: w.users[id] })));
+  const scoped = new Map([[CHANNEL, rows], [guildSearch, rows], [voiceSearch, rows]]);
+  let changes = 0;
+  class SearchGuildMemberTabStore {
+    getResults(id) { return scoped.get(id); }
+    getCount(id) { return scoped.get(id)?.length ?? null; }
+    emitChange() { changes++; }
+  }
+  const memberSearch = new SearchGuildMemberTabStore();
+  const originalResults = memberSearch.getResults, originalCount = memberSearch.getCount;
+  const item = await w.start('hide-blocked-and-ignored-messages', { whitelistedIds: [BLOCKED] });
+  let settings;
+  t.after(async () => {
+    if (settings) await w.Renderer.act(async () => settings.unmount());
+    await w.stop(item);
+    assert.deepEqual(w.errors, []);
+    assert.equal(w.pathWaiters.size, 0);
+    assert.equal(w.timers.size, 0);
+  });
+  w.addModule({ default: memberSearch }, 'modules/search/native/stores/SearchMemberTabStore.tsx');
+  const ids = id => memberSearch.getResults(id).map(result => result.record.id);
+  assert.deepEqual(ids(CHANNEL), [FRIEND]);
+  assert.equal(memberSearch.getResults(CHANNEL), memberSearch.getResults(CHANNEL));
+  assert.equal(memberSearch.getCount(CHANNEL), 1);
+  assert.equal(memberSearch.getResults(guildSearch), rows);
+  assert.equal(memberSearch.getResults(voiceSearch), rows);
+  assert.equal(memberSearch.getCount('unknown'), null);
+
+  let duringSearch;
+  w.dispatcher.subscribe('SEARCH_GUILD_MEMBER_TAB_SEARCH', ({ id }) => { duringSearch = ids(id); });
+  await w.dispatcher.dispatch({ type: 'SEARCH_GUILD_MEMBER_TAB_SEARCH', id: guildSearch, channelId: CHANNEL });
+  assert.deepEqual(duringSearch, [FRIEND]);
+  assert.equal(memberSearch.getCount(guildSearch), 1);
+  await w.dispatcher.dispatch({ type: 'SEARCH_GUILD_MEMBER_TAB_CLEANUP', id: guildSearch });
+  assert.equal(memberSearch.getResults(guildSearch), rows);
+  assert.equal(memberSearch.getCount(guildSearch), 3);
+
+  settings = await w.render(item);
+  const whitelist = settings.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Show whitelisted users');
+  await w.Renderer.act(async () => {
+    whitelist.props.onValueChange(true);
+    await w.advance(0);
+  });
+  assert.deepEqual(ids(CHANNEL), [BLOCKED, FRIEND]);
+  assert.equal(memberSearch.getCount(CHANNEL), 2);
+  const before = changes;
+  w.relationships[FRIEND] = 2;
+  w.stores.RelationshipStore.emitChange();
+  await w.advance(0);
+  assert.ok(changes > before);
+  assert.deepEqual(ids(CHANNEL), [BLOCKED]);
+  assert.equal(memberSearch.getCount(CHANNEL), 1);
+  assert.equal(rows.length, 3);
+  await w.stop(item);
+  assert.equal(memberSearch.getResults, originalResults);
+  assert.equal(memberSearch.getCount, originalCount);
+  assert.equal(memberSearch.getResults(CHANNEL), rows);
+});

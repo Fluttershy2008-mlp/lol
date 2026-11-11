@@ -1507,8 +1507,7 @@ function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden) {
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
-// Search is an explicit way to view blocked users. Keep it separate from chat
-// filtering: no search results, context messages or suggestions are removed.
+// Explicit message search and author suggestions can include blocked users.
 function createSearchScope() {
   let depth = 0;
   function run(fn) {
@@ -1527,10 +1526,55 @@ function createSearchScope() {
   return { run, dispatch, active: () => depth > 0 };
 }
 
-function installSearch(V, notify = () => {}) {
+function installSearch(V, notify, getChannel, isFilteredUser) {
   const scope = createSearchScope();
   const cleanups = [], stores = new Set(), patched = new WeakMap();
-  let stopped = false;
+  const memberSearchChannels = new Map();
+  let memberResults = new WeakMap(), stopped = false;
+  function isChannelMemberSearch(id) {
+    const channelId = memberSearchChannels.get(id) ?? id;
+    if (typeof channelId !== 'string') return false;
+    try {
+      const type = getChannel(channelId)?.type;
+      return type === 0 || type === 5;
+    } catch { return false; }
+  }
+  function visibleMembers(results) {
+    if (!Array.isArray(results) || !results.length) return results;
+    if (memberResults.has(results)) return memberResults.get(results);
+    const filtered = results.filter(result => !isFilteredUser(result?.record?.id));
+    const visible = filtered.length === results.length ? results : filtered;
+    memberResults.set(results, visible);
+    return visible;
+  }
+  function attachMemberSearch(module) {
+    const store = module?.default ?? module;
+    if (typeof store?.getResults !== 'function' || patched.get(store)?.has('getResults')) return;
+    const getRawResults = store.getResults;
+    patch(store, 'getResults', (object, key) => V.patcher.after(key, object, ([id], results) =>
+      isChannelMemberSearch(id) ? visibleMembers(results) : results));
+    patch(store, 'getCount', (object, key) => V.patcher.after(key, object, function ([id], count) {
+      if (!Number.isFinite(count) || count <= 0 || !isChannelMemberSearch(id)) return count;
+      const results = getRawResults.call(this, id);
+      if (!Array.isArray(results)) return count;
+      return Math.max(0, count - (results.length - visibleMembers(results).length));
+    }));
+    stores.add(store);
+    notify();
+  }
+  function observeMemberSearch(event) {
+    const { type, id, channelId } = event ?? {};
+    if (type === 'SEARCH_GUILD_MEMBER_TAB_SEARCH' && typeof id === 'string') {
+      // Channel contexts use the channel ID directly. An in: filter can also
+      // scope a guild context, and Discord supplies that channel in the action.
+      if (typeof channelId === 'string') memberSearchChannels.set(id, channelId);
+      else memberSearchChannels.delete(id);
+    } else if (type === 'SEARCH_GUILD_MEMBER_TAB_CLEANUP') {
+      memberSearchChannels.delete(id);
+    } else if (type === 'LOGOUT') {
+      memberSearchChannels.clear();
+    }
+  }
   function patch(object, method, callback) {
     if (stopped || !object || typeof object[method] !== 'function') return;
     const methods = patched.get(object) ?? new Set();
@@ -1579,7 +1623,7 @@ function installSearch(V, notify = () => {}) {
     if (stopped) return;
     stopped = true;
     for (const cleanup of cleanups.splice(0).reverse()) { try { cleanup(); } catch {} }
-    refresh(); stores.clear();
+    refresh(); stores.clear(); memberSearchChannels.clear();
   }
   try {
     try { attachRelationships(V.metro.findByStoreName?.('RelationshipStore')); } catch {}
@@ -1595,12 +1639,20 @@ function installSearch(V, notify = () => {}) {
       attachStore(store, method);
       watch(path, module => attachStore(module, method));
     }
+    if (typeof V.metro.getModuleWithImportedPath === 'function') {
+      try { attachMemberSearch(V.metro.findByStoreName?.('SearchGuildMemberTabStore')); } catch {}
+      watch('modules/search/native/stores/SearchMemberTabStore.tsx', attachMemberSearch);
+    }
     try { attachScreen(V.metro.findByTypeName?.('AutocompleteScreen')); } catch {}
     try { attachScreen(V.metro.findByName?.('AutocompleteScreen', false)); } catch {}
     watch('modules/search/native/components/layout/autocomplete/AutocompleteScreen.tsx', attachScreen);
   } catch (error) { stop(); throw error; }
-  return { refresh, clear() {}, stop,
-    dispatch(event, fn) { return stopped ? fn() : scope.dispatch(event, fn); } };
+  return { refresh, clear() { memberResults = new WeakMap(); }, stop,
+    dispatch(event, fn) {
+      if (stopped) return fn();
+      observeMemberSearch(event);
+      return scope.dispatch(event, fn);
+    } };
 }
 
 /* SPDX-License-Identifier: CC0-1.0 */
@@ -1618,14 +1670,14 @@ function createSettings(V, refresh) {
     const dark = (RN.useColorScheme?.() ?? 'dark') !== 'light';
     const text = dark ? '#f2f3f5' : '#202225';
     const muted = dark ? '#b9bec9' : '#505663';
-    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab too.' : '';
+    const memberListNote = typeof V.metro.getModuleWithImportedPath === 'function' ? ' Hide them in the text channel Members tab and its search results.' : '';
     const rows = [
       ['hideServerPings', 'Hide pings from selected servers', 'Hide their Recent Activity/mentions, mention badges and in-app notification banners. Uses your saved server IDs. OFF restores displayed mentions. Android push notifications while Discord is closed still depend on Discord’s notification settings.'],
       ['hideServerIcons', 'Hide selected server icons', 'ON hides the icons; OFF shows them again immediately. Uses your saved server IDs, including folder previews. This switch works independently of message and channel hiding.'],
       ['hideServerChannels', 'Hide channel lists in selected servers', 'Also hide their text channels, forums, media channels, categories, voice channels and threads from the sidebar. Uses the same server ID list below.'],
       ['hideServers', 'Hide messages from selected servers', 'Hide all chat messages in servers on your server ID list, including threads. Your user whitelist does not override this.'],
-      ['blocked', 'Hide blocked users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
-      ['ignored', 'Hide ignored users', 'Remove their messages from chat.' + memberListNote + ' You can still look them up in search.'],
+      ['blocked', 'Hide blocked users', 'Remove their messages from chat.' + memberListNote + ''],
+      ['ignored', 'Hide ignored users', 'Remove their messages from chat.' + memberListNote + ''],
       ['removeMentions', 'Hide mentions of them', 'Remove their @mentions from other people’s messages. The rest of the message stays visible.'],
       ['removeReplies', 'Hide replies to them', 'Also hide messages replying to a blocked or ignored user.'],
       ['removeBotCommands', 'Hide their bot commands', 'Hide bot responses to slash commands and interactions they trigger.'],
@@ -1724,7 +1776,7 @@ function createSettings(V, refresh) {
         'Whitelisted users appear as normal messages, without a blocked-message bar. Keep Hide blocked users and Hide ignored users enabled to hide everyone else.')
     ) : null,
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
-      'Search includes blocked and ignored users, including from: suggestions and message results. Your chat whitelist does not restrict search.'),
+      'Message search and from: suggestions can show blocked and ignored users.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 18 } },
       'Hidden messages leave no replacement text. If an open chat does not refresh, switch channels and return.'),
     h(RN.Text, { style: { color: muted, fontSize: 13, lineHeight: 20, marginTop: 10 } },
@@ -1867,7 +1919,8 @@ function createPlugin(V) {
       throw new Error('HideBlockedAndIgnoredMessages: message or relationship modules are unavailable on this Discord build.');
     }
     const channelStore = byStore('ChannelStore') ?? byProps('getChannel', 'getChannels');
-    const servers = createServerFilter(storage, id => channelStore?.getChannel?.(id));
+    const getChannel = id => channelStore?.getChannel?.(id);
+    const servers = createServerFilter(storage, getChannel);
     const originalGetMessage = messageStore.getMessage.bind(messageStore);
     filter = createMessageFilter({ storage, blockedStore, ignoredStore,
       getMessage: originalGetMessage, isServerMessageHidden: servers.isServerMessageHidden });
@@ -1894,10 +1947,10 @@ function createPlugin(V) {
       cleanup.push(guildIcons.stop);
       channelLists = installChannelLists(V, servers);
       cleanup.push(channelLists.stop);
-      channelMembers = installChannelMemberList(V, id => channelStore?.getChannel?.(id), filter.isFilteredUser);
+      channelMembers = installChannelMemberList(V, getChannel, filter.isFilteredUser);
       cleanup.push(channelMembers.stop);
       cleanup.push(installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden));
-      search = installSearch(V, refreshMessages);
+      search = installSearch(V, refreshMessages, getChannel, filter.isFilteredUser);
       cleanup.push(search.stop);
       // Native rows can resolve content by ID instead of using the list record.
       cleanup.push(V.patcher.after('getMessage', messageStore, (_args, result) => {
