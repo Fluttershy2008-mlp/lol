@@ -2,9 +2,9 @@
   "format": 1,
   "id": "dev.fluttershy2008.fluttershy-theme",
   "name": "Fluttershy - Pink & Yellow (Valenced)",
-  "description": "Fluttershy pink-and-yellow colours with a centred scrapbook collage, a soft plum tint and dark navigation. Wallpaper included for offline use.",
+  "description": "Fluttershy scrapbook wallpaper with Rainbow Dash-inspired sky-blue text and icons, lavender categories and sunny yellow mentions. Wallpaper included for offline use.",
   "author": "Fluttershy2008",
-  "version": "1.0.0-beta4",
+  "version": "1.0.0-beta5",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"

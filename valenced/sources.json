@@ -184,8 +184,8 @@
     },
     "dev.fluttershy2008.fluttershy-theme": {
       "path": "valenced/themes/fluttershy/index.js",
-      "sha256": "85fe53a3b141b743da628b0f956d7f9ae272b0f3b18c61a43f223a72f0b80ebe",
-      "originalVersion": "1.0.0-beta4",
+      "sha256": "2858a0a3c07455fec756f60fb94be8a1572eb8e1ed881bc3d368c593ea95f0b4",
+      "originalVersion": "1.0.0-beta5",
       "kind": "native-theme"
     },
     "dev.fluttershy2008.rainbow-dash-theme": {
