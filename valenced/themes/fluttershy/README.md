@@ -1,18 +1,13 @@
 # Fluttershy - Pink & Yellow (Valenced)
 
-Version **1.0.0-beta5** pairs the Fluttershy scrapbook with Rainbow Dash-inspired colours. Chat text is pale sky blue, channel names are brighter, category labels are lavender, and links and icons use cyan. Mentions use sunny yellow, with a deep blue highlight for the selected channel.
+Version **1.0.0-beta6** appears as **Fluttershy · Rainbow Skies** in the Colors picker. It uses sky-blue chat text and icons, brighter channel labels, lavender categories, sunny mentions and navy panels. The original 864 × 1536 Fluttershy and Angel collage ships offline and stays centred behind the interface.
 
-The original 864 × 1536 JPEG featuring Fluttershy and Angel is bundled for offline use.
-
-Valenced centres the image proportionally and uses a light blur (1) and 60% opacity over the plum base. Dark navigation uses 86% surface dimming to keep channel names readable. The cover renderer can crop the outer edges on taller screens.
+The theme refreshes a saved selection once Discord's colour tokens load. Valenced can otherwise keep the old colours when registration happens early in startup.
 
 ## Update
 
-1. Refresh Fluttershy's Valenced Repository and update the existing Fluttershy theme to **1.0.0-beta5**, or import the ZIP.
-2. Fully restart Discord and select **Fluttershy - Pink & Yellow**.
-3. If previous background slider values are still applied, reset Background to the theme defaults.
-
-No Classic Fluttershy Chat Background companion is required.
+1. Update **Fluttershy - Pink & Yellow (Valenced)** to **1.0.0-beta6**, or import the ZIP using **Install from file** in Valenced's plugin settings. Fully restart Discord.
+2. Open **Discord Settings → Valenced Themes → Colors** and look for **Fluttershy · Rainbow Skies**. If the palette is stale, select the default colours, then select **Fluttershy · Rainbow Skies** again.
 
 ## Build and validation
 

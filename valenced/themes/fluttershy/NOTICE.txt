@@ -1,8 +1,8 @@
-Fluttershy - Pink & Yellow (Valenced), version 1.0.0-beta5.
+Fluttershy - Pink & Yellow (Valenced), version 1.0.0-beta6.
 Theme colours adapted from the original Fluttershy theme by Fluttershy2008.
 Text and icon colours are inspired by Fluttershy2008's Rainbow Dash theme.
 Wallpaper: user-supplied Fluttershy scrapbook collage, bundled unchanged.
 
 The Themes API draws the collage at opacity 0.60 with blur 1 and surface
-dimming 0.86. Its screen-aligned cover renderer retains the image aspect
+dimming 0.90. Its screen-aligned cover renderer retains the image aspect
 ratio and may crop the edges. The wallpaper is available offline.
