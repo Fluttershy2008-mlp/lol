@@ -1,18 +1,7 @@
-Fluttershy - Pink & Yellow (Valenced), version 1.0.0-beta3.
+Fluttershy - Pink & Yellow (Valenced), version 1.0.0-beta4.
 Theme colours adapted from the original Fluttershy theme by Fluttershy2008.
-Wallpaper: user's supplied Fluttershy collage, bundled unchanged.
+Wallpaper: user-supplied Fluttershy scrapbook collage, bundled unchanged.
 
-This update softens the existing wallpaper through the Themes API (opacity 0.65,
-blur 2), increases surface dimming to 0.86, supplies the dark plum surface colour,
-and adds modern text, channel and icon tokens. Input fields and popups are opaque.
-The existing plugin, group and theme IDs are preserved. No extra companion is needed.
-The screen-aligned cover renderer retains the source aspect ratio and may crop edges.
-No global image, touch, navigation or React hooks are installed by this theme.
-
-After updating, fully restart Discord. If background sliders were customised,
-reset Background to the theme defaults to apply the softer appearance.
-
-Validation covers registration, wallpaper byte identity, deterministic packaging,
-catalogue hashes, preservation of previous releases and unrelated entries, and
-the contrast of modern labels over the darkest/brightest sidebar surfaces.
-No physical Android test was available.
+The Themes API draws the collage at opacity 0.60 with blur 1 and surface
+dimming 0.86. Its screen-aligned cover renderer retains the image aspect
+ratio and may crop the edges. The wallpaper is available offline.

@@ -750,11 +750,11 @@ const colors = {
 };
 const definition = {
   "name": "Fluttershy - Pink & Yellow",
-  "description": "Fluttershy pink-and-yellow colours with a softer centred collage, dark plum navigation and clearer labels. Wallpaper included for offline use.",
+  "description": "Fluttershy pink-and-yellow colours with a centred scrapbook collage, a soft plum tint and dark navigation. Wallpaper included for offline use.",
   "background": {
     "path": "assets/backgrounds/fluttershy-collage.jpg",
-    "opacity": 0.65,
-    "blur": 2,
+    "opacity": 0.60,
+    "blur": 1,
     "dimming": 0.86
   }
 };
