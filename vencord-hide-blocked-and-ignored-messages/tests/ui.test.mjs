@@ -10,8 +10,21 @@ const React = require('react');
 const JSX = require('react/jsx-runtime');
 const Renderer = require('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-async function loadPlugin({ legacy = false } = {}) {
-    const bridge = { modal: undefined, settings: undefined, settingsHost: legacy ? { customSections: [] } : { customEntries: [], customSections: [] } };
+function displayRuntime() {
+    const listeners = { members: new Set(), previews: new Set() };
+    let revision = 1, hide = true, active = false;
+    return {
+        start() { active = true; }, stop() { active = false; this.refresh(); },
+        refresh() { revision++; for (const group of Object.values(listeners)) for (const listener of group) listener(); },
+        subscribe(kind, callback) { listeners[kind].add(callback); return () => listeners[kind].delete(callback); },
+        revision: () => revision,
+        hiddenPreview: (props, native) => active ? hide && props?.message?.author?.id === 'blocked' : native,
+        memberList: props => active && hide ? { ...props, rows: props.rows.filter(row => row !== 'blocked'), version: revision } : props,
+        toggle(value) { hide = value; this.refresh(); }
+    };
+}
+async function loadPlugin({ legacy = false, runtime } = {}) {
+    const bridge = { runtime, modal: undefined, settings: undefined, settingsHost: legacy ? { customSections: [] } : { customEntries: [], customSections: [] } };
     globalThis.__HBIM_TEST__ = { React, JSX, bridge };
     const bundle = await build({ entryPoints: [fileURLToPath(new URL('../hideBlockedAndIgnoredMessages/index.tsx', import.meta.url))],
         bundle: true, format: 'cjs', platform: 'node', write: false, jsx: 'automatic', loader: { '.css': 'empty' },
@@ -20,7 +33,7 @@ async function loadPlugin({ legacy = false } = {}) {
             build.onResolve({ filter: /^(?:@|react)/ }, args => ({ path: args.path, namespace: 'host' }));
             build.onLoad({ filter: /.*/, namespace: 'host' }, ({ path: id }) => {
                 const prefix = 'Object.defineProperty(exports,"__esModule",{value:true});const {React,JSX,bridge}=globalThis.__HBIM_TEST__;';
-                if (id === 'desktop-runtime') return { contents: 'export const createDesktopRuntime=()=>({start(){},stop(){},refresh(){}});' };
+                if (id === 'desktop-runtime') return { contents: 'export const createDesktopRuntime=()=>globalThis.__HBIM_TEST__.bridge.runtime??({start(){},stop(){},refresh(){}});' };
                 if (id === '@plugins/_core/settings') return { contents: 'export default globalThis.__HBIM_TEST__.bridge.settingsHost;' };
                 if (id === 'react/jsx-runtime') return { contents: prefix + 'exports.jsx=JSX.jsx;exports.jsxs=JSX.jsxs;exports.Fragment=JSX.Fragment;' };
                 if (id === '@api/Settings') return { contents: prefix + `exports.definePluginSettings=def=>{
@@ -35,7 +48,7 @@ async function loadPlugin({ legacy = false } = {}) {
                 if (id === '@components/Paragraph') return { contents: prefix + 'exports.Paragraph=p=>React.createElement("p",null,p.children);' };
                 if (id === '@utils/Logger') return { contents: 'exports.Logger=class {warn(){}};' };
                 if (id === '@webpack') return { contents: 'exports.filters={};exports.find=()=>{};exports.waitFor=()=>{};exports.waitForSubscriptions=new Map();' };
-                if (id === '@webpack/common') return { contents: prefix + 'exports.React=React;exports.useState=React.useState;exports.useEffect=React.useEffect;exports.useId=React.useId;exports.Modal=p=>React.createElement("dialog",null,p.children);exports.openModal=f=>bridge.modal=f;' };
+                if (id === '@webpack/common') return { contents: prefix + 'exports.React=React;exports.useState=React.useState;exports.useEffect=React.useEffect;exports.useId=React.useId;exports.useMemo=React.useMemo;exports.useSyncExternalStore=React.useSyncExternalStore;exports.Modal=p=>React.createElement("dialog",null,p.children);exports.openModal=f=>bridge.modal=f;' };
                 return { contents: '' };
             });
         } }] });
@@ -43,6 +56,46 @@ async function loadPlugin({ legacy = false } = {}) {
     new Function('module','exports','require', bundle.outputFiles[0].text)(module, module.exports, require);
     return { plugin: module.exports.default, bridge };
 }
+test('preview gates update mounted content while keeping the parent card, actions and explicit search visible', async t => {
+    const runtime = displayRuntime();
+    const { plugin } = await loadPlugin({ runtime });
+    plugin.start();
+    const Native = props => { React.useState(0); return React.createElement('span', { className: 'preview' }, props.content); };
+    const props = { message: { author: { id: 'blocked' } }, content: 'hidden content' };
+    let view;
+    t.after(async () => { await Renderer.act(async () => { view?.unmount(); plugin.stop(); }); });
+    await Renderer.act(async () => { view = Renderer.create(React.createElement('article', null,
+        React.createElement('button', null, 'Open thread'),
+        React.createElement(plugin.Preview, { component: Native, previewProps: props }),
+        React.createElement(plugin.Preview, { component: Native, previewProps: props, searchHit: true }))); });
+    assert.equal(view.root.findAllByType('article').length, 1);
+    assert.equal(view.root.findAllByType('button').length, 1);
+    assert.equal(view.root.findAllByType('span').length, 1, 'only the explicit search preview remains');
+    await Renderer.act(async () => runtime.toggle(false));
+    assert.equal(view.root.findAllByType('span').length, 2);
+    await Renderer.act(async () => runtime.toggle(true));
+    assert.equal(view.root.findAllByType('span').length, 1);
+    await Renderer.act(async () => plugin.stop());
+    assert.equal(view.root.findAllByType('span').length, 2);
+});
+test('mounted member list updates when filtering changes and restores the original props on disable', async t => {
+    const runtime = displayRuntime();
+    const { plugin } = await loadPlugin({ runtime });
+    plugin.start();
+    const props = Object.freeze({ rows: Object.freeze(['blocked', 'friend']), version: 0 });
+    let received, view;
+    const Native = p => { received = p; return React.createElement('ul', null, p.rows.map(row => React.createElement('li', { key: row }, row))); };
+    t.after(async () => { await Renderer.act(async () => { view?.unmount(); plugin.stop(); }); });
+    await Renderer.act(async () => { view = Renderer.create(React.createElement(plugin.MemberList, { component: Native, memberProps: props })); });
+    assert.equal(view.root.findAllByType('li').length, 1);
+    await Renderer.act(async () => runtime.toggle(false));
+    assert.equal(received.rows, props.rows);
+    await Renderer.act(async () => runtime.toggle(true));
+    assert.equal(view.root.findAllByType('li').length, 1);
+    await Renderer.act(async () => plugin.stop());
+    assert.equal(received.rows, props.rows);
+    assert.equal(view.root.findAllByType('li').length, 2);
+});
 test('the desktop chat button mounts real settings, validates/saves IDs and controls independent switches', async t => {
     const { plugin, bridge } = await loadPlugin(); let button, modal;
     t.after(async () => { await Renderer.act(async () => { button?.unmount(); modal?.unmount(); }); });

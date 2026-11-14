@@ -1,7 +1,25 @@
 # HideBlockedAndIgnoredMessages for Vencord
 
-Version **1.0.0-beta3**. Desktop port of Fluttershy2008-mlp's Valenced plugin,
-including the beta16 filtering optimisations.
+Version **1.0.0-beta4**. Desktop port of Fluttershy2008-mlp's Valenced beta21,
+with the same approved beta3 settings UI and existing saved settings.
+
+## Beta21 desktop update
+
+- Hide blocked and ignored users from channel and thread member lists. The existing
+  Blocked, Ignored and Whitelist switches control this too.
+- Filter the desktop Members page and its search results. Native page totals and
+  page numbers stay intact so filtering cannot make later pages unreachable.
+- Hide their forum text/media previews, thread browser snippets, chat thread
+  previews and referenced thread starter content. Forum cards, titles, tags and
+  thread actions remain usable.
+- Member scrolling maps back to Discord's original subscription indexes, including
+  unloaded rows. Original member records, message caches and author-search
+  suggestions remain available.
+- Relationship and settings changes refresh these views. Turning a switch off,
+  whitelisting a user or disabling the plugin restores the appropriate content.
+- The Users / Servers / Whitelist panel, styling, setting keys and saved IDs are
+  unchanged. The mobile-only channel-row preview has no equivalent in the standard
+  desktop sidebar; desktop thread previews are covered instead.
 
 ## Redesigned settings
 
@@ -22,7 +40,7 @@ The sidebar button uses Vencord's custom-entry API and supports older builds'
 custom-section API. It opens the same saved settings as the chat button. Plugin
 shutdown removes only this entry; other Vencord settings entries remain intact.
 
-Update from beta1 or beta2 by running the installer again and restarting Discord. Your
+Update from beta1, beta2 or beta3 by running the installer again and restarting Discord. Your
 existing server IDs and switches are retained.
 
 ## Windows CMD installation
@@ -117,10 +135,17 @@ patches installed Discord desktop branches, not Vesktop.
 
 Checked against Vencord **1.15.17**, commit
 `d07030c0968e31e41caa0c35fda0ef8ae63a079e`: `pnpm test:ts` and
-`pnpm build --dev` pass. All **54** automated tests pass, covering existing
+`pnpm build --dev` pass. All **64** automated tests pass, covering existing
 filter behaviour, search preservation, notifications, sidebar registration,
 tab navigation, shared settings, ID validation and saving, cross-panel edits,
-installer backups/rollback and the self-contained CMD payload.
+installer backups/rollback and the self-contained CMD payload. Beta4 adds checks
+for sparse member rows, display-to-native scroll ranges, page preservation,
+whitelist/relationship refreshes, preview subscriptions and component restoration.
+
+The new source patches were also matched against Discord's public desktop web
+bundle `web.25de09cac6a6078d.js` and its channel/forum/thread dependencies on
+14 November 2026. Each intended replacement matched and the patched modules
+parsed successfully. Discord may change these internal components in future.
 
 Windows CMD execution and a signed-in Discord session were not available.
 A browser preview harness is included, using the real panel and Vencord's real

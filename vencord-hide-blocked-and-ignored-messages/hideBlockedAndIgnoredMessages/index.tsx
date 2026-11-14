@@ -12,7 +12,7 @@ import { Logger } from "@utils/Logger";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
 import { RenderModalProps } from "@vencord/discord-types";
 import { filters, find, waitFor, waitForSubscriptions } from "@webpack";
-import { ChannelStore, FluxDispatcher, GuildChannelStore, GuildReadStateStore, MessageActions, MessageStore, Modal, openModal, ReadStateStore, RelationshipStore, SelectedChannelStore, SortedGuildStore } from "@webpack/common";
+import { ChannelStore, FluxDispatcher, GuildChannelStore, GuildReadStateStore, MessageActions, MessageStore, Modal, openModal, React, ReadStateStore, RelationshipStore, SelectedChannelStore, SortedGuildStore, useMemo } from "@webpack/common";
 
 import { createDesktopRuntime } from "./runtime.js";
 import { registerSettingsSidebar } from "./settings-sidebar.js";
@@ -75,6 +75,21 @@ const SettingsPage = SettingsPanel;
 const SettingsModal = ErrorBoundary.wrap((props: RenderModalProps) => <Modal {...props} title="Hidden users & servers"><SettingsPanel /></Modal>, { noop: false });
 function openSettings() { openModal(props => <SettingsModal {...props} />); }
 
+const subscribeMembers = listener => runtime?.subscribe("members", listener) ?? (() => {});
+const memberRevision = () => runtime?.revision("members") ?? 0;
+const subscribePreviews = listener => runtime?.subscribe("previews", listener) ?? (() => {});
+const previewRevision = () => runtime?.revision("previews") ?? 0;
+const MemberList = ErrorBoundary.wrap(function MemberList({ component: NativeList, memberProps }) {
+    const revision = React.useSyncExternalStore(subscribeMembers, memberRevision);
+    const projected = useMemo(() => runtime?.memberList(memberProps) ?? memberProps, [memberProps, revision]);
+    return <NativeList {...projected} />;
+}, { fallback: ({ wrappedProps: { component: NativeList, memberProps } }) => <NativeList {...memberProps} /> });
+const Preview = ErrorBoundary.wrap(function Preview({ component: NativePreview, previewProps, searchHit = false, message = undefined, nativeHidden = false }) {
+    React.useSyncExternalStore(subscribePreviews, previewRevision);
+    const hidden = runtime?.hiddenPreview(message ? { message } : previewProps, nativeHidden) ?? nativeHidden;
+    return !searchHit && hidden ? null : <NativePreview {...previewProps} />;
+}, { fallback: ({ wrappedProps: { component: NativePreview, previewProps } }) => <NativePreview {...previewProps} /> });
+
 export default definePlugin({
     name: "HideBlockedAndIgnoredMessages",
     description: "Hide blocked users, ignored users and selected servers. Manage everything in one place.",
@@ -99,6 +114,56 @@ export default definePlugin({
             find: ".__invalid_blocked,",
             replacement: { match: /let{messages:\i,[^}]*?canUncollapse[^}]*}/,
                 replace: "if($self.hideGroup(arguments[0]))return null;$&" }
+        },
+        {
+            find: "getContentFeedAdjustedDimensions",
+            group: true,
+            replacement: [
+                { match: /(?<=\.jsx\))\((\i),(\{[^{}]*updateMaxContentFeedRowSeen:[^{}]*\})\)/,
+                    replace: "($self.MemberList,{component:$1,memberProps:$2})" },
+                { match: /return this.getContentFeedAdjustedDimensions\((\{[^{}]*\})\)/,
+                    replace: "return $self.memberDimensions(this.props,this.getContentFeedAdjustedDimensions($1))" },
+                { match: /(\i)\.channel\.id!==this\.props\.channel\.id&&this\.updateSubscription\(\)/,
+                    replace: "($1.channel.id!==this.props.channel.id||$1.hbimMemberGaps!==this.props.hbimMemberGaps)&&this.updateSubscription()" },
+                { match: /members:(\i\.\i\.getMemberListSections\(\i\))/,
+                    replace: "members:$self.threadMembers($1)" }
+            ]
+        },
+        {
+            find: '"ThreadBrowserRowSubtext"',
+            replacement: { match: /(?<=\.jsx\))\((\i),(\{channel:\i,message:\i\})\)/,
+                replace: "($self.Preview,{component:$1,previewProps:$2})" }
+        },
+        {
+            find: '"ThreadMessageAccessoryMessage"',
+            replacement: { match: /(?<=\.jsx\))\((\i),(\{message:\i,channel:\i\})\)/,
+                replace: "($self.Preview,{component:$1,previewProps:$2})" }
+        },
+        {
+            find: '"ForumPostMediaPreview"',
+            all: true,
+            replacement: { match: /(\i)\?\.blocked\|\|null==(\i)\?null:\(0,(\i)\.jsx\)\((\i),(\{channel:\i,firstMedia:\i\})\)/,
+                replace: "null==$2?null:(0,$3.jsx)($self.Preview,{component:$4,previewProps:$5,message:$1,nativeHidden:$1?.blocked})" }
+        },
+        {
+            find: "hasMediaAttachment:",
+            all: true,
+            replacement: { match: /(?<=\.jsx\))\((\i),(\{channel:\i,message:\i,content:\i,hasMediaAttachment:\i,hasUnreads:\i(?:,originalAuthor:\i)?\})\)/,
+                replace: "($self.Preview,{component:$1,previewProps:$2})" }
+        },
+        {
+            find: '"data-grid-item-id"',
+            replacement: [
+                { match: /(children:\(0,\i\.jsx\))\((\i),(\{channel:\i,firstMessage:\i,isFirstMessageLoaded:\i,overrideMedia:\i,coords:\i\})\)/,
+                    replace: "$1($self.Preview,{component:$2,previewProps:$3})" },
+                { match: /(?<=\.jsx\))\((\i),(\{message:\i,channel:\i,containerWidth:\i\.width\})\)/,
+                    replace: "($self.Preview,{component:$1,previewProps:$2})" }
+            ]
+        },
+        {
+            find: "Message must be a thread starter message",
+            replacement: { match: /(?<=\.jsx\))\((\i),(\{\.\.\.(\i),viewingChannelId:\i\.channel_id,message:\i\.message,groupId:\i\.message\.id\})\)/,
+                replace: "($self.Preview,{component:$1,previewProps:$2,searchHit:$3.message?.isSearchHit})" }
         }
     ],
     start() {
@@ -110,6 +175,10 @@ export default definePlugin({
         removeSidebar = registerSettingsSidebar(SettingsPlugin, SettingsPage, Icon);
     },
     stop() { removeSidebar?.(); removeSidebar = undefined; runtime?.stop(); runtime = undefined; },
+    MemberList,
+    Preview,
+    threadMembers: sections => runtime?.threadMembers(sections) ?? sections,
+    memberDimensions: (props, dimensions) => runtime?.memberDimensions(props, dimensions) ?? dimensions,
     hiddenNode: node => runtime?.hiddenNode(node) ?? false,
     visibleGuildIds: ids => runtime?.visibleGuildIds(ids) ?? ids,
     suppressPing: message => runtime?.suppressPing(message) ?? false,

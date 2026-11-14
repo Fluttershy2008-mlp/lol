@@ -40,6 +40,16 @@ function world(t) {
     let recentRows = [{ id: 'ping-hidden', message: rows[1] }, { id: 'ping-dm', message: rows[2] }];
     const recent = store('RecentMentionsStore', { getMentions: () => recentRows, hasMention: () => true });
     const search = store('SearchMessageStore', { getMessages: () => MessageStore.getMessages(DM) });
+    const members = [{ userId: BLOCK }, { userId: WHITE }, { userId: FRIEND }];
+    const pages = { 1: [BLOCK, WHITE, FRIEND], 2: [FRIEND] };
+    const memberSearch = store('MemberSafetyStore', {
+        getCurrentMemberSearchResultsByGuildId: () => [members, 3], getPagedMembersByGuildId: () => [pages, 4],
+        getKnownMemberSearchCountByGuildId: () => 4, getEstimatedMemberSearchCountByGuildId: () => 4
+    });
+    const sections = { online: { userIds: [BLOCK, WHITE, FRIEND], sectionId: 'online' } };
+    const threadMembers = store('ThreadMemberListStore', { getMemberListSections: () => sections });
+    const references = store('ReferencedMessageStore', { getMessage: () => ({ state: 0, message: rows[0] }) });
+    const threadMessages = store('ThreadMessageStore', { getMostRecentMessage: () => rows[0] });
     const env = { MessageStore, ChannelStore, RelationshipStore, SelectedChannelStore, SortedGuildStore, ReadStateStore: read, GuildReadStateStore: guild,
         MessageActions: { fetchMessages(options) { fetches.push({ options, rows: MessageStore.getMessages(DM) }); return 'native'; } },
         FluxDispatcher: { dispatch(event) { events.push(event); event.inspect?.(); return 'event'; } },
@@ -50,7 +60,8 @@ function world(t) {
     };
     const runtime = createDesktopRuntime(env, storage); runtime.start(); t.after(() => runtime.stop());
     return { runtime, env, storage, rows, collection, folders, recent, search, channelList, warnings, fetches, events, channels, blockedChecks: () => blockedChecks,
-        updateRecent(rows) { recentRows = rows; recent.emitChange(); }, waiters };
+        updateRecent(rows) { recentRows = rows; recent.emitChange(); }, waiters,
+        memberSearch, members, pages, threadMembers, sections, references, threadMessages };
 }
 test('desktop store integration hides only selected locations/users, preserves native history and explicit search, and restores on stop', t => {
     const w = world(t), { env, runtime } = w;
@@ -106,4 +117,53 @@ test('desktop channel models hide forum/text rows and restore them with the chan
     assert.deepEqual(hidden.getSections(), [2]); assert.equal(hidden.getRows()[0].length, 2);
     w.storage.hideServerChannels = true; w.runtime.refresh(); assert.deepEqual(hidden.getSections(), [0]);
     w.runtime.stop(); assert.deepEqual(hidden.getSections(), [2]);
+});
+
+test('member search and thread display projections honour whitelist/settings while preserving raw paging and author suggestions', t => {
+    const w = world(t), { runtime, memberSearch } = w;
+    assert.deepEqual(memberSearch.getCurrentMemberSearchResultsByGuildId()[0].map(m => m.userId), [WHITE, FRIEND]);
+    assert.deepEqual(memberSearch.getPagedMembersByGuildId()[0][1], [WHITE, FRIEND]);
+    assert.equal(memberSearch.getPagedMembersByGuildId()[0][2], w.pages[2]);
+    assert.equal(memberSearch.getEstimatedMemberSearchCountByGuildId(), 4, 'native pager can still reach the last page');
+    assert.equal(w.threadMembers.getMemberListSections(), w.sections, 'author autocomplete reads raw thread memberships');
+    assert.deepEqual(runtime.threadMembers(w.sections).online.userIds, [WHITE, FRIEND]);
+    let membershipUpdates = 0;
+    runtime.subscribe('members', () => membershipUpdates++);
+    w.env.MessageStore.emitChange();
+    assert.equal(membershipUpdates, 0, 'new messages do not rescan members');
+    w.storage.whitelistEnabled = false; runtime.refresh();
+    assert.deepEqual(memberSearch.getCurrentMemberSearchResultsByGuildId()[0].map(m => m.userId), [FRIEND]);
+    w.storage.blocked = false; runtime.refresh();
+    assert.equal(memberSearch.getCurrentMemberSearchResultsByGuildId()[0], w.members);
+    w.storage.blocked = true; w.env.RelationshipStore.isBlocked = () => false;
+    w.env.RelationshipStore.emitChange();
+    assert.equal(memberSearch.getPagedMembersByGuildId()[0], w.pages);
+    runtime.stop();
+    assert.equal(memberSearch.getCurrentMemberSearchResultsByGuildId()[0], w.members);
+    assert.equal(w.waiters.size, 0); assert.deepEqual(w.warnings, []);
+});
+
+test('preview rules hide blocked/ignored content, retain raw records and explicit search, and notify mounted previews', t => {
+    const w = world(t), { runtime } = w;
+    assert.equal(runtime.hiddenPreview({ message: w.rows[0] }), true);
+    assert.equal(runtime.hiddenPreview({ firstMessage: w.rows[0] }), true);
+    assert.equal(runtime.hiddenPreview({ message: w.rows[3] }, true), false, 'whitelist overrides the native blocked-media flag');
+    assert.equal(runtime.hiddenPreview({ message: { ...w.rows[0], isSearchHit: true } }), false);
+    w.env.FluxDispatcher.dispatch({ type: 'SEARCH_MESSAGES_SUCCESS', inspect() {
+        assert.equal(runtime.hiddenPreview({ message: w.rows[0] }), false);
+    } });
+    assert.equal(w.references.getMessage().message, w.rows[0]);
+    assert.equal(w.threadMessages.getMostRecentMessage(), w.rows[0]);
+    let updates = 0;
+    runtime.subscribe('previews', () => updates++);
+    w.references.emitChange(); w.threadMessages.emitChange();
+    assert.equal(updates, 2);
+    assert.equal(runtime.hiddenPreview({ senderModifier: 'ignored' }), true);
+    w.storage.ignored = false; w.storage.blocked = false; runtime.refresh();
+    assert.equal(runtime.hiddenPreview({ senderModifier: 'ignored' }), false);
+    assert.equal(runtime.hiddenPreview({ message: w.rows[0] }), false);
+    runtime.stop();
+    assert.equal(runtime.hiddenPreview({ message: w.rows[0] }), false);
+    assert.equal(runtime.hiddenPreview({ message: w.rows[0] }, true), true, 'disabling restores native blocked-media behaviour');
+    assert.deepEqual(w.warnings, []);
 });

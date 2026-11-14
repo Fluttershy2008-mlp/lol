@@ -1,6 +1,6 @@
 {
   "name": "vencord-hide-blocked-and-ignored-messages",
-  "version": "1.0.0-beta3",
+  "version": "1.0.0-beta4",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",

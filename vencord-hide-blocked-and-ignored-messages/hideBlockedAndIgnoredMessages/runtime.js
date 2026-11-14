@@ -8,12 +8,22 @@ import { createGuildIconFilter } from './guild-icons.js';
 import { installHiddenPings } from './notifications.js';
 import { installChannelLists } from './channel-lists.js';
 import { isUserWhitelisted } from './whitelist.js';
+import { createMemberSearchFilter, projectMemberList, projectThreadMembers, memberDimensions } from './member-lists.js';
 
 export function createDesktopRuntime(env, storage) {
     let active = false, searchDepth = 0, rawDepth = 0, timer;
-    let filter, mentions, lists, paging, pings, channels, servers;
+    let filter, mentions, lists, paging, pings, channels, servers, memberSearch;
     let messageViews = new WeakMap(), iconViews = new WeakMap();
-    const cleanup = [], patched = new WeakMap(), iconStores = new Set();
+    const cleanup = [], patched = new WeakMap(), iconStores = new Set(), memberStores = new Set();
+    const views = { members: { revision: 0, listeners: new Set() }, previews: { revision: 0, listeners: new Set() } };
+    function notify(kind) {
+        const view = views[kind];
+        view.revision++;
+        for (const listener of view.listeners) listener();
+    }
+    function safe(read, fallback) {
+        try { return read(); } catch (error) { env.logger.warn('Could not filter a display view', error); return fallback; }
+    }
     function patch(object, key, callback) {
         if (!object || typeof object[key] !== 'function') return () => {};
         const keys = patched.get(object) ?? new Set();
@@ -68,14 +78,35 @@ export function createDesktopRuntime(env, storage) {
     function clearMessages() { messageViews = new WeakMap(); lists?.clear(); mentions?.clear(); }
     function messageRefresh() {
         clearMessages();
+        notify('previews');
         if (!active || timer !== undefined) return;
         timer = setTimeout(() => { timer = undefined; if (active) emit(env.MessageStore); }, 0);
     }
     function refresh() {
         clearMessages(); iconViews = new WeakMap(); paging?.reset();
         channels?.refresh(); pings?.refresh();
+        refreshMembers();
         for (const store of iconStores) emit(store);
         messageRefresh();
+    }
+    function refreshMembers() {
+        memberSearch?.clear();
+        notify('members');
+        for (const store of memberStores) emit(store);
+    }
+    function attachMemberSearch(store) {
+        if (memberStores.has(store)) return;
+        const getResults = store.getCurrentMemberSearchResultsByGuildId;
+        if (typeof getResults !== 'function') return;
+        memberStores.add(store);
+        listen(store, () => memberSearch.clear());
+        for (const [key, project] of [['getCurrentMemberSearchResultsByGuildId', memberSearch.results], ['getPagedMembersByGuildId', memberSearch.paginated]]) {
+            patch(store, key, function (args, original) {
+                const value = original.apply(this, args);
+                return active ? safe(() => project(value), value) : value;
+            });
+        }
+        emit(store);
     }
     function withRaw(fn) { rawDepth++; try { return fn(); } finally { rawDepth--; } }
     function attachIcons(store) {
@@ -103,12 +134,13 @@ export function createDesktopRuntime(env, storage) {
             const originalMessages = env.MessageStore.getMessages.bind(env.MessageStore);
             filter = createMessageFilter({ storage, blockedStore: env.RelationshipStore, ignoredStore: env.RelationshipStore,
                 getMessage: originalMessage, isServerMessageHidden: servers.isServerMessageHidden });
+            memberSearch = createMemberSearchFilter(filter.isFilteredUser);
             mentions = createMentionFilter(filter.isFilteredUser, storage);
             lists = createCollectionFilter(filter.shouldHide, () => env.logger.warn('Unsupported message collection'), mentions.project);
             paging = createPagination({ getMessages: originalMessages, shouldHide: filter.shouldHide,
                 selectedChannel: () => env.SelectedChannelStore.getChannelId(), isChannelHidden: servers.isChannelHidden,
                 fetchMessages: options => env.MessageActions.fetchMessages(options) });
-            const trusted = listen(env.MessageStore, clearMessages);
+            const trusted = listen(env.MessageStore, () => { clearMessages(); notify('previews'); });
             patch(env.MessageStore, 'getMessages', function (args, original) {
                 const value = original.apply(this, args);
                 if (!active || rawDepth || searchDepth || paging.isNative()) return value;
@@ -148,8 +180,13 @@ export function createDesktopRuntime(env, storage) {
                     paging.observe(event); return result;
                 } finally { searchDepth = previous; }
             });
-            listen(env.RelationshipStore, messageRefresh);
+            listen(env.RelationshipStore, () => { refreshMembers(); messageRefresh(); });
             listen(env.ChannelStore, () => { servers.clearChannels(); pings?.invalidate(); messageRefresh(); });
+            watch(env.filters.byStoreName('MemberSafetyStore'), attachMemberSearch);
+            watch(env.filters.byStoreName('ThreadMemberListStore'), store => { memberStores.add(store); });
+            for (const name of ['ThreadMessageStore', 'ReferencedMessageStore']) {
+                watch(env.filters.byStoreName(name), store => { listen(store, () => notify('previews')); });
+            }
             pings = installHiddenPings(V, servers); cleanup.push(pings.stop);
             channels = installChannelLists(V, servers); cleanup.push(channels.stop);
             attachIcons(env.SortedGuildStore);
@@ -173,9 +210,26 @@ export function createDesktopRuntime(env, storage) {
         timer = undefined;
         for (const remove of cleanup.splice(0).reverse()) { try { remove(); } catch (error) { env.logger.warn('Cleanup failed', error); } }
         for (const store of iconStores) emit(store);
+        for (const store of memberStores) emit(store);
+        memberStores.clear(); memberSearch?.clear();
+        notify('members'); notify('previews');
+        for (const view of Object.values(views)) view.listeners.clear();
         iconStores.clear(); clearMessages(); iconViews = new WeakMap(); emit(env.MessageStore);
     }
     return { start, stop, refresh,
+        subscribe(kind, listener) { views[kind].listeners.add(listener); return () => views[kind].listeners.delete(listener); },
+        revision: kind => views[kind].revision,
+        memberList: props => active ? safe(() => projectMemberList(props, filter.isFilteredUser, views.members.revision), props) : props,
+        threadMembers: sections => active ? safe(() => projectThreadMembers(sections, filter.isFilteredUser), sections) : sections,
+        memberDimensions: (props, dimensions) => safe(() => memberDimensions(props, dimensions), dimensions),
+        hiddenPreview: (props, nativeHidden = false) => !active ? nativeHidden : safe(() => {
+            const message = props?.message ?? props?.firstMessage;
+            if (searchDepth || message?.isSearchHit) return false;
+            if (filter.shouldHide(message)) return true;
+            if (message?.author?.id) return false;
+            return (props?.senderModifier === 'blocked' && storage.blocked !== false)
+                || (props?.senderModifier === 'ignored' && storage.ignored !== false);
+        }, nativeHidden),
         suppressPing: message => active && storage.hideServerPings !== false &&
             (servers.isGuildPingHidden(message?.guild_id ?? message?.guildId) || servers.isChannelPingHidden(message?.channel_id ?? message?.channelId)),
         hiddenNode: node => active && servers.isGuildIconHidden(node?.id ?? node?.guildId),
