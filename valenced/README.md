@@ -1,3 +1,5 @@
+**ViewIcons 1.0.0-beta4** adds **View Avatar** and **View Banner** to the **⋯** menu on user profiles. The menu also shows **View Server Avatar** and **View Avatar Decoration** when available. Refresh the repository, update ViewIcons and fully restart Discord.
+
 **Chat Buttons 1.0.13** restores the compact composer icon and menu from 1.0.11. Refresh the repository, update Chat Buttons and restart Discord.
 
 **Hide Blocked & Ignored Messages 1.0.0-beta21** hides blocked and ignored message previews on forum cards, in thread lists and in the Messages tab for DMs and group chats. Post titles and conversation rows stay available. Refresh the repository, update the plugin and restart Discord.

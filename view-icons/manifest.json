@@ -1,7 +1,7 @@
 {
   "name": "ViewIcons",
   "description": "View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Revenge mobile.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "authors": [
     {
       "name": "Fluttershy2008-mlp",
@@ -12,5 +12,5 @@
   "vendetta": {
     "icon": "ic_image"
   },
-  "hash": "760ab367dabde6abd38937e5a409d0fa76b93197338830d6f60ad7e3d29fb041"
+  "hash": "0574f2035c78780c9089456a992f4b1cbb4652e5a4aaac77719507a1fcdf6b16"
 }

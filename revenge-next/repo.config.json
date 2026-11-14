@@ -11,6 +11,7 @@
     "server-leaver": "1.0.0-beta7",
     "more-alts": "1.0.0-stable20",
     "expression-cloner": "1.0.0-beta5",
+    "view-icons": "1.0.0-beta5",
     "blocked-user-list": "1.0.0-beta5",
     "friends-list": "1.0.0-beta5",
     "copy-user-id": "1.0.0-beta5",
@@ -21,6 +22,7 @@
     "hide-blocked-and-ignored-messages": "1.0.0-beta5"
   },
   "sourceRefs": {
+    "view-icons": "main",
     "save-as-sticker": "main",
     "stealmoji": "main",
     "server-leaver": "main",

@@ -9,7 +9,7 @@
     "save-as-sticker": "1.0.0-beta8",
     "stealmoji": "1.0.0-beta7",
     "expression-cloner": "1.0.0-beta4",
-    "view-icons": "1.0.0-beta3",
+    "view-icons": "1.0.0-beta4",
     "blocked-user-list": "1.0.0-beta4",
     "custom-rpc": "1.0.0-beta3",
     "friends-list": "1.0.0-beta4",
@@ -23,6 +23,7 @@
     "relationship-notifier": "1.0.0-beta5"
   },
   "sourceRefs": {
+    "view-icons": "main",
     "save-as-sticker": "main",
     "stealmoji": "main",
     "server-leaver": "main",

@@ -4,7 +4,7 @@
     // ViewIcons for Revenge / Vendetta-compatible Discord mobile clients.
     // Mobile port of the core Vencord ViewIcons behavior.
 
-    const { findByProps, findByStoreName, findByName } = vendetta.metro;
+    const { findByProps, findByStoreName, findByName, findByImportedPath, getModuleWithImportedPath } = vendetta.metro;
     const { React, ReactNative } = vendetta.metro.common;
     const { before, after } = vendetta.patcher;
     const { getAssetIDByName } = vendetta.ui.assets;
@@ -72,6 +72,7 @@
 
         try {
             const url = new URL(source, "https://discord.com");
+            if (url.pathname.startsWith("/embed/avatars/")) return url.toString();
             url.searchParams.set("size", String(size));
 
             // Avatar decorations are animated PNG/APNG assets. Rewriting them to GIF/WebP
@@ -100,8 +101,10 @@
         }
 
         const uri = normalizeImageUrl(source, 4096);
+        const session = generation;
 
         const openInDiscord = (width, height) => {
+            if (!active || session !== generation) return true;
             if (typeof MediaModal?.openMediaModal !== "function") return false;
             try {
                 MediaModal.openMediaModal({
@@ -156,69 +159,33 @@
         if (!openInDiscord(fallbackWidth, fallbackHeight)) openFallback();
     }
 
-    function resolveProfile(user, guildId, suppliedProfile) {
-        if (!user?.id) return suppliedProfile ?? user;
-        let profile = suppliedProfile ?? null;
-
-        try {
-            if (!profile && guildId && UserProfileStore?.getGuildMemberProfile) {
-                profile = UserProfileStore.getGuildMemberProfile(user.id, guildId);
-            }
-        } catch {}
-
-        try {
-            profile ??= UserProfileStore?.getUserProfile?.(user.id) ?? null;
-        } catch {}
-
-        return profile ? { ...user, ...profile } : user;
+    function defaultAvatarUrl(user) {
+        const discriminator = Number(user.discriminator);
+        if (Number.isInteger(discriminator) && discriminator > 0) {
+            return `https://cdn.discordapp.com/embed/avatars/${discriminator % 5}.png`;
+        }
+        if (!/^\d+$/.test(user.id)) return null;
+        const index = (BigInt(user.id) >> BigInt(22)) % BigInt(6);
+        return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
     }
 
-    function getUserBannerUrl(user, suppliedProfile, guildId) {
-        const profile = suppliedProfile ?? resolveProfile(user, guildId);
+    function getUserBannerUrl(user, guildId, displayProfile, memberProfile, globalProfile) {
+        // Keep the original profile objects so Discord's URL methods retain their receiver.
+        const displayed = optional(() => displayProfile?.getBannerURL?.({ canAnimate: true, size: 2048 }));
+        if (displayed) return displayed;
+        const memberBanner = safeString(displayProfile?._guildMemberProfile?.banner)
+            ?? safeString(memberProfile?.banner);
+        if (guildId && memberBanner) return cdnUrl(`guilds/${guildId}/users/${user.id}/banners`, memberBanner);
 
-        // Current Discord mobile exposes the actually displayed banner through
-        // DisplayProfile#getBannerURL. This also handles guild-specific banners.
-        try {
-            if (typeof suppliedProfile?.getBannerURL === "function") {
-                const url = suppliedProfile.getBannerURL({ canAnimate: true, size: 2048 });
-                if (url) return url;
-            }
-        } catch {}
-
-        try {
-            if (typeof profile?.getBannerURL === "function") {
-                const url = profile.getBannerURL({ canAnimate: true, size: 2048 });
-                if (url) return url;
-            }
-        } catch {}
-
-        const banner =
-            safeString(suppliedProfile?.banner)
-            ?? safeString(suppliedProfile?._guildMemberProfile?.banner)
-            ?? safeString(suppliedProfile?._userProfile?.banner)
-            ?? safeString(profile?.banner)
-            ?? safeString(user?.banner);
-
-        const userId =
-            safeString(suppliedProfile?.userId)
-            ?? safeString(profile?.userId)
-            ?? safeString(user?.id);
-
-        if (!banner || !userId) return null;
-
-        try {
-            const url = iconUrl("getUserBannerURL", {
-                id: userId,
-                banner,
-                canAnimate: true,
-                size: 2048,
-            });
-            if (url) return url;
-        } catch {}
-
-        // Final CDN fallback in case Discord renames the URL helper.
-        const extension = banner.startsWith("a_") ? "gif" : "webp";
-        return `https://cdn.discordapp.com/banners/${userId}/${banner}.${extension}?size=2048`;
+        const globalUrl = optional(() => globalProfile?.getBannerURL?.({ canAnimate: true, size: 2048 }));
+        if (globalUrl) return globalUrl;
+        const banner = safeString(displayProfile?.banner)
+            ?? safeString(displayProfile?._userProfile?.banner)
+            ?? safeString(globalProfile?.banner)
+            ?? safeString(user.banner);
+        if (!banner) return null;
+        return iconUrl("getUserBannerURL", { id: user.id, banner, canAnimate: true, size: 2048 })
+            || cdnUrl(`banners/${user.id}`, banner);
     }
 
     function getDecorationData(user) {
@@ -250,17 +217,20 @@
 
     function userTargets(user, guildId, suppliedProfile) {
         if (!user?.id) return [];
-        const profile = resolveProfile(user, guildId, suppliedProfile);
+        const memberProfile = guildId && optional(() => UserProfileStore?.getGuildMemberProfile?.(user.id, guildId));
+        const globalProfile = optional(() => UserProfileStore?.getUserProfile?.(user.id));
         const targets = [];
 
         try {
             const avatar = iconUrl("getUserAvatarURL", user, true)
-                ?? cdnUrl(`avatars/${user.id}`, safeString(user.avatar));
+                || optional(() => user.getAvatarURL?.(null, 4096, true))
+                || cdnUrl(`avatars/${user.id}`, safeString(user.avatar))
+                || defaultAvatarUrl(user);
             if (avatar) targets.push({ label: "Avatar", url: avatar, width: 512, height: 512 });
         } catch {}
 
         try {
-            const banner = getUserBannerUrl(user, suppliedProfile, guildId);
+            const banner = getUserBannerUrl(user, guildId, suppliedProfile, memberProfile, globalProfile);
             if (banner) targets.push({ label: "Banner", url: banner, width: 1024, height: 400 });
         } catch {}
 
@@ -281,7 +251,8 @@
             } catch {}
         }
 
-        const decoration = getDecorationData(suppliedProfile) ?? getDecorationData(profile) ?? getDecorationData(user);
+        const decoration = getDecorationData(suppliedProfile) ?? getDecorationData(memberProfile)
+            ?? getDecorationData(globalProfile) ?? getDecorationData(user);
         const decorationUrl = getDecorationUrl(decoration);
         if (decorationUrl) {
             targets.push({
@@ -342,9 +313,11 @@
     }
 
     function makePlainMenuItem(target, hide) {
+        const session = generation;
         const item = {
             label: `View ${target.label}`,
             action: () => {
+                if (!active || session !== generation) return;
                 try { hide?.(); } catch {}
                 openImage(target.label, target.url, target.width, target.height);
             },
@@ -354,79 +327,101 @@
         return item;
     }
 
-    function getItemsGroup(rendered) {
-        let items = rendered?.props?.items;
-        if (Array.isArray(items)) {
-            if (Array.isArray(items[0])) return items[0];
-            return items;
-        }
-
-        items = rendered?.props?.children?.props?.items;
-        if (Array.isArray(items)) {
-            if (Array.isArray(items[0])) return items[0];
-            return items;
-        }
-
-        const node = findInReactTree(rendered, value =>
-            Array.isArray(value?.props?.items)
-            && (Array.isArray(value.props.items[0]) || value.props.items.length === 0)
-        );
-        if (Array.isArray(node?.props?.items?.[0])) return node.props.items[0];
-        if (Array.isArray(node?.props?.items)) return node.props.items;
-        return null;
+    function withMenuItems(items, targets, hide) {
+        const grouped = items.some(Array.isArray);
+        const groups = grouped ? items.filter(Array.isArray) : [items];
+        const labels = new Set(groups.flat().map(item => item?.label ?? item?.props?.label));
+        const additions = targets.filter(target => !labels.has(`View ${target.label}`))
+            .map(target => makePlainMenuItem(target, hide));
+        if (!additions.length) return items;
+        const group = groups[0];
+        const extended = [...group, ...additions];
+        return grouped ? items.map(value => value === group ? extended : value) : extended;
     }
 
-    function addPlainItems(items, targets, hide) {
-        if (!Array.isArray(items)) return;
-        for (const target of targets) {
-            const label = `View ${target.label}`;
-            if (items.some(item => item?.label === label || item?.props?.label === label)) continue;
-            items.push(makePlainMenuItem(target, hide));
+    function injectProfileItems(tree, targets) {
+        let found = false, visited = 0;
+        function walk(node, depth = 0) {
+            if (!node || found || depth > 30 || ++visited > 1500) return node;
+            if (Array.isArray(node)) {
+                const children = node.map(child => walk(child, depth + 1));
+                return children.some((child, index) => child !== node[index]) ? children : node;
+            }
+            if (!node.props) return node;
+            if (Array.isArray(node.props.items)) {
+                found = true;
+                const items = withMenuItems(node.props.items, targets);
+                return items === node.props.items ? node : React.cloneElement(node, { items });
+            }
+            const children = walk(node.props.children, depth + 1);
+            return children === node.props.children ? node : React.cloneElement(node, { children });
         }
+        return targets.length ? walk(tree) : tree;
+    }
+
+    function profileContext(props, context) {
+        const displayProfile = props?.displayProfile ?? props?.profile ?? props?.userProfile
+            ?? context?.displayProfile ?? context?.profile ?? context?.userProfile;
+        const userId = safeString(props?.userId) ?? safeString(context?.userId)
+            ?? safeString(displayProfile?.userId);
+        const user = props?.user ?? context?.user ?? optional(() => userId && UserStore?.getUser?.(userId));
+        const guildId = safeString(props?.guildId) ?? safeString(context?.guildId)
+            ?? safeString(displayProfile?.guildId) ?? safeString(props?.channel?.guild_id)
+            ?? safeString(props?.channel?.guildId);
+        return { user, guildId, displayProfile };
+    }
+
+    function patchProfileMenu(module, session) {
+        if (!active || generation !== session || !module?.default) return false;
+        let owner = module, method = "default", classComponent = false;
+        for (let depth = 0; depth < 8; depth++) {
+            const component = owner[method];
+            if (component?.$$typeof === Symbol.for("react.memo")) {
+                owner = component;
+                method = "type";
+            } else if (component?.$$typeof === Symbol.for("react.forward_ref")) {
+                owner = component;
+                method = "render";
+            } else if (component?.prototype?.isReactComponent) {
+                owner = component.prototype;
+                method = "render";
+                classComponent = true;
+                break;
+            } else break;
+        }
+        if (typeof owner[method] !== "function") return false;
+
+        const unpatch = after(method, owner, function (args, rendered) {
+            if (!active || generation !== session) return rendered;
+            try {
+                const { user, guildId, displayProfile } = profileContext(classComponent ? this?.props : args?.[0]);
+                return injectProfileItems(rendered, userTargets(user, guildId, displayProfile));
+            } catch (error) {
+                logError("Could not extend profile menu", error);
+                return rendered;
+            }
+        });
+        if (typeof unpatch !== "function") return false;
+        unpatches.push(unpatch);
+        return true;
     }
 
     function patchUserProfileMenus() {
-        if (typeof findByName !== "function") return;
-
-        for (const moduleName of ["UserProfileOverflowMenu", "BotUserProfileOverflowMenu"]) {
-            try {
-                const module = findByName(moduleName, false);
-                if (!module?.default) continue;
-
-                const unpatch = after("default", module, (args, rendered) => {
-                    try {
-                        const props = args?.[0] ?? {};
-                        const user = props.user
-                            ?? (props.userId ? UserStore?.getUser?.(String(props.userId)) : null);
-                        if (!user?.id) return;
-
-                        const guildId = safeString(props.guildId)
-                            ?? safeString(props.displayProfile?.guildId)
-                            ?? safeString(props.channel?.guild_id)
-                            ?? safeString(props.channel?.guildId);
-
-                        const displayProfile =
-                            props.displayProfile
-                            ?? props.profile
-                            ?? props.userProfile
-                            ?? null;
-
-                        const items = getItemsGroup(rendered);
-                        addPlainItems(
-                            items,
-                            userTargets(user, guildId, displayProfile),
-                            () => LazyActionSheet?.hideActionSheet?.(),
-                        );
-                    } catch (error) {
-                        logError(`Failed to patch ${moduleName}`, error);
-                    }
-                });
-
-                unpatches.push(unpatch);
-            } catch (error) {
-                logError(`Could not locate ${moduleName}`, error);
-            }
+        const session = generation;
+        function connect(name) {
+            const path = `modules/user_profile/native/${name}.tsx`;
+            const patch = module => {
+                try { return patchProfileMenu(module, session); }
+                catch (error) { logError(`Could not patch ${name}`, error); }
+            };
+            const module = optional(() => findByImportedPath?.(path))
+                ?? optional(() => findByName?.(name, false));
+            if (patch(module)) return;
+            const unsubscribe = optional(() => getModuleWithImportedPath?.(path, patch));
+            if (typeof unsubscribe === "function") unpatches.push(unsubscribe);
         }
+        connect("UserProfileOverflowMenu");
+        connect("BotUserProfileOverflowMenu");
     }
 
     function resolveContextTargets(menu) {
@@ -435,20 +430,10 @@
         const key = safeString(menu.key);
         const guildId = safeString(menu.guildId) ?? safeString(context.guildId);
 
-        const explicitGuild = menu.guild
-            ?? (safeString(menu.guildId) ? GuildStore?.getGuild?.(String(menu.guildId)) : null);
-        if (explicitGuild?.id) return guildTargets(explicitGuild);
+        if (menu.guild?.id) return guildTargets(menu.guild);
 
-        const explicitUser = menu.user
-            ?? (safeString(menu.userId) ? UserStore?.getUser?.(String(menu.userId)) : null)
-            ?? (safeString(context.userId) ? UserStore?.getUser?.(String(context.userId)) : null);
-        if (explicitUser?.id) {
-            return userTargets(
-                explicitUser,
-                guildId,
-                menu.displayProfile ?? menu.profile ?? context.displayProfile ?? context.profile ?? null,
-            );
-        }
+        const profile = profileContext(menu, context);
+        if (profile.user?.id) return userTargets(profile.user, profile.guildId, profile.displayProfile);
 
         const explicitChannel = menu.channel
             ?? (safeString(menu.channelId) ? ChannelStore?.getChannel?.(String(menu.channelId)) : null)
@@ -476,17 +461,20 @@
             } catch {}
         }
 
-        return [];
+        return guildId ? guildTargets(GuildStore?.getGuild?.(guildId)) : [];
     }
 
     function patchContextMenus() {
         if (typeof ContextMenus?.showContextMenu !== "function") return;
 
-        const unpatch = before("showContextMenu", ContextMenus, ([menu]) => {
+        const unpatch = before("showContextMenu", ContextMenus, args => {
             try {
+                const menu = args[0];
                 if (!menu || !Array.isArray(menu.items)) return;
                 const targets = resolveContextTargets(menu);
-                addPlainItems(menu.items, targets, () => ContextMenus.hideContextMenu?.());
+                const hide = () => ContextMenus.hideContextMenu?.();
+                const items = withMenuItems(menu.items, targets, hide);
+                if (items !== menu.items) args[0] = { ...menu, items };
             } catch (error) {
                 logError("Context menu patch failed", error);
             }
@@ -549,11 +537,8 @@
         const guildId = safeString(props?.guildId);
 
         if (/^UserProfile/i.test(key)) {
-            const user = props?.user
-                ?? (safeString(props?.userId) ? UserStore?.getUser?.(String(props.userId)) : null);
-            return user?.id
-                ? userTargets(user, guildId, props?.displayProfile ?? props?.profile ?? props?.userProfile ?? null)
-                : [];
+            const profile = profileContext(props);
+            return userTargets(profile.user, profile.guildId, profile.displayProfile);
         }
 
         if (/Guild/i.test(key)) {

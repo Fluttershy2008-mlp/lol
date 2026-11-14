@@ -52,9 +52,13 @@ function runtime({ helpers = [], throwLookups = false, noMenus = false, brokenCo
             common: {
                 React: {
                     createElement: (type, props) => ({ type, props }),
+                    cloneElement: (element, props) => ({ ...element, props: { ...element.props, ...props } }),
                     useEffect: () => { throw new Error('must not inject React hooks into patched components'); }
                 },
-                ReactNative: { Image: { getSize: (_, ok) => ok(640, 480) } }
+                ReactNative: {
+                    Image: { getSize: (_, ok) => ok(640, 480) },
+                    ToastAndroid: { show: message => notices.push(message) },
+                }
             }
         },
         patcher: { before: (...args) => patch('before', ...args), after: (...args) => patch('after', ...args) },
@@ -115,8 +119,9 @@ test('CDN fallbacks keep avatar, banner, decoration, server and group images usa
         [{ channel: { id: '789', icon: 'icon' } }, ['View Group DM Icon'], ['/channel-icons/789/icon.webp']]
     ];
     for (const [props, labels, paths] of cases) {
-        const menu = { ...props, items: [] };
-        h.context.showContextMenu(menu); h.context.showContextMenu(menu);
+        const original = { ...props, items: [] };
+        const menu = h.context.showContextMenu(h.context.showContextMenu(original));
+        assert.equal(original.items.length, 0);
         assert.deepEqual(Array.from(menu.items, item => item.label), labels);
         menu.items.forEach((item, i) => {
             item.action();

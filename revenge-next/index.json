@@ -2191,11 +2191,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/revenge-next/pool/dev.fluttershy2008.view-icons@1.0.0-beta5.zip",
+          "sha256": "c038f888a3370f3d74cceac19016eb1fc17184c43d83d7caf50d44ee30b8bfd0",
+          "size": 17480,
+          "dependencies": {
+            "revenge.api": {
+              "version": ">=1.2.1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "ViewIcons (Next preview)",
       "description": "Revenge Next preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Revenge mobile.",
