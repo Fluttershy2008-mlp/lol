@@ -4,9 +4,9 @@ Revenge / Vendetta-compatible Discord mobile plugin with userinfo/inviteinfo com
 
 ## Install
 
-For **Valenced**, refresh the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update **InfoCommands to 1.0.0-beta8**. Fully restart Discord, long-press a server icon and tap **Server Info**. The plugin also has an **Open current server info** button in its settings.
+For **Valenced**, refresh the [Valenced repository](https://fluttershy2008-mlp.github.io/lol/valenced/index.json) and update **InfoCommands to 1.0.0-beta9**. Fully restart Discord, long-press a server icon and tap **Server Info**. The plugin also has an **Open current server info** button in its settings.
 
-For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview) 1.0.0-beta15**. Next uses its native sheet and can show a cached details popup when the sheet cannot open.
+For **Revenge Next**, use the [Next repository](https://fluttershy2008-mlp.github.io/lol/index.json) and install **InfoCommands (Next preview) 1.0.0-beta16**. Next uses its native sheet and can show a cached details popup when the sheet cannot open.
 
 For **Revenge Classic / Vendetta**:
 
@@ -18,7 +18,7 @@ The existing install URL is unchanged. Disable/remove another installed copy of 
 
 ## Use
 
-Valenced's **Overview** shows the server banner, icon and description, member and online counts, channels, roles, boosts, owner, creation and join dates, language, and verification level. The role count excludes the default @everyone role. Tap the server icon or banner to open the image, **ID** to copy the server ID, or **Vanity invite** to copy the invite when the server has one.
+Valenced's **Overview** shows the server banner, icon and description, member and online counts, channels, roles, boosts, owner, creation and join dates, language, and verification level. The role count excludes the default @everyone role. The page uses still previews. Tap the server icon or banner to open the full-size image with animation where available, **ID** to copy the server ID, or **Vanity invite** to copy the invite when the server has one.
 
 **Friends**, **Blocked** and **Ignored** show confirmed members of the selected server. Each list checks missing membership when opened and loads new results as Discord returns them. Tap a member or the owner to open their Discord profile. Close or Android Back dismisses the Server Info screen. A profile opens above it so closing the profile returns to the same tab.
 

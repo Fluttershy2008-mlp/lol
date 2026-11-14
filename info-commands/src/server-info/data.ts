@@ -1,6 +1,6 @@
-export function assetUrl(path: string, hash?: string | null, size = 128) {
+export function assetUrl(path: string, hash?: string | null, size = 128, animate = true) {
   return typeof hash === "string" && /^[a-zA-Z0-9_]+$/.test(hash)
-    ? `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : undefined;
+    ? `https://cdn.discordapp.com/${path}/${hash}.${animate && hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : undefined;
 }
 export function normalizeGuild(id: string, cached?: any, fetched?: any) {
   if (!cached?.name && !fetched?.name) return undefined;

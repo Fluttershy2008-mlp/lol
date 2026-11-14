@@ -68,7 +68,7 @@ test('Server Info shows its banner, icon, counts and owner while requests stall'
         assert.ok(text.includes(label), label);
     for (const value of ['1,264', '125', 'Level 3', '24 boosts', GUILD]) assert.ok(text.includes(value), value);
     const images = ui.root.findAll(node => node.type === 'Image').map(node => node.props.source.uri);
-    assert.ok(images.some(uri => uri.includes('banners/' + GUILD + '/a_server_banner.gif')));
+    assert.ok(images.some(uri => uri.includes('banners/' + GUILD + '/a_server_banner.png?size=512')));
     assert.ok(images.some(uri => uri.includes('icons/' + GUILD + '/server_icon.png')));
     assert.equal(ui.root.findByType('ScrollView').props.style.flex, 1);
     assert.notEqual(ui.root.findByType('ScrollView').props.scrollEnabled, false);
@@ -292,6 +292,7 @@ test('Blocked and ignored tabs show only confirmed members and use the correct p
     await Renderer.act(async () => {
         known.set(IGNORED, { nick: 'Ignored guild member' });
         w.stores.GuildMemberStore.emitChange();
+        await w.advance(80);
     });
     const row = ui.root.findAll(node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel?.startsWith('Ignored guild member'))[0];
     await Renderer.act(async () => row.props.onPress());
@@ -301,6 +302,7 @@ test('Blocked and ignored tabs show only confirmed members and use the correct p
     await Renderer.act(async () => {
         delete w.relationships[IGNORED];
         w.stores.RelationshipStore.emitChange();
+        await w.advance(80);
     });
     assert.doesNotMatch(contents(ui), /Ignored guild member/);
 });
@@ -367,4 +369,57 @@ test('An unsupported ignored-user store gives feedback without guessing from rel
     assert.match(contents(ui), /This list is unavailable on this Discord version/);
     assert.doesNotMatch(contents(ui), /Cached guild member/);
     assert.equal(w.calls.some(call => call[0] === 'dispatch' && call[1].type === 'GUILD_MEMBERS_REQUEST'), false);
+});
+
+test('Overview reads the channel tree only for channel changes and coalesces change bursts', async t => {
+    const w = await scenario(t);
+    const store = w.stores.GuildChannelStore, original = store.getChannels;
+    let reads = 0;
+    store.getChannels = (...args) => { reads++; return original(...args); };
+    const ui = await w.openPage();
+    const initial = reads;
+    await Renderer.act(async () => {
+        for (let i = 0; i < 20; i++) w.stores.UserStore.emitChange();
+        await w.advance(80);
+    });
+    assert.equal(reads, initial);
+    await Renderer.act(async () => {
+        for (let i = 0; i < 20; i++) store.emitChange();
+        await w.advance(80);
+    });
+    assert.equal(reads, initial + 1);
+    await Renderer.act(async () => button(ui, 'Friends').props.onPress());
+    await Renderer.act(async () => { store.emitChange(); await w.advance(80); });
+    assert.equal(reads, initial + 1, 'hidden Overview does not recount channels');
+    await Renderer.act(async () => button(ui, 'Overview').props.onPress());
+    assert.equal(reads, initial + 2);
+    await Renderer.act(async () => {
+        store.emitChange();
+        w.navigation.goBack();
+        await w.advance(80);
+    });
+    assert.equal(reads, initial + 2, 'Back cancels queued work before unmount');
+});
+
+test('Presence bursts refresh visible relationships without rescanning the relationship store', async t => {
+    const w = await scenario(t);
+    let scans = 0, presenceReads = 0, status = 'online';
+    w.stores.RelationshipStore.getFriendIDs = () => { scans++; return [FRIEND]; };
+    w.stores.GuildMemberStore.getMember = (guild, id) => guild === GUILD && id === FRIEND ? { avatar: 'a_member' } : undefined;
+    w.stores.PresenceStore.getStatus = () => { presenceReads++; return status; };
+    const ui = await w.openPage();
+    assert.equal(scans, 0);
+    await Renderer.act(async () => button(ui, 'Friends').props.onPress());
+    assert.equal(scans, 1);
+    assert.equal(presenceReads, 1);
+    assert.match(contents(ui), /a_member\.png/);
+    status = 'idle';
+    for (let i = 0; i < 10; i++) {
+        await Renderer.act(async () => { w.stores.PresenceStore.emitChange(); await w.advance(5); });
+    }
+    assert.equal(presenceReads, 1);
+    await Renderer.act(async () => w.advance(30));
+    assert.match(contents(ui), /Idle/);
+    assert.equal(scans, 1);
+    assert.equal(presenceReads, 2);
 });

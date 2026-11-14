@@ -24,6 +24,8 @@ This catalogue contains **21 compatibility plugin ports and four native theme pa
 
 **More Alts! stable12:** Removed QR authentication, WebView code and the web-style QR login screen. Add Account uses a smaller native email/password and 2FA dialog. Discord's native account sign-in remains available, along with saved-account management. This update changes only More Alts!, leaving other Next plugins on their existing preview versions. Keep your saved plugin data.
 
+**InfoCommands 1.0.0-beta16:** rebuilds the Next package from the shared InfoCommands source. The scrolling and preview changes apply to the Valenced page.
+
 **InfoCommands 1.0.0-beta15:** excludes @everyone from the role count and shows the owner's server avatar when available. The Next interface opens in its native sheet. Refresh the repository and restart Discord after updating.
 
 **InfoCommands 1.0.0-beta14:** includes the shared source for Valenced's replacement Server Info navigator screen (Classic 1.2.12 / Valenced beta7). Next retains its existing sheet: it prefers Next's curated native actions/components and opens after the floating server menu dismisses. A successful call to Discord's `openLazy` does not prove the sheet appeared. If it never mounts, renders with no visible layout, or throws, a native details popup shows cached information with copy/profile actions. Closing or disabling the plugin cancels pending presentation. The earlier profile-opening and lazy/frozen-menu fixes remain included. Refresh the repository, update InfoCommands, then fully restart Discord. Long-press a server icon and tap **Server Info**.

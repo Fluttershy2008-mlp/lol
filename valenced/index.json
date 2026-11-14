@@ -1159,11 +1159,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta9": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.info-commands@1.0.0-beta9.zip",
+          "sha256": "e22af4fcd3d3fbbe0f651de142ef9dc1709054986f7e251b304f9aa9c1a8c8a1",
+          "size": 39930,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta8",
-        "beta": "1.0.0-beta8"
+        "latest": "1.0.0-beta9",
+        "beta": "1.0.0-beta9"
       },
       "name": "InfoCommands (Valenced)",
       "description": "Long-press a server for details, images, friends, blocked and ignored members. Includes userinfo and inviteinfo.",

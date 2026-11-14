@@ -1,5 +1,6 @@
 import { runtime } from "./runtime";
 import { assetUrl } from "./data";
+import { watchStores } from "./store-refresh";
 import { getGuildMemberStore, getPresenceStore, getRelationshipStore, getRequestMembersById, getUserStore } from "./modules";
 
 export const relationshipTabs = ["Friends", "Blocked", "Ignored"] as const;
@@ -35,7 +36,8 @@ function uniqueIds(ids: unknown[]) {
 
 export function useServerRelationships(guildId: string, tab: RelationshipTab | undefined, canRequest: () => boolean) {
   const { React } = runtime.react;
-  const redraw = runtime.utils.react.useReRender();
+  const [revision, redraw] = React.useReducer((value: number) => value + 1, 0);
+  const [relationshipRevision, refreshRelationships] = React.useReducer((value: number) => value + 1, 0);
   const lookup = React.useRef(new Set<string>()).current;
   const [pending, setPending] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
@@ -43,17 +45,17 @@ export function useServerRelationships(guildId: string, tab: RelationshipTab | u
   const relationships = getRelationshipStore();
   const users = getUserStore();
   const presence = tab ? getPresenceStore() : undefined;
-  const ids = tab && getIds(relationships, tab);
+  const ids = React.useMemo(() => tab && getIds(relationships, tab), [tab, relationships, relationshipRevision]);
   // Store changes can replace an array with the same contents.
-  const key = ids ? ids.join(",") : "";
-  const getMember = (id: string) => optional(() => members?.getMember?.(guildId, id));
+  const key = React.useMemo(() => ids ? ids.join(",") : "", [ids]);
+  const getMember = React.useCallback((id: string) => optional(() => members?.getMember?.(guildId, id)), [members, guildId]);
 
   React.useEffect(() => {
     if (!tab) return;
-    const stores = [relationships, members, users, presence];
-    for (const store of stores) optional(() => store?.addChangeListener?.(redraw));
-    return () => { for (const store of stores) optional(() => store?.removeChangeListener?.(redraw)); };
-  }, [tab, relationships, members, users, presence, redraw]);
+    const stopRelationships = watchStores([relationships], () => { if (canRequest()) refreshRelationships(); });
+    const stopMembers = watchStores([members, users, presence], () => { if (canRequest()) redraw(); });
+    return () => { stopRelationships(); stopMembers(); };
+  }, [tab, relationships, members, users, presence, redraw, refreshRelationships, canRequest]);
 
   React.useEffect(() => {
     setPending(false);
@@ -91,18 +93,18 @@ export function useServerRelationships(guildId: string, tab: RelationshipTab | u
     }
     sendBatch();
     return () => { stopped = true; clearTimeout(timer); };
-  }, [guildId, tab, key, members, lookup, canRequest]);
+  }, [guildId, tab, key, members, lookup, canRequest, getMember]);
 
-  const rows = (ids || []).flatMap(userId => {
+  const rows = React.useMemo(() => (ids || []).flatMap(userId => {
     const member = getMember(userId);
     if (!member && optional(() => members?.isMember?.(guildId, userId)) !== true) return [];
     const user = optional(() => users?.getUser?.(userId)) ?? member?.user;
     const name = user?.globalName ?? user?.global_name ?? user?.username ?? userId;
     const label = member?.nick && member.nick !== name ? `${member.nick} (${name})` : name;
-    const avatar = assetUrl(`guilds/${guildId}/users/${userId}/avatars`, member?.avatar, 64)
-      ?? assetUrl(`avatars/${userId}`, user?.avatar, 64);
+    const avatar = assetUrl(`guilds/${guildId}/users/${userId}/avatars`, member?.avatar, 64, false)
+      ?? assetUrl(`avatars/${userId}`, user?.avatar, 64, false);
     const status = optional(() => presence?.getStatus?.(userId));
     return [{ userId, label, avatar, status: typeof status === "string" ? statuses[status] : undefined }];
-  });
+  }), [ids, revision, users, presence, members, guildId, getMember]);
   return { rows, pending, failed, available: Boolean(ids && (typeof members?.getMember === "function" || typeof members?.isMember === "function")) };
 }

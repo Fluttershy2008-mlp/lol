@@ -1,3 +1,5 @@
+**InfoCommands 1.0.0-beta9** reduces Server Info scrolling and tab-switching work. It batches store updates, counts channels only while Overview is visible, and uses smaller still previews. Tap the icon or banner to view the full-size image. Refresh the repository, update InfoCommands and restart Discord.
+
 **InfoCommands 1.0.0-beta8** adds Vencord-style Friends, Blocked and Ignored tabs, join date, language, verification level, copyable vanity invites, and tappable server images. Press and hold a server icon and tap **Server Info**. Refresh this repository, update **InfoCommands** and fully restart Discord. [Usage and source](../info-commands/README.md).
 
 **ViewIcons 1.0.0-beta5** opens **View Server Icon** and **View Server Banner** after the server menu closes. Refresh the repository, update ViewIcons and fully restart Discord.
@@ -94,7 +96,7 @@ Tap **Add repository**, open **Browse Plugins**, install the plugins you want, t
 
 **Friends List and Blocked User List 1.0.0-beta4 fix profile opening.** Refresh the repository, update and enable both plugins, then force-close Discord and reopen it. Their entries remain in the existing **Valenced section of Settings**, alongside CustomRPC, More Alts!, Server Leaver and the core Valenced entries. Tap a friend, a blocked user's card or its **Profile** button to open Discord's native profile.
 
-InfoCommands is at **1.0.0-beta8**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
+InfoCommands is at **1.0.0-beta9**; SaveAsSticker at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**; CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User at **1.0.0-beta3**; AutoText and the remaining ports at **1.0.0-beta2**. The repository URL stays the same.
 
 Raw GitHub fallback, serving the same catalogue:
 
@@ -110,7 +112,7 @@ Use an address ending in `index.json`. A GitHub repository page or a `github.com
 
 **Auto Quest 1.2.2** and **Quick Delete** are native plugins alongside the compatibility ports and themes below. Auto Quest retains simultaneous video quests and fixes native HTTP response/error handling, adds bounded automatic connection retries, and shows a specific error code if recovery fails. See each quest's progress at **Settings → Valenced → Auto Quest**. Refresh this repository, update **Auto Quest** and fully restart Discord. [Setup, fixes and supported quest types](plugins/auto-quest/README.md).
 
-All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta8**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
+All **21 unique Revenge plugins** are included. More Alts! is at **1.0.0-beta8** and InfoCommands at **1.0.0-beta9**. Server Leaver is at **1.0.0-beta6**. Friends List and Blocked User List are at **1.0.0-beta4**. SaveAsSticker is at **1.0.0-beta4** and Stealmoji at **1.0.0-beta6**. CustomRPC, ExpressionCloner, Copy User ID, Addon List and Valid User are at **1.0.0-beta3**. The other ports are at **1.0.0-beta2**:
 
 | Plugin | Plugin | Plugin |
 | --- | --- | --- |

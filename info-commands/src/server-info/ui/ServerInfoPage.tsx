@@ -29,7 +29,7 @@ export default function ServerInfoPage({ guildId, canRequest, BottomSafeArea, on
   const { Text, TableRow, TableRowGroup } = panelDesign
   const colors = sheetColors()
   const [tab, setTab] = React.useState<Tab>('Overview')
-  const { guild, isLoading, ...info } = useGuildInfo(guildId, false)
+  const { guild, isLoading, ...info } = useGuildInfo(guildId, { showOverview: tab === 'Overview', canRefresh: canRequest })
   const people = useServerRelationships(guildId, guild && tab !== 'Overview' ? tab : undefined, canRequest)
   const invite = typeof guild?.vanityCode === 'string' && /^[a-zA-Z0-9-]+$/.test(guild.vanityCode)
     ? `https://discord.gg/${guild.vanityCode}` : undefined
@@ -51,6 +51,7 @@ export default function ServerInfoPage({ guildId, canRequest, BottomSafeArea, on
       </View>}
       {guild && tab !== 'Overview' ? (
         <FlatList key={tab} data={people.rows} keyExtractor={item => item.userId} style={{ flex: 1 }}
+          initialNumToRender={8} maxToRenderPerBatch={8} windowSize={7}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}
           ListHeaderComponent={<Text variant="text-sm/normal" color="text-subtle" style={{ marginBottom: 10 }}>
             {people.rows.length > 0 ? `${tab} in this server (${people.rows.length})` : `${tab} in this server`}
@@ -75,7 +76,7 @@ export default function ServerInfoPage({ guildId, canRequest, BottomSafeArea, on
           keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
           {banner && <TouchableOpacity accessibilityRole="button" accessibilityLabel="View server banner"
             onPress={() => onOpenImage(banner, 2048, 1152)}>
-            <Image source={{ uri: info.bannerUri }} style={{ width: '100%', height: 140, resizeMode: 'cover' }} />
+            <Image resizeMethod="resize" source={{ uri: info.bannerUri }} style={{ width: '100%', height: 140, resizeMode: 'cover' }} />
           </TouchableOpacity>}
           {guild ? <>
             <View style={{ paddingHorizontal: 16, paddingTop: banner ? 0 : 4 }}>

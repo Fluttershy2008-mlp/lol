@@ -1,5 +1,6 @@
 /** Data hook adapted from the supplied Server Info 1.2.2 implementation. */
 import { runtime } from "../runtime";
+import { watchStores } from "../store-refresh";
 import { assetUrl, normalizeGuild, countChannels, countRoles, creationLabel } from "../data";
 import {
   getBasicGuildStore, getGuildChannelStore, getGuildHeaderCountsStore,
@@ -21,7 +22,16 @@ function cachedGuild(id: string) {
 }
 function optional(fn: () => any) { try { return fn(); } catch { return undefined; } }
 
-export function useGuildInfo(guildId: string, loadFriends = true): GuildInfo {
+function readChannelCount(store: any, guildId: string) {
+  const channels = optional(() => store?.getMutableGuildChannelsForGuild?.(guildId));
+  const grouped = optional(() => store?.getChannels?.(guildId));
+  return channels == null && grouped == null ? undefined : countChannels([channels, grouped], guildId);
+}
+
+export function useGuildInfo(guildId: string, page?: { showOverview: boolean; canRefresh(): boolean }): GuildInfo {
+  const showOverview = page?.showOverview ?? true;
+  const canRefresh = page?.canRefresh;
+  const loadFriends = !page;
   const { React } = runtime.react;
   const forceUpdate = runtime.utils.react.useReRender();
   const [remoteGuild, setRemoteGuild] = React.useState<any>(null);
@@ -30,14 +40,26 @@ export function useGuildInfo(guildId: string, loadFriends = true): GuildInfo {
   const [friendsPending, setFriendsPending] = React.useState(false);
   const guild = normalizeGuild(guildId, optional(() => cachedGuild(guildId)), remoteGuild);
 
+  const channelStore = showOverview ? getGuildChannelStore() : undefined;
+  const [channelCount, setChannelCount] = React.useState<number | undefined>(undefined);
   React.useEffect(() => {
-    const stores = [getGuildStore(), getBasicGuildStore(), getUserStore(), getGuildRoleStore(),
-      getGuildChannelStore(), getGuildMemberCountStore(), getGuildHeaderCountsStore(),
-      getGuildMemberStore(), loadFriends && getRelationshipStore()].filter(Boolean);
-    const distinct = [...new Set(stores)];
+    const guildStores = [getGuildStore(), getBasicGuildStore()];
+    const overviewStores = showOverview ? [getUserStore(), getGuildRoleStore(), getGuildMemberCountStore(),
+      getGuildHeaderCountsStore(), getGuildMemberStore()] : [];
+    const stores = [...guildStores, ...overviewStores];
+    if (!loadFriends) return watchStores(stores, () => { if (canRefresh?.()) forceUpdate(); });
+    const distinct = [...new Set([...stores, channelStore, getRelationshipStore()])].filter(Boolean);
     for (const store of distinct) optional(() => store.addChangeListener?.(forceUpdate));
     return () => { for (const store of distinct) optional(() => store.removeChangeListener?.(forceUpdate)); };
-  }, [guildId, forceUpdate, loadFriends]);
+  }, [guildId, forceUpdate, loadFriends, showOverview, channelStore, canRefresh]);
+
+  React.useEffect(() => {
+    if (loadFriends || !channelStore) return;
+    const update = () => { if (canRefresh?.()) setChannelCount(readChannelCount(channelStore, guildId)); };
+    const cleanup = watchStores([channelStore], update);
+    update();
+    return cleanup;
+  }, [guildId, loadFriends, channelStore, canRefresh]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -75,8 +97,8 @@ export function useGuildInfo(guildId: string, loadFriends = true): GuildInfo {
     return () => clearTimeout(timer);
   }, [guildId, loadFriends]);
 
-  const userStore = getUserStore();
-  const memberStore = getGuildMemberStore();
+  const userStore = showOverview ? getUserStore() : undefined;
+  const memberStore = showOverview ? getGuildMemberStore() : undefined;
   const owner = ownerId ? userStore?.getUser?.(ownerId) ?? ownerUser : null;
   const friendIds: string[] = loadFriends ? getRelationshipStore()?.getFriendIDs?.() ?? [] : [];
   const friends = friendIds.filter(id => memberStore?.getMember?.(guildId, id) != null).map(id => {
@@ -84,9 +106,6 @@ export function useGuildInfo(guildId: string, loadFriends = true): GuildInfo {
     return { userId: id, displayName: user?.globalName ?? user?.global_name ?? user?.username ?? "Unknown",
       avatarHash: user?.avatar, nick: memberStore?.getMember?.(guildId, id)?.nick };
   });
-  const channelStore = getGuildChannelStore();
-  const channels = optional(() => channelStore?.getMutableGuildChannelsForGuild?.(guildId));
-  const groupedChannels = optional(() => channelStore?.getChannels?.(guildId));
   const boostCount = guild?.premiumSubscriptionCount;
   return {
     guild, isLoading: !guild && pending,
@@ -95,16 +114,15 @@ export function useGuildInfo(guildId: string, loadFriends = true): GuildInfo {
     ownerId,
     ownerDisplayName: owner?.globalName ?? owner?.global_name ?? owner?.username ?? ownerId,
     ownerAvatarUri: assetUrl(`guilds/${guildId}/users/${ownerId}/avatars`,
-      optional(() => memberStore?.getMember?.(guildId, ownerId)?.avatar), 64)
-      ?? assetUrl(`avatars/${ownerId}`, owner?.avatar, 64),
-    iconUri: assetUrl(`icons/${guildId}`, guild?.icon, 128),
-    bannerUri: assetUrl(`banners/${guildId}`, guild?.banner, 1024),
-    memberCount: optional(() => getGuildMemberCountStore()?.getMemberCount?.(guildId)) ?? guild?.memberCount,
-    onlineCount: optional(() => getGuildHeaderCountsStore()?.getOnlineCount?.(guildId)) ?? guild?.onlineCount,
-    roleCount: countRoles(optional(() => getGuildRoleStore()?.getSortedRoles?.(guildId)), guildId)
-      ?? countRoles(guild?.roles, guildId),
-    channelCount: countChannels(channels == null && groupedChannels == null
-      ? undefined : [channels, groupedChannels], guildId),
+      optional(() => memberStore?.getMember?.(guildId, ownerId)?.avatar), 64, loadFriends)
+      ?? assetUrl(`avatars/${ownerId}`, owner?.avatar, 64, loadFriends),
+    iconUri: assetUrl(`icons/${guildId}`, guild?.icon, 128, loadFriends),
+    bannerUri: assetUrl(`banners/${guildId}`, guild?.banner, loadFriends ? 1024 : 512, loadFriends),
+    memberCount: showOverview ? optional(() => getGuildMemberCountStore()?.getMemberCount?.(guildId)) ?? guild?.memberCount : undefined,
+    onlineCount: showOverview ? optional(() => getGuildHeaderCountsStore()?.getOnlineCount?.(guildId)) ?? guild?.onlineCount : undefined,
+    roleCount: showOverview ? countRoles(optional(() => getGuildRoleStore()?.getSortedRoles?.(guildId)), guildId)
+      ?? countRoles(guild?.roles, guildId) : undefined,
+    channelCount: loadFriends ? readChannelCount(channelStore, guildId) : channelStore ? channelCount : undefined,
     boostLabel: boostCount != null ? `${boostCount.toLocaleString()} boost${boostCount === 1 ? "" : "s"}` : undefined,
     premiumTier: guild?.premiumTier ?? 0,
     createdLabel: guild ? creationLabel(guildId) : undefined,

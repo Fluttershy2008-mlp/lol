@@ -831,8 +831,8 @@ var InfoCommandsBundle = (() => {
   }
 
   // src/server-info/data.ts
-  function assetUrl(path, hash, size = 128) {
-    return typeof hash === "string" && /^[a-zA-Z0-9_]+$/.test(hash) ? `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : void 0;
+  function assetUrl(path, hash, size = 128, animate = true) {
+    return typeof hash === "string" && /^[a-zA-Z0-9_]+$/.test(hash) ? `https://cdn.discordapp.com/${path}/${hash}.${animate && hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : void 0;
   }
   function normalizeGuild(id, cached, fetched) {
     if (!cached?.name && !fetched?.name) return void 0;
@@ -939,6 +939,38 @@ var InfoCommandsBundle = (() => {
     )));
   }
 
+  // src/server-info/store-refresh.ts
+  function watchStores(stores, refresh, interval = 80) {
+    let timer;
+    let active2 = true;
+    const queue = () => {
+      if (!active2 || timer !== void 0) return;
+      timer = setTimeout(() => {
+        timer = void 0;
+        if (active2) refresh();
+      }, interval);
+    };
+    const watched = [...new Set(stores)].filter((store2) => typeof store2?.addChangeListener === "function" && typeof store2?.removeChangeListener === "function");
+    const attached = [];
+    for (const store2 of watched) {
+      try {
+        store2.addChangeListener(queue);
+        attached.push(store2);
+      } catch {
+      }
+    }
+    return () => {
+      active2 = false;
+      clearTimeout(timer);
+      for (const store2 of attached) {
+        try {
+          store2.removeChangeListener(queue);
+        } catch {
+        }
+      }
+    };
+  }
+
   // src/server-info/ui/useGuildInfo.ts
   function cachedGuild(id) {
     return getGuildStore()?.getGuild?.(id) ?? getBasicGuildStore()?.getGuild?.(id);
@@ -950,7 +982,15 @@ var InfoCommandsBundle = (() => {
       return void 0;
     }
   }
-  function useGuildInfo(guildId2, loadFriends = true) {
+  function readChannelCount(store2, guildId2) {
+    const channels = optional4(() => store2?.getMutableGuildChannelsForGuild?.(guildId2));
+    const grouped = optional4(() => store2?.getChannels?.(guildId2));
+    return channels == null && grouped == null ? void 0 : countChannels([channels, grouped], guildId2);
+  }
+  function useGuildInfo(guildId2, page) {
+    const showOverview = page?.showOverview ?? true;
+    const canRefresh = page?.canRefresh;
+    const loadFriends = !page;
     const { React: React4 } = runtime.react;
     const forceUpdate = runtime.utils.react.useReRender();
     const [remoteGuild, setRemoteGuild] = React4.useState(null);
@@ -958,24 +998,36 @@ var InfoCommandsBundle = (() => {
     const [ownerUser, setOwnerUser] = React4.useState(null);
     const [friendsPending, setFriendsPending] = React4.useState(false);
     const guild = normalizeGuild(guildId2, optional4(() => cachedGuild(guildId2)), remoteGuild);
+    const channelStore = showOverview ? getGuildChannelStore() : void 0;
+    const [channelCount, setChannelCount] = React4.useState(void 0);
     React4.useEffect(() => {
-      const stores = [
-        getGuildStore(),
-        getBasicGuildStore(),
+      const guildStores = [getGuildStore(), getBasicGuildStore()];
+      const overviewStores = showOverview ? [
         getUserStore(),
         getGuildRoleStore(),
-        getGuildChannelStore(),
         getGuildMemberCountStore(),
         getGuildHeaderCountsStore(),
-        getGuildMemberStore(),
-        loadFriends && getRelationshipStore()
-      ].filter(Boolean);
-      const distinct = [...new Set(stores)];
+        getGuildMemberStore()
+      ] : [];
+      const stores = [...guildStores, ...overviewStores];
+      if (!loadFriends) return watchStores(stores, () => {
+        if (canRefresh?.()) forceUpdate();
+      });
+      const distinct = [.../* @__PURE__ */ new Set([...stores, channelStore, getRelationshipStore()])].filter(Boolean);
       for (const store2 of distinct) optional4(() => store2.addChangeListener?.(forceUpdate));
       return () => {
         for (const store2 of distinct) optional4(() => store2.removeChangeListener?.(forceUpdate));
       };
-    }, [guildId2, forceUpdate, loadFriends]);
+    }, [guildId2, forceUpdate, loadFriends, showOverview, channelStore, canRefresh]);
+    React4.useEffect(() => {
+      if (loadFriends || !channelStore) return;
+      const update = () => {
+        if (canRefresh?.()) setChannelCount(readChannelCount(channelStore, guildId2));
+      };
+      const cleanup = watchStores([channelStore], update);
+      update();
+      return cleanup;
+    }, [guildId2, loadFriends, channelStore, canRefresh]);
     React4.useEffect(() => {
       let cancelled = false;
       let timer;
@@ -1025,8 +1077,8 @@ var InfoCommandsBundle = (() => {
       const timer = setTimeout(() => setFriendsPending(false), 1500);
       return () => clearTimeout(timer);
     }, [guildId2, loadFriends]);
-    const userStore = getUserStore();
-    const memberStore = getGuildMemberStore();
+    const userStore = showOverview ? getUserStore() : void 0;
+    const memberStore = showOverview ? getGuildMemberStore() : void 0;
     const owner = ownerId ? userStore?.getUser?.(ownerId) ?? ownerUser : null;
     const friendIds = loadFriends ? getRelationshipStore()?.getFriendIDs?.() ?? [] : [];
     const friends = friendIds.filter((id) => memberStore?.getMember?.(guildId2, id) != null).map((id) => {
@@ -1038,9 +1090,6 @@ var InfoCommandsBundle = (() => {
         nick: memberStore?.getMember?.(guildId2, id)?.nick
       };
     });
-    const channelStore = getGuildChannelStore();
-    const channels = optional4(() => channelStore?.getMutableGuildChannelsForGuild?.(guildId2));
-    const groupedChannels = optional4(() => channelStore?.getChannels?.(guildId2));
     const boostCount = guild?.premiumSubscriptionCount;
     return {
       guild,
@@ -1052,14 +1101,15 @@ var InfoCommandsBundle = (() => {
       ownerAvatarUri: assetUrl(
         `guilds/${guildId2}/users/${ownerId}/avatars`,
         optional4(() => memberStore?.getMember?.(guildId2, ownerId)?.avatar),
-        64
-      ) ?? assetUrl(`avatars/${ownerId}`, owner?.avatar, 64),
-      iconUri: assetUrl(`icons/${guildId2}`, guild?.icon, 128),
-      bannerUri: assetUrl(`banners/${guildId2}`, guild?.banner, 1024),
-      memberCount: optional4(() => getGuildMemberCountStore()?.getMemberCount?.(guildId2)) ?? guild?.memberCount,
-      onlineCount: optional4(() => getGuildHeaderCountsStore()?.getOnlineCount?.(guildId2)) ?? guild?.onlineCount,
-      roleCount: countRoles(optional4(() => getGuildRoleStore()?.getSortedRoles?.(guildId2)), guildId2) ?? countRoles(guild?.roles, guildId2),
-      channelCount: countChannels(channels == null && groupedChannels == null ? void 0 : [channels, groupedChannels], guildId2),
+        64,
+        loadFriends
+      ) ?? assetUrl(`avatars/${ownerId}`, owner?.avatar, 64, loadFriends),
+      iconUri: assetUrl(`icons/${guildId2}`, guild?.icon, 128, loadFriends),
+      bannerUri: assetUrl(`banners/${guildId2}`, guild?.banner, loadFriends ? 1024 : 512, loadFriends),
+      memberCount: showOverview ? optional4(() => getGuildMemberCountStore()?.getMemberCount?.(guildId2)) ?? guild?.memberCount : void 0,
+      onlineCount: showOverview ? optional4(() => getGuildHeaderCountsStore()?.getOnlineCount?.(guildId2)) ?? guild?.onlineCount : void 0,
+      roleCount: showOverview ? countRoles(optional4(() => getGuildRoleStore()?.getSortedRoles?.(guildId2)), guildId2) ?? countRoles(guild?.roles, guildId2) : void 0,
+      channelCount: loadFriends ? readChannelCount(channelStore, guildId2) : channelStore ? channelCount : void 0,
       boostLabel: boostCount != null ? `${boostCount.toLocaleString()} boost${boostCount === 1 ? "" : "s"}` : void 0,
       premiumTier: guild?.premiumTier ?? 0,
       createdLabel: guild ? creationLabel(guildId2) : void 0,
@@ -1218,7 +1268,8 @@ var InfoCommandsBundle = (() => {
   }
   function useServerRelationships(guildId2, tab, canRequest) {
     const { React: React4 } = runtime.react;
-    const redraw = runtime.utils.react.useReRender();
+    const [revision, redraw] = React4.useReducer((value) => value + 1, 0);
+    const [relationshipRevision, refreshRelationships] = React4.useReducer((value) => value + 1, 0);
     const lookup = React4.useRef(/* @__PURE__ */ new Set()).current;
     const [pending, setPending] = React4.useState(false);
     const [failed, setFailed] = React4.useState(false);
@@ -1226,17 +1277,22 @@ var InfoCommandsBundle = (() => {
     const relationships = getRelationshipStore();
     const users = getUserStore();
     const presence = tab ? getPresenceStore() : void 0;
-    const ids = tab && getIds(relationships, tab);
-    const key = ids ? ids.join(",") : "";
-    const getMember = (id) => optional5(() => members?.getMember?.(guildId2, id));
+    const ids = React4.useMemo(() => tab && getIds(relationships, tab), [tab, relationships, relationshipRevision]);
+    const key = React4.useMemo(() => ids ? ids.join(",") : "", [ids]);
+    const getMember = React4.useCallback((id) => optional5(() => members?.getMember?.(guildId2, id)), [members, guildId2]);
     React4.useEffect(() => {
       if (!tab) return;
-      const stores = [relationships, members, users, presence];
-      for (const store2 of stores) optional5(() => store2?.addChangeListener?.(redraw));
+      const stopRelationships = watchStores([relationships], () => {
+        if (canRequest()) refreshRelationships();
+      });
+      const stopMembers = watchStores([members, users, presence], () => {
+        if (canRequest()) redraw();
+      });
       return () => {
-        for (const store2 of stores) optional5(() => store2?.removeChangeListener?.(redraw));
+        stopRelationships();
+        stopMembers();
       };
-    }, [tab, relationships, members, users, presence, redraw]);
+    }, [tab, relationships, members, users, presence, redraw, refreshRelationships, canRequest]);
     React4.useEffect(() => {
       setPending(false);
       setFailed(false);
@@ -1274,17 +1330,17 @@ var InfoCommandsBundle = (() => {
         stopped = true;
         clearTimeout(timer);
       };
-    }, [guildId2, tab, key, members, lookup, canRequest]);
-    const rows = (ids || []).flatMap((userId) => {
+    }, [guildId2, tab, key, members, lookup, canRequest, getMember]);
+    const rows = React4.useMemo(() => (ids || []).flatMap((userId) => {
       const member = getMember(userId);
       if (!member && optional5(() => members?.isMember?.(guildId2, userId)) !== true) return [];
       const user = optional5(() => users?.getUser?.(userId)) ?? member?.user;
       const name = user?.globalName ?? user?.global_name ?? user?.username ?? userId;
       const label = member?.nick && member.nick !== name ? `${member.nick} (${name})` : name;
-      const avatar = assetUrl(`guilds/${guildId2}/users/${userId}/avatars`, member?.avatar, 64) ?? assetUrl(`avatars/${userId}`, user?.avatar, 64);
+      const avatar = assetUrl(`guilds/${guildId2}/users/${userId}/avatars`, member?.avatar, 64, false) ?? assetUrl(`avatars/${userId}`, user?.avatar, 64, false);
       const status = optional5(() => presence?.getStatus?.(userId));
       return [{ userId, label, avatar, status: typeof status === "string" ? statuses[status] : void 0 }];
-    });
+    }), [ids, revision, users, presence, members, guildId2, getMember]);
     return { rows, pending, failed, available: Boolean(ids && (typeof members?.getMember === "function" || typeof members?.isMember === "function")) };
   }
 
@@ -1306,7 +1362,7 @@ var InfoCommandsBundle = (() => {
     const { Text: Text2, TableRow: TableRow2, TableRowGroup: TableRowGroup2 } = panelDesign;
     const colors = sheetColors();
     const [tab, setTab] = React4.useState("Overview");
-    const { guild, isLoading, ...info } = useGuildInfo(guildId2, false);
+    const { guild, isLoading, ...info } = useGuildInfo(guildId2, { showOverview: tab === "Overview", canRefresh: canRequest });
     const people = useServerRelationships(guildId2, guild && tab !== "Overview" ? tab : void 0, canRequest);
     const invite = typeof guild?.vanityCode === "string" && /^[a-zA-Z0-9-]+$/.test(guild.vanityCode) ? `https://discord.gg/${guild.vanityCode}` : void 0;
     const banner = assetUrl(`banners/${guildId2}`, guild?.banner, 2048);
@@ -1344,6 +1400,9 @@ var InfoCommandsBundle = (() => {
         data: people.rows,
         keyExtractor: (item) => item.userId,
         style: { flex: 1 },
+        initialNumToRender: 8,
+        maxToRenderPerBatch: 8,
+        windowSize: 7,
         contentContainerStyle: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
         ListHeaderComponent: /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-sm/normal", color: "text-subtle", style: { marginBottom: 10 } }, people.rows.length > 0 ? `${tab} in this server (${people.rows.length})` : `${tab} in this server`),
         ListEmptyComponent: /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingVertical: 16 } }, people.pending ? "Checking server membership…" : people.failed ? "Could not check server membership. Switch tabs to retry." : people.available ? "No matching members found." : "This list is unavailable on this Discord version."),
@@ -1373,7 +1432,7 @@ var InfoCommandsBundle = (() => {
           accessibilityLabel: "View server banner",
           onPress: () => onOpenImage(banner, 2048, 1152)
         },
-        /* @__PURE__ */ runtime.react.React.createElement(Image, { source: { uri: info.bannerUri }, style: { width: "100%", height: 140, resizeMode: "cover" } })
+        /* @__PURE__ */ runtime.react.React.createElement(Image, { resizeMethod: "resize", source: { uri: info.bannerUri }, style: { width: "100%", height: 140, resizeMode: "cover" } })
       ),
       guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(View, { style: { paddingHorizontal: 16, paddingTop: banner ? 0 : 4 } }, /* @__PURE__ */ runtime.react.React.createElement(
         ServerHeader,
