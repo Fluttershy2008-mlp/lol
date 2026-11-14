@@ -70,7 +70,7 @@ function runtime({ helpers = [], throwLookups = false, noMenus = false, brokenCo
         logger: { error: (...args) => errors.push(args) }
     };
     // Matches VdPluginManager.evalPlugin, including the immediate `return` expression.
-    const evaluate = source => vm.runInNewContext(`vendetta=>{return ${source}}`, { URL, console })(V);
+    const evaluate = source => vm.runInNewContext(`vendetta=>{return ${source}}`, { URL, console, setTimeout, clearTimeout })(V);
     const plugin = evaluate(code);
     return { V, evaluate, plugin, context, lazy, row, profile, images, notices, errors, patches };
 }

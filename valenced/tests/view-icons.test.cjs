@@ -14,6 +14,7 @@ function scenario(t) {
     t.after(async () => {
         for (const ui of renders.reverse()) await Renderer.act(async () => ui.unmount());
         for (const item of [...w.loaded.values()].reverse()) await w.stop(item);
+        assert.equal(w.timers.size, 0);
         assert.equal(w.pathWaiters.size, 0);
         assert.deepEqual(w.errors, []);
     });
@@ -119,7 +120,7 @@ test('ViewIcons and Copy User ID compose in either load order', async t => {
     }
 });
 
-test('ViewIcons keeps server actions and adds user actions to grouped context menus', async t => {
+test('ViewIcons adds user actions to grouped context menus', async t => {
     const w = scenario(t);
     const menus = { showContextMenu: menu => menu, hideContextMenu: () => w.calls.push(['hideContext']) };
     w.addModule(menus);
@@ -133,11 +134,90 @@ test('ViewIcons keeps server actions and adds user actions to grouped context me
     assert.equal(action(user.items, 'View Server Icon'), undefined);
     action(user.items, 'View Avatar').action();
     assert.ok(w.calls.some(call => call[0] === 'hideContext'));
+    assert.deepEqual(w.imagePaths(), [`/avatars/${FRIEND}/user.webp`]);
+});
 
-    const guild = menus.showContextMenu({ guild: w.guilds[GUILD], items: [] });
-    action(guild.items, 'View Server Icon').action();
-    action(guild.items, 'View Server Banner').action();
+test('ViewIcons opens server images after the guild popout dismisses', async t => {
+    const w = scenario(t);
+    let visible;
+    const menus = {
+        showContextMenu(menu) {
+            visible = menu;
+            return menu;
+        },
+        hideContextMenu() { w.calls.push(['hideContext']); },
+        press(label) {
+            action(visible.items, label).action();
+            // The native popout dismisses its surface after invoking the item.
+            w.host.setTimeout(() => { visible = undefined; }, 150);
+        },
+    };
+    w.addModule(menus);
+    const media = w.modules.find(module => module.openMediaModal);
+    const open = media.openMediaModal;
+    media.openMediaModal = input => { if (!visible) open(input); };
+    w.guilds[GUILD].icon = 'a_server';
+    w.guilds[GUILD].banner = 'banner';
+    const plugin = await w.start('view-icons');
+
+    const menu = Object.freeze({ key: GUILD, items: groups });
+    for (const label of ['View Server Icon', 'View Server Banner']) {
+        menus.showContextMenu(menu);
+        menus.press(label);
+        await w.advance(500);
+    }
     assert.deepEqual(w.imagePaths(), [
-        `/avatars/${FRIEND}/user.webp`, `/icons/${GUILD}/server.webp`, `/banners/${GUILD}/banner.webp`,
+        `/icons/${GUILD}/a_server.gif`, `/banners/${GUILD}/banner.webp`,
     ]);
+    menus.showContextMenu(menu);
+    menus.press('View Server Icon');
+    await w.stop(plugin);
+    await w.advance(500);
+    assert.equal(w.imagePaths().length, 2);
+});
+
+test('ViewIcons uses the server hashes and opens even when Android image sizing stalls', async t => {
+    const w = scenario(t);
+    w.addModule({
+        getGuildIconURL: () => 'https://cdn.discordapp.com/icons/undefined/undefined.png',
+        getGuildBannerURL: () => 'https://cdn.discordapp.com/banners/undefined/undefined.png',
+    });
+    const menus = { showContextMenu: menu => menu };
+    w.addModule(menus);
+    w.guilds[GUILD].icon = 'server';
+    w.guilds[GUILD].banner = 'a_banner';
+    const sizeCallbacks = [];
+    w.RN.Image.getSize = (_url, success) => sizeCallbacks.push(success);
+    await w.start('view-icons');
+
+    const menu = menus.showContextMenu({ guildId: GUILD, items: [] });
+    action(menu.items, 'View Server Icon').action();
+    await w.advance(200);
+    action(menu.items, 'View Server Banner').action();
+    for (const success of sizeCallbacks) success(320, 320);
+    await w.advance(3000);
+    assert.deepEqual(w.imagePaths(), [`/banners/${GUILD}/a_banner.gif`]);
+    for (const success of sizeCallbacks) success(800, 320);
+    assert.equal(w.imagePaths().length, 1);
+});
+
+test('ViewIcons and Server Info share the late-loaded guild bar menu without duplicate rows', async t => {
+    const w = scenario(t);
+    const original = Object.freeze([{ label: 'Mark As Read', action() {} }]);
+    const builder = { default: () => original };
+    const menus = { showContextMenu: menu => menu };
+    w.addModule(menus);
+    w.guilds[GUILD].icon = 'server';
+    w.guilds[GUILD].banner = 'banner';
+    await w.start('view-icons');
+    await w.start('info-commands');
+    w.addModule(builder, 'modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx');
+    const built = builder.default(GUILD);
+    const shown = menus.showContextMenu({ key: GUILD, items: built });
+    assert.deepEqual(Array.from(shown.items, item => item.label).sort(),
+        ['Mark As Read', 'Server Info', 'View Server Banner', 'View Server Icon']);
+    assert.equal(original.length, 1);
+    action(shown.items, 'View Server Icon').action();
+    await w.advance(180);
+    assert.deepEqual(w.imagePaths(), [`/icons/${GUILD}/server.webp`]);
 });

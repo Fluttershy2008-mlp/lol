@@ -16,6 +16,10 @@ If ViewIcons is already installed, enable plugin updates and reload Revenge. If 
 
 Open a profile's overflow menu or a supported server/group DM menu and choose **View Avatar**, **View Banner**, or another available image action. Images open in Discord's media viewer, with a browser fallback when that viewer is unavailable.
 
+## 1.0.6
+
+Server icon and banner actions use the server's image hashes. On Valenced, they open the viewer after the server menu dismisses. The viewer uses fallback dimensions if Android's image size lookup stalls.
+
 ## 1.0.5
 
 Profile image actions support Valenced's late-loaded user and bot overflow menus and grouped menu items. **View Avatar** also works for Discord's default avatars. **View Banner** uses the displayed profile or the stored server or global banner when available.

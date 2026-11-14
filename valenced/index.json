@@ -2803,11 +2803,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.view-icons@1.0.0-beta5.zip",
+          "sha256": "e46a4856ea5ddb253678a2df5e111c87fa7275abb36b52ead5ae747770b4e76c",
+          "size": 18124,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "ViewIcons (Valenced)",
       "description": "Valenced preview. View user avatars, banners, server avatars, avatar decorations, server icons/banners and group DM icons on Valenced mobile.",

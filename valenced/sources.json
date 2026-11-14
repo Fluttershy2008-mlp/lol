@@ -168,8 +168,8 @@
     },
     "dev.fluttershy2008.view-icons": {
       "path": "view-icons/index.js",
-      "sha256": "0574f2035c78780c9089456a992f4b1cbb4652e5a4aaac77719507a1fcdf6b16",
-      "originalVersion": "1.0.5",
+      "sha256": "858bc74efaa7ad6af8602fcf8de6a3df2a38063e695ce2689d0f91c856c9f17a",
+      "originalVersion": "1.0.6",
       "kind": "compatibility-preview",
       "sourceRef": "main"
     },

@@ -242,6 +242,7 @@ return (() => {
     }
 
     const unpatches = [];
+    let serverMenuTimer, serverSizeTimer, serverRequest = 0;
     let lazyContexts = new WeakMap();
     let active = false;
     let generation = 0;
@@ -291,7 +292,7 @@ return (() => {
         }
     }
 
-    function openImage(label, source, fallbackWidth = 512, fallbackHeight = 512) {
+    function openImage({ label, url: source, width: fallbackWidth, height: fallbackHeight, server }) {
         if (!source) {
             toast(`${label} is unavailable`);
             return;
@@ -299,9 +300,10 @@ return (() => {
 
         const uri = normalizeImageUrl(source, 4096);
         const session = generation;
+        const request = serverRequest;
+        MediaModal ??= optional(() => findByProps("openMediaModal"));
 
         const openInDiscord = (width, height) => {
-            if (!active || session !== generation) return true;
             if (typeof MediaModal?.openMediaModal !== "function") return false;
             try {
                 MediaModal.openMediaModal({
@@ -335,25 +337,31 @@ return (() => {
             toast(`Couldn't open ${label.toLowerCase()}`);
         };
 
+        let opened = false;
+        const show = (width, height) => {
+            if (opened || !active || session !== generation || (server && request !== serverRequest)) return;
+            opened = true;
+            if (server) {
+                clearTimeout(serverSizeTimer);
+                serverSizeTimer = undefined;
+            }
+            if (!openInDiscord(width, height)) openFallback();
+        };
         try {
             const Image = ReactNative?.Image;
             if (Image?.getSize && typeof MediaModal?.openMediaModal === "function") {
-                Image.getSize(
-                    uri,
-                    (width, height) => {
-                        if (!openInDiscord(width, height)) openFallback();
-                    },
-                    () => {
-                        if (!openInDiscord(fallbackWidth, fallbackHeight)) openFallback();
-                    },
-                );
+                if (server) {
+                    // Animated or large server images can leave Android's size callback pending.
+                    serverSizeTimer = setTimeout(() => show(fallbackWidth, fallbackHeight), 1500);
+                }
+                Image.getSize(uri, show, () => show(fallbackWidth, fallbackHeight));
                 return;
             }
         } catch (error) {
             logError("Image size lookup failed", error);
         }
 
-        if (!openInDiscord(fallbackWidth, fallbackHeight)) openFallback();
+        show(fallbackWidth, fallbackHeight);
     }
 
     function defaultAvatarUrl(user) {
@@ -467,26 +475,11 @@ return (() => {
         if (!guild?.id) return [];
         const targets = [];
 
-        if (guild.icon) {
-            try {
-                const icon = iconUrl("getGuildIconURL", {
-                    id: guild.id,
-                    icon: guild.icon,
-                    canAnimate: true,
-                }) ?? cdnUrl(`icons/${guild.id}`, safeString(guild.icon));
-                if (icon) targets.push({ label: "Server Icon", url: icon, width: 512, height: 512 });
-            } catch {}
-        }
-
-        if (guild.banner) {
-            try {
-                const banner = iconUrl("getGuildBannerURL", guild, true)
-                    ?? cdnUrl(`banners/${guild.id}`, safeString(guild.banner));
-                if (banner) targets.push({ label: "Server Banner", url: banner, width: 1024, height: 400 });
-            } catch {}
-        }
-
-        return dedupeTargets(targets);
+        const icon = cdnUrl(`icons/${guild.id}`, safeString(guild.icon));
+        const banner = cdnUrl(`banners/${guild.id}`, safeString(guild.banner));
+        if (icon) targets.push({ label: "Server Icon", url: icon, width: 512, height: 512, server: true });
+        if (banner) targets.push({ label: "Server Banner", url: banner, width: 960, height: 540, server: true });
+        return targets;
     }
 
     function channelTargets(channel) {
@@ -509,15 +502,33 @@ return (() => {
         });
     }
 
-    function makePlainMenuItem(target, hide) {
+    function imageAction(target, hide) {
         const session = generation;
+        return () => {
+            if (!active || session !== generation) return;
+            optional(() => hide?.());
+            if (target.server) {
+                serverRequest++;
+                clearTimeout(serverSizeTimer);
+                serverSizeTimer = undefined;
+                if (vendetta.host?.id === "valenced") {
+                    // Match Server Info's handoff from Discord's closing guild popout.
+                    clearTimeout(serverMenuTimer);
+                    serverMenuTimer = setTimeout(() => {
+                        serverMenuTimer = undefined;
+                        if (active && session === generation) openImage(target);
+                    }, 180);
+                    return;
+                }
+            }
+            openImage(target);
+        };
+    }
+
+    function makePlainMenuItem(target, hide) {
         const item = {
             label: `View ${target.label}`,
-            action: () => {
-                if (!active || session !== generation) return;
-                try { hide?.(); } catch {}
-                openImage(target.label, target.url, target.width, target.height);
-            },
+            action: imageAction(target, hide),
         };
 
         if (imageIcon != null) item.icon = imageIcon;
@@ -680,6 +691,29 @@ return (() => {
         unpatches.push(unpatch);
     }
 
+    function patchGuildMenu() {
+        if (typeof getModuleWithImportedPath !== "function") return;
+        const session = generation;
+        const path = "modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx";
+        const unsubscribe = getModuleWithImportedPath(path, module => {
+            if (!active || generation !== session) return;
+            const method = typeof module?.getGuildsBarGuildMenuItems === "function" ? "getGuildsBarGuildMenuItems" : "default";
+            if (typeof module?.[method] !== "function") return;
+            try {
+                const unpatch = after(method, module, ([value], items) => {
+                    if (!active || generation !== session || !Array.isArray(items)) return items;
+                    const id = safeString(value) ?? safeString(value?.guildId) ?? safeString(value?.id);
+                    const guild = value?.guild ?? optional(() => id && GuildStore?.getGuild?.(id));
+                    return withMenuItems(items, guildTargets(guild));
+                });
+                if (typeof unpatch === "function") unpatches.push(unpatch);
+            } catch (error) {
+                logError("Could not patch server menu", error);
+            }
+        });
+        if (typeof unsubscribe === "function") unpatches.push(unsubscribe);
+    }
+
     function findRowArray(rendered) {
         return findInReactTree(rendered, node =>
             Array.isArray(node)
@@ -696,10 +730,7 @@ return (() => {
 
         const props = {
             label: `View ${target.label}`,
-            onPress: () => {
-                try { LazyActionSheet?.hideActionSheet?.(sheetKey); } catch {}
-                openImage(target.label, target.url, target.width, target.height);
-            },
+            onPress: imageAction(target, () => LazyActionSheet?.hideActionSheet?.(sheetKey)),
         };
 
         if (imageIcon != null) {
@@ -807,7 +838,7 @@ return (() => {
         generation++;
         resolveModules();
 
-        for (const patch of [patchUserProfileMenus, patchContextMenus, patchLazyActionSheets]) {
+        for (const patch of [patchUserProfileMenus, patchGuildMenu, patchContextMenus, patchLazyActionSheets]) {
             try { patch(); } catch (error) { logError("Optional menu patch unavailable", error); }
         }
         toast(unpatches.length ? "ViewIcons enabled" : "ViewIcons: no supported menus found on this Discord build");
@@ -816,6 +847,9 @@ return (() => {
     function onUnload() {
         active = false;
         generation++;
+        clearTimeout(serverMenuTimer);
+        clearTimeout(serverSizeTimer);
+        serverMenuTimer = serverSizeTimer = undefined;
         for (const unpatch of unpatches.splice(0).reverse()) {
             try { unpatch?.(); } catch (error) { logError("Failed to unpatch", error); }
         }

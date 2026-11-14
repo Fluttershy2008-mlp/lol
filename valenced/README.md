@@ -1,3 +1,5 @@
+**ViewIcons 1.0.0-beta5** opens **View Server Icon** and **View Server Banner** after the server menu closes. Refresh the repository, update ViewIcons and fully restart Discord.
+
 **ViewIcons 1.0.0-beta4** adds **View Avatar** and **View Banner** to the **⋯** menu on user profiles. The menu also shows **View Server Avatar** and **View Avatar Decoration** when available. Refresh the repository, update ViewIcons and fully restart Discord.
 
 **Chat Buttons 1.0.13** restores the compact composer icon and menu from 1.0.11. Refresh the repository, update Chat Buttons and restart Discord.
