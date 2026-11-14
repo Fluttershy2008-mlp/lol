@@ -36,10 +36,9 @@ for (const first of [true, false]) test('menu tap mounts real hider settings wit
   s.w.stores.ThemeStore = { theme: 'dark' };
   const composer = await s.mount(h(s.f.chatModule.default)), menu = await s.menu(composer);
   assert.equal(menu.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === LABEL).length, 1);
-  const actions = menu.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityHint === 'Opens filter settings');
-  assert.equal(actions[0], button(menu, LABEL));
   const labels = menu.root.findAll(n => n.type === 'Pressable').map(n => n.props.accessibilityLabel);
-  assert.ok(labels.indexOf(LABEL) < labels.indexOf('Emoji'));
+  assert.ok(labels.includes('Manage buttons'));
+  assert.equal(menu.root.findAll(n => n.type === 'Text' && ['Chat tools', 'Filter settings'].includes(n.props.children)).length, 0);
   await Renderer.act(async () => button(menu, LABEL).props.onPress());
   assert.equal(panels(composer).length, 1, 'the settings UI must actually mount');
   const panel = panels(composer)[0];

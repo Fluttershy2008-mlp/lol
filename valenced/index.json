@@ -2842,6 +2842,19 @@
             }
           }
         },
+        "1.0.13": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.13.zip",
+          "sha256": "640d2fd5220d41f3f57d95efb17f58a108b8e9f88ea23f9f9b120c358e506658",
+          "size": 36159,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.7": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.7.zip",
           "sha256": "aa5112979c7e4038a7306bd0f24496b38e61d6420243d049ce1276a2beed2d42",
@@ -2883,8 +2896,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.12",
-        "beta": "1.0.12"
+        "latest": "1.0.13",
+        "beta": "1.0.13"
       },
       "name": "Chat Buttons",
       "description": "Puts the chat bar buttons in one menu, with a shortcut to Hidden users & servers settings.",

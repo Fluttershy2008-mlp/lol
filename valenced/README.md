@@ -1,6 +1,8 @@
+**Chat Buttons 1.0.13** restores the compact composer icon and menu from 1.0.11. Refresh the repository, update Chat Buttons and restart Discord.
+
 **Hide Blocked & Ignored Messages 1.0.0-beta21** hides blocked and ignored message previews on forum cards, in thread lists and in the Messages tab for DMs and group chats. Post titles and conversation rows stay available. Refresh the repository, update the plugin and restart Discord.
 
-**Hide Blocked & Ignored Messages 1.0.0-beta20** follows Discord’s theme and puts hidden servers and whitelisted users above the filter switches. **Chat Buttons 1.0.12** puts the settings shortcut at the top of the composer menu. Refresh this repository and update both plugins. Open **Buttons → Hidden users & servers** from any chat.
+**Hide Blocked & Ignored Messages 1.0.0-beta20** follows Discord’s theme and puts hidden servers and whitelisted users above the filter switches. Open **Buttons → Hidden users & servers** from any chat.
 
 **HideBlockedAndIgnoredMessages 1.0.0-beta19** filters the Members tab in server-wide and channel searches, including direct username matches. The existing hide switches and whitelist apply. Refresh the repository, update the plugin, and restart Discord.
 

@@ -276,8 +276,8 @@
     },
     "mlemception.chatbuttons": {
       "path": "valenced/plugins/chat-buttons/index.js",
-      "sha256": "1df5ae6035c1c996681cb5644ea9b72ef0b620f425ccb9698c655b750dfce3ea",
-      "originalVersion": "1.0.12",
+      "sha256": "a0a63fd5432ac582f08efcffb68ec1c7acdf8a85473f2d78ff0efbc8caa1a7e3",
+      "originalVersion": "1.0.13",
       "kind": "native-plugin"
     },
     "dev.fluttershy2008.message-bubbles": {

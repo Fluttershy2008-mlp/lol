@@ -4,7 +4,7 @@
   "name": "Chat Buttons",
   "description": "Puts the chat bar buttons in one menu, with a shortcut to Hidden users & servers settings.",
   "author": "mlemception",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "dependencies": {
     "valenced.api": {
       "version": ">=1 <2"
