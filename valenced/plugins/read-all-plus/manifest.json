@@ -6,7 +6,7 @@
   "icon": "ChatCheckIcon",
   "author": "fluttershy_simper67 <753962426407452713>",
   "contributors": ["sapphire <757982547861962752> (https://github.com/aeongdesu/slimplugins \"Original Read All Servers\")"],
-  "version": "2.1.0",
+  "version": "2.1.1",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }

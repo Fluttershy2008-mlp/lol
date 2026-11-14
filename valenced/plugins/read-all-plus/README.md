@@ -1,4 +1,4 @@
-# Read All Plus 2.1.0
+# Read All Plus 2.1.1
 
 An expanded version of Read All Servers for Valenced Discord, customised for fluttershy_simper67.
 
@@ -9,6 +9,8 @@ An expanded version of Read All Servers for Valenced Discord, customised for flu
 3. Hold the **Messages** icon in the server sidebar to open the panel. You can also open **Read All Plus** from the Valenced settings section, or use this plugin's **Settings** button in the plugin manager.
 
 Button labels in Valenced may vary slightly by build. The plugin manager's Settings button is available even when a Discord UI change prevents the sidebar shortcut from appearing.
+
+Tap **Close** or use Android **Back** to return to the Discord screen you opened the panel from.
 
 ## What you can do
 

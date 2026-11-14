@@ -16,6 +16,11 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
     const cache = new Map();
 
     const emit = () => { for (const fn of listeners) { try { fn(); } catch {} } };
+    const subscribe = listener => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+    };
+    const getPanelSession = () => panelSession;
     const storeNames = ["ChannelStore", "GuildChannelStore", "GuildStore", "ReadStateStore", "ActiveJoinedThreadsStore", "PrivateChannelSortStore", "UserStore", "UserGuildSettingsStore", "NotificationSettingsStore", "SelectedChannelStore", "SelectedGuildStore", "PermissionStore", "ThemeStore"];
 
     function getStores() {
@@ -136,6 +141,7 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
     function closePanel() {
         if (!panelSession) return;
         panelSession = 0;
+        emit();
         try { V.discord.actions.ActionSheetActionCreators.hideActionSheet(KEY); } catch {}
     }
 
@@ -145,14 +151,15 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
     }
 
     function PanelLauncher({ session }) {
+        const openSession = R.useSyncExternalStore(subscribe, getPanelSession);
         R.useEffect(() => () => {
             if (panelSession === session) panelSession = 0;
         }, [session]);
-        if (!active || panelSession !== session) return null;
+        if (openSession !== session) return null;
         const h = R.createElement;
         const Provider = safeArea()?.SafeAreaProvider || N.View;
         const close = () => { if (panelSession === session) closePanel(); };
-        // The sheet registry mounts the shortcut. A native modal owns the window and touch gestures.
+        // Unmount the native window even if Discord keeps the sheet launcher mounted.
         return h(N.Modal, {
             visible: true, presentationStyle: "fullScreen", animationType: "slide",
             onRequestClose: close,
@@ -212,7 +219,7 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
                 if (timer) return;
                 timer = setTimeout(() => { timer = null; setRevision(v => v + 1); }, 120);
             };
-            listeners.add(refresh);
+            const unsubscribe = subscribe(refresh);
             const unsubs = [];
             const stores = getStores();
             for (const name of ["ReadStateStore", "ChannelStore", "GuildStore", "UserStore", "UserGuildSettingsStore", "ThemeStore"]) {
@@ -224,7 +231,7 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
             }
             const poll = setInterval(refresh, 4000);
             return () => {
-                listeners.delete(refresh);
+                unsubscribe();
                 clearTimeout(timer);
                 clearInterval(poll);
                 for (const unsub of unsubs) { try { unsub(); } catch {} }
@@ -443,7 +450,7 @@ function createReadAllPlugin(initialApi, definePlugin, createEngine) {
                     ["quiet", "Quiet completion", "Save results in Recent activity without a notification."],
                 ]),
                 h(N.View, { key: "compatibility", style: { gap: 6, alignItems: "flex-start" } },
-                    detail("Read All Plus 2.1.0"), button("Check compatibility", checkCompatibility, { compact: true, plain: true })),
+                    detail("Read All Plus 2.1.1"), button("Check compatibility", checkCompatibility, { compact: true, plain: true })),
             ];
         }
 

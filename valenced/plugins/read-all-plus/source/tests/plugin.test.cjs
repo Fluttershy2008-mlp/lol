@@ -72,6 +72,32 @@ test("settings entry opens the same panel independently of the sidebar UI", asyn
     assert.equal(f.panels[0][1], "read-all-plus-panel"); assert.equal(f.panels[0][3], "stack");
 });
 
+test("Close and Android Back each unmount the native modal even when the Discord launcher stays mounted", async t => {
+    let now = Date.now();
+    t.mock.method(Date, "now", () => now);
+    const f = pluginFixture({ hideSheetThrows: true }); await f.init();
+    const open = f.items.get("ReadAllPlusPanel").onPress;
+    open();
+    const first = await f.mountLauncher(f.panels[0]);
+    const screen = f.render(first.tree.children[0].children[0].props);
+    const staleBack = first.tree.props.onRequestClose;
+
+    f.findButton(screen, "Close").props.onPress();
+    assert.equal(first.tree, null);
+    assert.deepEqual(f.panels.at(-1), { hidden: "read-all-plus-panel" });
+
+    now += 450;
+    open();
+    const second = await f.mountLauncher(f.panels.at(-1));
+    staleBack();
+    assert.equal(second.tree.type, "Modal");
+    second.tree.props.onRequestClose();
+    assert.equal(second.tree, null);
+    assert.equal(f.panels.filter(panel => panel.hidden).length, 2);
+    first.unmount();
+    second.unmount();
+});
+
 test("search, selection and account-specific exclusion controls render and persist", async () => {
     const f = pluginFixture(); await f.init();
     f.findButton(f.render(), "Channels").props.onPress();

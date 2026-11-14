@@ -7,6 +7,7 @@ function pluginFixture(options = {}) {
     const f = fixture();
     const cleanups = [], alerts = [], toasts = [], panels = [], patches = [], saved = [], items = new Map(), sections = new Map();
     let hookIndex = 0; const hooks = [];
+    let observeLauncher;
     const React = {
         createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat(1).filter(x => x !== null && x !== undefined) }),
         useState(value) {
@@ -16,6 +17,10 @@ function pluginFixture(options = {}) {
         },
         useEffect() {},
         useMemo(fn) { return fn(); },
+        useSyncExternalStore(subscribe, getSnapshot) {
+            observeLauncher?.(subscribe);
+            return getSnapshot();
+        },
     };
     const ReactNative = {
         ...Object.fromEntries(["View", "Text", "Pressable", "Switch", "TextInput", "ScrollView", "FlatList", "Modal"].map(s => [s, s])),
@@ -32,7 +37,13 @@ function pluginFixture(options = {}) {
         discord: {
             flux: { Stores: f.stores }, common: { flux: { Dispatcher: { dispatch: payload => f.env.dispatch(payload) } }, constants: { Constants: {} } },
             actions: {
-                ActionSheetActionCreators: { openLazy: (...args) => panels.push(args), hideActionSheet: key => panels.push({ hidden: key }) },
+                ActionSheetActionCreators: {
+                    openLazy: (...args) => panels.push(args),
+                    hideActionSheet(key) {
+                        panels.push({ hidden: key });
+                        if (options.hideSheetThrows) throw new Error("Discord could not close its sheet");
+                    },
+                },
                 ToastActionCreators: { open: (...args) => toasts.push(args) },
             },
             design: { Design: { BottomSheet: "BottomSheet" } },
@@ -53,6 +64,17 @@ function pluginFixture(options = {}) {
     const plugin = new Function("valenced", "plugin", `return ${script}`)(unscoped, x => x).default;
     const init = async () => { plugin.init(context); await new Promise(resolve => setImmediate(resolve)); };
     const render = (props = {}) => { hookIndex = 0; return plugin.SettingsComponent({ api: context, ...props }); };
+    async function mountLauncher([sheet, , props]) {
+        const { default: Launcher } = await sheet;
+        let tree, unsubscribe;
+        const update = () => {
+            observeLauncher = subscribe => { unsubscribe ??= subscribe(update); };
+            try { tree = Launcher(props); }
+            finally { observeLauncher = undefined; }
+        };
+        update();
+        return { get tree() { return tree; }, unmount: () => unsubscribe?.() };
+    }
     const allNodes = root => {
         const list = [];
         const walk = node => { if (!node || typeof node !== "object") return; list.push(node);
@@ -72,7 +94,7 @@ function pluginFixture(options = {}) {
         return (root.children || []).map(textContent).join("");
     };
     const findButton = (root, label) => allNodes(root).find(n => n.type === "Pressable" && (n.props.accessibilityLabel === label || textContent(n) === label));
-    return { f, plugin, context, unscoped, init, render, allNodes, textContent, findButton, cleanups, alerts, toasts, panels, patches, saved, items, sections, hooks };
+    return { f, plugin, context, unscoped, init, render, mountLauncher, allNodes, textContent, findButton, cleanups, alerts, toasts, panels, patches, saved, items, sections, hooks };
 }
 
 module.exports = { pluginFixture };
