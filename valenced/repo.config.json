@@ -123,6 +123,10 @@
     "always-animate": {
       "path": "valenced/plugins/always-animate"
     },
+    "voice-messages": {
+      "path": "valenced/plugins/voice-messages",
+      "upstream": "https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages"
+    },
     "more-alts": {
       "path": "valenced/plugins/more-alts",
       "upstream": "https://code.is-your.app/SheWhoReignsSupreme/Valenced-Plugins/src/commit/19b5f3267c05e24c12c65c59c5bcdaf3e21dc104/plugins/more-alts",

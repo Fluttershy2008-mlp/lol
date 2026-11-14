@@ -16,6 +16,8 @@ More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta9**, Friends 
 
 **Auto Quest 1.2.2** keeps concurrent video quests running with native HTTP response fixes, bounded connection retries and automatic recovery after Discord reconnects. Refresh the Valenced repository, update Auto Quest and fully restart Discord. Open **Settings → Valenced → Auto Quest** to see each quest's progress and any specific error code. [Supported quests and setup](valenced/plugins/auto-quest/README.md).
 
+**Voice Messages 1.0.2** is available for Valenced Android. Refresh this repository and install or update it from **Browse Plugins**. [Usage and source](valenced/plugins/voice-messages/README.md).
+
 ## Revenge Next
 
 Paste this into **Plugins > Settings > Advanced > Repository URL**:

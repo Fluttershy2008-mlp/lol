@@ -1,0 +1,10 @@
+Voice Messages for Valenced on Android
+
+Original Vencord plugin by V, Vap0r1ze, Nickyux, and Vendicated contributors.
+https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages
+
+Android port credited to Rosie. The TypeScript and Kotlin sources are under
+source/. See README.md for build instructions.
+
+SPDX-License-Identifier: GPL-3.0-or-later
+See LICENSE for the full license text.

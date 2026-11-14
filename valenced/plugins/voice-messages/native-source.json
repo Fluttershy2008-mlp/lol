@@ -1,0 +1,6 @@
+{
+  "minAndroidApi": 24,
+  "compileAndroidApi": 36,
+  "kotlin": "2.4.10",
+  "buildTools": "36.0.0"
+}

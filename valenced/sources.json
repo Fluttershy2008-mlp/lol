@@ -300,6 +300,13 @@
       "originalVersion": "1.1.0-beta1",
       "kind": "native-plugin"
     },
+    "rosie.voice-messages": {
+      "path": "valenced/plugins/voice-messages/index.js",
+      "sha256": "898f9e49d757e52ff9f3b9596ec9b3b5a56c32f012de081144633d0fc7acf7c0",
+      "originalVersion": "1.0.2",
+      "kind": "native-plugin",
+      "upstream": "https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages"
+    },
     "dev.fluttershy2008.more-alts": {
       "path": "valenced/plugins/more-alts/index.js",
       "sha256": "f6900266736d0449af039a1d7762f4fe86346d44e9a2ebf603eaca19e7efa1a2",

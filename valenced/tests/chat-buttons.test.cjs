@@ -9,7 +9,9 @@ const { installChatButtonsHost } = require('./chat-buttons-fixture.cjs');
 const h = React.createElement;
 const source = JSON.parse(fs.readFileSync(path.join(__dirname, '../sources.json'))).plugins;
 const slugs = Object.entries(source).filter(([id]) => id !== 'mlemception.chatbuttons')
-    .map(([id]) => id.replace(/^dev\.fluttershy2008\.|^fluttershy(?:2008)?\./, ''));
+    .map(([id, entry]) => entry.kind === 'native-plugin'
+        ? path.basename(path.dirname(entry.path))
+        : id.replace(/^dev\.fluttershy2008\./, ''));
 function press(ui, label) {
     const nodes = ui.root.findAll(n => typeof n.type === 'string' && n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
     assert.ok(nodes.length, 'button: ' + label); return nodes[0];

@@ -1,0 +1,21 @@
+{
+	"format": 1,
+	"id": "rosie.voice-messages",
+	"name": "Voice Messages",
+	"description": "Record or import audio, preview it, and send it as a Discord voice message.",
+	"author": "Rosie",
+	"contributors": ["V", "Vap0r1ze", "Nickyux"],
+	"icon": "MicrophoneIcon",
+	"version": "1.0.2",
+	"dependencies": {
+		"valenced.api": { "version": ">=1 <2" },
+		"discord": { "version": "*" }
+	},
+	"dist": {
+		"script": "index.js",
+		"android": {
+			"path": "plugin.jar",
+			"class": "com.rosie.voicemessages.VoiceMessages"
+		}
+	}
+}
