@@ -314,6 +314,7 @@ def build(check=False):
         # Ship the corresponding source and build recipes for copyleft ports.
         if slug in ("chat-buttons", "more-alts"):
             files["build.mjs"] = (directory / "build.mjs").read_bytes()
+        if slug in ("chat-buttons", "more-alts", "read-all-plus"):
             for path in sorted((directory / "source").rglob("*")):
                 if path.is_file():
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()

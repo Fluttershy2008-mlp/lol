@@ -256,6 +256,13 @@
       "originalVersion": "1.1.0",
       "kind": "native-plugin"
     },
+    "dev.fluttershy.read-all-plus": {
+      "path": "valenced/plugins/read-all-plus/index.js",
+      "sha256": "c735950c8a38ac29ac8819839f97967b0474f3fe3a0a24c34f9c50d2bb371935",
+      "originalVersion": "2.1.0",
+      "kind": "native-plugin",
+      "upstream": "https://github.com/aeongdesu/slimplugins"
+    },
     "dev.fluttershy2008.scrollbar": {
       "path": "valenced/plugins/scrollbar/index.js",
       "sha256": "2c936fab155b1f6144f3bc350014f141f7df4e4651c8e185932f2defb22712e0",

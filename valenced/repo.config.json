@@ -100,6 +100,10 @@
     "double-tap-edit": {
       "path": "valenced/plugins/double-tap-edit"
     },
+    "read-all-plus": {
+      "path": "valenced/plugins/read-all-plus",
+      "upstream": "https://github.com/aeongdesu/slimplugins"
+    },
     "scrollbar": {
       "path": "valenced/plugins/scrollbar"
     },

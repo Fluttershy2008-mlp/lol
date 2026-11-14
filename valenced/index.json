@@ -4,6 +4,34 @@
   "description": "Valenced ports of all unique Revenge plugins and native colour themes, including High and Low Altitude.",
   "icon": "GlobeEarthIcon",
   "plugins": {
+    "dev.fluttershy.read-all-plus": {
+      "versions": {
+        "2.1.0": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy.read-all-plus@2.1.0.zip",
+          "sha256": "7678fe46d1eebf99c06561e563173d48cd34bf7d462abacb84c1f1744a89aeaf",
+          "size": 55219,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "2.1.0",
+        "beta": "2.1.0"
+      },
+      "name": "Read All Plus",
+      "description": "A complete read-all panel for servers, channels, DMs, group chats and active threads. Includes selection, exclusions, mention protection and a cancellable queue.",
+      "icon": "ChatCheckIcon",
+      "author": "fluttershy_simper67 <753962426407452713>",
+      "contributors": [
+        "sapphire <757982547861962752> (https://github.com/aeongdesu/slimplugins \"Original Read All Servers\")"
+      ]
+    },
     "dev.fluttershy2008.addon-list": {
       "versions": {
         "1.0.0-beta1": {
