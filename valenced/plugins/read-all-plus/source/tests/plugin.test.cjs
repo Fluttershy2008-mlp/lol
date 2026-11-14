@@ -43,59 +43,65 @@ test("the dedicated DM action includes both private and group chats", async () =
     assert.deepEqual(new Set(f.f.sent[0].channels.map(c => c.channelId)), new Set([f.f.dm.id, f.f.group.id]));
 });
 
-test("Messages hook opens the control sheet and preserves normal and disabled long-press behaviour", async () => {
+test("the Messages shortcut preserves the original element and tap handler", async () => {
     const f = pluginFixture(); await f.init();
+    const onPress = () => {};
     let originalCalls = 0;
-    const Wrapper = function GuildsBarAnimatedItemWrapper() {};
-    const DMs = function HomeDrawerDMsRowWrapper() {};
-    const props = { expandedChildren: { type: DMs }, config: { onPress: "normal tap", onLongPress: () => { originalCalls++; } } };
-    const patched = f.patches[0].fn([Wrapper, props, "key"]);
-    assert.equal(patched[1].config.onPress, "normal tap");
-    patched[1].config.onLongPress();
-    assert.equal(f.panels.length, 1); assert.equal(f.f.sent.length, 0);
-    const sheet = await f.panels[0][0]; assert.equal(typeof sheet.default, "function");
-    const modal = sheet.default(f.panels[0][2]);
-    assert.equal(modal.type, "Modal");
-    assert.equal(modal.props.presentationStyle, "fullScreen");
-    assert.equal(modal.children[0].type, "SafeAreaProvider");
-    const screen = modal.children[0].children[0];
-    const tree = f.render(screen.props);
-    assert.deepEqual(tree.props.edges, ["top", "right", "bottom", "left"]);
-    assert.equal(f.findButton(tree, "Close").props.onPress, modal.props.onRequestClose);
-    modal.props.onRequestClose();
-    assert.deepEqual(f.panels.at(-1), { hidden: "read-all-plus-panel" });
-    f.plugin.stop(); patched[1].config.onLongPress(); assert.equal(originalCalls, 1);
+    const shortcut = f.mountShortcut({ onPress, onLongPress: () => { originalCalls++; } });
+    let item = shortcut.render().children[0];
+    assert.equal(item.type, shortcut.item.type);
+    assert.equal(item.props.config.onPress, onPress);
+    item.props.config.onLongPress();
+    f.plugin.stop();
+    const tree = shortcut.render();
+    assert.equal(tree.children.length, 1);
+    item = tree.children[0];
+    item.props.config.onLongPress();
+    assert.equal(originalCalls, 1);
+    await f.init();
+    assert.equal(shortcut.render().children.length, 1, "reenabling does not reopen the previous modal");
+    assert.equal(f.f.sent.length, 0);
+    shortcut.unmount();
 });
 
-test("settings entry opens the same panel independently of the sidebar UI", async () => {
-    const f = pluginFixture(); await f.init(); f.items.get("ReadAllPlusPanel").onPress();
-    assert.equal(f.panels[0][1], "read-all-plus-panel"); assert.equal(f.panels[0][3], "stack");
+test("both close controls remove the only overlay and leave the Messages row interactive", async () => {
+    const f = pluginFixture(); await f.init();
+    let taps = 0;
+    const shortcut = f.mountShortcut({ onPress: () => { taps++; } });
+    for (const method of ["Close", "Android Back", "Close"]) {
+        shortcut.render().children[0].props.config.onLongPress();
+        const [, modal] = shortcut.render().children;
+        assert.equal(modal.type, "Modal");
+        assert.equal(modal.props.presentationStyle, "fullScreen");
+        assert.equal(modal.children[0].type, "SafeAreaProvider");
+        const screen = f.render(modal.children[0].children[0].props);
+        assert.deepEqual(screen.props.edges, ["top", "right", "bottom", "left"]);
+
+        if (method === "Close") f.findButton(screen, "Close").props.onPress();
+        else modal.props.onRequestClose();
+
+        const closed = shortcut.render();
+        assert.equal(closed.children.length, 1);
+        closed.children[0].props.config.onPress();
+    }
+    assert.equal(taps, 3);
+    assert.deepEqual(f.panels, [], "the shortcut never opens a Discord action sheet");
+    shortcut.unmount();
 });
 
-test("Close and Android Back each unmount the native modal even when the Discord launcher stays mounted", async t => {
-    let now = Date.now();
-    t.mock.method(Date, "now", () => now);
-    const f = pluginFixture({ hideSheetThrows: true }); await f.init();
-    const open = f.items.get("ReadAllPlusPanel").onPress;
-    open();
-    const first = await f.mountLauncher(f.panels[0]);
-    const screen = f.render(first.tree.children[0].children[0].props);
-    const staleBack = first.tree.props.onRequestClose;
-
+test("Valenced Settings uses a normal route whose Close button goes back", async () => {
+    const f = pluginFixture(); await f.init();
+    const entry = f.items.get("ReadAllPlusPanel");
+    assert.equal(entry.type, "route");
+    assert.equal(entry.screen.route, "ReadAllPlusPanel");
+    let options, backs = 0;
+    const navigation = { setOptions: value => { options = value; }, goBack: () => { backs++; } };
+    const page = entry.screen.getComponent()({ navigation });
+    assert.equal(options.headerShown, false);
+    const screen = f.render(page.props);
     f.findButton(screen, "Close").props.onPress();
-    assert.equal(first.tree, null);
-    assert.deepEqual(f.panels.at(-1), { hidden: "read-all-plus-panel" });
-
-    now += 450;
-    open();
-    const second = await f.mountLauncher(f.panels.at(-1));
-    staleBack();
-    assert.equal(second.tree.type, "Modal");
-    second.tree.props.onRequestClose();
-    assert.equal(second.tree, null);
-    assert.equal(f.panels.filter(panel => panel.hidden).length, 2);
-    first.unmount();
-    second.unmount();
+    assert.equal(backs, 1);
+    assert.deepEqual(f.panels, []);
 });
 
 test("search, selection and account-specific exclusion controls render and persist", async () => {
@@ -133,13 +139,12 @@ test("switching accounts while a confirmation is open prevents the old action fr
     assert.equal(f.f.sent.length, 0); assert.match(f.alerts.at(-1)[1], /account changed/);
 });
 
-test("cleanup removes settings, hook patches and closes only this plugin's sheet", async () => {
+test("cleanup removes settings and shortcut patches", async () => {
     const f = pluginFixture(); await f.init();
-    f.items.get("ReadAllPlusPanel").onPress();
     f.plugin.stop(); for (const cleanup of f.cleanups.reverse()) cleanup();
     assert.equal(f.items.size, 0); assert.equal(f.sections.size, 0);
     assert(f.patches.every(p => p.removed));
-    assert(f.panels.filter(p => p.hidden).every(p => p.hidden === "read-all-plus-panel"));
+    assert.deepEqual(f.panels, []);
 });
 
 test("every tab has a bounded native scroll viewport below the fixed tab bar", async () => {

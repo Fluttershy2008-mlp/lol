@@ -1,4 +1,4 @@
-# Read All Plus 2.1.1
+# Read All Plus 2.1.2
 
 An expanded version of Read All Servers for Valenced Discord, customised for fluttershy_simper67.
 
@@ -41,7 +41,7 @@ Switching accounts or disabling the plugin stops the remaining queue. Saved hist
 
 ## Compatibility and validation
 
-Packaged for Valenced's format-1 manifest and `valenced.api` version 1. Uses the current supported plugin settings, storage, patcher, action-sheet and Flux APIs. The full-screen panel uses Discord theme colours where available. Tabs and the queue controls stay visible while the content scrolls. Channels and exclusions use virtualized lists, and the selection bar stays visible while you scroll the Channels tab.
+Packaged for Valenced's format-1 manifest and `valenced.api` version 1. Uses Valenced's plugin settings, storage, patcher and Discord Flux APIs. The full-screen panel uses Discord theme colours where available. Tabs and the queue controls stay visible while the content scrolls. Channels and exclusions use virtualized lists, and the selection bar stays visible while you scroll the Channels tab.
 
 The included automated tests cover channel discovery, private chats, thread inheritance, muted channels, mentions, message snapshots, queue batching, stop/disable, account changes, error reporting, plugin loading, settings access and the long-press shortcut. Tests use mocked Discord stores. This package has not been run on your Android device, so the live Discord UI and server synchronisation still need an on-device check.
 

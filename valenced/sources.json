@@ -258,8 +258,8 @@
     },
     "dev.fluttershy.read-all-plus": {
       "path": "valenced/plugins/read-all-plus/index.js",
-      "sha256": "c4510961419fc983854b3dee9c8ae717fd8b78a660a8c8bdfe9a51e1f8cb151f",
-      "originalVersion": "2.1.1",
+      "sha256": "7b4f6142d733f8ab0e818af74b0c87da652be77db14124f86e73e7c45f0f1690",
+      "originalVersion": "2.1.2",
       "kind": "native-plugin",
       "upstream": "https://github.com/aeongdesu/slimplugins"
     },

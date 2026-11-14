@@ -31,11 +31,24 @@
               "version": "*"
             }
           }
+        },
+        "2.1.2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy.read-all-plus@2.1.2.zip",
+          "sha256": "66c195a7162714f26d816de3a9e4894875320ef4d8f06343da862f0d028c4c8c",
+          "size": 55771,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "2.1.1",
-        "beta": "2.1.1"
+        "latest": "2.1.2",
+        "beta": "2.1.2"
       },
       "name": "Read All Plus",
       "description": "A complete read-all panel for servers, channels, DMs, group chats and active threads. Includes selection, exclusions, mention protection and a cancellable queue.",

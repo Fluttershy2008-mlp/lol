@@ -3,13 +3,12 @@
         includeMuted: true, protectMentions: false, includeThreads: true,
         confirm: true, longPress: true, quiet: false, accounts: {}, history: [],
     };
-    const KEY = "read-all-plus-panel";
     const SETTING = "ReadAllPlusPanel";
     const listeners = new Set();
     let V = initialApi;
     let R, N, api, engine, prefs = { ...defaults }, active = false, loaded = false;
-    let panelSession = 0, nextPanelSession = 0, progressAccount = "", useThemeStyles;
-    let loadingError = "", storage, lastOpen = 0, saveQueue = Promise.resolve();
+    let progressAccount = "", useThemeStyles;
+    let loadingError = "", storage, saveQueue = Promise.resolve();
     const cache = new Map();
 
     const emit = () => { for (const fn of listeners) { try { fn(); } catch {} } };
@@ -17,7 +16,7 @@
         listeners.add(listener);
         return () => listeners.delete(listener);
     };
-    const getPanelSession = () => panelSession;
+    const getActiveEngine = () => active ? engine : null;
     const storeNames = ["ChannelStore", "GuildChannelStore", "GuildStore", "ReadStateStore", "ActiveJoinedThreadsStore", "PrivateChannelSortStore", "UserStore", "UserGuildSettingsStore", "NotificationSettingsStore", "SelectedChannelStore", "SelectedGuildStore", "PermissionStore", "ThemeStore"];
 
     function getStores() {
@@ -120,47 +119,35 @@
         );
     }
 
-    function openPanel() {
-        if (!active || panelSession || Date.now() - lastOpen < 400) return;
-        lastOpen = Date.now();
-        const session = ++nextPanelSession;
-        panelSession = session;
-        try {
-            V.discord.actions.ActionSheetActionCreators.openLazy(
-                Promise.resolve({ default: PanelLauncher }), KEY, { sheetKey: KEY, session }, "stack",
-            );
-        } catch {
-            panelSession = 0;
-            errorAlert("Open Valenced → Plugins → Read All Plus → Settings to use the full panel.");
-        }
-    }
-
-    function closePanel() {
-        if (!panelSession) return;
-        panelSession = 0;
-        emit();
-        try { V.discord.actions.ActionSheetActionCreators.hideActionSheet(KEY); } catch {}
-    }
-
     function safeArea() {
         try { return V.externals.ReactNativeSafeAreaContext.ReactNativeSafeAreaContext; }
         catch { return undefined; }
     }
 
-    function PanelLauncher({ session }) {
-        const openSession = R.useSyncExternalStore(subscribe, getPanelSession);
-        R.useEffect(() => () => {
-            if (panelSession === session) panelSession = 0;
-        }, [session]);
-        if (openSession !== session) return null;
+    function MessagesShortcut({ item }) {
+        const currentEngine = R.useSyncExternalStore(subscribe, getActiveEngine);
+        const [openedFor, setOpenedFor] = R.useState(null);
         const h = R.createElement;
+        const config = item.props.config;
+        const close = () => setOpenedFor(null);
+        const onLongPress = (...args) => {
+            if (active && prefs.longPress) setOpenedFor(engine);
+            else return config?.onLongPress?.(...args);
+        };
         const Provider = safeArea()?.SafeAreaProvider || N.View;
-        const close = () => { if (panelSession === session) closePanel(); };
-        // Unmount the native window even if Discord keeps the sheet launcher mounted.
-        return h(N.Modal, {
-            visible: true, presentationStyle: "fullScreen", animationType: "slide",
-            onRequestClose: close,
-        }, h(Provider, { style: { flex: 1 } }, h(Screen, { onClose: close })));
+        return h(R.Fragment, null,
+            R.cloneElement(item, { config: { ...config, onLongPress } }),
+            currentEngine && openedFor === currentEngine ? h(N.Modal, {
+                visible: true, presentationStyle: "fullScreen", animationType: "none",
+                onRequestClose: close,
+            }, h(Provider, { style: { flex: 1 } }, h(Screen, { onClose: close }))) : null);
+    }
+
+    function SettingsPage({ navigation }) {
+        R.useLayoutEffect(() => {
+            navigation.setOptions({ headerShown: false });
+        }, [navigation]);
+        return R.createElement(Screen, { onClose: () => navigation.goBack() });
     }
 
     function getThemeStyles() {
@@ -447,7 +434,7 @@
                     ["quiet", "Quiet completion", "Save results in Recent activity without a notification."],
                 ]),
                 h(N.View, { key: "compatibility", style: { gap: 6, alignItems: "flex-start" } },
-                    detail("Read All Plus 2.1.1"), button("Check compatibility", checkCompatibility, { compact: true, plain: true })),
+                    detail("Read All Plus 2.1.2"), button("Check compatibility", checkCompatibility, { compact: true, plain: true })),
             ];
         }
 
@@ -534,18 +521,16 @@
 
     function installShortcut(cleanup) {
         const nameOf = type => type?.displayName || type?.name || type?.type?.displayName || type?.type?.name || type?.render?.name;
-        const patch = args => {
-            const [type, props, key] = args;
-            if (nameOf(type) !== "GuildsBarAnimatedItemWrapper" || nameOf(props?.expandedChildren?.type) !== "HomeDrawerDMsRowWrapper") return args;
-            const original = props.config?.onLongPress;
-            return [type, { ...props, config: { ...props.config, onLongPress: (...params) => {
-                if (active && prefs.longPress) return openPanel();
-                return original?.(...params);
-            } } }, key];
+        const addShortcut = item => {
+            if (nameOf(item?.type) !== "GuildsBarAnimatedItemWrapper" ||
+                nameOf(item.props?.expandedChildren?.type) !== "HomeDrawerDMsRowWrapper") return item;
+            // Mount the modal alongside the Messages row so Discord creates no second overlay.
+            return R.createElement(MessagesShortcut, { item, key: item.key });
         };
         try {
             const runtime = V.react.ReactJSXRuntime;
-            cleanup(V.patcher.before(runtime, "jsx", patch), V.patcher.before(runtime, "jsxs", patch));
+            cleanup(V.patcher.after(runtime, "jsx", addShortcut));
+            cleanup(V.patcher.after(runtime, "jsxs", addShortcut));
         } catch { /* The native Settings entry is always available. */ }
     }
 
@@ -554,7 +539,11 @@
             const settings = V.discord.modules.settings;
             cleanup(settings.onSettingsModulesLoaded(() => {
                 if (!active) return;
-                cleanup(settings.registerSettingsItem(SETTING, { parent: null, type: "pressable", useTitle: () => "Read All Plus", useDescription: () => "Servers, channels, DMs and group chats", onPress: openPanel, withArrow: true }));
+                cleanup(settings.registerSettingsItem(SETTING, {
+                    parent: null, type: "route", useTitle: () => "Read All Plus",
+                    useDescription: () => "Servers, channels, DMs and group chats",
+                    screen: { route: SETTING, getComponent: () => SettingsPage },
+                }));
                 try { cleanup(settings.addSettingsItemToSection("VALENCED", SETTING)); }
                 catch { cleanup(settings.registerSettingsSection("READ_ALL_PLUS", { label: "Read All Plus", settings: [SETTING] })); }
                 try { settings.refreshSettings(); } catch {}
@@ -570,7 +559,6 @@
             R = V.react.React;
             N = V.react.ReactNative;
             active = true;
-            lastOpen = 0;
             loadingError = "";
             progressAccount = "";
             useThemeStyles = undefined;
@@ -611,11 +599,11 @@
             installShortcut(context.cleanup);
             registerSettings(context.cleanup);
             context.cleanup(() => {
-                active = false; loaded = false; engine?.dispose(); closePanel(); cache.clear(); emit();
+                active = false; loaded = false; engine?.dispose(); cache.clear(); emit();
             });
         },
         stop() {
-            active = false; engine?.dispose(); closePanel(); emit();
+            active = false; engine?.dispose(); emit();
         },
     }) };
 })(valenced, plugin, (function createReadAllEngine(env) {

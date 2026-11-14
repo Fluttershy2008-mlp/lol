@@ -7,8 +7,10 @@ function pluginFixture(options = {}) {
     const f = fixture();
     const cleanups = [], alerts = [], toasts = [], panels = [], patches = [], saved = [], items = new Map(), sections = new Map();
     let hookIndex = 0; const hooks = [];
-    let observeLauncher;
+    let observeShortcut;
     const React = {
+        Fragment: "Fragment",
+        cloneElement: (element, props) => ({ ...element, props: { ...element.props, ...props } }),
         createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat(1).filter(x => x !== null && x !== undefined) }),
         useState(value) {
             const index = hookIndex++;
@@ -16,9 +18,10 @@ function pluginFixture(options = {}) {
             return [hooks[index], update => { hooks[index] = typeof update === "function" ? update(hooks[index]) : update; }];
         },
         useEffect() {},
+        useLayoutEffect(effect) { effect(); },
         useMemo(fn) { return fn(); },
         useSyncExternalStore(subscribe, getSnapshot) {
-            observeLauncher?.(subscribe);
+            observeShortcut?.(subscribe);
             return getSnapshot();
         },
     };
@@ -33,16 +36,13 @@ function pluginFixture(options = {}) {
             SafeAreaProvider: "SafeAreaProvider", SafeAreaView: "SafeAreaView",
         } } },
         react: { React, ReactNative, ReactJSXRuntime: { jsx() {}, jsxs() {} } },
-        patcher: { before: (obj, key, fn) => { const patch = { obj, key, fn, removed: false }; patches.push(patch); return () => { patch.removed = true; }; } },
+        patcher: { after: (obj, key, fn) => { const patch = { obj, key, fn, removed: false }; patches.push(patch); return () => { patch.removed = true; }; } },
         discord: {
             flux: { Stores: f.stores }, common: { flux: { Dispatcher: { dispatch: payload => f.env.dispatch(payload) } }, constants: { Constants: {} } },
             actions: {
                 ActionSheetActionCreators: {
                     openLazy: (...args) => panels.push(args),
-                    hideActionSheet(key) {
-                        panels.push({ hidden: key });
-                        if (options.hideSheetThrows) throw new Error("Discord could not close its sheet");
-                    },
+                    hideActionSheet: key => panels.push({ hidden: key }),
                 },
                 ToastActionCreators: { open: (...args) => toasts.push(args) },
             },
@@ -64,16 +64,22 @@ function pluginFixture(options = {}) {
     const plugin = new Function("valenced", "plugin", `return ${script}`)(unscoped, x => x).default;
     const init = async () => { plugin.init(context); await new Promise(resolve => setImmediate(resolve)); };
     const render = (props = {}) => { hookIndex = 0; return plugin.SettingsComponent({ api: context, ...props }); };
-    async function mountLauncher([sheet, , props]) {
-        const { default: Launcher } = await sheet;
-        let tree, unsubscribe;
-        const update = () => {
-            observeLauncher = subscribe => { unsubscribe ??= subscribe(update); };
-            try { tree = Launcher(props); }
-            finally { observeLauncher = undefined; }
+    function mountShortcut(config = {}) {
+        function GuildsBarAnimatedItemWrapper() {}
+        function HomeDrawerDMsRowWrapper() {}
+        const item = React.createElement(GuildsBarAnimatedItemWrapper, {
+            config, expandedChildren: React.createElement(HomeDrawerDMsRowWrapper),
+        });
+        const wrapper = patches.find(patch => patch.key === "jsx").fn(item);
+        let unsubscribe;
+        const render = () => {
+            const previousIndex = hookIndex;
+            hookIndex = 100;
+            observeShortcut = subscribe => { unsubscribe ??= subscribe(render); };
+            try { return wrapper.type(wrapper.props); }
+            finally { observeShortcut = undefined; hookIndex = previousIndex; }
         };
-        update();
-        return { get tree() { return tree; }, unmount: () => unsubscribe?.() };
+        return { item, wrapper, render, unmount: () => unsubscribe?.() };
     }
     const allNodes = root => {
         const list = [];
@@ -94,7 +100,7 @@ function pluginFixture(options = {}) {
         return (root.children || []).map(textContent).join("");
     };
     const findButton = (root, label) => allNodes(root).find(n => n.type === "Pressable" && (n.props.accessibilityLabel === label || textContent(n) === label));
-    return { f, plugin, context, unscoped, init, render, mountLauncher, allNodes, textContent, findButton, cleanups, alerts, toasts, panels, patches, saved, items, sections, hooks };
+    return { f, plugin, context, unscoped, init, render, mountShortcut, allNodes, textContent, findButton, cleanups, alerts, toasts, panels, patches, saved, items, sections, hooks };
 }
 
 module.exports = { pluginFixture };

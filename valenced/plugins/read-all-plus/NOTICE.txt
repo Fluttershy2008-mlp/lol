@@ -8,7 +8,7 @@ The upstream project is distributed under the GNU General Public License, versio
 
 Modifications dated 31 October 2026: new plugin identity and name; a full settings panel; private-chat, group-chat and channel selection; joined-thread discovery; account-specific exclusions; muted/mention options; snapshot-based bulk acknowledgements; batch progress, cancellation and confirmation checks; local history; source build and automated tests.
 
-Modifications dated 14 November 2026: redesigned the panel using a full-screen native modal, safe-area layout, fixed navigation and selection controls, and virtualized lists. Wired Close and Android Back to unmount the native modal directly.
+Modifications dated 14 November 2026: redesigned the panel using a full-screen native modal, safe-area layout, fixed navigation and selection controls, and virtualized lists. Moved the Messages modal into the Messages row and the Valenced settings entry to a native settings route, removing the extra Discord action-sheet overlay.
 
 Customised for fluttershy_simper67. The original author's contribution is retained and credited; the original author does not endorse this modified package.
 
