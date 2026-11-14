@@ -15,7 +15,7 @@ const upstream = process.env.VENCORD_SOURCE;
 if (!upstream) throw new Error('Set VENCORD_SOURCE to a Vencord checkout.');
 const out = process.env.PREVIEW_OUTPUT || mkdtempSync(path.join(tmpdir(), 'hbim-preview-'));
 mkdirSync(out, { recursive: true });
-const defaults = { blocked:true, ignored:true, removeReplies:true, removeBotCommands:true, removeMentions:true, whitelistEnabled:false, hiddenServerIds:'1462026187323871303', whitelistedIds:'', hideServers:true, hideServerChannels:true, hideServerIcons:true, hideServerPings:true };
+const defaults = { blocked:true, ignored:true, removeReplies:true, removeBotCommands:true, removeMentions:true, whitelistEnabled:false, hiddenServerIds:'1400000000000000003', whitelistedIds:'', hideServers:true, hideServerChannels:true, hideServerIcons:true, hideServerPings:true };
 await build({
     stdin: { contents: `import * as React from 'react';import {createRoot} from 'react-dom/client';import {SettingsPanel} from './hideBlockedAndIgnoredMessages/settings-panel';function App(){const [values,set]=React.useState(${JSON.stringify(defaults)});return <SettingsPanel values={values} onToggle={(k,v)=>set(s=>({...s,[k]:v}))} onSave={v=>set(s=>({...s,...v}))}/>;}createRoot(document.getElementById('root')).render(<App/>);`, resolveDir:root, sourcefile:'preview.tsx', loader:'tsx' },
     bundle:true, format:'iife', platform:'browser', jsx:'automatic', outfile:path.join(out,'app.js'),
@@ -46,14 +46,14 @@ try {
     await serverField.fill('bad-id');
     await page.getByRole('button',{name:'Save IDs',exact:true}).click();
     assert.equal(await page.getByRole('alert').count(),1);
-    await serverField.fill('1462026187323871303,1462026187323871303\n400000000000000002');
+    await serverField.fill('1400000000000000003,1400000000000000003\n400000000000000002');
     await page.getByRole('tab',{name:'Whitelist'}).click();
     const userField=page.getByRole('textbox',{name:'Whitelisted user IDs'});
     await userField.fill('<@!400000000000000003>');
     await page.getByRole('button',{name:'Save IDs',exact:true}).click();
     assert.equal(await userField.inputValue(),'400000000000000003');
     await page.getByRole('tab',{name:'Servers'}).click();
-    assert.equal(await serverField.inputValue(),'1462026187323871303\n400000000000000002');
+    assert.equal(await serverField.inputValue(),'1400000000000000003\n400000000000000002');
     await page.getByRole('checkbox',{name:/Hide messages from selected servers/}).uncheck();
     assert.equal(await page.getByRole('checkbox',{name:/Hide their channels and forums/}).isDisabled(),true);
     assert.equal(await page.getByRole('checkbox',{name:/Hide selected server icons/}).isDisabled(),false);
