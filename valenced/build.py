@@ -316,15 +316,19 @@ def build(check=False):
         files = {name: (directory / name).read_bytes()
                  for name in ("manifest.json", "index.js", "LICENSE", "NOTICE.txt", "README.md")}
         # Ship the corresponding source and build recipes for copyleft ports.
-        if slug in ("chat-buttons", "more-alts"):
+        if slug in ("chat-buttons", "more-alts", "voice-messages"):
             files["build.mjs"] = (directory / "build.mjs").read_bytes()
-        if slug in ("chat-buttons", "more-alts", "read-all-plus"):
+        if slug in ("chat-buttons", "more-alts", "read-all-plus", "voice-messages"):
             for path in sorted((directory / "source").rglob("*")):
                 if path.is_file():
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()
-        if slug == "more-alts":
+        if slug in ("more-alts", "voice-messages"):
             for name in ("build-native.sh", "native-source.json"):
                 files[name] = (directory / name).read_bytes()
+        if slug == "voice-messages":
+            api = HERE / "plugins" / "more-alts" / "source" / "valenced-api"
+            for path in sorted(api.rglob("*.kt")):
+                files[(Path("source/valenced-api") / path.relative_to(api)).as_posix()] = path.read_bytes()
         if slug == "translate-message":
             for path in sorted(directory.rglob("*")):
                 if path.is_file() and not any(part in ("__pycache__", "node_modules") for part in path.parts):

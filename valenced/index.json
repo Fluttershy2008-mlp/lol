@@ -3012,6 +3012,36 @@
         "Fluttershy2008-mlp <753962426407452713>"
       ],
       "icon": "GridSquareIcon"
+    },
+    "rosie.voice-messages": {
+      "versions": {
+        "1.0.2": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/rosie.voice-messages@1.0.2.zip",
+          "sha256": "5cff760dabda60b673f3562deab344c1a466a2c4f469f322744d65c084dc5cc9",
+          "size": 59065,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.2",
+        "beta": "1.0.2"
+      },
+      "name": "Voice Messages",
+      "description": "Record or import audio, preview it, and send it as a Discord voice message.",
+      "author": "Rosie",
+      "contributors": [
+        "V",
+        "Vap0r1ze",
+        "Nickyux"
+      ],
+      "icon": "MicrophoneIcon"
     }
   }
 }

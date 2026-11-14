@@ -1,3 +1,5 @@
+**Voice Messages 1.0.2** adds a record and import panel to the microphone slot in an empty composer. Preview the clip and send it as a Discord voice message. [Usage and source](plugins/voice-messages/README.md).
+
 **InfoCommands 1.0.0-beta9** reduces Server Info scrolling and tab-switching work. It batches store updates, counts channels only while Overview is visible, and uses smaller still previews. Tap the icon or banner to view the full-size image. Refresh the repository, update InfoCommands and restart Discord.
 
 **InfoCommands 1.0.0-beta8** adds Vencord-style Friends, Blocked and Ignored tabs, join date, language, verification level, copyable vanity invites, and tappable server images. Press and hold a server icon and tap **Server Info**. Refresh this repository, update **InfoCommands** and fully restart Discord. [Usage and source](../info-commands/README.md).

@@ -48,7 +48,8 @@ test('every package evaluates through the actual lexical Valenced loader contrac
         if (slug === 'chat-buttons') installChatButtonsHost(world);
         const options = factory(world.U, value => value)?.default;
         assert.ok(options && typeof options === 'object', slug);
-        assert.ok(typeof options.start === 'function' || typeof options.preInit === 'function' || typeof dist.android?.class === 'string', slug);
+        assert.ok(['preInit', 'init', 'start'].some(key => typeof options[key] === 'function')
+            || typeof dist.android?.class === 'string', slug);
         assert.equal(sandbox.valenced, undefined);
         assert.equal(sandbox.vendetta, undefined);
         assert.equal(sandbox.revenge, undefined);

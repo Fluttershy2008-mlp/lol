@@ -44,7 +44,7 @@ test('every current catalogue package passes the actual options resolver with He
         const { dist } = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
         const options = factory(slug, hermesScopes(script))();
         assert.equal(typeof options, 'object', slug);
-        assert.ok(options.start || options.preInit || dist.android?.class, slug + ' has a lifecycle');
+        assert.ok(options.start || options.init || options.preInit || dist.android?.class, slug + ' has a lifecycle');
     }
 });
 
