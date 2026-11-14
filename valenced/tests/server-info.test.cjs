@@ -2,7 +2,7 @@
 process.env.PLUGIN_TEST_TARGET = 'valenced';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorld, React, Renderer, GUILD, FRIEND, ACCOUNT } = require('../../revenge-next/tests/next-harness.cjs');
+const { createWorld, React, Renderer, GUILD, FRIEND, BLOCKED, IGNORED, ACCOUNT } = require('../../revenge-next/tests/next-harness.cjs');
 const { installNavigationHost } = require('../../revenge-next/tests/navigation-fixture.cjs');
 const { trackNativeWindows, installProfileSheetHost } = require('./server-info-fixture.cjs');
 const { installColdProfileModule } = require('./profile-fixture.cjs');
@@ -61,15 +61,15 @@ test('Server Info shows its banner, icon, counts and owner while requests stall'
     const w = await scenario(t, { curatedOnly: true, http: () => new Promise(() => {}) });
     w.sheets.openLazy = () => { throw new Error('Server Info must not use the invisible lazy-sheet path'); };
     w.U.discord.design.Design.TableRow = () => { throw new Error('No private sheet contexts'); };
-    Object.assign(w.guilds[GUILD], { icon: 'server-icon', banner: 'a_server-banner', memberCount: 1264,
+    Object.assign(w.guilds[GUILD], { icon: 'server_icon', banner: 'a_server_banner', memberCount: 1264,
         onlineCount: 125, roles: { one: {}, two: {} }, premiumTier: 3, premiumSubscriptionCount: 24 });
     const ui = await w.openPage(), text = contents(ui);
-    for (const label of ['Test Guild', 'Overview', 'Members', 'Online', 'Roles', 'Channels', 'Boost Level', 'Server', 'Owner', 'Created', 'ID', 'Friends in Server'])
+    for (const label of ['Test Guild', 'Overview', 'Members', 'Online', 'Roles', 'Channels', 'Boost Level', 'Server', 'Owner', 'Created', 'ID', 'Friends', 'Blocked', 'Ignored'])
         assert.ok(text.includes(label), label);
     for (const value of ['1,264', '125', 'Level 3', '24 boosts', GUILD]) assert.ok(text.includes(value), value);
     const images = ui.root.findAll(node => node.type === 'Image').map(node => node.props.source.uri);
-    assert.ok(images.some(uri => uri.includes('banners/' + GUILD + '/a_server-banner.gif')));
-    assert.ok(images.some(uri => uri.includes('icons/' + GUILD + '/server-icon.png')));
+    assert.ok(images.some(uri => uri.includes('banners/' + GUILD + '/a_server_banner.gif')));
+    assert.ok(images.some(uri => uri.includes('icons/' + GUILD + '/server_icon.png')));
     assert.equal(ui.root.findByType('ScrollView').props.style.flex, 1);
     assert.notEqual(ui.root.findByType('ScrollView').props.scrollEnabled, false);
     await Renderer.act(async () => button(ui, 'ID').props.onPress());
@@ -120,6 +120,7 @@ test('Friend profiles use the same ordinary screen and preserve the exact user',
     const w = await scenario(t); installColdProfileModule(w);
     w.stores.GuildMemberStore.getMember = (guild, user) => guild === GUILD && user === FRIEND ? { nick: 'Server friend' } : undefined;
     const ui = await w.openPage();
+    await Renderer.act(async () => button(ui, 'Friends').props.onPress());
     await Renderer.act(async () => button(ui, 'Server friend (Test Friend)').props.onPress());
     assert.equal(profiles(w)[0][1].userId, FRIEND);
     assert.equal(profiles(w)[0][1].guildId, GUILD);
@@ -257,4 +258,113 @@ test('A rejecting native profile opener leaves the ordinary Server Info page usa
     await Renderer.act(async () => button(ui, 'ID').props.onPress());
     assert.equal(w.clipboard.at(-1), GUILD);
     assert.equal(w.alerts.length, 0); assert.equal(ui.root.findAllByType('Modal').length, 0);
+});
+
+test('Server Info shows additional Vencord details, excludes @everyone and copies the vanity invite', async t => {
+    const w = await scenario(t, { http: () => ({ body: { id: GUILD, name: 'Test Guild',
+        joined_at: '2024-06-02T22:00:00Z', preferred_locale: 'en-GB',
+        verification_level: 0, vanity_url_code: 'test-server',
+        roles: [{ id: GUILD }, { id: 'another-role' }] } }) });
+    const ui = await w.openPage();
+    for (const value of ['Joined', '2024', 'en-GB', 'None', 'discord.gg/test-server'])
+        assert.ok(contents(ui).includes(value), value);
+    const roles = ui.root.findAll(node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel === 'Roles')[0];
+    assert.ok(roles.findAll(node => node.type === 'Text' && node.children.includes('1')).length);
+    await Renderer.act(async () => button(ui, 'Vanity invite').props.onPress());
+    assert.equal(w.clipboard.at(-1), 'https://discord.gg/test-server');
+});
+
+test('Blocked and ignored tabs show only confirmed members and use the correct profile ID', async t => {
+    const w = await scenario(t); installColdProfileModule(w);
+    const known = new Map([[BLOCKED, { nick: 'Blocked guild member', avatar: 'guild_avatar' }]]);
+    w.stores.GuildMemberStore.getMember = (guild, id) => guild === GUILD ? known.get(id) : undefined;
+    const ui = await w.openPage();
+    const membershipRequests = () => w.calls.filter(call => call[0] === 'dispatch' && call[1].type === 'GUILD_MEMBERS_REQUEST');
+    assert.equal(membershipRequests().length, 0, 'opening Overview never requests relationships');
+    await Renderer.act(async () => button(ui, 'Blocked').props.onPress());
+    assert.match(contents(ui), /Blocked guild member/);
+    assert.match(contents(ui), /guild_avatar\.png/);
+    assert.equal(membershipRequests().length, 0, 'cached memberships need no request');
+    await Renderer.act(async () => button(ui, 'Ignored').props.onPress());
+    assert.match(contents(ui), /Checking server membership/);
+    assert.doesNotMatch(contents(ui), /Blocked guild member/);
+    assert.deepEqual(Array.from(membershipRequests()[0][1].userIds), [IGNORED]);
+    await Renderer.act(async () => {
+        known.set(IGNORED, { nick: 'Ignored guild member' });
+        w.stores.GuildMemberStore.emitChange();
+    });
+    const row = ui.root.findAll(node => node.type === 'TouchableOpacity' && node.props.accessibilityLabel?.startsWith('Ignored guild member'))[0];
+    await Renderer.act(async () => row.props.onPress());
+    assert.equal(profiles(w)[0][1].userId, IGNORED);
+    assert.equal(profiles(w)[0][1].guildId, GUILD);
+    assert.equal(profiles(w)[0][1].ignoreBlockedSpeedBump, false);
+    await Renderer.act(async () => {
+        delete w.relationships[IGNORED];
+        w.stores.RelationshipStore.emitChange();
+    });
+    assert.doesNotMatch(contents(ui), /Ignored guild member/);
+});
+
+test('Membership requests are batched and Back cancels later batches', async t => {
+    const w = await scenario(t);
+    const ids = Array.from({ length: 201 }, (_, i) => String(200000000000000000n + BigInt(i)));
+    const requests = [];
+    w.modules.push({ requestMembersById: (guild, batch) => requests.push([guild, [...batch]]) });
+    w.stores.RelationshipStore.getIgnoredIDs = () => [...ids, ids[0], null];
+    const ui = await w.openPage();
+    await Renderer.act(async () => button(ui, 'Ignored').props.onPress());
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0], [GUILD, ids.slice(0, 100)]);
+    await Renderer.act(async () => w.advance(300));
+    assert.deepEqual(requests[1], [GUILD, ids.slice(100, 200)]);
+    await Renderer.act(async () => { w.navigation.goBack(); await w.advance(8000); });
+    assert.equal(requests.length, 2);
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+});
+
+test('Server images open once in Discord and fall back to the CDN link on failure', async t => {
+    const w = await scenario(t);
+    Object.assign(w.guilds[GUILD], { icon: 'a_server_icon', banner: 'server_banner' });
+    const ui = await w.openPage(), icon = button(ui, 'View server icon').props.onPress;
+    await Renderer.act(async () => { icon(); icon(); });
+    const calls = w.calls.filter(call => call[0] === 'openMedia');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0][1].initialSources[0].uri, /a_server_icon\.gif\?size=1024/);
+    w.modules.find(module => module.openMediaModal).openMediaModal = () => { throw new Error('No media viewer'); };
+    await Renderer.act(async () => button(ui, 'View server banner').props.onPress());
+    assert.match(w.calls.find(call => call[0] === 'openURL')[1], /server_banner\.png\?size=2048/);
+    await Renderer.act(async () => { button(ui, 'Close server info').props.onPress(); icon(); });
+    assert.equal(w.calls.filter(call => call[0] === 'openMedia' || call[0] === 'openURL').length, 2);
+});
+
+test('The Valenced server menu opens information for the long-pressed server after dismissal', async t => {
+    const w = await scenario(t);
+    const other = '400000000000000002';
+    w.guilds[other] = { id: other, name: 'Long-pressed server' };
+    await w.start('info-commands');
+    const menu = { default: () => Object.freeze([{ label: 'Notifications' }]) };
+    w.addModule(menu, 'modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx');
+    const items = menu.default(other);
+    assert.equal(items.filter(item => item.label === 'Server Info').length, 1);
+    await Renderer.act(async () => {
+        items.find(item => item.label === 'Server Info').action();
+        await w.advance(179);
+    });
+    assert.equal(w.navigation.getCurrentRoute().name, 'Chat');
+    await Renderer.act(async () => w.advance(1));
+    assert.match(contents(w.hostRoot), /Long-pressed server/);
+    assert.doesNotMatch(contents(w.hostRoot), /Test Guild/);
+    await Renderer.act(async () => button(w.hostRoot, 'ID').props.onPress());
+    assert.equal(w.clipboard.at(-1), other);
+});
+
+test('An unsupported ignored-user store gives feedback without guessing from relationship types', async t => {
+    const w = await scenario(t);
+    delete w.stores.RelationshipStore.isIgnored;
+    w.stores.GuildMemberStore.getMember = () => ({ nick: 'Cached guild member' });
+    const ui = await w.openPage();
+    await Renderer.act(async () => button(ui, 'Ignored').props.onPress());
+    assert.match(contents(ui), /This list is unavailable on this Discord version/);
+    assert.doesNotMatch(contents(ui), /Cached guild member/);
+    assert.equal(w.calls.some(call => call[0] === 'dispatch' && call[1].type === 'GUILD_MEMBERS_REQUEST'), false);
 });

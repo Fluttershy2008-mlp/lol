@@ -10,6 +10,7 @@ export const getGuildRoleStore = () => store("GuildRoleStore");
 export const getGuildChannelStore = () => store("GuildChannelStore");
 export const getGuildMemberStore = () => store("GuildMemberStore");
 export const getRelationshipStore = () => store("RelationshipStore");
+export const getPresenceStore = () => store("PresenceStore");
 export const getGuildMemberCountStore = () => store("GuildMemberCountStore") ?? props("getMemberCount", "getOnlineCount");
 export const getGuildHeaderCountsStore = () => store("GuildHeaderCountsStore") ?? getGuildMemberCountStore();
 export function getHTTPUtils() {

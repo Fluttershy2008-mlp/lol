@@ -217,13 +217,13 @@ var InfoCommandsBundle = (() => {
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
-  // info-commands/src/plugin.js
+  // src/plugin.js
   var plugin_exports = {};
   __export(plugin_exports, {
     default: () => plugin_default
   });
 
-  // info-commands/src/common.js
+  // src/common.js
   function mSendMessage(vendetta2) {
     const {
       metro: {
@@ -302,7 +302,7 @@ var InfoCommandsBundle = (() => {
   }
   var AVATARS = { command: "https://cdn.discordapp.com/attachments/1099116247364407337/1112129955053187203/command.png" };
 
-  // info-commands/src/embeds.js
+  // src/embeds.js
   var { findByProps } = vendetta.metro;
   var API = findByProps("get", "post");
   var DISCORD_EPOCH = 14200704e5;
@@ -428,7 +428,7 @@ var InfoCommandsBundle = (() => {
     }
   }
 
-  // info-commands/src/next-api.js
+  // src/next-api.js
   var optional = (fn) => {
     try {
       return fn();
@@ -449,7 +449,7 @@ var InfoCommandsBundle = (() => {
     return optional(() => nextAPI()?.discord?.design?.Design?.[name]);
   }
 
-  // info-commands/src/server-info/runtime.tsx
+  // src/server-info/runtime.tsx
   var { React, ReactNative: RN } = vendetta.metro.common;
   var optional2 = (fn) => {
     try {
@@ -467,7 +467,11 @@ var InfoCommandsBundle = (() => {
   }
   function sheetColors() {
     const light = optional2(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
-    return { background: color("BACKGROUND_PRIMARY", light ? "#ffffff" : "#242429") };
+    return {
+      background: color("BACKGROUND_PRIMARY", light ? "#ffffff" : "#242429"),
+      surface: color("BACKGROUND_SECONDARY", light ? "#f2f3f5" : "#2b2d31"),
+      accent: color("TEXT_LINK", light ? "#4054c5" : "#8ea1ff")
+    };
   }
   function Text({ children, color: semantic, variant, lineClamp, style, ...props2 }) {
     const light = optional2(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
@@ -476,7 +480,7 @@ var InfoCommandsBundle = (() => {
       ...props2,
       numberOfLines: lineClamp,
       style: [{
-        color: color(name, name === "TEXT_LINK" ? "#8ea1ff" : name === "TEXT_MUTED" ? light ? "#5c5f66" : "#b5bac1" : light ? "#1e1f22" : "#f2f3f5"),
+        color: color(name, name === "TEXT_LINK" ? light ? "#4054c5" : "#8ea1ff" : name === "TEXT_MUTED" ? light ? "#5c5f66" : "#b5bac1" : light ? "#1e1f22" : "#f2f3f5"),
         fontSize: variant?.includes("lg") ? 20 : variant?.includes("sm") ? 13 : 15,
         fontWeight: /semibold|medium/.test(variant ?? "") ? "600" : "400"
       }, style]
@@ -497,7 +501,7 @@ var InfoCommandsBundle = (() => {
       { style: { flex: 1 } },
       React.createElement(Text, { variant: "text-md/medium" }, label),
       subLabel ? React.createElement(Text, { color: "text-subtle", style: { marginTop: 4 } }, subLabel) : null
-    ), trailing);
+    ), trailing && React.createElement(RN.View, { style: { flexShrink: 1, maxWidth: "62%" } }, trailing));
   }
   TableRow.TrailingText = TrailingText;
   function TableRowGroup({ title, children }) {
@@ -545,10 +549,10 @@ var InfoCommandsBundle = (() => {
     } }
   };
 
-  // info-commands/src/server-info/ui/format.ts
+  // src/server-info/ui/format.ts
   var formatCount = (n) => n == null ? "—" : n.toLocaleString();
 
-  // info-commands/src/server-info/ui/OverviewRows.tsx
+  // src/server-info/ui/OverviewRows.tsx
   function OverviewRows({
     memberCount,
     onlineCount,
@@ -593,7 +597,7 @@ var InfoCommandsBundle = (() => {
     ));
   }
 
-  // info-commands/src/server-info/ui/ServerBanner.tsx
+  // src/server-info/ui/ServerBanner.tsx
   function ServerBanner({ uri, bleed = 28, height = 140, scrollY }) {
     const RN4 = runtime.react.ReactNative;
     const Animated = RN4.Animated;
@@ -618,14 +622,16 @@ var InfoCommandsBundle = (() => {
     );
   }
 
-  // info-commands/src/server-info/ui/ServerHeader.tsx
+  // src/server-info/ui/ServerHeader.tsx
   function ServerHeader({
     name,
     description,
-    iconUri
+    iconUri,
+    onOpenIcon
   }) {
-    const { View, Image } = runtime.react.ReactNative;
+    const { View, Image, TouchableOpacity } = runtime.react.ReactNative;
     const { Text: Text2 } = runtime.discord.design.Design;
+    const image = iconUri != null ? /* @__PURE__ */ runtime.react.React.createElement(Image, { source: { uri: iconUri }, style: { width: 56, height: 56, borderRadius: 14 } }) : null;
     return /* @__PURE__ */ runtime.react.React.createElement(
       View,
       {
@@ -637,18 +643,12 @@ var InfoCommandsBundle = (() => {
           paddingBottom: 8
         }
       },
-      iconUri != null && /* @__PURE__ */ runtime.react.React.createElement(
-        Image,
-        {
-          source: { uri: iconUri },
-          style: { width: 56, height: 56, borderRadius: 14 }
-        }
-      ),
+      image && onOpenIcon ? /* @__PURE__ */ runtime.react.React.createElement(TouchableOpacity, { accessibilityRole: "button", accessibilityLabel: "View server icon", onPress: onOpenIcon }, image) : image,
       /* @__PURE__ */ runtime.react.React.createElement(View, { style: { flex: 1 } }, /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-lg/semibold", color: "text-default", lineClamp: 1 }, name), description != null && description.length > 0 && /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-sm/normal", color: "text-subtle", lineClamp: 2 }, description))
     );
   }
 
-  // compatibility/user-profile.mjs
+  // ../compatibility/user-profile.mjs
   var USER_PROFILE_MODULE_PATH = "modules/user_profile/native/showUserProfileActionSheet.tsx";
   var profileTry = (callback) => {
     try {
@@ -718,7 +718,7 @@ var InfoCommandsBundle = (() => {
     return true;
   }
 
-  // info-commands/src/server-info/modules.ts
+  // src/server-info/modules.ts
   var optional3 = (fn) => {
     try {
       return fn();
@@ -735,6 +735,7 @@ var InfoCommandsBundle = (() => {
   var getGuildChannelStore = () => store("GuildChannelStore");
   var getGuildMemberStore = () => store("GuildMemberStore");
   var getRelationshipStore = () => store("RelationshipStore");
+  var getPresenceStore = () => store("PresenceStore");
   var getGuildMemberCountStore = () => store("GuildMemberCountStore") ?? props("getMemberCount", "getOnlineCount");
   var getGuildHeaderCountsStore = () => store("GuildHeaderCountsStore") ?? getGuildMemberCountStore();
   function getHTTPUtils() {
@@ -763,7 +764,7 @@ var InfoCommandsBundle = (() => {
     }
   }
 
-  // info-commands/src/server-info/ui/ServerRows.tsx
+  // src/server-info/ui/ServerRows.tsx
   function ServerRows({
     guildId: guildId2,
     ownerId,
@@ -829,9 +830,9 @@ var InfoCommandsBundle = (() => {
     ));
   }
 
-  // info-commands/src/server-info/data.ts
+  // src/server-info/data.ts
   function assetUrl(path, hash, size = 128) {
-    return hash ? `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : void 0;
+    return typeof hash === "string" && /^[a-zA-Z0-9_]+$/.test(hash) ? `https://cdn.discordapp.com/${path}/${hash}.${hash.startsWith("a_") ? "gif" : "png"}?size=${size}` : void 0;
   }
   function normalizeGuild(id, cached, fetched) {
     if (!cached?.name && !fetched?.name) return void 0;
@@ -841,10 +842,14 @@ var InfoCommandsBundle = (() => {
       memberCount: "approximate_member_count",
       onlineCount: "approximate_presence_count",
       premiumTier: "premium_tier",
-      premiumSubscriptionCount: "premium_subscription_count"
+      premiumSubscriptionCount: "premium_subscription_count",
+      joinedAt: "joined_at",
+      preferredLocale: "preferred_locale",
+      verificationLevel: "verification_level"
     };
     for (const [key, snake] of Object.entries(aliases)) guild[key] = fetched?.[snake] ?? fetched?.[key] ?? cached?.[key] ?? cached?.[snake];
-    guild.premiumSubscriptionCount ?? (guild.premiumSubscriptionCount = cached?.premiumSubscriberCount);
+    guild.premiumSubscriptionCount ?? (guild.premiumSubscriptionCount = fetched?.premiumSubscriberCount ?? cached?.premiumSubscriberCount);
+    guild.vanityCode = Object.hasOwn(fetched ?? {}, "vanity_url_code") ? fetched.vanity_url_code : fetched?.vanityURLCode ?? fetched?.vanityUrlCode ?? cached?.vanityURLCode ?? cached?.vanityUrlCode ?? cached?.vanity_url_code;
     return guild;
   }
   function countChannels(value, guildId2) {
@@ -862,19 +867,27 @@ var InfoCommandsBundle = (() => {
     walk(value);
     return ids.size;
   }
+  function countRoles(roles, guildId2) {
+    if (!roles || typeof roles !== "object") return;
+    if (Array.isArray(roles)) return roles.filter((role) => (role?.id ?? role) !== guildId2).length;
+    const ids = roles instanceof Map ? [...roles.keys()] : Object.keys(roles);
+    return ids.filter((id) => id !== guildId2).length;
+  }
+  function dateLabel(date) {
+    if (date == null || date === "") return;
+    const parsed = new Date(date);
+    if (!Number.isFinite(parsed.getTime())) return;
+    return parsed.toLocaleDateString(void 0, { year: "numeric", month: "short", day: "numeric" });
+  }
   function creationLabel(id) {
     try {
-      return new Date(Number((BigInt(id) >> 22n) + 1420070400000n)).toLocaleDateString(void 0, {
-        year: "numeric",
-        month: "short",
-        day: "numeric"
-      });
+      return dateLabel(Number((BigInt(id) >> 22n) + 1420070400000n));
     } catch {
       return void 0;
     }
   }
 
-  // info-commands/src/server-info/ui/FriendsRows.tsx
+  // src/server-info/ui/FriendsRows.tsx
   var VISIBLE_LIMIT = 5;
   function FriendsRows({ guildId: guildId2, friends, loading, onOpenProfile, design }) {
     const { React: React4 } = runtime.react;
@@ -926,7 +939,7 @@ var InfoCommandsBundle = (() => {
     )));
   }
 
-  // info-commands/src/server-info/ui/useGuildInfo.ts
+  // src/server-info/ui/useGuildInfo.ts
   function cachedGuild(id) {
     return getGuildStore()?.getGuild?.(id) ?? getBasicGuildStore()?.getGuild?.(id);
   }
@@ -937,7 +950,7 @@ var InfoCommandsBundle = (() => {
       return void 0;
     }
   }
-  function useGuildInfo(guildId2) {
+  function useGuildInfo(guildId2, loadFriends = true) {
     const { React: React4 } = runtime.react;
     const forceUpdate = runtime.utils.react.useReRender();
     const [remoteGuild, setRemoteGuild] = React4.useState(null);
@@ -955,14 +968,14 @@ var InfoCommandsBundle = (() => {
         getGuildMemberCountStore(),
         getGuildHeaderCountsStore(),
         getGuildMemberStore(),
-        getRelationshipStore()
+        loadFriends && getRelationshipStore()
       ].filter(Boolean);
       const distinct = [...new Set(stores)];
       for (const store2 of distinct) optional4(() => store2.addChangeListener?.(forceUpdate));
       return () => {
         for (const store2 of distinct) optional4(() => store2.removeChangeListener?.(forceUpdate));
       };
-    }, [guildId2, forceUpdate]);
+    }, [guildId2, forceUpdate, loadFriends]);
     React4.useEffect(() => {
       let cancelled = false;
       let timer;
@@ -1003,6 +1016,7 @@ var InfoCommandsBundle = (() => {
       };
     }, [ownerId]);
     React4.useEffect(() => {
+      if (!loadFriends) return;
       const ids = getRelationshipStore()?.getFriendIDs?.() ?? [];
       const request = getRequestMembersById();
       if (!ids.length || !request) return;
@@ -1010,11 +1024,11 @@ var InfoCommandsBundle = (() => {
       optional4(() => request(guildId2, ids, false));
       const timer = setTimeout(() => setFriendsPending(false), 1500);
       return () => clearTimeout(timer);
-    }, [guildId2]);
+    }, [guildId2, loadFriends]);
     const userStore = getUserStore();
     const memberStore = getGuildMemberStore();
     const owner = ownerId ? userStore?.getUser?.(ownerId) ?? ownerUser : null;
-    const friendIds = getRelationshipStore()?.getFriendIDs?.() ?? [];
+    const friendIds = loadFriends ? getRelationshipStore()?.getFriendIDs?.() ?? [] : [];
     const friends = friendIds.filter((id) => memberStore?.getMember?.(guildId2, id) != null).map((id) => {
       const user = userStore?.getUser?.(id);
       return {
@@ -1035,12 +1049,16 @@ var InfoCommandsBundle = (() => {
       cachedOnly: !pending && !remoteGuild,
       ownerId,
       ownerDisplayName: owner?.globalName ?? owner?.global_name ?? owner?.username ?? ownerId,
-      ownerAvatarUri: assetUrl(`avatars/${ownerId}`, owner?.avatar, 64),
+      ownerAvatarUri: assetUrl(
+        `guilds/${guildId2}/users/${ownerId}/avatars`,
+        optional4(() => memberStore?.getMember?.(guildId2, ownerId)?.avatar),
+        64
+      ) ?? assetUrl(`avatars/${ownerId}`, owner?.avatar, 64),
       iconUri: assetUrl(`icons/${guildId2}`, guild?.icon, 128),
       bannerUri: assetUrl(`banners/${guildId2}`, guild?.banner, 1024),
-      memberCount: getGuildMemberCountStore()?.getMemberCount?.(guildId2) ?? guild?.memberCount,
-      onlineCount: getGuildHeaderCountsStore()?.getOnlineCount?.(guildId2) ?? guild?.onlineCount,
-      roleCount: getGuildRoleStore()?.getSortedRoles?.(guildId2)?.length ?? (guild?.roles ? Object.keys(guild.roles).length : void 0),
+      memberCount: optional4(() => getGuildMemberCountStore()?.getMemberCount?.(guildId2)) ?? guild?.memberCount,
+      onlineCount: optional4(() => getGuildHeaderCountsStore()?.getOnlineCount?.(guildId2)) ?? guild?.onlineCount,
+      roleCount: countRoles(optional4(() => getGuildRoleStore()?.getSortedRoles?.(guildId2)), guildId2) ?? countRoles(guild?.roles, guildId2),
       channelCount: countChannels(channels == null && groupedChannels == null ? void 0 : [channels, groupedChannels], guildId2),
       boostLabel: boostCount != null ? `${boostCount.toLocaleString()} boost${boostCount === 1 ? "" : "s"}` : void 0,
       premiumTier: guild?.premiumTier ?? 0,
@@ -1050,7 +1068,7 @@ var InfoCommandsBundle = (() => {
     };
   }
 
-  // info-commands/src/server-info/ui/ServerInfoSheet.tsx
+  // src/server-info/ui/ServerInfoSheet.tsx
   var scrollContainerModule;
   function getScrollContainer() {
     if (scrollContainerModule) return scrollContainerModule;
@@ -1165,44 +1183,241 @@ var InfoCommandsBundle = (() => {
     );
   }
 
-  // info-commands/src/server-info/ui/ServerInfoPage.tsx
-  function ServerInfoPage({ guildId: guildId2, onClose, onOpenProfile, onCopyServerId }) {
+  // src/server-info/relationships.ts
+  var relationshipTabs = ["Friends", "Blocked", "Ignored"];
+  var requestBatchSize = 100;
+  var waitBetweenBatches = 300;
+  var cacheWait = 4e3;
+  var statuses = {
+    online: "Online",
+    idle: "Idle",
+    dnd: "Do Not Disturb",
+    offline: "Offline"
+  };
+  function optional5(fn) {
+    try {
+      return fn();
+    } catch {
+      return void 0;
+    }
+  }
+  function getIds(store2, tab) {
+    const method = tab === "Friends" ? "getFriend" : tab === "Blocked" ? "getBlocked" : "getIgnored";
+    const direct = optional5(() => store2?.[method + "IDs"]?.()) ?? optional5(() => store2?.[method + "Ids"]?.());
+    if (Array.isArray(direct) || direct instanceof Set) return uniqueIds([...direct]);
+    const relationships = optional5(() => store2?.getRelationships?.() ?? store2?.getMutableRelationships?.());
+    if (!relationships || typeof relationships !== "object") return;
+    const entries = relationships instanceof Map ? [...relationships] : Object.entries(relationships);
+    const predicate = tab === "Friends" ? "isFriend" : tab === "Blocked" ? "isBlocked" : "isIgnored";
+    const hasPredicate = typeof store2[predicate] === "function";
+    if (!hasPredicate && tab === "Ignored") return;
+    return uniqueIds(entries.filter(([id, value]) => hasPredicate ? optional5(() => store2[predicate](id)) === true : Number(value?.type ?? value) === (tab === "Friends" ? 1 : 2)).map(([id]) => id));
+  }
+  function uniqueIds(ids) {
+    return [...new Set(ids.filter((id) => typeof id === "string" && /^\d{5,22}$/.test(id)))];
+  }
+  function useServerRelationships(guildId2, tab, canRequest) {
+    const { React: React4 } = runtime.react;
+    const redraw = runtime.utils.react.useReRender();
+    const lookup = React4.useRef(/* @__PURE__ */ new Set()).current;
+    const [pending, setPending] = React4.useState(false);
+    const [failed, setFailed] = React4.useState(false);
+    const members = getGuildMemberStore();
+    const relationships = getRelationshipStore();
+    const users = getUserStore();
+    const presence = tab ? getPresenceStore() : void 0;
+    const ids = tab && getIds(relationships, tab);
+    const key = ids ? ids.join(",") : "";
+    const getMember = (id) => optional5(() => members?.getMember?.(guildId2, id));
+    React4.useEffect(() => {
+      if (!tab) return;
+      const stores = [relationships, members, users, presence];
+      for (const store2 of stores) optional5(() => store2?.addChangeListener?.(redraw));
+      return () => {
+        for (const store2 of stores) optional5(() => store2?.removeChangeListener?.(redraw));
+      };
+    }, [tab, relationships, members, users, presence, redraw]);
+    React4.useEffect(() => {
+      setPending(false);
+      setFailed(false);
+      if (!tab || !key || !members) return;
+      const request = getRequestMembersById();
+      const dispatcher = optional5(() => vendetta.metro.common.FluxDispatcher);
+      if (!request && typeof dispatcher?.dispatch !== "function") return;
+      const missing = key.split(",").filter((id) => !getMember(id) && optional5(() => members.isMember?.(guildId2, id)) !== true && !lookup.has(id));
+      if (!missing.length) return;
+      let timer;
+      let stopped = false;
+      let index = 0;
+      function failedBatch(batch) {
+        for (const id of batch) lookup.delete(id);
+        if (!stopped) setFailed(true);
+      }
+      setPending(true);
+      function sendBatch() {
+        if (stopped || !canRequest()) return;
+        const batch = missing.slice(index, index + requestBatchSize).filter((id) => !getMember(id));
+        index += requestBatchSize;
+        for (const id of batch) lookup.add(id);
+        if (batch.length) {
+          try {
+            const result = request ? request(guildId2, batch, false) : dispatcher.dispatch({ type: "GUILD_MEMBERS_REQUEST", guildIds: [guildId2], userIds: batch });
+            Promise.resolve(result).catch(() => failedBatch(batch));
+          } catch {
+            failedBatch(batch);
+          }
+        }
+        timer = index < missing.length ? setTimeout(sendBatch, waitBetweenBatches) : setTimeout(() => setPending(false), cacheWait);
+      }
+      sendBatch();
+      return () => {
+        stopped = true;
+        clearTimeout(timer);
+      };
+    }, [guildId2, tab, key, members, lookup, canRequest]);
+    const rows = (ids || []).flatMap((userId) => {
+      const member = getMember(userId);
+      if (!member && optional5(() => members?.isMember?.(guildId2, userId)) !== true) return [];
+      const user = optional5(() => users?.getUser?.(userId)) ?? member?.user;
+      const name = user?.globalName ?? user?.global_name ?? user?.username ?? userId;
+      const label = member?.nick && member.nick !== name ? `${member.nick} (${name})` : name;
+      const avatar = assetUrl(`guilds/${guildId2}/users/${userId}/avatars`, member?.avatar, 64) ?? assetUrl(`avatars/${userId}`, user?.avatar, 64);
+      const status = optional5(() => presence?.getStatus?.(userId));
+      return [{ userId, label, avatar, status: typeof status === "string" ? statuses[status] : void 0 }];
+    });
+    return { rows, pending, failed, available: Boolean(ids && (typeof members?.getMember === "function" || typeof members?.isMember === "function")) };
+  }
+
+  // src/server-info/ui/ServerInfoPage.tsx
+  var tabs = ["Overview", ...relationshipTabs];
+  var verificationLevels = ["None", "Low", "Medium", "High", "Highest"];
+  function ServerInfoPage({
+    guildId: guildId2,
+    canRequest,
+    BottomSafeArea,
+    onClose,
+    onOpenProfile,
+    onCopyServerId,
+    onCopyInvite,
+    onOpenImage
+  }) {
     const { React: React4, ReactNative: RN4 } = runtime.react;
-    const { View, ScrollView, Image, TouchableOpacity, ActivityIndicator } = RN4;
-    const { Text: Text2 } = runtime.discord.design.Design;
+    const { View, ScrollView, FlatList, Image, TouchableOpacity, ActivityIndicator } = RN4;
+    const { Text: Text2, TableRow: TableRow2, TableRowGroup: TableRowGroup2 } = panelDesign;
     const colors = sheetColors();
-    const { guild, isLoading, ...info } = useGuildInfo(guildId2);
-    return /* @__PURE__ */ runtime.react.React.createElement(View, { testID: "info-commands-server-page", style: { flex: 1, backgroundColor: colors.background } }, /* @__PURE__ */ runtime.react.React.createElement(
+    const [tab, setTab] = React4.useState("Overview");
+    const { guild, isLoading, ...info } = useGuildInfo(guildId2, false);
+    const people = useServerRelationships(guildId2, guild && tab !== "Overview" ? tab : void 0, canRequest);
+    const invite = typeof guild?.vanityCode === "string" && /^[a-zA-Z0-9-]+$/.test(guild.vanityCode) ? `https://discord.gg/${guild.vanityCode}` : void 0;
+    const banner = assetUrl(`banners/${guildId2}`, guild?.banner, 2048);
+    const icon = assetUrl(`icons/${guildId2}`, guild?.icon, 1024);
+    const page = /* @__PURE__ */ runtime.react.React.createElement(View, { testID: "info-commands-server-page", style: { flex: 1, backgroundColor: colors.background } }, guild && /* @__PURE__ */ runtime.react.React.createElement(
+      View,
+      {
+        accessibilityRole: "tablist",
+        style: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 8, paddingTop: 4, backgroundColor: colors.surface }
+      },
+      tabs.map((name) => /* @__PURE__ */ runtime.react.React.createElement(
+        TouchableOpacity,
+        {
+          key: name,
+          accessibilityRole: "tab",
+          accessibilityLabel: name,
+          accessibilityState: { selected: tab === name },
+          onPress: () => setTab(name),
+          style: {
+            flexGrow: 1,
+            paddingHorizontal: 10,
+            minHeight: 44,
+            justifyContent: "center",
+            alignItems: "center",
+            borderBottomWidth: 2,
+            borderBottomColor: tab === name ? colors.accent : "transparent"
+          }
+        },
+        /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-sm/semibold", color: tab === name ? "text-link" : "text-subtle" }, name)
+      ))
+    ), guild && tab !== "Overview" ? /* @__PURE__ */ runtime.react.React.createElement(
+      FlatList,
+      {
+        key: tab,
+        data: people.rows,
+        keyExtractor: (item) => item.userId,
+        style: { flex: 1 },
+        contentContainerStyle: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+        ListHeaderComponent: /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-sm/normal", color: "text-subtle", style: { marginBottom: 10 } }, people.rows.length > 0 ? `${tab} in this server (${people.rows.length})` : `${tab} in this server`),
+        ListEmptyComponent: /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingVertical: 16 } }, people.pending ? "Checking server membership…" : people.failed ? "Could not check server membership. Switch tabs to retry." : people.available ? "No matching members found." : "This list is unavailable on this Discord version."),
+        ListFooterComponent: people.rows.length > 0 && (people.pending ? /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { color: colors.accent, style: { marginTop: 12 } }) : people.failed ? /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { marginTop: 12 } }, "Some memberships could not be checked.") : null),
+        renderItem: ({ item }) => /* @__PURE__ */ runtime.react.React.createElement(View, { style: { backgroundColor: colors.surface } }, /* @__PURE__ */ runtime.react.React.createElement(
+          TableRow2,
+          {
+            label: item.label,
+            subLabel: item.status,
+            trailing: item.avatar ? /* @__PURE__ */ runtime.react.React.createElement(Image, { source: { uri: item.avatar }, style: { width: 32, height: 32, borderRadius: 16 } }) : void 0,
+            onPress: () => onOpenProfile({ userId: item.userId, guildId: guildId2, ignoreBlockedSpeedBump: false })
+          }
+        ))
+      }
+    ) : /* @__PURE__ */ runtime.react.React.createElement(
       ScrollView,
       {
         style: { flex: 1 },
-        contentContainerStyle: { paddingBottom: 32, gap: 18 },
+        contentContainerStyle: { paddingBottom: 16, gap: 18 },
         keyboardShouldPersistTaps: "handled",
         showsVerticalScrollIndicator: true
       },
-      info.bannerUri && /* @__PURE__ */ runtime.react.React.createElement(
-        Image,
-        {
-          accessibilityLabel: "Server banner",
-          source: { uri: info.bannerUri },
-          style: { width: "100%", height: 140, resizeMode: "cover" }
-        }
-      ),
-      /* @__PURE__ */ runtime.react.React.createElement(View, { style: { paddingHorizontal: 16, paddingTop: info.bannerUri ? 0 : 8 } }, guild ? /* @__PURE__ */ runtime.react.React.createElement(ServerHeader, { name: guild.name, description: guild.description, iconUri: info.iconUri }) : /* @__PURE__ */ runtime.react.React.createElement(Text2, { variant: "text-lg/semibold" }, "Server Info"), /* @__PURE__ */ runtime.react.React.createElement(
+      banner && /* @__PURE__ */ runtime.react.React.createElement(
         TouchableOpacity,
         {
           accessibilityRole: "button",
-          accessibilityLabel: "Close server info",
-          onPress: onClose,
-          style: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingHorizontal: 12, marginTop: 4 }
+          accessibilityLabel: "View server banner",
+          onPress: () => onOpenImage(banner, 2048, 1152)
         },
-        /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", onPress: onClose, accessibilityRole: "button" }, "Close")
-      )),
-      guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(OverviewRows, { ...info, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(ServerRows, { guildId: guildId2, ...info, onOpenProfile, onCopyServerId, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(FriendsRows, { guildId: guildId2, friends: info.friends, loading: info.friendsPending, onOpenProfile, design: panelDesign }), info.cachedOnly && /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingHorizontal: 16 } }, "Showing cached server details.")) : /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24, alignItems: "center", gap: 12 } }, isLoading && /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { size: "large", color: "#5865f2" }), /* @__PURE__ */ runtime.react.React.createElement(Text2, null, isLoading ? "Loading server info…" : info.error ?? "Server details are unavailable."))
+        /* @__PURE__ */ runtime.react.React.createElement(Image, { source: { uri: info.bannerUri }, style: { width: "100%", height: 140, resizeMode: "cover" } })
+      ),
+      guild ? /* @__PURE__ */ runtime.react.React.createElement(runtime.react.React.Fragment, null, /* @__PURE__ */ runtime.react.React.createElement(View, { style: { paddingHorizontal: 16, paddingTop: banner ? 0 : 4 } }, /* @__PURE__ */ runtime.react.React.createElement(
+        ServerHeader,
+        {
+          name: guild.name,
+          description: guild.description,
+          iconUri: info.iconUri,
+          onOpenIcon: icon ? () => onOpenImage(icon, 1024, 1024) : void 0
+        }
+      )), /* @__PURE__ */ runtime.react.React.createElement(OverviewRows, { ...info, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(ServerRows, { guildId: guildId2, ...info, onOpenProfile, onCopyServerId, design: panelDesign }), /* @__PURE__ */ runtime.react.React.createElement(TableRowGroup2, { title: "Server settings" }, /* @__PURE__ */ runtime.react.React.createElement(TableRow2, { label: "Joined", trailing: /* @__PURE__ */ runtime.react.React.createElement(TableRow2.TrailingText, { text: dateLabel(guild.joinedAt) }) }), /* @__PURE__ */ runtime.react.React.createElement(TableRow2, { label: "Preferred locale", trailing: /* @__PURE__ */ runtime.react.React.createElement(TableRow2.TrailingText, { text: guild.preferredLocale }) }), /* @__PURE__ */ runtime.react.React.createElement(
+        TableRow2,
+        {
+          label: "Verification level",
+          trailing: /* @__PURE__ */ runtime.react.React.createElement(TableRow2.TrailingText, { text: guild.verificationLevel == null ? void 0 : verificationLevels[guild.verificationLevel] })
+        }
+      ), /* @__PURE__ */ runtime.react.React.createElement(
+        TableRow2,
+        {
+          label: "Vanity invite",
+          trailing: /* @__PURE__ */ runtime.react.React.createElement(TableRow2.TrailingText, { text: invite ? invite.slice("https://".length) : void 0 }),
+          onPress: invite ? () => onCopyInvite(invite) : void 0
+        }
+      )), info.cachedOnly && /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-subtle", style: { paddingHorizontal: 16 } }, "Showing cached server details.")) : /* @__PURE__ */ runtime.react.React.createElement(View, { style: { padding: 24, alignItems: "center", gap: 12 } }, isLoading && /* @__PURE__ */ runtime.react.React.createElement(ActivityIndicator, { size: "large", color: colors.accent }), /* @__PURE__ */ runtime.react.React.createElement(Text2, null, isLoading ? "Loading server info…" : info.error ?? "Server details are unavailable."))
+    ), /* @__PURE__ */ runtime.react.React.createElement(
+      TouchableOpacity,
+      {
+        accessibilityRole: "button",
+        accessibilityLabel: "Close server info",
+        onPress: onClose,
+        style: { minHeight: 48, justifyContent: "center", alignItems: "center", paddingHorizontal: 16, backgroundColor: colors.surface }
+      },
+      /* @__PURE__ */ runtime.react.React.createElement(Text2, { color: "text-link", variant: "text-md/semibold" }, "Close")
     ));
+    return BottomSafeArea ? /* @__PURE__ */ runtime.react.React.createElement(
+      BottomSafeArea,
+      {
+        edges: ["bottom", "left", "right"],
+        style: { flex: 1, backgroundColor: colors.surface }
+      },
+      page
+    ) : page;
   }
 
-  // info-commands/src/server-info/valenced-page.js
+  // src/server-info/valenced-page.js
   var sequence = 0;
   var TOKEN = "__infoCommandsPage";
   var LOADING = "__infoCommandsLoading";
@@ -1269,16 +1484,55 @@ var InfoCommandsBundle = (() => {
         };
       }, [entry, navigation]);
       const allowed = () => live(entry) && ownsFocus(entry);
+      const copy2 = (value, message) => {
+        const clipboard = V.metro.common.clipboard;
+        if (typeof clipboard?.setString !== "function") {
+          toast("Clipboard is unavailable");
+          return;
+        }
+        try {
+          clipboard.setString(value);
+          toast(message);
+        } catch {
+          toast("Could not copy to the clipboard");
+        }
+      };
       return React4.createElement(ServerInfoPage, {
         guildId: entry.guildId,
+        canRequest: entry.canRequest,
+        BottomSafeArea: safe(() => client.externals.ReactNativeSafeAreaContext.ReactNativeSafeAreaContext.SafeAreaView),
         onClose: () => close(entry),
         onCopyServerId: (id) => {
-          if (!allowed() || id !== entry.guildId) return;
-          const clipboard = V.metro.common.clipboard;
-          if (typeof clipboard?.setString === "function") {
-            clipboard.setString(id);
-            toast("Server ID copied");
-          }
+          if (allowed() && id === entry.guildId) copy2(id, "Server ID copied");
+        },
+        onCopyInvite: (url) => {
+          if (allowed() && /^https:\/\/discord\.gg\/[a-zA-Z0-9-]+$/.test(url)) copy2(url, "Invite link copied");
+        },
+        onOpenImage: (uri, width, height) => {
+          if (!allowed() || entry.imagePending) return;
+          entry.imagePending = true;
+          const openExternal = () => {
+            if (!allowed()) return;
+            if (!RN4.Linking?.openURL) throw new Error("No image viewer");
+            return RN4.Linking.openURL(uri);
+          };
+          Promise.resolve().then(() => {
+            if (!allowed()) return;
+            const media = safe(() => V.metro.findByProps("openMediaModal"));
+            if (typeof media?.openMediaModal !== "function") return openExternal();
+            try {
+              return Promise.resolve(media.openMediaModal({
+                initialIndex: 0,
+                initialSources: [{ uri, sourceURI: uri, width, height }]
+              })).catch(openExternal);
+            } catch {
+              return openExternal();
+            }
+          }).catch(() => {
+            if (allowed()) toast("Could not open server image");
+          }).finally(() => {
+            entry.imagePending = false;
+          });
         },
         onOpenProfile: (options) => {
           if (!allowed() || entry.profilePending || !/^\d{5,22}$/.test(options.userId)) return;
@@ -1326,6 +1580,7 @@ var InfoCommandsBundle = (() => {
         loading: false,
         removers: []
       };
+      entry.canRequest = () => live(entry) && contains(root, TOKEN, token);
       entries.set(token, entry);
       const add = (remove) => {
         if (typeof remove !== "function") return;
@@ -1401,7 +1656,7 @@ var InfoCommandsBundle = (() => {
     } };
   }
 
-  // info-commands/src/guild-sheet.js
+  // src/guild-sheet.js
   var { React: React2, ReactNative: RN2 } = vendetta.metro.common;
   function wrapGuildSheet(component, live, extendItems, makeRow, Row) {
     const caches = Array.from({ length: 5 }, () => /* @__PURE__ */ new WeakMap());
@@ -1499,9 +1754,9 @@ var InfoCommandsBundle = (() => {
             return transform(original.apply(this, args), level);
           };
         }
-      } else if (original.$$typeof === /* @__PURE__ */ Symbol.for("react.memo")) {
+      } else if (original.$$typeof === Symbol.for("react.memo")) {
         wrapped = React2.memo(wrap(original.type, level), original.compare);
-      } else if (original.$$typeof === /* @__PURE__ */ Symbol.for("react.forward_ref")) {
+      } else if (original.$$typeof === Symbol.for("react.forward_ref")) {
         wrapped = React2.forwardRef((props2, ref) => transform(original.render(props2, ref), level));
       }
       cache.set(original, wrapped);
@@ -1510,7 +1765,7 @@ var InfoCommandsBundle = (() => {
     return wrap(component);
   }
 
-  // info-commands/src/server-menu.js
+  // src/server-menu.js
   var { find, findByName, findByProps: findByProps2, findByStoreName } = vendetta.metro;
   var { before, after } = vendetta.patcher;
   var { React: React3, ReactNative: RN3 } = vendetta.metro.common;
@@ -1523,7 +1778,7 @@ var InfoCommandsBundle = (() => {
   var running = false;
   var generation = 0;
   var dynamicPatches = [];
-  function optional5(fn) {
+  function optional6(fn) {
     try {
       return fn();
     } catch {
@@ -1535,7 +1790,7 @@ var InfoCommandsBundle = (() => {
     return typeof id === "string" && /^\d{5,22}$/.test(id) ? id : null;
   }
   function notify2(text) {
-    optional5(() => vendetta.ui.toasts.showToast(text));
+    optional6(() => vendetta.ui.toasts.showToast(text));
   }
   function isInfo(item) {
     return item?.id === ITEM_ID || item?.key === ITEM_ID || item?.label === "Server Info" || item?.props?.label === "Server Info";
@@ -1559,11 +1814,11 @@ var InfoCommandsBundle = (() => {
     const epoch = ++generation;
     const live = () => running && generation === epoch;
     const patched = /* @__PURE__ */ new WeakMap();
-    const store2 = optional5(() => findByStoreName("GuildStore"));
+    const store2 = optional6(() => findByStoreName("GuildStore"));
     const next = nextAPI()?.modules?.finders;
     const action = (id, close) => () => {
       if (!live()) return;
-      optional5(close);
+      optional6(close);
       if (next) {
         clearTimeout(menuTimer);
         menuTimer = setTimeout(() => {
@@ -1575,7 +1830,7 @@ var InfoCommandsBundle = (() => {
     function patch(target, key, kind, callback) {
       if (!live() || typeof target?.[key] !== "function") return false;
       if (patched.get(target)?.has(key)) return true;
-      const unpatch = optional5(() => kind(key, target, callback));
+      const unpatch = optional6(() => kind(key, target, callback));
       if (typeof unpatch !== "function") return false;
       if (!patched.has(target)) patched.set(target, /* @__PURE__ */ new Set());
       patched.get(target).add(key);
@@ -1614,7 +1869,7 @@ var InfoCommandsBundle = (() => {
         if (!id || !promise?.then) return;
         args[0] = Promise.resolve(promise).then((module2) => {
           if (!live() || !module2?.default) return module2;
-          const Row = nativeDesign("ActionSheetRow") ?? optional5(() => findByProps2("ActionSheetRow")?.ActionSheetRow);
+          const Row = nativeDesign("ActionSheetRow") ?? optional6(() => findByProps2("ActionSheetRow")?.ActionSheetRow);
           const onPress = action(id, () => target.hideActionSheet?.(key));
           return { ...module2, default: wrapGuildSheet(
             module2.default,
@@ -1628,7 +1883,7 @@ var InfoCommandsBundle = (() => {
     }
     function watch(filter, connect) {
       if (!next?.getModules || !filter) return;
-      const unsubscribe = optional5(() => next.getModules(filter, (module) => {
+      const unsubscribe = optional6(() => next.getModules(filter, (module) => {
         if (live()) connect(module);
       }, { returnNamespace: true, initialize: false }));
       if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
@@ -1641,15 +1896,15 @@ var InfoCommandsBundle = (() => {
       });
       if (typeof unsubscribe === "function") dynamicPatches.push(unsubscribe);
     }
-    const menu = !usesPaths && (optional5(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional5(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems")));
-    if (!usesPaths && !connectBuilder(menu)) watch(optional5(() => next.filters.createFilterGenerator(
+    const menu = !usesPaths && (optional6(() => findByName?.("getGuildsBarGuildMenuItems", false)) ?? optional6(() => find?.((m) => m?.default?.name === "getGuildsBarGuildMenuItems")));
+    if (!usesPaths && !connectBuilder(menu)) watch(optional6(() => next.filters.createFilterGenerator(
       (_args, _id, value) => value?.name === "getGuildsBarGuildMenuItems" || typeof value?.getGuildsBarGuildMenuItems === "function" || value?.default?.name === "getGuildsBarGuildMenuItems",
       () => "info-commands.guild-menu"
     )()), connectBuilder);
-    if (!connectContexts(optional5(() => findByProps2("showContextMenu"))))
-      watch(optional5(() => next.filters.withProps("showContextMenu")), connectContexts);
-    if (!connectSheets(nativeSheets() ?? optional5(() => findByProps2("openLazy", "hideActionSheet")) ?? optional5(() => findByProps2("openLazy"))))
-      watch(optional5(() => next.filters.withProps("openLazy", "hideActionSheet")), connectSheets);
+    if (!connectContexts(optional6(() => findByProps2("showContextMenu"))))
+      watch(optional6(() => next.filters.withProps("showContextMenu")), connectContexts);
+    if (!connectSheets(nativeSheets() ?? optional6(() => findByProps2("openLazy", "hideActionSheet")) ?? optional6(() => findByProps2("openLazy"))))
+      watch(optional6(() => next.filters.withProps("openLazy", "hideActionSheet")), connectSheets);
     if (!dynamicPatches.length) notify2("InfoCommands: server menu unavailable on this Discord version");
     return () => {
       if (live()) disposeServerMenu();
@@ -1688,7 +1943,7 @@ var InfoCommandsBundle = (() => {
     activeSheet?.close();
     const next = nextAPI();
     const host = nativeSheets() ?? sheets;
-    const ActionSheet = nativeDesign("ActionSheet") ?? optional5(() => findByProps2("ActionSheet")?.ActionSheet);
+    const ActionSheet = nativeDesign("ActionSheet") ?? optional6(() => findByProps2("ActionSheet")?.ActionSheet);
     const epoch = generation;
     const attempt = { key, timer: void 0, fallback: false, presented: false, closed: false, close };
     activeSheet = attempt;
@@ -1699,7 +1954,7 @@ var InfoCommandsBundle = (() => {
       if (current) activeSheet = void 0;
       attempt.closed = true;
       if (!current) return;
-      if (hide) optional5(() => host?.hideActionSheet?.(key));
+      if (hide) optional6(() => host?.hideActionSheet?.(key));
     }
     function presented() {
       if (live() && !attempt.fallback) {
@@ -1717,8 +1972,8 @@ var InfoCommandsBundle = (() => {
       attempt.fallback = true;
       clearTimeout(attempt.timer);
       attempt.closed = true;
-      optional5(() => host?.hideActionSheet?.(key));
-      if (error) optional5(() => console.warn("[InfoCommands] Using native server info fallback", error));
+      optional6(() => host?.hideActionSheet?.(key));
+      if (error) optional6(() => console.warn("[InfoCommands] Using native server info fallback", error));
       Promise.resolve().then(() => load(id, { preferCache: Boolean(next) })).then((data) => {
         if (!live()) return;
         close(false);
@@ -1797,10 +2052,10 @@ var InfoCommandsBundle = (() => {
     menuTimer = void 0;
     running = false;
     generation++;
-    for (const unpatch of dynamicPatches.splice(0).reverse()) optional5(() => unpatch());
+    for (const unpatch of dynamicPatches.splice(0).reverse()) optional6(() => unpatch());
   }
 
-  // info-commands/src/plugin.js
+  // src/plugin.js
   var { findByStoreName: findByStoreName2, findByProps: findByProps3 } = vendetta.metro;
   var { registerCommand } = vendetta.commands;
   var { semanticColors } = vendetta.ui;

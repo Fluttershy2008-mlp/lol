@@ -54,13 +54,45 @@ export function createValencedServerInfo(V, client, isRunning) {
             return () => { if (entry.navigation === navigation) entry.navigation = undefined; };
         }, [entry, navigation]);
         const allowed = () => live(entry) && ownsFocus(entry);
+        const copy = (value, message) => {
+            const clipboard = V.metro.common.clipboard;
+            if (typeof clipboard?.setString !== "function") { toast("Clipboard is unavailable"); return; }
+            try { clipboard.setString(value); toast(message); }
+            catch { toast("Could not copy to the clipboard"); }
+        };
         return React.createElement(ServerInfoPage, {
             guildId: entry.guildId,
+            canRequest: entry.canRequest,
+            BottomSafeArea: safe(() => client.externals.ReactNativeSafeAreaContext.ReactNativeSafeAreaContext.SafeAreaView),
             onClose: () => close(entry),
             onCopyServerId: id => {
-                if (!allowed() || id !== entry.guildId) return;
-                const clipboard = V.metro.common.clipboard;
-                if (typeof clipboard?.setString === "function") { clipboard.setString(id); toast("Server ID copied"); }
+                if (allowed() && id === entry.guildId) copy(id, "Server ID copied");
+            },
+            onCopyInvite: url => {
+                if (allowed() && /^https:\/\/discord\.gg\/[a-zA-Z0-9-]+$/.test(url)) copy(url, "Invite link copied");
+            },
+            onOpenImage: (uri, width, height) => {
+                if (!allowed() || entry.imagePending) return;
+                entry.imagePending = true;
+                const openExternal = () => {
+                    if (!allowed()) return;
+                    if (!RN.Linking?.openURL) throw new Error("No image viewer");
+                    return RN.Linking.openURL(uri);
+                };
+                Promise.resolve().then(() => {
+                    if (!allowed()) return;
+                    const media = safe(() => V.metro.findByProps("openMediaModal"));
+                    if (typeof media?.openMediaModal !== "function") return openExternal();
+                    try {
+                        return Promise.resolve(media.openMediaModal({
+                            initialIndex: 0,
+                            initialSources: [{ uri, sourceURI: uri, width, height }],
+                        })).catch(openExternal);
+                    } catch {
+                        return openExternal();
+                    }
+                }).catch(() => { if (allowed()) toast("Could not open server image"); })
+                    .finally(() => { entry.imagePending = false; });
             },
             onOpenProfile: options => {
                 if (!allowed() || entry.profilePending || !/^\d{5,22}$/.test(options.userId)) return;
@@ -97,6 +129,7 @@ export function createValencedServerInfo(V, client, isRunning) {
         const token = `${routeName}.${++sequence}`;
         const entry = { token, guildId, root, account: accountId(), open: true, mounted: false,
             presented: false, loading: false, removers: [] };
+        entry.canRequest = () => live(entry) && contains(root, TOKEN, token);
         entries.set(token, entry);
         const add = remove => {
             if (typeof remove !== "function") return;

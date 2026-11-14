@@ -210,6 +210,10 @@ def build(check=False):
                 "entry.enabled === undefined ? 'Installed' : entry.enabled ? 'Enabled' : 'Disabled'")
             transformed = transformed.replace("entry.selected ? 'Selected' : 'Not selected'", "'Installed'")
         if directory.name == "info-commands":
+            manifest["description"] = (
+                "Long-press a server for details, images, friends, blocked and ignored members. "
+                "Includes userinfo and inviteinfo."
+            )
             # Classic's helper depends on a window global and an old lodash
             # barrel. Use the scoped local-message adapter for Valenced output.
             old = "if (window.sendMessage) return window.sendMessage(...arguments);"

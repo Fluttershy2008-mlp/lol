@@ -10,14 +10,18 @@ function color(name: string, fallback: string) {
 }
 export function sheetColors() {
   const light = optional(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
-  return { background: color("BACKGROUND_PRIMARY", light ? "#ffffff" : "#242429") };
+  return {
+    background: color("BACKGROUND_PRIMARY", light ? "#ffffff" : "#242429"),
+    surface: color("BACKGROUND_SECONDARY", light ? "#f2f3f5" : "#2b2d31"),
+    accent: color("TEXT_LINK", light ? "#4054c5" : "#8ea1ff"),
+  };
 }
 function Text({ children, color: semantic, variant, lineClamp, style, ...props }: any) {
   const light = optional(() => vendetta.metro.findByStoreName("ThemeStore")?.theme) === "light";
   const name = semantic === "text-link" ? "TEXT_LINK" : semantic === "text-subtle" ? "TEXT_MUTED" : "TEXT_NORMAL";
   return React.createElement(RN.Text, {
     ...props, numberOfLines: lineClamp,
-    style: [{ color: color(name, name === "TEXT_LINK" ? "#8ea1ff"
+    style: [{ color: color(name, name === "TEXT_LINK" ? light ? "#4054c5" : "#8ea1ff"
       : name === "TEXT_MUTED" ? light ? "#5c5f66" : "#b5bac1" : light ? "#1e1f22" : "#f2f3f5"),
       fontSize: variant?.includes("lg") ? 20 : variant?.includes("sm") ? 13 : 15,
       fontWeight: /semibold|medium/.test(variant ?? "") ? "600" : "400" }, style],
@@ -32,7 +36,7 @@ function TableRow({ label, subLabel, trailing, onPress, disabled }: any) {
   }, React.createElement(RN.View, { style: { flex: 1 } },
     React.createElement(Text, { variant: "text-md/medium" }, label),
     subLabel ? React.createElement(Text, { color: "text-subtle", style: { marginTop: 4 } }, subLabel) : null,
-  ), trailing);
+  ), trailing && React.createElement(RN.View, { style: { flexShrink: 1, maxWidth: "62%" } }, trailing));
 }
 TableRow.TrailingText = TrailingText;
 function TableRowGroup({ title, children }: any) {

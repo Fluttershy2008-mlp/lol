@@ -5,3 +5,5 @@ The userinfo/inviteinfo commands and message/embedding helpers were adapted from
 The Server Info interface is adapted from the user-provided `revenge-next-plugins-main_plugins-server-info.zip`. Its manifest credits **kmmiio99o**, identifies the plugin as `dev.kmmiio99o.server-info`, and records version **1.2.2**. The original uploaded source is preserved unchanged under `vendor/revenge-next-server-info/`.
 
 The adapted UI is under `src/server-info/`. Local changes replace the Revenge Next/kmmiio library integration with the existing Vendetta-compatible client API, retain menu compatibility and ID copying, and handle unavailable data and component cleanup. Attribution does not assign a new license to the uploaded replacement code.
+
+The Valenced tabs, server settings fields and image actions follow the design of [Vencord ServerInfo](https://github.com/Vendicated/Vencord/tree/main/src/plugins/serverInfo) by V and Nuckyz. Vencord's implementation is GPL-3.0-or-later. The mobile implementation uses the local Valenced navigation, data and rendering adapters.
