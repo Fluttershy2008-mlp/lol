@@ -6,50 +6,37 @@
 
 import { ChatBarButton } from "@api/ChatButtons";
 import { definePluginSettings } from "@api/Settings";
-import { Button } from "@components/Button";
 import ErrorBoundary from "@components/ErrorBoundary";
-import { FormSwitch } from "@components/FormSwitch";
-import { Paragraph } from "@components/Paragraph";
 import SettingsPlugin from "@plugins/_core/settings";
 import { Logger } from "@utils/Logger";
 import definePlugin, { IconComponent, OptionType } from "@utils/types";
 import { RenderModalProps } from "@vencord/discord-types";
 import { filters, find, waitFor, waitForSubscriptions } from "@webpack";
-import { ChannelStore, FluxDispatcher, GuildChannelStore, GuildReadStateStore, MessageActions, MessageStore, Modal, openModal, ReadStateStore, RelationshipStore, SelectedChannelStore, SortedGuildStore, useState } from "@webpack/common";
+import { ChannelStore, FluxDispatcher, GuildChannelStore, GuildReadStateStore, MessageActions, MessageStore, Modal, openModal, ReadStateStore, RelationshipStore, SelectedChannelStore, SortedGuildStore } from "@webpack/common";
 
 import { createDesktopRuntime } from "./runtime.js";
 import { registerSettingsSidebar } from "./settings-sidebar.js";
 import { normalizeWhitelist } from "./whitelist.js";
+import { validIds } from "./id-input";
+import { SettingsPanel as Panel, toggles } from "./settings-panel";
 
 let runtime: ReturnType<typeof createDesktopRuntime> | undefined;
 let removeSidebar: (() => void) | undefined;
-const toggles = {
-    blocked: "Hide blocked users", ignored: "Hide ignored users",
-    removeReplies: "Hide replies to hidden users", removeBotCommands: "Hide commands run by hidden users",
-    removeMentions: "Hide mentions of hidden users", whitelistEnabled: "Allow whitelisted user IDs",
-    hideServers: "Hide messages from selected servers", hideServerChannels: "Hide their channels and forums",
-    hideServerIcons: "Hide selected server icons", hideServerPings: "Hide their pings and notifications"
-};
-type ToggleKey = keyof typeof toggles;
 function changed() { runtime?.refresh(); }
-function validIds(value: string, mentions = false) {
-    const tokens = value.trim().split(/[\s,;]+/).filter(Boolean);
-    return tokens.every(token => /^[0-9]{17,20}$/.test(token) || mentions && /^<@!?[0-9]{17,20}>$/.test(token))
-        || "Use Discord IDs separated by spaces, commas or new lines.";
-}
 const settings = definePluginSettings({
-    blocked: { type: OptionType.BOOLEAN, description: toggles.blocked, default: true, onChange: changed },
-    ignored: { type: OptionType.BOOLEAN, description: toggles.ignored, default: true, onChange: changed },
-    removeReplies: { type: OptionType.BOOLEAN, description: toggles.removeReplies, default: true, onChange: changed },
-    removeBotCommands: { type: OptionType.BOOLEAN, description: toggles.removeBotCommands, default: true, onChange: changed },
-    removeMentions: { type: OptionType.BOOLEAN, description: toggles.removeMentions, default: true, onChange: changed },
-    whitelistEnabled: { type: OptionType.BOOLEAN, description: toggles.whitelistEnabled, default: false, onChange: changed },
-    whitelistedIds: { type: OptionType.STRING, description: "Whitelisted user IDs (spaces or commas)", default: "", isValid: value => validIds(String(value), true), onChange: changed },
-    hiddenServerIds: { type: OptionType.STRING, description: "Hidden server IDs (spaces or commas)", default: "", isValid: value => validIds(String(value)), onChange: changed },
-    hideServers: { type: OptionType.BOOLEAN, description: toggles.hideServers, default: true, onChange: changed },
-    hideServerChannels: { type: OptionType.BOOLEAN, description: toggles.hideServerChannels, default: true, onChange: changed },
-    hideServerIcons: { type: OptionType.BOOLEAN, description: toggles.hideServerIcons, default: true, onChange: changed },
-    hideServerPings: { type: OptionType.BOOLEAN, description: toggles.hideServerPings, default: true, onChange: changed }
+    controls: { type: OptionType.COMPONENT, component: () => <SettingsPanel /> },
+    blocked: { type: OptionType.BOOLEAN, hidden: true, description: toggles.blocked, default: true, onChange: changed },
+    ignored: { type: OptionType.BOOLEAN, hidden: true, description: toggles.ignored, default: true, onChange: changed },
+    removeReplies: { type: OptionType.BOOLEAN, hidden: true, description: toggles.removeReplies, default: true, onChange: changed },
+    removeBotCommands: { type: OptionType.BOOLEAN, hidden: true, description: toggles.removeBotCommands, default: true, onChange: changed },
+    removeMentions: { type: OptionType.BOOLEAN, hidden: true, description: toggles.removeMentions, default: true, onChange: changed },
+    whitelistEnabled: { type: OptionType.BOOLEAN, hidden: true, description: toggles.whitelistEnabled, default: false, onChange: changed },
+    whitelistedIds: { type: OptionType.STRING, hidden: true, description: "Whitelisted user IDs (spaces or commas)", default: "", isValid: value => validIds(String(value), true), onChange: changed },
+    hiddenServerIds: { type: OptionType.STRING, hidden: true, description: "Hidden server IDs (spaces or commas)", default: "", isValid: value => validIds(String(value)), onChange: changed },
+    hideServers: { type: OptionType.BOOLEAN, hidden: true, description: toggles.hideServers, default: true, onChange: changed },
+    hideServerChannels: { type: OptionType.BOOLEAN, hidden: true, description: toggles.hideServerChannels, default: true, onChange: changed },
+    hideServerIcons: { type: OptionType.BOOLEAN, hidden: true, description: toggles.hideServerIcons, default: true, onChange: changed },
+    hideServerPings: { type: OptionType.BOOLEAN, hidden: true, description: toggles.hideServerPings, default: true, onChange: changed }
 });
 let previousServers: string | undefined, serverIds: string[] = [];
 let previousUsers: string | undefined, userIds: string[] = [];
@@ -75,34 +62,22 @@ const Icon: IconComponent = ({ width = 24, height = 24 }) => <svg width={width} 
 </svg>;
 const SettingsPanel = ErrorBoundary.wrap(function SettingsPanel() {
     const values = settings.use();
-    const [servers, setServers] = useState(values.hiddenServerIds);
-    const [users, setUsers] = useState(values.whitelistedIds);
-    const [error, setError] = useState("");
-    function save() {
-        const result = validIds(servers), userResult = validIds(users, true);
-        if (result !== true || userResult !== true) { setError(String(result !== true ? result : userResult)); return; }
-        settings.store.hiddenServerIds = servers.trim(); settings.store.whitelistedIds = users.trim();
-        setError(""); changed();
-    }
-    return <div style={{ display: "grid", gap: 12 }}>
-        <Paragraph>Paste the same server IDs you use on mobile. Icons and pings have independent switches. Explicit message search stays available.</Paragraph>
-        <label>Hidden server IDs<textarea aria-label="Hidden server IDs" value={servers} onChange={e => setServers(e.currentTarget.value)} rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} /></label>
-        <label>Whitelisted user IDs<textarea aria-label="Whitelisted user IDs" value={users} onChange={e => setUsers(e.currentTarget.value)} rows={2} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} /></label>
-        {error && <p role="alert">{error}</p>}
-        <Button onClick={save}>Save IDs</Button>
-        {(Object.entries(toggles) as [ToggleKey, string][]).map(([key, title]) => <FormSwitch key={key} title={title} value={values[key]} onChange={value => { settings.store[key] = value; changed(); }} />)}
-    </div>;
+    return <Panel values={values} onToggle={(key, value) => {
+        settings.store[key] = value;
+        changed();
+    }} onSave={changes => {
+        if (changes.hiddenServerIds !== undefined) settings.store.hiddenServerIds = changes.hiddenServerIds;
+        if (changes.whitelistedIds !== undefined) settings.store.whitelistedIds = changes.whitelistedIds;
+        changed();
+    }} />;
 }, { noop: false });
-const SettingsPage = ErrorBoundary.wrap(() => <section>
-    <h2 style={{ color: "var(--header-primary)", marginBottom: 20 }}>Hidden users &amp; servers</h2>
-    <SettingsPanel />
-</section>, { noop: false });
+const SettingsPage = SettingsPanel;
 const SettingsModal = ErrorBoundary.wrap((props: RenderModalProps) => <Modal {...props} title="Hidden users & servers"><SettingsPanel /></Modal>, { noop: false });
 function openSettings() { openModal(props => <SettingsModal {...props} />); }
 
 export default definePlugin({
     name: "HideBlockedAndIgnoredMessages",
-    description: "Hide blocked/ignored users and selected servers' messages, channels, forums, icons and pings. Keeps explicit search available.",
+    description: "Hide blocked users, ignored users and selected servers. Manage everything in one place.",
     authors: [{ name: "Fluttershy2008-mlp", id: 0n }],
     settings,
     patches: [
@@ -140,9 +115,9 @@ export default definePlugin({
     suppressPing: message => runtime?.suppressPing(message) ?? false,
     hideGroup: props => Array.isArray(props?.messages) && props.messages.length > 0 && props.messages.every(message => runtime?.shouldHide(message)),
     toolboxActions: { "Hidden users & servers": openSettings },
-    settingsAboutComponent: () => <Button onClick={openSettings}>Open Hidden users & servers</Button>,
     chatBarButton: {
         icon: Icon,
         render: ({ isAnyChat }) => isAnyChat ? <ErrorBoundary noop><ChatBarButton tooltip="Hidden users & servers" onClick={openSettings}><Icon /></ChatBarButton></ErrorBoundary> : null
     }
 });
+

@@ -1,6 +1,6 @@
 {
   "name": "vencord-hide-blocked-and-ignored-messages",
-  "version": "1.0.0-beta2",
+  "version": "1.0.0-beta3",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
@@ -11,6 +11,7 @@
   "devDependencies": {
     "esbuild": "0.28.2",
     "react": "19.2.0",
+    "react-dom": "19.2.0",
     "react-test-renderer": "19.2.0"
   }
 }

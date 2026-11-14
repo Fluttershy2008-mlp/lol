@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 process.chdir(fileURLToPath(new URL(".", import.meta.url)));
 const directory = new URL("hideBlockedAndIgnoredMessages/", import.meta.url);
-const manifest = { version: "1.0.0-beta2", files: {}, content: {} };
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+const manifest = { version, files: {}, content: {} };
 for (const name of readdirSync(directory).sort()) {
     const bytes = readFileSync(new URL(name, directory));
     manifest.files[name] = createHash("sha256").update(bytes).digest("hex");
@@ -34,3 +35,4 @@ exit /b %HBIM_EXIT_CODE%
 `;
 writeFileSync("Install-HideBlockedAndIgnoredMessages.cmd", (launcher + script).replace(/\r?\n/g, "\r\n"));
 console.log("Created Install-HideBlockedAndIgnoredMessages.cmd");
+

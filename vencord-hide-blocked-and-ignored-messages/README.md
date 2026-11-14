@@ -1,7 +1,18 @@
 # HideBlockedAndIgnoredMessages for Vencord
 
-Version **1.0.0-beta2**. Desktop port of Fluttershy2008-mlp's Valenced plugin,
+Version **1.0.0-beta3**. Desktop port of Fluttershy2008-mlp's Valenced plugin,
 including the beta16 filtering optimisations.
+
+## Redesigned settings
+
+The sidebar, chat button, Toolbox and plugin gear now share one compact panel:
+
+- Users, Servers and Whitelist tabs replace the long list of duplicate controls.
+- Theme-aware cards, dark ID fields, tighter spacing and descriptive switches.
+- ID counts, validation messages, duplicate removal, Save IDs and Reset.
+- Switches save immediately; ID drafts survive tab changes until saved or reset.
+- Keyboard arrow navigation and layouts that adapt to narrow settings panels.
+- Existing plugin identity, saved IDs, defaults and filtering behaviour are retained.
 
 ## Vencord settings sidebar
 
@@ -11,7 +22,7 @@ The sidebar button uses Vencord's custom-entry API and supports older builds'
 custom-section API. It opens the same saved settings as the chat button. Plugin
 shutdown removes only this entry; other Vencord settings entries remain intact.
 
-Update from beta1 by running the installer again and restarting Discord. Your
+Update from beta1 or beta2 by running the installer again and restarting Discord. Your
 existing server IDs and switches are retained.
 
 ## Windows CMD installation
@@ -19,7 +30,7 @@ existing server IDs and switches are retained.
 Paste this into **Command Prompt**:
 
 ```bat
-curl -fL "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd" -o "%TEMP%\Install-HideBlockedAndIgnoredMessages.cmd" && call "%TEMP%\Install-HideBlockedAndIgnoredMessages.cmd"
+curl -fL "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/codex/hbim-ui-beta3/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd" -o "%TEMP%\Install-HideBlockedAndIgnoredMessages.cmd" && call "%TEMP%\Install-HideBlockedAndIgnoredMessages.cmd"
 ```
 
 Requires **Node.js 22+** and an existing **Vencord source checkout**. It checks the
@@ -39,7 +50,7 @@ the CMD window open until **SUCCESS**, then reopen Discord.
 If you use **PowerShell** (your prompt starts with `PS`), use this instead:
 
 ```powershell
-curl.exe -fL "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd" -o "$env:TEMP\Install-Hidden.cmd"
+curl.exe -fL "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/codex/hbim-ui-beta3/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd" -o "$env:TEMP\Install-Hidden.cmd"
 if ($LASTEXITCODE -eq 0) { & "$env:TEMP\Install-Hidden.cmd" }
 ```
 
@@ -56,8 +67,8 @@ Backups and the install log are in the source checkout's
 patched. A corrupt embedded payload stops before your current plugin is moved.
 The installer does not alter PowerShell execution policy or request admin access.
 
-[Download the CMD](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd)
-· [Manual plugin ZIP](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/vencord-hide-blocked-and-ignored-messages/HideBlockedAndIgnoredMessages-Vencord.zip)
+[Download the CMD](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/codex/hbim-ui-beta3/vencord-hide-blocked-and-ignored-messages/Install-HideBlockedAndIgnoredMessages.cmd)
+· [Manual plugin ZIP](https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/codex/hbim-ui-beta3/vencord-hide-blocked-and-ignored-messages/HideBlockedAndIgnoredMessages-Vencord.zip)
 
 ## Features
 
@@ -105,14 +116,17 @@ patches installed Discord desktop branches, not Vesktop.
 ## Verification / development
 
 Checked against Vencord **1.15.17**, commit
-`795ed0ff5b7e6b8db7488d0fcc95512a58edc919`: `pnpm test:ts` and
-`pnpm build --dev`. Automated checks cover desktop store integration, preserved
-history/search, whitelist and switch restoration, native cache invalidation,
-repeat-read overhead, the actual settings panel, chat button and sidebar (current and older layouts), notification
-policy replacement, installer backups/rollback, payload hashes, failure handling
-and the embedded CMD launcher. Windows execution and a signed-in desktop Discord
-session were not available; actual patch matching and client behaviour still
-need checking on the installed Discord build.
+`d07030c0968e31e41caa0c35fda0ef8ae63a079e`: `pnpm test:ts` and
+`pnpm build --dev` pass. All **54** automated tests pass, covering existing
+filter behaviour, search preservation, notifications, sidebar registration,
+tab navigation, shared settings, ID validation and saving, cross-panel edits,
+installer backups/rollback and the self-contained CMD payload.
+
+Windows CMD execution and a signed-in Discord session were not available.
+A browser preview harness is included, using the real panel and Vencord's real
+switch/text components. Its build succeeds, but browser execution was blocked
+by this environment's socket restriction, so visual and live Discord checks
+remain unverified.
 
 From this folder, use pnpm to install development dependencies and run tests.
 `VENCORD_SOURCE` may point to a Vencord checkout for the UI test's esbuild host;
@@ -121,3 +135,10 @@ with `node build-installer.mjs`, then the ZIP/checksums with `python3 build.py`.
 
 Desktop integration and installer: GPL-3.0-or-later. Portable `.js` filters retain
 CC0-1.0; see `hideBlockedAndIgnoredMessages/NOTICE.txt` and `LICENSE`.
+
+
+Run the optional browser check with Playwright installed and `VENCORD_SOURCE`
+pointing to a Vencord checkout: `node tests/browser-check.mjs`. `CHROMIUM_PATH`
+can select a local Chromium executable; `PLAYWRIGHT_MODULE` can select an
+installed Playwright module. The harness checks ID editing, independent
+server switches, keyboard tabs and 320/420/760px layouts.

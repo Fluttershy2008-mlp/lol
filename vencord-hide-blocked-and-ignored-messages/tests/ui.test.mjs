@@ -7,34 +7,35 @@ const require = createRequire(import.meta.url);
 const upstreamRequire = createRequire(path.join(process.env.VENCORD_SOURCE || process.cwd(), 'package.json'));
 const { build } = upstreamRequire('esbuild');
 const React = require('react');
+const JSX = require('react/jsx-runtime');
 const Renderer = require('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 async function loadPlugin({ legacy = false } = {}) {
     const bridge = { modal: undefined, settings: undefined, settingsHost: legacy ? { customSections: [] } : { customEntries: [], customSections: [] } };
-    globalThis.__HBIM_TEST__ = { React, bridge };
+    globalThis.__HBIM_TEST__ = { React, JSX, bridge };
     const bundle = await build({ entryPoints: [fileURLToPath(new URL('../hideBlockedAndIgnoredMessages/index.tsx', import.meta.url))],
-        bundle: true, format: 'cjs', platform: 'node', write: false, jsx: 'automatic',
+        bundle: true, format: 'cjs', platform: 'node', write: false, jsx: 'automatic', loader: { '.css': 'empty' },
         plugins: [{ name: 'vencord-test-host', setup(build) {
             build.onResolve({ filter: /^\.\/runtime\.js$/ }, () => ({ path: 'desktop-runtime', namespace: 'host' }));
             build.onResolve({ filter: /^(?:@|react)/ }, args => ({ path: args.path, namespace: 'host' }));
             build.onLoad({ filter: /.*/, namespace: 'host' }, ({ path: id }) => {
-                const prefix = 'Object.defineProperty(exports,"__esModule",{value:true});const {React,bridge}=globalThis.__HBIM_TEST__;';
+                const prefix = 'Object.defineProperty(exports,"__esModule",{value:true});const {React,JSX,bridge}=globalThis.__HBIM_TEST__;';
                 if (id === 'desktop-runtime') return { contents: 'export const createDesktopRuntime=()=>({start(){},stop(){},refresh(){}});' };
                 if (id === '@plugins/_core/settings') return { contents: 'export default globalThis.__HBIM_TEST__.bridge.settingsHost;' };
-                if (id === 'react/jsx-runtime') return { contents: prefix + 'exports.jsx=exports.jsxs=(type,props,key)=>React.createElement(type,{...props,key});exports.Fragment=React.Fragment;' };
+                if (id === 'react/jsx-runtime') return { contents: prefix + 'exports.jsx=JSX.jsx;exports.jsxs=JSX.jsxs;exports.Fragment=JSX.Fragment;' };
                 if (id === '@api/Settings') return { contents: prefix + `exports.definePluginSettings=def=>{
                     const listeners=new Set();let revision=0;
                     const store=new Proxy(Object.fromEntries(Object.entries(def).map(([k,v])=>[k,v.default])),{set(t,k,v){t[k]=v;revision++;for(const f of listeners)f();return true;}});
                     return bridge.settings={def,store,use(){React.useSyncExternalStore(f=>{listeners.add(f);return()=>listeners.delete(f)},()=>revision);return store;}};
                 };` };
-                if (id === '@utils/types') return { contents: 'export default p=>p;export const OptionType={BOOLEAN:1,STRING:2};' };
+                if (id === '@utils/types') return { contents: 'export default p=>p;export const OptionType={BOOLEAN:1,STRING:2,COMPONENT:3};' };
                 if (id === '@components/ErrorBoundary') return { contents: 'const E=({children})=>children;E.wrap=C=>C;export default E;' };
-                if (id === '@components/FormSwitch') return { contents: prefix + 'exports.FormSwitch=p=>React.createElement("input",{type:"checkbox","aria-label":p.title,checked:p.value,onChange:e=>p.onChange(e.target.checked)});' };
+                if (id === '@components/FormSwitch') return { contents: prefix + 'exports.FormSwitch=p=>React.createElement("input",{type:"checkbox","aria-label":p.title,checked:p.value,disabled:p.disabled,onChange:e=>p.onChange(e.target.checked)});' };
                 if (id === '@components/Button' || id === '@api/ChatButtons') return { contents: prefix + 'exports.Button=exports.ChatBarButton=p=>React.createElement("button",{onClick:p.onClick,title:p.tooltip},p.children);' };
                 if (id === '@components/Paragraph') return { contents: prefix + 'exports.Paragraph=p=>React.createElement("p",null,p.children);' };
                 if (id === '@utils/Logger') return { contents: 'exports.Logger=class {warn(){}};' };
                 if (id === '@webpack') return { contents: 'exports.filters={};exports.find=()=>{};exports.waitFor=()=>{};exports.waitForSubscriptions=new Map();' };
-                if (id === '@webpack/common') return { contents: prefix + 'exports.useState=React.useState;exports.Modal=p=>React.createElement("dialog",null,p.children);exports.openModal=f=>bridge.modal=f;' };
+                if (id === '@webpack/common') return { contents: prefix + 'exports.React=React;exports.useState=React.useState;exports.useEffect=React.useEffect;exports.useId=React.useId;exports.Modal=p=>React.createElement("dialog",null,p.children);exports.openModal=f=>bridge.modal=f;' };
                 return { contents: '' };
             });
         } }] });
@@ -97,4 +98,71 @@ for (const legacy of [false, true]) test(`Vencord sidebar opens the live setting
     plugin.stop(); assert.equal(entries.length, 0);
     plugin.start(); assert.equal(entries.length, 1);
     assert.equal(bridge.settings.store.hiddenServerIds, '400000000000000002');
+});
+
+
+test('one custom settings component replaces all duplicate native controls', async t => {
+    const { plugin, bridge } = await loadPlugin(); let panel;
+    t.after(async () => { await Renderer.act(async () => panel?.unmount()); });
+    assert.equal(plugin.settingsAboutComponent, undefined);
+    assert.deepEqual(Object.keys(bridge.settings.def).filter(k => !bridge.settings.def[k].hidden), ['controls']);
+    await Renderer.act(async () => { panel = Renderer.create(bridge.settings.def.controls.component({})); });
+    const tabs = () => panel.root.findAll(n => n.props.role === 'tab');
+    const panels = () => panel.root.findAll(n => n.props.role === 'tabpanel');
+    assert.equal(tabs().length, 3);
+    assert.deepEqual(panels().map(n => n.props.hidden), [false, true, true]);
+    await Renderer.act(async () => tabs()[1].props.onClick());
+    assert.deepEqual(panels().map(n => n.props.hidden), [true, false, true]);
+    let focused = -1, prevented = false;
+    await Renderer.act(async () => tabs()[1].props.onKeyDown({ key: 'ArrowRight', preventDefault() { prevented = true; }, currentTarget: { parentElement: { querySelectorAll: () => [0,1,2].map(i => ({ focus() { focused = i; } })) } } }));
+    assert.ok(prevented); assert.equal(focused, 2);
+    assert.deepEqual(panels().map(n => n.props.hidden), [true, true, false]);
+});
+
+test('ID edits survive tab changes, save atomically, deduplicate without rounding, and reset only drafts', async t => {
+    const { bridge } = await loadPlugin(); let panel;
+    t.after(async () => { await Renderer.act(async () => panel?.unmount()); });
+    await Renderer.act(async () => { panel = Renderer.create(bridge.settings.def.controls.component({})); });
+    const field = label => panel.root.findAllByType('textarea').find(n => n.props['aria-label'] === label);
+    const button = label => panel.root.findAllByType('button').find(n => n.props.children === label);
+    const edit = async (label, value) => Renderer.act(async () => field(label).props.onChange({ currentTarget: { value } }));
+    assert.equal(button('Save IDs').props.disabled, true);
+    await edit('Hidden server IDs', '1462026187323871303, 1462026187323871303');
+    await Renderer.act(async () => panel.root.findAll(n => n.props.role === 'tab')[2].props.onClick());
+    assert.equal(field('Hidden server IDs').props.value, '1462026187323871303, 1462026187323871303');
+    await edit('Whitelisted user IDs', 'invalid');
+    await Renderer.act(async () => button('Save IDs').props.onClick());
+    assert.equal(bridge.settings.store.hiddenServerIds, '');
+    assert.equal(bridge.settings.store.whitelistedIds, '');
+    await edit('Whitelisted user IDs', '<@!400000000000000001>;400000000000000001\n400000000000000002');
+    await Renderer.act(async () => button('Save IDs').props.onClick());
+    assert.equal(bridge.settings.store.hiddenServerIds, '1462026187323871303');
+    assert.equal(bridge.settings.store.whitelistedIds, '400000000000000001\n400000000000000002');
+    assert.equal(bridge.settings.store.whitelistEnabled, false);
+    assert.equal(button('Save IDs').props.disabled, true);
+    await edit('Hidden server IDs', '');
+    await Renderer.act(async () => button('Reset').props.onClick());
+    assert.equal(field('Hidden server IDs').props.value, '1462026187323871303');
+    await edit('Hidden server IDs', '');
+    await Renderer.act(async () => button('Save IDs').props.onClick());
+    assert.equal(bridge.settings.store.hiddenServerIds, '');
+    assert.equal(bridge.settings.store.whitelistedIds, '400000000000000001\n400000000000000002');
+});
+
+test('two open panels sync clean fields and refuse to overwrite a newer saved list', async t => {
+    const { bridge } = await loadPlugin(); let first, second;
+    t.after(async () => { await Renderer.act(async () => { first?.unmount(); second?.unmount(); }); });
+    await Renderer.act(async () => { first = Renderer.create(bridge.settings.def.controls.component({})); second = Renderer.create(bridge.settings.def.controls.component({})); });
+    const field = panel => panel.root.findAllByType('textarea').find(n => n.props['aria-label'] === 'Hidden server IDs');
+    const button = (panel, label) => panel.root.findAllByType('button').find(n => n.props.children === label);
+    await Renderer.act(async () => { field(first).props.onChange({ currentTarget: { value: '400000000000000001' } }); });
+    await Renderer.act(async () => { button(first, 'Save IDs').props.onClick(); });
+    assert.equal(field(second).props.value, '400000000000000001');
+    await Renderer.act(async () => { field(first).props.onChange({ currentTarget: { value: '400000000000000002' } }); field(second).props.onChange({ currentTarget: { value: '400000000000000003' } }); });
+    await Renderer.act(async () => { button(second, 'Save IDs').props.onClick(); });
+    await Renderer.act(async () => { button(first, 'Save IDs').props.onClick(); });
+    assert.equal(bridge.settings.store.hiddenServerIds, '400000000000000003');
+    assert.equal(first.root.findAll(n => n.props.role === 'alert').length, 1);
+    await Renderer.act(async () => { button(first, 'Reset').props.onClick(); });
+    assert.equal(field(first).props.value, '400000000000000003');
 });
