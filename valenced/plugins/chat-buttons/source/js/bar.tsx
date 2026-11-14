@@ -377,6 +377,7 @@ function Menu({ bar }: { bar: BarType }) {
 					{...p}
 					keep
 					accessibilityLabel="Buttons"
+					accessibilityHint="Opens chat tools"
 					IconComponent={MenuIcon}
 				/>
 			)}

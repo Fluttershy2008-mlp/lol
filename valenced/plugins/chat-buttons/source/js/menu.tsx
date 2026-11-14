@@ -18,7 +18,8 @@ import { inOrder, storage, useLive, isActive, useActive } from './store'
 import type { Bar, Entry } from './store'
 
 const edge = 12
-const wide = 244
+const wide = 292
+const hiderSettingsId = 'dev.fluttershy2008.hide-blocked-and-ignored-messages'
 const gap = 8
 const hold = 350
 const fillDelay = 100
@@ -47,26 +48,30 @@ const useStyles = () => {
 				backgroundColor: t.colors.BACKGROUND_SURFACE_HIGHEST,
 				borderWidth: 1,
 				borderColor: t.colors.BORDER_SUBTLE,
-				borderRadius: t.radii.lg,
+				borderRadius: 16,
+				paddingVertical: 4,
 				...t.shadows.SHADOW_HIGH,
 			},
 			row: {
-				minHeight: 44,
-				paddingHorizontal: 12,
+				minHeight: 46,
+				paddingHorizontal: 14,
 				paddingVertical: 8,
 				flexDirection: 'row',
 				alignItems: 'center',
 				gap: 10,
 			},
-			pressed: { backgroundColor: t.colors.BACKGROUND_MOD_SUBTLE },
+			pressed: { backgroundColor: t.colors.BACKGROUND_MOD_NORMAL },
 			fill: {
 				...StyleSheet.absoluteFillObject,
 				backgroundColor: t.colors.BACKGROUND_MOD_NORMAL,
 				transformOrigin: 'left',
 			},
-			label: { flex: 1 },
+			label: { flex: 1, minWidth: 0 },
+			header: { paddingHorizontal: 14, paddingTop: 9, paddingBottom: 6 },
+			shortcut: { marginHorizontal: 6, paddingHorizontal: 8, borderRadius: 10,
+				backgroundColor: t.colors.BACKGROUND_MOD_SUBTLE },
 			more: { width: 16, height: 16, tintColor: t.colors.ICON_MUTED },
-			line: { height: 1, backgroundColor: t.colors.BORDER_SUBTLE },
+			line: { height: 1, marginHorizontal: 12, marginVertical: 4, backgroundColor: t.colors.BORDER_SUBTLE },
 			track: {
 				width: 30,
 				height: 18,
@@ -124,9 +129,10 @@ interface RowProps {
 	on?: boolean
 	press: () => void
 	held?: () => void
+	shortcut?: boolean
 }
 
-function Row({ label, Icon, on, press, held }: RowProps) {
+function Row({ label, Icon, on, press, held, shortcut }: RowProps) {
 	const s = useStyles()
 	const [v] = useState(() => new Animated.Value(0))
 	const [down, setDown] = useState(false)
@@ -135,8 +141,9 @@ function Row({ label, Icon, on, press, held }: RowProps) {
 
 	return (
 		<Pressable
-			style={[s.row, down && s.pressed]}
+			style={[s.row, shortcut && s.shortcut, down && s.pressed]}
 			accessibilityLabel={label}
+			accessibilityHint={shortcut ? 'Opens filter settings' : undefined}
 			accessibilityRole={toggle ? 'switch' : 'button'}
 			accessibilityState={toggle ? { checked: on } : undefined}
 			accessibilityActions={
@@ -179,14 +186,13 @@ function Row({ label, Icon, on, press, held }: RowProps) {
 				/>
 			)}
 			{Tinted && <Tinted />}
-			<Design.Text
-				variant="text-md/medium"
-				color="text-strong"
-				numberOfLines={1}
-				style={s.label}
-			>
-				{label}
-			</Design.Text>
+			<View style={s.label}>
+				<Design.Text variant="text-md/medium" color="text-strong" numberOfLines={2}>
+					{label}
+				</Design.Text>
+				{shortcut && <Design.Text variant="text-sm/normal" color="text-muted">Filter settings</Design.Text>}
+			</View>
+			{shortcut && <Design.Text variant="text-xl/medium" color="text-muted">›</Design.Text>}
 			{held && <MoreIcon style={s.more} />}
 			{toggle && <Toggle on={on} />}
 		</Pressable>
@@ -198,7 +204,9 @@ export function Sheet({ menu, transitionState, cleanUp }: any) {
 	const s = useStyles()
 	const bar: Bar = menu.items[0].bar
 	const opts = storage.use()
-	const rows = inOrder(useLive(bar), opts).filter(x => !opts?.kept?.[x.id])
+	const entries = inOrder(useLive(bar), opts).filter(x => !opts?.kept?.[x.id])
+	const shortcut = entries.find(x => x.id === hiderSettingsId)
+	const rows = entries.filter(x => x !== shortcut)
 	const { width, height } = useWindowDimensions()
 	const [v] = useState(() => new Animated.Value(0))
 	const yeeted = transitionState === (Design as any).TransitionStates.YEETED
@@ -225,12 +233,13 @@ export function Sheet({ menu, transitionState, cleanUp }: any) {
 	}, [])
 	useEffect(() => { if (!active) close() }, [active])
 
+	const horizontal = Math.max(edge, Math.min(menu.x, width - 172 - edge))
 	const top = (StatusBar.currentHeight ?? 44) + edge
 	const place = {
-		[menu.positionX]: menu.x,
+		[menu.positionX]: horizontal,
 		bottom: menu.y + gap,
-		width: Math.min(wide, width - edge - menu.x),
-		maxHeight: height - menu.y - gap - top,
+		width: Math.min(wide, width - edge - horizontal),
+		maxHeight: Math.max(0, height - menu.y - gap - top),
 		transformOrigin: `${menu.positionX} bottom`,
 	}
 	const scale = v.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] })
@@ -248,45 +257,51 @@ export function Sheet({ menu, transitionState, cleanUp }: any) {
 				accessibilityRole="menu"
 				style={[s.sheet, place, { opacity: v, transform: [{ scale }] }]}
 			>
-				{!!rows.length && (
-					<ScrollView
-						bounces={false}
-						overScrollMode="never"
-						showsVerticalScrollIndicator={false}
-						keyboardShouldPersistTaps="handled"
-					>
-						{rows.map(x => (
-							<Row
-								key={x.id}
-								label={opts?.names?.[x.id] || x.label}
-								Icon={x.Icon}
-								on={x.on}
-								press={() => {
+				<ScrollView bounces={false} overScrollMode="never" keyboardShouldPersistTaps="handled">
+					<View style={s.header}>
+						<Design.Text variant="text-sm/semibold" color="text-muted" accessibilityRole="header">Chat tools</Design.Text>
+					</View>
+					{shortcut && <Row
+						label={opts?.names?.[shortcut.id] || shortcut.label}
+						Icon={shortcut.Icon}
+						shortcut
+						press={() => {
+							if (!isActive()) return
+							close()
+							find(shortcut.id)?.press()
+						}}
+					/>}
+					{rows.map(x => (
+						<Row
+							key={x.id}
+							label={opts?.names?.[x.id] || x.label}
+							Icon={x.Icon}
+							on={x.on}
+							press={() => {
+								if (!isActive()) return
+								if (typeof x.on !== 'boolean') close()
+								find(x.id)?.press()
+							}}
+							held={
+								x.hold &&
+								(() => {
 									if (!isActive()) return
-									if (typeof x.on !== 'boolean') close()
-									find(x.id)?.press()
-								}}
-								held={
-									x.hold &&
-									(() => {
-										if (!isActive()) return
-										close()
-										find(x.id)?.hold?.()
-									})
-								}
-							/>
-						))}
-					</ScrollView>
-				)}
-				{!!rows.length && <View style={s.line} />}
-				<Row
-					label="Manage buttons"
-					Icon={EditIcon}
-					press={() => {
-						close()
-						openManage(bar)
-					}}
-				/>
+									close()
+									find(x.id)?.hold?.()
+								})
+							}
+						/>
+					))}
+					{(shortcut || !!rows.length) && <View style={s.line} />}
+					<Row
+						label="Manage buttons"
+						Icon={EditIcon}
+						press={() => {
+							close()
+							openManage(bar)
+						}}
+					/>
+				</ScrollView>
 			</Moving>
 		</>
 	)

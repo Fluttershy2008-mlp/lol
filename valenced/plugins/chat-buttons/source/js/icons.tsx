@@ -13,7 +13,18 @@ const asset =
 		/>
 	)
 
-export const MenuIcon = asset('GridSquareIcon')
+const GridIcon = asset('GridSquareIcon')
+
+export function MenuIcon() {
+	const t = (Tokens as any).default ?? Tokens
+	const color = (Design as any).useToken(t.colors.INTERACTIVE_ICON_DEFAULT)
+	const backgroundColor = (Design as any).useToken(t.colors.BACKGROUND_MOD_NORMAL)
+	return (
+		<View pointerEvents="none" style={{ ...box, width: 28, height: 28, borderRadius: 9, backgroundColor }}>
+			<GridIcon style={{ width: 17, height: 17, tintColor: color }} />
+		</View>
+	)
+}
 export const EmojiIcon = asset('ReactionIcon')
 export const EditIcon = asset('PencilIcon')
 export const MoreIcon = asset('MoreHorizontalIcon')

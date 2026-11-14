@@ -72,6 +72,10 @@
       "sha256": "3415c2b562cce4e407c7d6f3231adb094145ff0310c4b8ccd5bfb295bb2a9a0f",
       "originalVersion": "1.5.7",
       "kind": "compatibility-preview",
+      "settings": {
+        "path": "valenced/plugins/hide-blocked-and-ignored-messages/settings.js",
+        "sha256": "657a7d09e53616fa9a4324926045faa783b23c086cbbf74a4b051a352ba5117f"
+      },
       "sourceRef": "main"
     },
     "dev.fluttershy2008.info-commands": {
@@ -268,8 +272,8 @@
     },
     "mlemception.chatbuttons": {
       "path": "valenced/plugins/chat-buttons/index.js",
-      "sha256": "265e16655483ab889b4a1fc30c8b23e7b2af3d1eb820b87d3336cf1e3fe9dd54",
-      "originalVersion": "1.0.11",
+      "sha256": "1df5ae6035c1c996681cb5644ea9b72ef0b620f425ccb9698c655b750dfce3ea",
+      "originalVersion": "1.0.12",
       "kind": "native-plugin"
     },
     "dev.fluttershy2008.message-bubbles": {

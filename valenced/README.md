@@ -1,3 +1,5 @@
+**Hide Blocked & Ignored Messages 1.0.0-beta20** follows Discord’s theme and puts hidden servers and whitelisted users above the filter switches. **Chat Buttons 1.0.12** puts the settings shortcut at the top of the composer menu. Refresh this repository and update both plugins. Open **Buttons → Hidden users & servers** from any chat.
+
 **HideBlockedAndIgnoredMessages 1.0.0-beta19** filters the Members tab in server-wide and channel searches, including direct username matches. The existing hide switches and whitelist apply. Refresh the repository, update the plugin, and restart Discord.
 
 **HideBlockedAndIgnoredMessages 1.0.0-beta18** also hides blocked and ignored users in the Members results when searching a text or announcement channel. The Members count follows the visible results. Refresh the repository, update the plugin, and restart Discord.

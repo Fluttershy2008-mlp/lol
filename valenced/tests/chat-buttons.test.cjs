@@ -16,6 +16,9 @@ function press(ui, label) {
 }
 function scenario(t) {
     const w = createWorld(), fixture = installChatButtonsHost(w), views = [];
+    // Valenced finders can be passed directly as callbacks by native plugins.
+    const finders = w.U.modules.finders;
+    finders.getModules = finders.getModules.bind(finders);
     const sender = { sendMessage: async (...args) => { w.calls.push(['sendMessage', ...args]); return { ok: true }; }, revealMessage() {}, deleteMessage() {} };
     w.addModule(sender);
     const start = w.start;

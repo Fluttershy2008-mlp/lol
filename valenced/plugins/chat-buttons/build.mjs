@@ -18,6 +18,7 @@ const modules = {
   '@valenced/discord/actions': ['valenced.discord.actions', ['ActionSheetActionCreators', 'AlertActionCreators']],
 };
 const result = await build({
+  absWorkingDir: fileURLToPath(here),
   entryPoints: [fileURLToPath(new URL('source/js/index.ts', here))],
   bundle: true, format: 'cjs', platform: 'neutral', target: 'es2022', write: false,
   jsx: 'automatic', legalComments: 'none',

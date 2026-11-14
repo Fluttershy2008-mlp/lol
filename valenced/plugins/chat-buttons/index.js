@@ -35,7 +35,7 @@
         value: true
       }), mod);
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/index.ts
+      // source/js/index.ts
       var index_exports = {};
       __export(index_exports, {
         default: () => index_default,
@@ -93,7 +93,7 @@
       var jsxs = valenced.react.ReactJSXRuntime.jsxs;
       var Fragment = valenced.react.ReactJSXRuntime.Fragment;
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/icons.tsx
+      // source/js/icons.tsx
       var asset = name => ({
         style
       }) => /* @__PURE__ */jsx(Image, {
@@ -103,7 +103,29 @@
           height: 24
         }, style]
       });
-      var MenuIcon = asset("GridSquareIcon");
+      var GridIcon = asset("GridSquareIcon");
+      function MenuIcon() {
+        var t = Tokens.default ?? Tokens;
+        var color = Design.useToken(t.colors.INTERACTIVE_ICON_DEFAULT);
+        var backgroundColor = Design.useToken(t.colors.BACKGROUND_MOD_NORMAL);
+        return /* @__PURE__ */jsx(View, {
+          pointerEvents: "none",
+          style: {
+            ...box,
+            width: 28,
+            height: 28,
+            borderRadius: 9,
+            backgroundColor
+          },
+          children: /* @__PURE__ */jsx(GridIcon, {
+            style: {
+              width: 17,
+              height: 17,
+              tintColor: color
+            }
+          })
+        });
+      }
       var EmojiIcon = asset("ReactionIcon");
       var EditIcon = asset("PencilIcon");
       var MoreIcon = asset("MoreHorizontalIcon");
@@ -137,7 +159,7 @@
         return Tinted;
       }
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/store.ts
+      // source/js/store.ts
       var defaults = {
         names: {},
         kept: {},
@@ -222,7 +244,7 @@
         return [...list].sort((a, b) => at(a) - at(b));
       }
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/bar.tsx
+      // source/js/bar.tsx
       var Bar = createContext(null);
       var Free = createContext(false);
       var Slot = createContext(null);
@@ -628,6 +650,7 @@
             ...p,
             keep: true,
             accessibilityLabel: "Buttons",
+            accessibilityHint: "Opens chat tools",
             IconComponent: MenuIcon
           })
         });
@@ -696,7 +719,7 @@
       var ActionSheetActionCreators = valenced.discord.actions.ActionSheetActionCreators;
       var AlertActionCreators = valenced.discord.actions.AlertActionCreators;
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/manage.tsx
+      // source/js/manage.tsx
       function Nickname({
         id,
         label
@@ -820,9 +843,10 @@
         });
       }
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/menu.tsx
+      // source/js/menu.tsx
       var edge = 12;
-      var wide = 244;
+      var wide = 292;
+      var hiderSettingsId = "dev.fluttershy2008.hide-blocked-and-ignored-messages";
       var gap = 8;
       var hold = 350;
       var fillDelay = 100;
@@ -847,19 +871,20 @@
               backgroundColor: t.colors.BACKGROUND_SURFACE_HIGHEST,
               borderWidth: 1,
               borderColor: t.colors.BORDER_SUBTLE,
-              borderRadius: t.radii.lg,
+              borderRadius: 16,
+              paddingVertical: 4,
               ...t.shadows.SHADOW_HIGH
             },
             row: {
-              minHeight: 44,
-              paddingHorizontal: 12,
+              minHeight: 46,
+              paddingHorizontal: 14,
               paddingVertical: 8,
               flexDirection: "row",
               alignItems: "center",
               gap: 10
             },
             pressed: {
-              backgroundColor: t.colors.BACKGROUND_MOD_SUBTLE
+              backgroundColor: t.colors.BACKGROUND_MOD_NORMAL
             },
             fill: {
               ...StyleSheet.absoluteFillObject,
@@ -867,7 +892,19 @@
               transformOrigin: "left"
             },
             label: {
-              flex: 1
+              flex: 1,
+              minWidth: 0
+            },
+            header: {
+              paddingHorizontal: 14,
+              paddingTop: 9,
+              paddingBottom: 6
+            },
+            shortcut: {
+              marginHorizontal: 6,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              backgroundColor: t.colors.BACKGROUND_MOD_SUBTLE
             },
             more: {
               width: 16,
@@ -876,6 +913,8 @@
             },
             line: {
               height: 1,
+              marginHorizontal: 12,
+              marginVertical: 4,
               backgroundColor: t.colors.BORDER_SUBTLE
             },
             track: {
@@ -936,7 +975,8 @@
         Icon,
         on,
         press,
-        held
+        held,
+        shortcut
       }) {
         var s = useStyles();
         var [v] = useState(() => new Animated.Value(0));
@@ -944,8 +984,9 @@
         var Tinted = Icon && tint(Icon);
         var toggle = typeof on === "boolean";
         return /* @__PURE__ */jsxs(Pressable, {
-          style: [s.row, down && s.pressed],
+          style: [s.row, shortcut && s.shortcut, down && s.pressed],
           accessibilityLabel: label,
+          accessibilityHint: shortcut ? "Opens filter settings" : void 0,
           accessibilityRole: toggle ? "switch" : "button",
           accessibilityState: toggle ? {
             checked: on
@@ -984,12 +1025,22 @@
                 scaleX: v
               }]
             }]
-          }), Tinted && /* @__PURE__ */jsx(Tinted, {}), /* @__PURE__ */jsx(Design.Text, {
-            variant: "text-md/medium",
-            color: "text-strong",
-            numberOfLines: 1,
+          }), Tinted && /* @__PURE__ */jsx(Tinted, {}), /* @__PURE__ */jsxs(View, {
             style: s.label,
-            children: label
+            children: [/* @__PURE__ */jsx(Design.Text, {
+              variant: "text-md/medium",
+              color: "text-strong",
+              numberOfLines: 2,
+              children: label
+            }), shortcut && /* @__PURE__ */jsx(Design.Text, {
+              variant: "text-sm/normal",
+              color: "text-muted",
+              children: "Filter settings"
+            })]
+          }), shortcut && /* @__PURE__ */jsx(Design.Text, {
+            variant: "text-xl/medium",
+            color: "text-muted",
+            children: "\u203A"
           }), held && /* @__PURE__ */jsx(MoreIcon, {
             style: s.more
           }), toggle && /* @__PURE__ */jsx(Toggle, {
@@ -1006,7 +1057,9 @@
         var s = useStyles();
         var bar = menu.items[0].bar;
         var opts = storage.use();
-        var rows = inOrder(useLive(bar), opts).filter(x => !opts?.kept?.[x.id]);
+        var entries = inOrder(useLive(bar), opts).filter(x => !opts?.kept?.[x.id]);
+        var shortcut = entries.find(x => x.id === hiderSettingsId);
+        var rows = entries.filter(x => x !== shortcut);
         var {
           width,
           height
@@ -1040,12 +1093,13 @@
         useEffect(() => {
           if (!active2) close();
         }, [active2]);
+        var horizontal = Math.max(edge, Math.min(menu.x, width - 172 - edge));
         var top = (StatusBar.currentHeight ?? 44) + edge;
         var place = {
-          [menu.positionX]: menu.x,
+          [menu.positionX]: horizontal,
           bottom: menu.y + gap,
-          width: Math.min(wide, width - edge - menu.x),
-          maxHeight: height - menu.y - gap - top,
+          width: Math.min(wide, width - edge - horizontal),
+          maxHeight: Math.max(0, height - menu.y - gap - top),
           transformOrigin: `${menu.positionX} bottom`
         };
         var scale = v.interpolate({
@@ -1062,7 +1116,7 @@
                 opacity: v
               }]
             })
-          }), /* @__PURE__ */jsxs(Moving, {
+          }), /* @__PURE__ */jsx(Moving, {
             accessibilityRole: "menu",
             style: [s.sheet, place, {
               opacity: v,
@@ -1070,12 +1124,28 @@
                 scale
               }]
             }],
-            children: [!!rows.length && /* @__PURE__ */jsx(ScrollView, {
+            children: /* @__PURE__ */jsxs(ScrollView, {
               bounces: false,
               overScrollMode: "never",
-              showsVerticalScrollIndicator: false,
               keyboardShouldPersistTaps: "handled",
-              children: rows.map(x => /* @__PURE__ */jsx(Row2, {
+              children: [/* @__PURE__ */jsx(View, {
+                style: s.header,
+                children: /* @__PURE__ */jsx(Design.Text, {
+                  variant: "text-sm/semibold",
+                  color: "text-muted",
+                  accessibilityRole: "header",
+                  children: "Chat tools"
+                })
+              }), shortcut && /* @__PURE__ */jsx(Row2, {
+                label: opts?.names?.[shortcut.id] || shortcut.label,
+                Icon: shortcut.Icon,
+                shortcut: true,
+                press: () => {
+                  if (!isActive()) return;
+                  close();
+                  find(shortcut.id)?.press();
+                }
+              }), rows.map(x => /* @__PURE__ */jsx(Row2, {
                 label: opts?.names?.[x.id] || x.label,
                 Icon: x.Icon,
                 on: x.on,
@@ -1089,22 +1159,22 @@
                   close();
                   find(x.id)?.hold?.();
                 })
-              }, x.id))
-            }), !!rows.length && /* @__PURE__ */jsx(View, {
-              style: s.line
-            }), /* @__PURE__ */jsx(Row2, {
-              label: "Manage buttons",
-              Icon: EditIcon,
-              press: () => {
-                close();
-                openManage(bar);
-              }
-            })]
+              }, x.id)), (shortcut || !!rows.length) && /* @__PURE__ */jsx(View, {
+                style: s.line
+              }), /* @__PURE__ */jsx(Row2, {
+                label: "Manage buttons",
+                Icon: EditIcon,
+                press: () => {
+                  close();
+                  openManage(bar);
+                }
+              })]
+            })
           })]
         });
       }
 
-      // direct-settings/valenced/plugins/chat-buttons/source/js/index.ts
+      // source/js/index.ts
       function target(mod, name = "default") {
         var holder = mod,
           key = name;

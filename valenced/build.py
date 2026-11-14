@@ -164,6 +164,20 @@ def build(check=False):
             if count != 1:
                 raise RuntimeError(f"{slug} startup notification bridge needs updating")
         plugin_runtime = runtime
+        if slug == "hide-blocked-and-ignored-messages":
+            manifest["name"] = "Hide Blocked & Ignored Messages (Valenced)"
+            # Keep filtering on the shared bundle and use Valenced's composer
+            # and storage for its settings UI. Other hosts retain their UI.
+            settings_path = HERE / "plugins" / slug / "settings.js"
+            settings_source = settings_path.read_text()
+            settings_start = transformed.index("function createSettings(V, refresh) {")
+            chat_start = transformed.index("function installChatSettings(V, refresh) {", settings_start)
+            transformed = transformed[:settings_start] + settings_source + "\n" + transformed[chat_start:]
+            button_start = transformed.index("  function SettingsIcon(props = {}) {", settings_start)
+            button_end = transformed.index("  function addButton(tree) {", button_start)
+            transformed = (transformed[:button_start]
+                + "  const HiddenSettingsButton = createHiddenSettingsButton(V, Settings, () => active, listeners);\n"
+                + transformed[button_end:])
         if directory.name in ("stealmoji", "save-as-sticker"):
             # These packages open their custom pages from chat. The ordinary
             # legacy navigation bridge is used by plugins already in Settings.
@@ -212,6 +226,11 @@ def build(check=False):
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
             "kind": "compatibility-preview"}
+        if slug == "hide-blocked-and-ignored-messages":
+            source_info[manifest["id"]]["settings"] = {
+                "path": settings_path.relative_to(ROOT).as_posix(),
+                "sha256": hashlib.sha256(settings_source.encode()).hexdigest(),
+            }
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
         if shortcut:

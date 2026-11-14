@@ -869,6 +869,19 @@
             }
           }
         },
+        "1.0.0-beta20": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta20.zip",
+          "sha256": "e10d00712bb0290acf398b7303ef216d1e20f4df97e4776e0473a5f569e56596",
+          "size": 38282,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.0-beta3": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.hide-blocked-and-ignored-messages@1.0.0-beta3.zip",
           "sha256": "a70cc63b23e48f8948f870da621cb3d6f4cff51586edbd379f702f4bf92f2304",
@@ -962,10 +975,10 @@
         }
       },
       "channels": {
-        "latest": "1.0.0-beta19",
-        "beta": "1.0.0-beta19"
+        "latest": "1.0.0-beta20",
+        "beta": "1.0.0-beta20"
       },
-      "name": "HideBlockedAndIgnoredMessages (Valenced)",
+      "name": "Hide Blocked & Ignored Messages (Valenced)",
       "description": "Valenced preview. Hides blocked and ignored users, plus messages, channels, icons and in-app pings from selected server IDs. Explicit search stays available.",
       "author": "Zykrah <543614592291700748>",
       "icon": "ic_block",
@@ -2803,6 +2816,19 @@
             }
           }
         },
+        "1.0.12": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.12.zip",
+          "sha256": "e575385851ba7635e4287ff013c8741f7ff4b98a8379e2d5f7a384b95c3e9065",
+          "size": 37046,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        },
         "1.0.7": {
           "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/mlemception.chatbuttons@1.0.7.zip",
           "sha256": "aa5112979c7e4038a7306bd0f24496b38e61d6420243d049ce1276a2beed2d42",
@@ -2844,8 +2870,8 @@
         }
       },
       "channels": {
-        "latest": "1.0.11",
-        "beta": "1.0.11"
+        "latest": "1.0.12",
+        "beta": "1.0.12"
       },
       "name": "Chat Buttons",
       "description": "Puts the chat bar buttons in one menu, with a shortcut to Hidden users & servers settings.",
