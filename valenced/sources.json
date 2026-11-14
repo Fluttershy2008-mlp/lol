@@ -76,6 +76,10 @@
         "path": "valenced/plugins/hide-blocked-and-ignored-messages/settings.js",
         "sha256": "657a7d09e53616fa9a4324926045faa783b23c086cbbf74a4b051a352ba5117f"
       },
+      "previews": {
+        "path": "valenced/plugins/hide-blocked-and-ignored-messages/previews.js",
+        "sha256": "c388f813ccf1961ab30ceb92e218443d82ea1a3ccef97d742ec72447113fec82"
+      },
       "sourceRef": "main"
     },
     "dev.fluttershy2008.info-commands": {

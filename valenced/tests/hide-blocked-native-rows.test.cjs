@@ -54,3 +54,17 @@ test('native row hook supports late ChatManager loading and removes both hooks a
   rows.createRow(nativeGroup); assert.equal(rows.rows[0], nativeGroup);
   assert.deepEqual(second.errors, []);
 });
+
+test('ungrouped native rows from blocked and ignored authors are hidden in threads and private chats', async t => {
+  const w = createWorld(), ChatManager = makeManager();
+  w.addModule({ default: ChatManager }, path);
+  const item = await w.start('hide-blocked-and-ignored-messages', { whitelistEnabled: true, whitelistedIds: [IGNORED] });
+  t.after(async () => { await w.stop(item); assert.deepEqual(w.errors, []); });
+  const manager = new ChatManager();
+  for (const channelId of ['300000000000000005', '300000000000000006']) {
+    const first = message('one', BLOCKED), second = message('two', IGNORED);
+    manager.createRow({ ...first, message: { ...first.message, channelId } });
+    manager.createRow({ ...second, message: { ...second.message, channelId } });
+  }
+  assert.deepEqual(manager.rows.map(row => [row.message.authorId, row.index]), [[IGNORED, 1], [IGNORED, 2]]);
+});

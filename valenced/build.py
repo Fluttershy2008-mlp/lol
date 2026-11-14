@@ -178,6 +178,25 @@ def build(check=False):
             transformed = (transformed[:button_start]
                 + "  const HiddenSettingsButton = createHiddenSettingsButton(V, Settings, () => active, listeners);\n"
                 + transformed[button_end:])
+            previews_path = HERE / "plugins" / slug / "previews.js"
+            previews_source = previews_path.read_text()
+            plugin_start = transformed.index("function createPlugin(V) {")
+            transformed = transformed[:plugin_start] + previews_source + "\n" + transformed[plugin_start:]
+            # Wire the mobile preview renderers into the existing filter lifecycle.
+            for old, new in (
+                ("let filter, lists, mentions, pagination, search,", "let previews, filter, lists, mentions, pagination, search,"),
+                ("    hiddenPings?.refresh();", "    hiddenPings?.refresh();\n    previews?.refresh();"),
+                ("      cleanup.push(installChatSettings(V, refresh));", "      cleanup.push(installChatSettings(V, refresh));\n"
+                    "      previews = installHiddenPreviews(V, filter);\n      cleanup.push(previews.stop);"),
+                ("const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };",
+                    "const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); previews?.refresh(); };"),
+                ("    filter = lists = mentions = pagination = search =", "    previews = filter = lists = mentions = pagination = search ="),
+                ("if (row?.type === 1 && isServerMessageHidden(row.message)) return [];",
+                    "if (row?.type === 1 && (isServerMessageHidden(row.message) || isFilteredUser(row.message?.authorId))) return [];"),
+            ):
+                if transformed.count(old) != 1:
+                    raise RuntimeError("Hide Blocked & Ignored Messages preview integration needs updating")
+                transformed = transformed.replace(old, new)
         if directory.name in ("stealmoji", "save-as-sticker"):
             # These packages open their custom pages from chat. The ordinary
             # legacy navigation bridge is used by plugins already in Settings.
@@ -227,10 +246,11 @@ def build(check=False):
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
             "kind": "compatibility-preview"}
         if slug == "hide-blocked-and-ignored-messages":
-            source_info[manifest["id"]]["settings"] = {
-                "path": settings_path.relative_to(ROOT).as_posix(),
-                "sha256": hashlib.sha256(settings_source.encode()).hexdigest(),
-            }
+            for name, path, content in (("settings", settings_path, settings_source), ("previews", previews_path, previews_source)):
+                source_info[manifest["id"]][name] = {
+                    "path": path.relative_to(ROOT).as_posix(),
+                    "sha256": hashlib.sha256(content.encode()).hexdigest(),
+                }
         if source_ref != config["sourceCommit"]:
             source_info[manifest["id"]]["sourceRef"] = source_ref
         if shortcut:
