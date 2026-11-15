@@ -188,10 +188,22 @@ def build(check=False):
             transformed = transformed[:plugin_start] + previews_source + "\n" + transformed[plugin_start:]
             # Wire the mobile preview renderers into the existing filter lifecycle.
             for old, new in (
+                ("function isServerMessageHidden(message) {\n"
+                    "    if (!message || storage.hideServers === false || !storage.hiddenServerIds?.length) return false;",
+                    "function isServerMessageHidden(message) {\n"
+                    "    return storage.hideServers !== false && isServerRecordSelected(message);\n"
+                    "  }\n"
+                    "  function isServerRecordSelected(message) {\n"
+                    "    if (!message || !storage.hiddenServerIds?.length) return false;"),
+                ("return { isChannelHidden, isServerMessageHidden, clearChannels, pingRevision,",
+                    "return { isChannelHidden, isServerMessageHidden, isServerRecordSelected, clearChannels, pingRevision,"),
+                ("    if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;",
+                    "    if (typeof storage.hideServers !== 'boolean') storage.hideServers = true;\n"
+                    "    if (typeof storage.hideServerVoiceActivity !== 'boolean') storage.hideServerVoiceActivity = storage.hideServers;"),
                 ("let filter, lists, mentions, pagination, search,", "let previews, filter, lists, mentions, pagination, search,"),
                 ("    hiddenPings?.refresh();", "    hiddenPings?.refresh();\n    previews?.refresh();"),
                 ("      cleanup.push(installChatSettings(V, refresh));", "      cleanup.push(installChatSettings(V, refresh));\n"
-                    "      previews = installHiddenPreviews(V, filter, servers.isServerMessageHidden);\n      cleanup.push(previews.stop);"),
+                    "      previews = installHiddenPreviews(V, filter, servers.isServerRecordSelected);\n      cleanup.push(previews.stop);"),
                 ("const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };",
                     "const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); previews?.refresh(); };"),
                 ("    filter = lists = mentions = pagination = search =", "    previews = filter = lists = mentions = pagination = search ="),

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: CC0-1.0 */
 // Intercept the preview components themselves. Discord still renders the card,
 // channel row and its actions, including on clients using a different list implementation.
-function installHiddenPreviews(V, filter, isFromHiddenServer) {
+function installHiddenPreviews(V, filter, isServerRecordSelected) {
   const { React } = V.metro.common;
   const jsxRuntime = valenced.react.jsxRuntime;
   if (!jsxRuntime?.afterJSX) return { refresh() {}, stop() {} };
@@ -24,7 +24,7 @@ function installHiddenPreviews(V, filter, isFromHiddenServer) {
     return hidden ? null : element;
   }
   function readVoiceFilter() {
-    return active && storage.hideServers !== false ? storage.hiddenServerIds : null;
+    return active && storage.hideServerVoiceActivity !== false ? storage.hiddenServerIds : null;
   }
   function VoiceCarousel({ element }) {
     // Pass the selection to Discord's memoized carousel so edits rerender its
@@ -37,12 +37,12 @@ function installHiddenPreviews(V, filter, isFromHiddenServer) {
       case 'voice':
       case 'unified-vc':
       case 'embedded-activity':
-        return isFromHiddenServer({ guildId: card.guildId ?? card.voiceState?.guildId,
+        return isServerRecordSelected({ guildId: card.guildId ?? card.voiceState?.guildId,
           channelId: card.voiceState?.channelId });
       case 'live-guild-stage':
-        return isFromHiddenServer(card.stage);
+        return isServerRecordSelected(card.stage);
       case 'activity':
-        return card.stream != null && isFromHiddenServer(card.stream);
+        return isServerRecordSelected(card.stream);
       default:
         return false;
     }

@@ -133,7 +133,7 @@ test('forum sender markers without a loaded author and server rules hide only th
   assert.deepEqual(text(ui), ['ordinary snippet']);
 });
 
-test('Messages voice cards follow the selected server IDs without changing group calls or other activities', async t => {
+test('Messages voice cards use the selected server IDs and a switch independent of message hiding', async t => {
   const { w, item, mount, stop, jsx } = await scene(t, { hiddenServerIds: [GUILD] });
   const otherGuild = '400000000000000002';
   const hiddenVoice = '600000000000000001';
@@ -170,10 +170,18 @@ test('Messages voice cards follow the selected server IDs without changing group
   assert.deepEqual(text(messages), allCards.slice(5));
   assert.deepEqual(text(guild), allCards);
 
-  const setting = 'Hide messages from selected servers';
-  await change(settings, setting, false);
+  const messagesSetting = 'Hide messages from selected servers';
+  const voiceSetting = 'Hide voice activity from selected servers';
+  assert.equal(w.stores.MessageStore.getMessages(CHANNEL).length, 0);
+  await change(settings, messagesSetting, false);
+  assert.equal(w.stores.MessageStore.getMessages(CHANNEL).length, 1);
+  assert.deepEqual(text(messages), allCards.slice(5));
+  await change(settings, messagesSetting, true);
+
+  await change(settings, voiceSetting, false);
   assert.deepEqual(text(messages), allCards);
-  await change(settings, setting, true);
+  assert.equal(w.stores.MessageStore.getMessages(CHANNEL).length, 0);
+  await change(settings, voiceSetting, true);
   assert.deepEqual(text(messages), allCards.slice(5));
 
   const press = label => Renderer.act(async () => {
@@ -191,4 +199,26 @@ test('Messages voice cards follow the selected server IDs without changing group
   await stop();
   assert.equal(dataModule.default, original);
   assert.deepEqual(text(messages), allCards);
+});
+
+test('upgrading copies the previous voice behavior once and preserves an explicit voice setting', async t => {
+  const { item, mount, w } = await scene(t, { hiddenServerIds: [GUILD], hideServers: false });
+  const settings = await mount(h(item.options.SettingsComponent, { api: item.api }));
+  const voiceSetting = 'Hide voice activity from selected servers';
+  const voiceSwitch = () => settings.root.findAllByType('Switch')
+    .find(node => node.props.accessibilityLabel === voiceSetting);
+  assert.equal(voiceSwitch().props.value, false);
+  await change(settings, 'Hide messages from selected servers', true);
+  assert.equal(voiceSwitch().props.value, false);
+
+  const previousSettings = { ...item.api.jsonStorage.cache };
+  assert.equal(previousSettings.hideServerVoiceActivity, false);
+  const reloadedWorld = createWorld();
+  installChatButtonsHost(reloadedWorld);
+  const reloaded = await reloadedWorld.start(plugin, previousSettings);
+  t.after(async () => reloadedWorld.stop(reloaded));
+  const reloadedSettings = await mount(h(reloaded.options.SettingsComponent, { api: reloaded.api }));
+  assert.equal(reloadedSettings.root.findAllByType('Switch')
+    .find(node => node.props.accessibilityLabel === voiceSetting).props.value, false);
+  assert.equal(w.stores.MessageStore.getMessages(CHANNEL).length, 0);
 });
