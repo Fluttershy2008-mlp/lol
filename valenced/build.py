@@ -166,6 +166,10 @@ def build(check=False):
         plugin_runtime = runtime
         if slug == "hide-blocked-and-ignored-messages":
             manifest["name"] = "Hide Blocked & Ignored Messages (Valenced)"
+            manifest["description"] = (
+                "Valenced preview. Hides blocked and ignored users, plus messages, channels, icons, in-app pings "
+                "and voice activity cards from selected server IDs. Explicit search stays available."
+            )
             # Keep filtering on the shared bundle and use Valenced's composer
             # and storage for its settings UI. Other hosts retain their UI.
             settings_path = HERE / "plugins" / slug / "settings.js"
@@ -187,7 +191,7 @@ def build(check=False):
                 ("let filter, lists, mentions, pagination, search,", "let previews, filter, lists, mentions, pagination, search,"),
                 ("    hiddenPings?.refresh();", "    hiddenPings?.refresh();\n    previews?.refresh();"),
                 ("      cleanup.push(installChatSettings(V, refresh));", "      cleanup.push(installChatSettings(V, refresh));\n"
-                    "      previews = installHiddenPreviews(V, filter);\n      cleanup.push(previews.stop);"),
+                    "      previews = installHiddenPreviews(V, filter, servers.isServerMessageHidden);\n      cleanup.push(previews.stop);"),
                 ("const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };",
                     "const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); previews?.refresh(); };"),
                 ("    filter = lists = mentions = pagination = search =", "    previews = filter = lists = mentions = pagination = search ="),

@@ -132,3 +132,63 @@ test('forum sender markers without a loaded author and server rules hide only th
     jsx(forum, { message: message(FRIEND, DM) })));
   assert.deepEqual(text(ui), ['ordinary snippet']);
 });
+
+test('Messages voice cards follow the selected server IDs without changing group calls or other activities', async t => {
+  const { w, item, mount, stop, jsx } = await scene(t, { hiddenServerIds: [GUILD] });
+  const otherGuild = '400000000000000002';
+  const hiddenVoice = '600000000000000001';
+  const otherVoice = '600000000000000002';
+  w.channels[hiddenVoice] = { id: hiddenVoice, type: 2, guild_id: GUILD };
+  w.channels[otherVoice] = { id: otherVoice, type: 2, guild_id: otherGuild };
+  w.channels[GROUP] = { id: GROUP, type: 3 };
+  const data = Object.freeze([
+    { kind: 'voice', name: 'Selected voice', guildId: GUILD, voiceState: { channelId: hiddenVoice } },
+    { kind: 'unified-vc', name: 'Selected unified voice', voiceState: { channelId: hiddenVoice } },
+    { kind: 'embedded-activity', name: 'Selected embedded activity', voiceState: { guildId: GUILD } },
+    { kind: 'live-guild-stage', name: 'Selected stage', stage: { guild_id: GUILD, channel_id: hiddenVoice } },
+    { kind: 'activity', name: 'Selected stream', stream: { guildId: GUILD, channelId: hiddenVoice } },
+    { kind: 'voice', name: 'Other server voice', voiceState: { channelId: otherVoice } },
+    { kind: 'voice', name: 'Group call', voiceState: { channelId: GROUP } },
+    { kind: 'activity', name: 'Game activity', guildId: GUILD },
+    { kind: 'voice', name: 'Unknown channel', voiceState: {} },
+  ].map(Object.freeze));
+  const result = Object.freeze([data, false]);
+  const original = function useHappeningNowData() { return React.useState(result)[0]; };
+  const dataModule = { default: original };
+  const carousel = React.memo(function HappeningNow({ guildId }) {
+    const [cards, loading] = dataModule.default(new Set(), { guildId });
+    assert.equal(loading, false);
+    return cards.map(card => h(w.RN.Text, { key: card.name }, card.name));
+  });
+  const path = 'modules/main_tabs_v2/native/shared_components/happening_now/';
+  w.addModule(dataModule, path + 'useHappeningNowData.tsx');
+  w.addModule({ default: carousel }, path + 'HappeningNow.tsx');
+  const messages = await mount(jsx(carousel, {}));
+  const guild = await mount(jsx(carousel, { guildId: GUILD }));
+  const settings = await mount(h(item.options.SettingsComponent, { api: item.api }));
+  const allCards = data.map(card => card.name);
+  assert.deepEqual(text(messages), allCards.slice(5));
+  assert.deepEqual(text(guild), allCards);
+
+  const setting = 'Hide messages from selected servers';
+  await change(settings, setting, false);
+  assert.deepEqual(text(messages), allCards);
+  await change(settings, setting, true);
+  assert.deepEqual(text(messages), allCards.slice(5));
+
+  const press = label => Renderer.act(async () => {
+    settings.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label).props.onPress();
+  });
+  await press('Manage hidden server IDs (1)');
+  await press(`Remove hidden server ${GUILD}`);
+  assert.deepEqual(text(messages), allCards);
+  await Renderer.act(async () => {
+    settings.root.findByType('TextInput').props.onChangeText(otherGuild);
+  });
+  await press('Add and hide servers');
+  assert.deepEqual(text(messages), allCards.filter(name => name !== 'Other server voice'));
+
+  await stop();
+  assert.equal(dataModule.default, original);
+  assert.deepEqual(text(messages), allCards);
+});

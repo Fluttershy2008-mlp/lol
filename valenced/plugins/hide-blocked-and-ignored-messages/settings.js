@@ -166,7 +166,7 @@ function createSettings(V, refresh) {
           ['whitelistEnabled', 'Show whitelisted users', 'Shows users on your whitelist in chat.'],
         ]),
         switches('Server filters', [
-          ['hideServers', 'Hide messages from selected servers', 'Hides chat and threads. DMs with members stay visible.'],
+          ['hideServers', 'Hide messages from selected servers', 'Hides chat, threads and voice activity cards. DMs with members stay visible.'],
           ['hideServerChannels', 'Hide channel lists in selected servers', 'Hides the sidebar when message hiding is on.'],
           ['hideServerIcons', 'Hide selected server icons', 'Also hides icons in server folders.'],
           ['hideServerPings', 'Hide pings from selected servers', 'Hides in-app alerts, mention badges and Recent Activity.'],

@@ -74,11 +74,11 @@
       "kind": "compatibility-preview",
       "settings": {
         "path": "valenced/plugins/hide-blocked-and-ignored-messages/settings.js",
-        "sha256": "657a7d09e53616fa9a4324926045faa783b23c086cbbf74a4b051a352ba5117f"
+        "sha256": "3395671354bd6418a0ad4867802ec4c5b409c655b9282b72177e88b39b60a370"
       },
       "previews": {
         "path": "valenced/plugins/hide-blocked-and-ignored-messages/previews.js",
-        "sha256": "c388f813ccf1961ab30ceb92e218443d82ea1a3ccef97d742ec72447113fec82"
+        "sha256": "4dc548b56307ba11d386f50351e07df0853b534b5a56f0e41bc816829a17ede8"
       },
       "sourceRef": "main"
     },

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: CC0-1.0 */
 // Intercept the preview components themselves. Discord still renders the card,
 // channel row and its actions, including on clients using a different list implementation.
-function installHiddenPreviews(V, filter) {
+function installHiddenPreviews(V, filter, isFromHiddenServer) {
   const { React } = V.metro.common;
   const jsxRuntime = valenced.react.jsxRuntime;
   if (!jsxRuntime?.afterJSX) return { refresh() {}, stop() {} };
@@ -22,6 +22,30 @@ function installHiddenPreviews(V, filter) {
     const read = () => active && isHidden(element.props);
     const hidden = React.useSyncExternalStore(subscribe, read, read);
     return hidden ? null : element;
+  }
+  function readVoiceFilter() {
+    return active && storage.hideServers !== false ? storage.hiddenServerIds : null;
+  }
+  function VoiceCarousel({ element }) {
+    // Pass the selection to Discord's memoized carousel so edits rerender its
+    // data hook without changing the hooks that Discord calls or remounting it.
+    const hiddenServerIds = React.useSyncExternalStore(subscribe, readVoiceFilter, readVoiceFilter);
+    return React.cloneElement(element, { hideBlockedServerIds: hiddenServerIds });
+  }
+  function isHiddenVoiceCard(card) {
+    switch (card?.kind) {
+      case 'voice':
+      case 'unified-vc':
+      case 'embedded-activity':
+        return isFromHiddenServer({ guildId: card.guildId ?? card.voiceState?.guildId,
+          channelId: card.voiceState?.channelId });
+      case 'live-guild-stage':
+        return isFromHiddenServer(card.stage);
+      case 'activity':
+        return card.stream != null && isFromHiddenServer(card.stream);
+      default:
+        return false;
+    }
   }
   function own(remove) {
     if (typeof remove === 'function') disposers.push(remove);
@@ -89,6 +113,21 @@ function installHiddenPreviews(V, filter) {
       ({ message }) => filter.shouldHide(message));
     watchPreview('modules/threads/native/components/ThreadBrowserRowSubtext.tsx', ['ThreadSubtext'], threadHidden);
     watchPreview('modules/threads/native/components/ThreadParentMessage.tsx', ['ThreadChannelStarterMessage'], threadStarterHidden);
+    const carouselPath = 'modules/main_tabs_v2/native/shared_components/happening_now/';
+    watch(carouselPath + 'useHappeningNowData.tsx', module => {
+      if (typeof module?.default !== 'function') return;
+      own(V.patcher.after('default', module, ([, options], result) => {
+        if (!readVoiceFilter()?.length || options?.guildId != null || !Array.isArray(result?.[0])) return;
+        const cards = result[0];
+        const visible = cards.filter(card => !isHiddenVoiceCard(card));
+        if (visible.length !== cards.length) return [visible, ...result.slice(1)];
+      }));
+    });
+    watch(carouselPath + 'HappeningNow.tsx', module => {
+      if (!module?.default) return;
+      own(jsxRuntime.afterJSX(module.default, element => active && element
+        ? { ...element, type: VoiceCarousel, props: { element } } : element));
+    });
   } catch (error) { stop(); throw error; }
   return { refresh, stop };
 }
