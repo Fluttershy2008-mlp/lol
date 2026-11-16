@@ -309,6 +309,34 @@
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "PencilIcon"
     },
+    "dev.fluttershy2008.better-font-scale": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.better-font-scale@1.0.0-beta1.zip",
+          "sha256": "da66666f1ebc1ed05a24b8895c5ae8b096dcbc79e05e5012981ce554bc9b309e",
+          "size": 17238,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Better Font Scale",
+      "description": "Set separate font sizes for messages, the chatbox, usernames, profiles, and channel names on Android.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "contributors": [
+        "RazerTexz <633565155501801472>"
+      ],
+      "icon": "TextIcon"
+    },
     "dev.fluttershy2008.blocked-user-list": {
       "versions": {
         "1.0.0-beta1": {
