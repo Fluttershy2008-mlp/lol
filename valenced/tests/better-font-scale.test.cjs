@@ -118,3 +118,48 @@ test('bio, category and profile text receive independent overrides without chang
     const status = plugin.jsx(UserProfileCustomStatusBubble, {}).type({}).props.children;
     assert.equal(status.type(status.props).props.style[1].fontSize, 18);
 });
+
+test('sliders preview sizes, preserve decimal entries and save only when requested', async t => {
+    process.env.PLUGIN_TEST_TARGET = 'valenced';
+    const { createWorld, React, Renderer } = require('../../revenge-next/tests/next-harness.cjs');
+    const world = createWorld();
+    world.U.discord.design.Design.Slider = 'Slider';
+    world.U.modules.native.callNativeMethod = async () => true;
+    const plugin = await world.start('better-font-scale', { messages: 16.5, aboutMe: 19.5 });
+    let screen;
+    await Renderer.act(async () => {
+        screen = Renderer.create(React.createElement(plugin.options.SettingsComponent, { api: plugin.api }));
+    });
+    t.after(async () => {
+        await Renderer.act(async () => screen.unmount());
+        await world.stop(plugin);
+    });
+    const sliders = () => screen.root.findAllByType('Slider');
+    const byLabel = (type, label) => screen.root.findAllByType(type).find(node => node.props.accessibilityLabel === label).props;
+    const button = label => screen.root.findAllByType('Pressable').find(node =>
+        node.findAllByType('Text').some(text => text.props.children === label)).props;
+    const messagePreview = () => screen.root.findAllByType('Text').find(node =>
+        node.props.children === 'Hey, are you free later?').props.style.fontSize;
+
+    assert.equal(sliders().length, 11);
+    assert.equal(messagePreview(), 16.5);
+    assert.equal(byLabel('TextInput', 'About Me exact size').value, '19.5');
+    await Renderer.act(async () => byLabel('Slider', 'Messages slider').onChange(23));
+    assert.equal(messagePreview(), 23);
+    assert.equal(byLabel('TextInput', 'Messages exact size').value, '23');
+    assert.equal(plugin.writes.length, 0);
+    await Renderer.act(async () => byLabel('TextInput', 'Messages exact size').onChangeText('23.5'));
+    assert.equal(messagePreview(), 23.5);
+    await Renderer.act(async () => button('Save').onPress());
+    assert.equal(plugin.writes[0].messages, 23.5);
+    assert.equal(plugin.writes[0].aboutMe, 19.5);
+
+    await Renderer.act(async () => byLabel('Pressable', 'Reset Messages').onPress());
+    assert.equal(byLabel('TextInput', 'Messages exact size').value, '0');
+    assert.equal(messagePreview(), 16);
+    assert.equal(byLabel('TextInput', 'About Me exact size').value, '19.5');
+    await Renderer.act(async () => button('Reset all').onPress());
+    assert.equal(byLabel('TextInput', 'About Me exact size').value, '0');
+    await Renderer.act(async () => button('Save').onPress());
+    assert.ok(Object.values(plugin.writes[1]).every(value => value === 0));
+});

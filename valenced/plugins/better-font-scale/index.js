@@ -14,6 +14,19 @@
         thread: 'Channel Thread Name',
     };
     const defaults = Object.fromEntries(Object.keys(fields).map(key => [key, 0]));
+    const previews = {
+        messages: [16, 'Hey, are you free later?'],
+        chatbox: [16, 'Write a message…'],
+        username: [16, 'Strawberry Whirl'],
+        aboutMe: [14, 'I like baking strawberry treats.'],
+        gameStatus: [12, 'Playing Minecraft'],
+        profileStatus: [14, 'Currently baking'],
+        timestamp: [12, 'Today at 9:24 AM'],
+        category: [14, 'COMMUNITY'],
+        channel: [16, '# general'],
+        voice: [16, 'Voice Lounge'],
+        thread: [16, 'Weekend plans'],
+    };
     const nativeMethod = 'dev.fluttershy2008.better-font-scale.apply';
     const channelKinds = { 0: 'channel', 2: 'voice', 5: 'channel', 10: 'thread', 11: 'thread',
         12: 'thread', 13: 'voice', 15: 'channel', 16: 'channel' };
@@ -218,6 +231,7 @@
 
     function SettingsComponent({ api }) {
         const { React, ReactNative: RN } = api.unscoped.react;
+        const Slider = api.unscoped.discord.design?.Design?.Slider;
         const h = React.createElement;
         const state = session;
         const saved = state?.values ?? readSettings(api.jsonStorage.cache);
@@ -231,6 +245,10 @@
         const parsed = Object.fromEntries(Object.keys(fields).map(key => [key, readSize(draft[key])]));
         const invalid = Object.keys(fields).find(key => parsed[key] === undefined);
         const dirty = Object.keys(fields).some(key => parsed[key] !== saved[key]);
+        function changeField(key, value) {
+            setDraft(current => ({ ...current, [key]: String(value) }));
+            setFeedback('');
+        }
         async function save() {
             if (!state?.active || state.busy || invalid || !dirty) return;
             state.busy = true;
@@ -257,22 +275,45 @@
                 backgroundColor: primary ? '#5865F2' : palette.card, opacity: disabled ? 0.5 : 1 },
         }, h(RN.Text, { style: { color: primary ? '#fff' : palette.text, fontSize: 15, fontWeight: '600' } }, label));
 
-        return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, gap: 8, paddingBottom: 36 } },
-            h(RN.Text, { style: { color: palette.muted, fontSize: 14, marginBottom: 6 } },
-                'Enter a size from 8 to 48. Use 0 for Discord’s default.'),
-            ...Object.entries(fields).map(([key, label]) => h(RN.View, { key,
-                style: { borderRadius: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 7, backgroundColor: palette.card } },
-                h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, label),
-                h(RN.TextInput, { accessibilityLabel: label, value: draft[key], keyboardType: 'decimal-pad',
-                    maxLength: 7, selectTextOnFocus: true, editable: !saving,
-                    onChangeText: value => { setDraft(current => ({ ...current, [key]: value })); setFeedback(''); },
-                    style: { color: parsed[key] === undefined ? palette.error : palette.text, fontSize: 18,
-                        paddingHorizontal: 0, paddingVertical: 2, minHeight: 32 } }))),
-            h(RN.View, { style: { flexDirection: 'row', gap: 10, marginTop: 8 } },
-                button('Reset all', () => { setDraft(Object.fromEntries(Object.keys(fields).map(key => [key, '0']))); setFeedback(''); }, saving, false),
-                button(saving ? 'Saving…' : 'Save', save, saving || !!invalid || !dirty || !state?.active, true)),
-            h(RN.Text, { accessibilityLiveRegion: 'polite', style: { color: invalid ? palette.error : palette.muted, fontSize: 14 } },
-                invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError || ''));
+        function renderField([key, label]) {
+            const [defaultSampleSize, sample] = previews[key];
+            const previewSize = parsed[key] || defaultSampleSize;
+            const isDefault = parsed[key] === 0;
+            return h(RN.View, { key, style: { borderRadius: 10, padding: 14, gap: 4, backgroundColor: palette.card } },
+                h(RN.Text, { style: { color: palette.text, fontSize: 15, fontWeight: '600' } }, label),
+                Slider && h(Slider, { accessibilityLabel: label + ' slider', value: previewSize, minValue: 8,
+                    maxValue: 48, step: 1, disabled: saving, formatValue: value => value + ' sp',
+                    onChange: value => changeField(key, value) }),
+                h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', gap: 10 } },
+                    h(RN.TextInput, { accessibilityLabel: label + ' exact size', value: draft[key],
+                        keyboardType: 'decimal-pad', maxLength: 7, selectTextOnFocus: true, editable: !saving,
+                        onChangeText: value => changeField(key, value),
+                        style: { color: parsed[key] === undefined ? palette.error : palette.text, fontSize: 16,
+                            minWidth: 52, minHeight: 42, paddingVertical: 4 } }),
+                    h(RN.Text, { style: { color: palette.muted, flex: 1 } }, isDefault ? 'Discord default' : 'sp'),
+                    h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Reset ' + label,
+                        disabled: saving || isDefault, onPress: () => changeField(key, 0),
+                        style: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, opacity: isDefault ? 0.45 : 1 } },
+                        h(RN.Text, { style: { color: palette.text } }, 'Default'))),
+                h(RN.Text, { style: { color: palette.muted, fontSize: previewSize,
+                    lineHeight: Math.ceil(previewSize * 1.25) } }, sample));
+        }
+        const message = invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError;
+        return h(RN.View, { style: { flex: 1 } },
+            h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', style: { flex: 1 },
+                contentContainerStyle: { padding: 16, gap: 10 } },
+                h(RN.Text, { style: { color: palette.muted, fontSize: 14, marginBottom: 4 } },
+                    'Drag a slider to preview a size or enter an exact value. Use 0 for Discord’s default.'),
+                Object.entries(fields).map(renderField)),
+            h(RN.View, { style: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 8 } },
+                h(RN.View, { style: { flexDirection: 'row', gap: 10 } },
+                    button('Reset all', () => {
+                        setDraft(Object.fromEntries(Object.keys(fields).map(key => [key, '0'])));
+                        setFeedback('');
+                    }, saving, false),
+                    button(saving ? 'Saving…' : 'Save', save, saving || !!invalid || !dirty || !state?.active, true)),
+                message && h(RN.Text, { accessibilityLiveRegion: 'polite',
+                    style: { color: invalid ? palette.error : palette.muted, fontSize: 14 } }, message)));
     }
 
     return { default: { jsonStorage: { load: true, default: defaults }, start, SettingsComponent } };
