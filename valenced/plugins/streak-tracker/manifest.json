@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.streak-tracker",
+  "name": "Streak Tracker",
+  "description": "Track consecutive days you message in DMs, with fire badges, milestone notifications and local stats.",
+  "author": "Fluttershy2008-mlp <753962426407452713>",
+  "icon": "ChatIcon",
+  "version": "1.0.0-beta1",
+  "dependencies": {
+    "valenced.api": { "version": ">=1 <2" },
+    "discord": { "version": "*" }
+  },
+  "dist": { "script": "index.js" }
+}

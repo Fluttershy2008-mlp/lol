@@ -108,7 +108,7 @@ class ValencedPackages(unittest.TestCase):
         self.assertEqual(set(config["settingsShortcuts"]), wanted)
         native = {slug for slug, entry in config.get("nativePlugins", {}).items()
                   if isinstance(entry, dict) and entry.get("settingsShortcut")}
-        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share", "math-ai", "more-alts"})
+        self.assertEqual(native, {"quick-delete", "auto-quest", "long-video-share", "math-ai", "more-alts", "streak-tracker"})
         index = json.loads((HERE / "index.json").read_text())["plugins"]
         sources = json.loads((HERE / "sources.json").read_text())["plugins"]
         digest = hashlib.sha256((HERE / "settings-shortcut.cjs").read_bytes()).hexdigest()

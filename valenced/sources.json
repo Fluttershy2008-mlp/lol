@@ -307,6 +307,19 @@
       "kind": "native-plugin",
       "upstream": "https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages"
     },
+    "dev.fluttershy2008.streak-tracker": {
+      "path": "valenced/plugins/streak-tracker/index.js",
+      "sha256": "a67cf63f8fba098b9bdc363cf58af7f9603c1d33e344cc25bd5571b8585159aa",
+      "originalVersion": "1.0.0-beta1",
+      "kind": "native-plugin",
+      "upstream": "https://github.com/TermitJs/Streak-Tracker-for-Discord",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "Streak Tracker"
+      }
+    },
     "dev.fluttershy2008.more-alts": {
       "path": "valenced/plugins/more-alts/index.js",
       "sha256": "f6900266736d0449af039a1d7762f4fe86346d44e9a2ebf603eaca19e7efa1a2",

@@ -2636,6 +2636,31 @@
         "fluttershy_simper <753962426407452713>"
       ]
     },
+    "dev.fluttershy2008.streak-tracker": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.streak-tracker@1.0.0-beta1.zip",
+          "sha256": "5dc504d0fcaba76952bceab2611664a8aca679c30ce0d4d5f584a72039da2c96",
+          "size": 8435,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Streak Tracker",
+      "description": "Track consecutive days you message in DMs, with fire badges, milestone notifications and local stats.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "ChatIcon"
+    },
     "dev.fluttershy2008.sunset-shimmer-theme": {
       "versions": {
         "1.0.0-beta1": {
