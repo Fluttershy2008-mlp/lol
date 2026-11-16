@@ -4,7 +4,12 @@
     const discordEpoch = 1420070400000n;
     const previewPath = 'modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx';
     const previewExports = ['ChannelRowPreview', 'NativeChannelRowPreview', 'NativeMessageChannelRowPreview'];
-    const defaults = { showBadges: true, milestoneToasts: true, accounts: {} };
+    const defaults = { showBadges: true, milestoneToasts: true, lossAnimations: true, accounts: {} };
+    const tiers = [
+        { min: 100, range: '100+ days', name: 'Red', light: ['#9A243B', '#FCE1E5'], dark: ['#FFACB9', '#462131'] },
+        { min: 50, range: '50–99 days', name: 'Purple', light: ['#653399', '#EEE3FC'], dark: ['#E1BDFF', '#392750'] },
+        { min: 1, range: '1–49 days', name: 'Orange', light: ['#844000', '#FFE9D4'], dark: ['#FFBE80', '#422D23'] },
+    ];
     const listeners = new Set();
     let current;
     let revision = 0;
@@ -32,20 +37,40 @@
                     lastDay: record.lastDay, days: record.days, best: record.best,
                     recipientId: isId(record.recipientId) ? record.recipientId : null,
                 };
+                if (record.recipientUsername) streaks[channelId].recipientUsername = validName(record.recipientUsername);
+                if (record.lossShown === true) streaks[channelId].lossShown = true;
             }
             accounts[accountId] = streaks;
         }
-        return { showBadges: value?.showBadges !== false, milestoneToasts: value?.milestoneToasts !== false, accounts };
+        return { showBadges: value?.showBadges !== false, milestoneToasts: value?.milestoneToasts !== false,
+            lossAnimations: value?.lossAnimations !== false, accounts };
     }
 
     function activeDays(record, day) {
         return record && (record.lastDay === day || record.lastDay === day - 1) ? record.days : 0;
     }
 
-    function streakColor(days, light) {
-        if (days >= 100) return light ? '#A21D30' : '#FFA4AD';
-        if (days >= 50) return light ? '#6937A8' : '#D6B0FF';
-        return light ? '#934500' : '#FFC083';
+    function tierColors(days, light) {
+        const tier = tiers.find(tier => days >= tier.min) ?? tiers[2];
+        return light ? tier.light : tier.dark;
+    }
+
+    function validName(value) {
+        return typeof value === 'string' && value.trim() ? value.trim().slice(0, 128) : null;
+    }
+
+    function paintBadge(h, RN, days, light) {
+        const [color, backgroundColor] = tierColors(days, light);
+        const count = days > 999 ? '999+' : String(days);
+        return h(RN.View, {
+            accessible: true, accessibilityLabel: days + '-day DM streak',
+            pointerEvents: 'none',
+            style: { alignSelf: 'center', flexShrink: 1, maxWidth: 74, minWidth: 0, overflow: 'hidden',
+                backgroundColor, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 2, marginStart: 6 },
+        }, h(RN.Text, {
+            numberOfLines: 1, ellipsizeMode: 'tail', maxFontSizeMultiplier: 1.4,
+            style: { color, fontSize: 12, fontWeight: '700' },
+        }, '🔥 ' + count));
     }
 
     function changed() {
@@ -56,6 +81,12 @@
     function subscribe(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);
+    }
+
+    function watchStore(store, listener) {
+        if (!store?.addChangeListener || !store?.removeChangeListener) return () => {};
+        store.addChangeListener(listener);
+        return () => store.removeChangeListener(listener);
     }
 
     const snapshot = () => revision;
@@ -93,10 +124,18 @@
         changed();
     }
 
-    function getRecipient(channel) {
-        const first = channel.recipients?.[0];
-        const id = channel.getRecipientId?.() ?? first?.id ?? first;
-        return isId(id) ? id : null;
+    function getRecipient(stores, channel, record, account) {
+        const recipients = [channel?.rawRecipients, channel?.recipients].filter(Array.isArray).flat();
+        const ids = [channel?.getRecipientId?.(), ...recipients.map(user => user?.id ?? user), record?.recipientId];
+        const id = ids.find(id => isId(id) && id !== account) ?? null;
+        const embedded = recipients.find(user => user?.id === id);
+        const user = id && stores.UserStore?.getUser?.(id);
+        const lastUsername = record?.recipientId === id ? record.recipientUsername : null;
+        const username = validName(user?.username) ?? validName(embedded?.username) ?? lastUsername ?? null;
+        const nickname = id && validName(stores.RelationshipStore?.getNickname?.(id));
+        const name = nickname || validName(user?.globalName) || validName(user?.global_name)
+            || validName(embedded?.globalName) || validName(embedded?.global_name) || username;
+        return { id, name, username };
     }
 
     function trackMessage(session, event) {
@@ -120,9 +159,11 @@
         const previous = streaks[channelId];
         if (previous && previous.lastDay >= day) return;
         const days = previous?.lastDay === day - 1 ? previous.days + 1 : 1;
+        const recipient = getRecipient(session.stores, channel, previous, sender);
         const record = {
             lastDay: day, days, best: Math.max(days, previous?.best ?? 0),
-            recipientId: getRecipient(channel) ?? previous?.recipientId ?? null,
+            recipientId: recipient.id,
+            ...(recipient.username ? { recipientUsername: recipient.username } : {}),
         };
         persist(session, { ...session.data, accounts: {
             ...accounts, [sender]: { ...streaks, [channelId]: record },
@@ -145,21 +186,74 @@
         const h = React.createElement;
         const ParentBadge = React.createContext(null);
         const types = new Set();
+        const isLight = () => session.stores.ThemeStore?.theme === 'light';
+        const animated = RN.Animated;
+
+        function useSmoke(channelId, lossKey, light) {
+            const [motion, setMotion] = React.useState(null);
+            React.useEffect(() => {
+                if (!lossKey) { setMotion(null); return; }
+                if (!live(session) || !session.foreground || session.reduceMotion || !session.data?.showBadges ||
+                    !session.data.lossAnimations) return;
+                const { account, data } = session;
+                const streaks = data.accounts[account];
+                const record = streaks?.[channelId];
+                if (!record || record.lossShown || record.lastDay + 2 !== session.day ||
+                    session.account !== accountId(session.stores) || localDay(Date.now()) !== session.day) return;
+                const progress = new animated.Value(0);
+                setMotion({ key: lossKey, progress, days: record.days });
+                persist(session, { ...data, accounts: {
+                    ...data.accounts, [account]: { ...streaks, [channelId]: { ...record, lossShown: true } },
+                } });
+            }, [channelId, lossKey]);
+
+            React.useEffect(() => {
+                if (!motion || motion.key !== lossKey) return;
+                let mounted = true;
+                const animation = animated.timing(motion.progress, {
+                    toValue: 1, duration: 850, useNativeDriver: true, isInteraction: false,
+                });
+                animation.start(() => { if (mounted) setMotion(null); });
+                return () => { mounted = false; animation.stop(); };
+            }, [motion, lossKey]);
+
+            if (!motion || motion.key !== lossKey) return null;
+            const progressStyle = (inputRange, outputRange) =>
+                motion.progress.interpolate({ inputRange, outputRange, extrapolate: 'clamp' });
+            return h(RN.View, {
+                pointerEvents: 'none', accessible: false, importantForAccessibility: 'no-hide-descendants',
+                accessibilityElementsHidden: true, style: { flexShrink: 1, minWidth: 0, maxWidth: 74 },
+            }, h(animated.View, { style: { opacity: progressStyle([0, 0.55], [1, 0]) } },
+                paintBadge(h, RN, motion.days, light)),
+            h(animated.View, {
+                style: { position: 'absolute', end: 8, bottom: 0,
+                    opacity: progressStyle([0, 0.35, 1], [0, 0.86, 0]),
+                    transform: [{ translateY: progressStyle([0, 1], [3, -5]) }] },
+            }, h(RN.Text, { style: { fontSize: 13 }, maxFontSizeMultiplier: 1.2 }, '💨')));
+        }
+
         function PreviewWithStreak({ streakElement, streakChannelId }) {
-            const inherited = React.useContext(ParentBadge);
+            const inherited = React.useContext(ParentBadge) === streakChannelId;
             const read = () => live(session) && session.data?.showBadges
                 ? activeDays(session.data.accounts[session.account]?.[streakChannelId], session.day) : 0;
+            const readLoss = () => {
+                if (inherited || !animated?.View || !animated.Value || !animated.timing || !live(session) ||
+                    !session.foreground || session.reduceMotion || !session.data?.showBadges ||
+                    !session.data.lossAnimations || !session.account) return null;
+                const record = session.data.accounts[session.account]?.[streakChannelId];
+                return record && record.lastDay + 2 === session.day
+                    ? session.account + ':' + streakChannelId + ':' + record.lastDay : null;
+            };
             const days = React.useSyncExternalStore(subscribe, read, read);
-            if (!days || inherited === streakChannelId) return streakElement;
-            const light = session.stores.ThemeStore?.theme === 'light';
-            return h(ParentBadge.Provider, { value: streakChannelId },
-                h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 } },
-                    h(RN.View, { style: { flexShrink: 1, minWidth: 0 } }, streakElement),
-                    h(RN.Text, {
-                        accessibilityLabel: days + '-day DM streak',
-                        numberOfLines: 1,
-                        style: { flexShrink: 0, marginStart: 6, fontSize: 12, fontWeight: '700', color: streakColor(days, light) },
-                    }, '🔥 ' + days)));
+            const lossKey = React.useSyncExternalStore(subscribe, readLoss, readLoss);
+            const light = React.useSyncExternalStore(subscribe, isLight, isLight);
+            const smoke = useSmoke(streakChannelId, lossKey, light);
+            if (inherited || (!days && !lossKey)) return streakElement;
+            const badge = days ? paintBadge(h, RN, days, light) : smoke;
+            return h(ParentBadge.Provider, { value: streakChannelId }, badge
+                ? h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, maxWidth: '100%' } },
+                    h(RN.View, { style: { flexShrink: 1, minWidth: 0 } }, streakElement), badge)
+                : streakElement);
         }
 
         const removeFinder = finders.getModuleWithImportedPath(previewPath, module => {
@@ -190,6 +284,7 @@
         const session = {
             api, U, React: U.react.React, RN: U.react.ReactNative, stores: U.discord.flux.Stores,
             active: true, day: localDay(Date.now()), account: null, data: null, error: null,
+            foreground: (U.react.ReactNative.AppState?.currentState ?? 'active') === 'active', reduceMotion: false,
         };
         current = session;
         api.cleanup(() => {
@@ -216,10 +311,8 @@
 
         const userStore = session.stores.UserStore;
         const onUserChange = () => { if (live(session)) refreshClock(session); };
-        if (userStore?.addChangeListener && userStore?.removeChangeListener) {
-            userStore.addChangeListener(onUserChange);
-            api.cleanup(() => userStore.removeChangeListener(onUserChange));
-        }
+        api.cleanup(watchStore(userStore, onUserChange));
+        api.cleanup(watchStore(session.stores.ThemeStore, changed));
         const dispatcher = U.discord.common.flux.Dispatcher;
         const onMessage = event => {
             try { trackMessage(session, event); }
@@ -239,9 +332,32 @@
         }
         api.cleanup(() => clearTimeout(clockTimer));
         const appState = session.RN.AppState?.addEventListener('change', state => {
+            const foreground = state === 'active';
+            const toggled = foreground !== session.foreground;
+            session.foreground = foreground;
             if (state === 'active') checkClock();
+            if (toggled) changed();
         });
         if (appState) api.cleanup(() => appState.remove());
+
+        const accessibility = session.RN.AccessibilityInfo;
+        let receivedMotionEvent = false;
+        const setReduceMotion = enabled => {
+            if (!live(session) || session.reduceMotion === enabled) return;
+            session.reduceMotion = enabled;
+            changed();
+        };
+        const motionSetting = accessibility?.addEventListener?.('reduceMotionChanged', enabled => {
+            receivedMotionEvent = true;
+            setReduceMotion(enabled);
+        });
+        if (motionSetting) api.cleanup(() => motionSetting.remove());
+        if (accessibility?.isReduceMotionEnabled) {
+            session.reduceMotion = true;
+            Promise.resolve().then(() => accessibility.isReduceMotionEnabled()).then(enabled => {
+                if (!receivedMotionEvent) setReduceMotion(enabled);
+            }).catch(error => api.logger?.warn?.('Could not read reduce motion setting', error));
+        }
         try { installBadges(session); }
         catch (error) { api.logger?.warn?.('Could not attach DM streak badges', error); }
         checkClock();
@@ -252,10 +368,17 @@
         const { React, ReactNative: RN } = api.unscoped.react;
         const h = React.createElement;
         React.useSyncExternalStore(subscribe, snapshot, snapshot);
+        const stores = api.unscoped.discord.flux.Stores;
+        const [, refreshNames] = React.useReducer(value => value + 1, 0);
+        React.useEffect(() => {
+            const removers = [stores.UserStore, stores.ChannelStore, stores.RelationshipStore]
+                .map(store => watchStore(store, refreshNames));
+            return () => removers.forEach(remove => remove());
+        }, [stores]);
         const session = current;
         const data = session?.data;
         const signedIn = session?.account;
-        const light = api.unscoped.discord.flux.Stores.ThemeStore?.theme === 'light';
+        const light = stores.ThemeStore?.theme === 'light';
         const fg = light ? '#17171B' : '#F2F3F5';
         const muted = light ? '#505460' : '#B7BBC5';
         const card = light ? '#F0F1F4' : '#282B32';
@@ -267,18 +390,23 @@
         const records = Object.entries(data?.accounts[signedIn] ?? {});
         const stats = records.reduce((totals, [id, record]) => {
             const days = activeDays(record, session.day);
-            if (days) totals.active.push({ id, record, days });
+            if (days) {
+                totals.active.push({ id, record, days });
+                if (record.lastDay === session.day - 1) totals.due++;
+            }
             totals.best = Math.max(totals.best, record.best);
             totals.total += days;
             return totals;
-        }, { active: [], best: 0, total: 0 });
+        }, { active: [], best: 0, total: 0, due: 0 });
         const leaderboard = stats.active.sort((a, b) => b.days - a.days || a.id.localeCompare(b.id)).slice(0, 5);
         const stat = (value, label) => h(RN.View, { style: { flex: 1, marginEnd: 4 } },
             text(String(value), { fontSize: 23, fontWeight: '700' }),
             text(label, { color: muted, fontSize: 12 }));
-        const toggle = (key, label) => h(RN.View,
+        const toggle = (key, label, detail) => h(RN.View,
             { style: { flexDirection: 'row', alignItems: 'center', minHeight: 48 } },
-            text(label, { flex: 1, fontSize: 15, marginEnd: 8 }),
+            h(RN.View, { style: { flex: 1, marginEnd: 8, paddingVertical: 5 } },
+                text(label, { fontSize: 15, fontWeight: '600' }),
+                text(detail, { color: muted, fontSize: 13, marginTop: 2 })),
             h(RN.Switch, { accessibilityLabel: label, value: data?.[key] ?? defaults[key], disabled: !data,
                 onValueChange: value => {
                     if (session && live(session) && session.data) persist(session, { ...session.data, [key]: value });
@@ -298,24 +426,38 @@
         }
 
         return h(RN.ScrollView, { contentContainerStyle: { padding: 16, paddingBottom: 32 } },
-            paragraph('Send a message in a one-to-one DM to count today. Keep messaging daily to extend the streak. Days follow your phone’s local time.'),
             session?.error ? paragraph(session.error) : null,
-            h(RN.View, { style: { ...panel, flexDirection: 'row' } },
-                stat(stats.active.length, 'Active streaks'), stat(stats.best, 'Personal best'), stat(stats.total, 'Active days')),
-            h(RN.View, { style: panel }, heading('Top DM streaks'),
+            h(RN.View, { style: panel }, heading('Statistics'),
+                h(RN.View, { style: { flexDirection: 'row' } },
+                    stat(stats.active.length, 'Active streaks'), stat(stats.best, 'Personal best'), stat(stats.total, 'Active days')),
+                stats.due ? text(stats.due === 1 ? '1 streak needs a message today' : stats.due + ' streaks need a message today',
+                    { color: muted, marginTop: 10 }) : null),
+            h(RN.View, { style: panel }, heading('Top 5 DM streaks'),
                 leaderboard.length ? leaderboard.map(({ id, record, days }, index) => {
-                    const channel = session.stores.ChannelStore?.getChannel?.(id);
-                    const recipientId = record.recipientId ?? getRecipient(channel ?? {});
-                    const user = recipientId && session.stores.UserStore?.getUser?.(recipientId);
-                    const name = user?.globalName ?? user?.global_name ?? user?.username ?? 'Direct message';
-                    return h(RN.View, { key: id, style: { flexDirection: 'row', alignItems: 'center', minHeight: 35 } },
-                        text(String(index + 1), { color: muted, width: 24 }),
-                        text(name, { flex: 1, marginEnd: 8 }, { numberOfLines: 1 }),
-                        text('🔥 ' + days, { color: streakColor(days, light), fontWeight: '700' }));
+                    const channel = stores.ChannelStore?.getChannel?.(id);
+                    const { id: recipientId, name, username } = getRecipient(stores, channel, record, signedIn);
+                    const detail = username && name !== username ? '@' + username : null;
+                    return h(RN.View, { key: id, style: { flexDirection: 'row', alignItems: 'center', minHeight: 44 } },
+                        text(String(index + 1), { color: muted, width: 24, fontVariant: ['tabular-nums'] }),
+                        h(RN.View, { style: { flex: 1, minWidth: 0 } },
+                            text(name ?? ('DM · …' + (recipientId ?? id).slice(-4)), { fontWeight: '600' }, { numberOfLines: 1 }),
+                            detail ? text(detail, { color: muted, fontSize: 12, marginTop: 2 }, { numberOfLines: 1 }) : null),
+                        paintBadge(h, RN, days, light));
                 }) : paragraph(!data && !session?.error ? 'Loading streaks…'
                     : signedIn ? 'No active streaks yet.' : 'Sign in to see your streaks.')),
-            h(RN.View, { style: panel }, toggle('showBadges', 'Show badges in Messages'),
-                toggle('milestoneToasts', 'Notify at 10, 50 and 100 days')),
+            h(RN.View, { style: panel }, heading('Preferences'),
+                toggle('showBadges', 'Show badges in Messages', 'Display the fire count beside each DM preview.'),
+                toggle('lossAnimations', 'Animate expired streaks', 'Fade the badge out with smoke when you miss a day.'),
+                toggle('milestoneToasts', 'Notify at 10, 50 and 100 days', 'Show a short notification when you reach a milestone.')),
+            h(RN.View, { style: panel }, heading('How streaks work'),
+                paragraph('Send a message in a one-to-one DM to count today. You have until your phone’s midnight to extend yesterday’s streak. Records are saved on this device.'),
+                h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 } },
+                    [...tiers].reverse().map(tier => {
+                        const [color, backgroundColor] = tierColors(tier.min, light);
+                        return text(tier.range, { color, backgroundColor, borderRadius: 6,
+                            overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 4, fontWeight: '600' },
+                        { key: tier.min, accessibilityLabel: tier.name + ', ' + tier.range });
+                    }))),
             h(RN.Button, { title: 'Clear streak history', color: light ? '#A21D30' : '#F4697C',
                 disabled: !records.length, onPress: clear }));
     }

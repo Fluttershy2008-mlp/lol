@@ -19,11 +19,29 @@ const snowflake = time => ((BigInt(time) - 1420070400000n) << 22n).toString();
 const text = ui => ui.root.findAllByType('Text').map(node => node.props.children);
 const fire = ui => text(ui).filter(value => typeof value === 'string' && value.startsWith('🔥 '));
 
-async function setup(t, initial = {}, { hideFirst, hideLast, nested } = {}) {
+async function setup(t, initial = {}, { hideFirst, hideLast, nested, reduceMotion } = {}) {
     const w = createWorld();
     const host = installChatButtonsHost(w);
     const settings = installSettingsSection(w);
     const jsx = w.U.react.ReactJSXRuntime.jsx;
+    const animations = [], motionListeners = new Set();
+    if (reduceMotion != null) {
+        w.RN.AccessibilityInfo = {
+            isReduceMotionEnabled: async () => reduceMotion,
+            addEventListener(event, listener) {
+                assert.equal(event, 'reduceMotionChanged');
+                motionListeners.add(listener);
+                return { remove: () => motionListeners.delete(listener) };
+            },
+        };
+        w.RN.Animated.View = w.RN.View;
+        w.RN.Animated.timing = (_value, config) => {
+            const animation = { config, stopped: false,
+                start(finish) { this.finish = finish; }, stop() { this.stopped = true; } };
+            animations.push(animation);
+            return animation;
+        };
+    }
     w.channels[dm] = { id: dm, type: 1, recipients: [FRIEND] };
     w.channels[group] = { id: group, type: 3, recipients: [FRIEND, BLOCKED] };
     await w.advance(time - 1800000000000);
@@ -47,6 +65,7 @@ async function setup(t, initial = {}, { hideFirst, hideLast, nested } = {}) {
         assert.equal(w.appListeners.size, 0);
         assert.equal(w.pathWaiters.size, 0);
         assert.equal(host.patches.size, 0);
+        assert.equal(motionListeners.size, 0);
         assert.deepEqual(w.errors, []);
     });
     const send = opts => {
@@ -58,7 +77,7 @@ async function setup(t, initial = {}, { hideFirst, hideLast, nested } = {}) {
     const preview = (type, channel, author = FRIEND) => jsx(type, {
         message: { channel_id: channel, author: w.users[author], content: 'A native preview' },
     });
-    return { w, item, settings, send, mount, Plain, Native, preview };
+    return { w, item, settings, send, mount, Plain, Native, preview, animations, motionListeners };
 }
 
 test('confirmed outgoing DMs count once per calendar day and expire only after a missed day', async t => {
@@ -148,3 +167,90 @@ for (const order of ['hideFirst', 'hideLast']) {
         assert.equal(text(hidden).includes('A native preview'), false);
     });
 }
+
+test('a missed streak plays one cancellable native smoke animation and remembers that it played', async t => {
+    const initial = { accounts: { [ACCOUNT]: { [dm]: { recipientId: FRIEND, lastDay: day - 1, days: 52, best: 52 } } } };
+    const { w, item, mount, Native, preview, animations } = await setup(t, initial, { reduceMotion: false, nested: true });
+    const row = await mount(preview(Native, dm));
+    assert.deepEqual(fire(row), ['🔥 52']);
+    await Renderer.act(async () => w.advance(2000));
+    assert.equal(animations.length, 1);
+    assert.equal(animations[0].config.useNativeDriver, true);
+    assert.ok(text(row).includes('💨'));
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][dm].lossShown, true);
+    await Renderer.act(async () => animations[0].finish());
+    assert.deepEqual(fire(row), []);
+    assert.equal(text(row).includes('💨'), false);
+
+    const otherRow = await mount(preview(Native, dm));
+    assert.equal(text(otherRow).includes('💨'), false);
+    assert.equal(animations.length, 1);
+    await Renderer.act(async () => w.stop(item));
+    await w.start(slug, item.writes.at(-1));
+    const restartedRow = await mount(preview(Native, dm));
+    assert.equal(text(restartedRow).includes('💨'), false);
+    assert.equal(animations.length, 1);
+});
+
+test('reduce motion and the smoke switch gate playback, and switching accounts cancels a running effect', async t => {
+    const initial = { accounts: { [ACCOUNT]: { [dm]: { recipientId: FRIEND, lastDay: day - 2, days: 5, best: 5 } } } };
+    const { w, item, mount, Native, preview, animations, motionListeners } = await setup(t, initial, { reduceMotion: true });
+    const row = await mount(preview(Native, dm));
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    const toggle = value => Renderer.act(async () => ui.root.findAllByType('Switch')
+        .find(node => node.props.accessibilityLabel === 'Animate expired streaks').props.onValueChange(value));
+    const setMotion = value => Renderer.act(async () => motionListeners.forEach(listener => listener(value)));
+    assert.equal(animations.length, 0);
+    await toggle(false);
+    await setMotion(false);
+    assert.equal(text(row).includes('💨'), false);
+    await toggle(true);
+    assert.equal(animations.length, 1);
+    assert.ok(text(row).includes('💨'));
+    await Renderer.act(async () => w.setAccount(FRIEND));
+    assert.equal(animations[0].stopped, true);
+    assert.equal(text(row).includes('💨'), false);
+    await Renderer.act(async () => w.setAccount(ACCOUNT));
+    assert.equal(animations.length, 1);
+});
+
+test('leaderboard ranks five DMs, resolves changing names and keeps large badges compact', async t => {
+    const second = '300000000000000021';
+    const third = '300000000000000022';
+    const initial = { accounts: { [ACCOUNT]: {
+        [dm]: { lastDay: day, days: 1234, best: 1234, recipientId: FRIEND },
+        [second]: { lastDay: day, days: 51, best: 51 },
+        [third]: { lastDay: day, days: 10, best: 10, recipientId: BLOCKED, recipientUsername: 'cached-handle' },
+        '300000000000000023': { lastDay: day, days: 4, best: 4 },
+        '300000000000000024': { lastDay: day, days: 3, best: 3 },
+        '300000000000000025': { lastDay: day, days: 2, best: 2 },
+    } } };
+    const { w, item, mount, Plain, preview } = await setup(t, initial);
+    let nickname = 'Friend’s nickname';
+    w.stores.RelationshipStore.getNickname = id => id === FRIEND ? nickname : null;
+    w.channels[second] = { id: second, type: 1, rawRecipients: [w.users[ACCOUNT],
+        { id: '100000000000000004', global_name: 'From channel', username: 'channel-handle' }] };
+    delete w.users[BLOCKED];
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    assert.deepEqual(fire(ui), ['🔥 999+', '🔥 51', '🔥 10', '🔥 4', '🔥 3']);
+    for (const name of ['Friend’s nickname', '@friend', 'From channel', '@channel-handle', 'cached-handle', 'DM · …0023']) {
+        assert.ok(text(ui).includes(name), name);
+    }
+    await Renderer.act(async () => {
+        nickname = null;
+        w.stores.RelationshipStore.emitChange();
+    });
+    assert.ok(text(ui).includes('Test Friend'));
+
+    const row = await mount(preview(Plain, dm));
+    const badge = () => row.root.findAllByType('View').find(node => node.props.accessibilityLabel === '1234-day DM streak');
+    assert.equal(badge().props.style.maxWidth, 74);
+    const red = badge().props.style.backgroundColor;
+    await Renderer.act(async () => {
+        w.stores.ThemeStore.theme = 'light';
+        w.stores.ThemeStore.emitChange();
+    });
+    assert.notEqual(badge().props.style.backgroundColor, red);
+    assert.equal(row.root.findAllByType('Text').find(node => node.props.children === '🔥 999+').props.numberOfLines, 1);
+    assert.ok(text(row).includes('A native preview'));
+});
