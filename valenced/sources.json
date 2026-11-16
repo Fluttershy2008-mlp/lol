@@ -207,6 +207,12 @@
       "originalVersion": "1.1.0",
       "kind": "native-theme"
     },
+    "dev.fluttershy2008.birthday-badge": {
+      "path": "valenced/plugins/birthday-badge/index.js",
+      "sha256": "b047c5f3f0123ff0318cdef91adc5890a0873fd966aa5cc01f7ddc206a65cacf",
+      "originalVersion": "1.0.0-beta1",
+      "kind": "native-plugin"
+    },
     "dev.fluttershy2008.long-video-share": {
       "path": "valenced/plugins/long-video-share/index.js",
       "sha256": "a3b0a5f7a8191349f077ebab775896acb1394cab767e26bd080389a06610f034",

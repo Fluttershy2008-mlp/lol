@@ -389,6 +389,31 @@
       ],
       "icon": "AccessibilityIcon"
     },
+    "dev.fluttershy2008.birthday-badge": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.birthday-badge@1.0.0-beta1.zip",
+          "sha256": "e4a5f27154e524cd3da6a1ac0a1f44678e89a9a45d56255037185691a34c6daf",
+          "size": 7003,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Birthday Badge",
+      "description": "Save someone's birthday and see a cake countdown beside their profile badges.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "GiftIcon"
+    },
     "dev.fluttershy2008.blocked-user-list": {
       "versions": {
         "1.0.0-beta1": {

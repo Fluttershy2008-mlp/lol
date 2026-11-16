@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "id": "dev.fluttershy2008.birthday-badge",
+  "name": "Birthday Badge",
+  "description": "Save someone's birthday and see a cake countdown beside their profile badges.",
+  "author": "Fluttershy2008-mlp <753962426407452713>",
+  "icon": "GiftIcon",
+  "version": "1.0.0-beta1",
+  "dependencies": {
+    "valenced.api": { "version": ">=1 <2" },
+    "discord": { "version": "*" }
+  },
+  "dist": { "script": "index.js" }
+}
