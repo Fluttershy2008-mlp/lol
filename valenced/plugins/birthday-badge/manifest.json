@@ -5,7 +5,7 @@
   "description": "Save someone's birthday and see a cake countdown beside their profile badges.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
   "icon": "GiftIcon",
-  "version": "1.0.0-beta1",
+  "version": "1.0.0-beta2",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }

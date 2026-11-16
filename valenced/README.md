@@ -1,4 +1,4 @@
-**Birthday Badge 1.0.0-beta1** adds a cake countdown to profiles with a saved birthday. Open the profile menu and tap **Set birthday** to add a date. [Usage and source](plugins/birthday-badge/README.md).
+**Birthday Badge 1.0.0-beta2** adds a row under **Settings → Valenced → Birthday Badge**. Open it to manage saved birthdays or add one by user ID. [Usage and source](plugins/birthday-badge/README.md).
 
 **Better Font Scale 1.0.0-beta5** adds a compact OpenDyslexic preset and controls for reply size, letter spacing, and line spacing. [Usage and source](plugins/better-font-scale/README.md).
 

@@ -71,7 +71,11 @@
   },
   "nativePlugins": {
     "birthday-badge": {
-      "path": "valenced/plugins/birthday-badge"
+      "path": "valenced/plugins/birthday-badge",
+      "settingsShortcut": {
+        "title": "Birthday Badge",
+        "icon": "GiftIcon"
+      }
     },
     "long-video-share": {
       "path": "valenced/plugins/long-video-share",
