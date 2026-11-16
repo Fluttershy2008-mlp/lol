@@ -311,6 +311,13 @@
       "kind": "native-plugin",
       "upstream": "https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages"
     },
+    "dev.fluttershy2008.better-font-scale": {
+      "path": "valenced/plugins/better-font-scale/index.js",
+      "sha256": "6cfc5e5b65134295b9be19517ecbe7b103079cde6358782807f5ace47dcaac53",
+      "originalVersion": "1.0.0-beta1",
+      "kind": "native-plugin",
+      "upstream": "https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale"
+    },
     "dev.fluttershy2008.streak-tracker": {
       "path": "valenced/plugins/streak-tracker/index.js",
       "sha256": "4b4db8c4d900d8f5b45f9168bc18eb62fa2e38d877844d3a9fb637ab3d7453ee",

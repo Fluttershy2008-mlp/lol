@@ -127,6 +127,10 @@
       "path": "valenced/plugins/voice-messages",
       "upstream": "https://github.com/Vendicated/Vencord/tree/main/src/plugins/voiceMessages"
     },
+    "better-font-scale": {
+      "path": "valenced/plugins/better-font-scale",
+      "upstream": "https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale"
+    },
     "streak-tracker": {
       "path": "valenced/plugins/streak-tracker",
       "upstream": "https://github.com/TermitJs/Streak-Tracker-for-Discord",
