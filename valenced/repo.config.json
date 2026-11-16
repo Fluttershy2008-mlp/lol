@@ -70,6 +70,10 @@
     "sunset-background": "Replaced by the native Sunset Shimmer theme package."
   },
   "nativePlugins": {
+    "better-font-scale": {
+      "path": "valenced/plugins/better-font-scale",
+      "upstream": "https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale"
+    },
     "long-video-share": {
       "path": "valenced/plugins/long-video-share",
       "settingsShortcut": {

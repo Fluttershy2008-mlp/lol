@@ -1,3 +1,5 @@
+**Better Font Scale 1.0.0-beta1** adds eleven independent Android font-size sliders, with live samples and a reset button. [Usage and source](plugins/better-font-scale/README.md).
+
 **Streak Tracker 1.0.0-beta4** adds group DM and server streaks under **Settings → Valenced → Streak Tracker → Who to track**. Group chats can show fire badges in Messages. Long-press a tracked server icon to see its streak, shared across its channels. [Usage and source](plugins/streak-tracker/README.md).
 
 **Voice Messages 1.0.2** adds a record and import panel to the microphone slot in an empty composer. Preview the clip and send it as a Discord voice message. [Usage and source](plugins/voice-messages/README.md).

@@ -387,6 +387,9 @@ def build(check=False):
                 if path.is_file() and "__pycache__" not in path.parts:
                     files[path.relative_to(directory).as_posix()] = path.read_bytes()
             files["native-source.json"] = (directory / "native-source.json").read_bytes()
+        if slug == "better-font-scale":
+            for name in ("source/BetterFontScale.java", "source/build.py", "native-source.json"):
+                files[name] = (directory / name).read_bytes()
         if slug == "always-animate":
             # Preserve the GPL Android helper's corresponding source, build
             # recipe and regression fixtures in every repository release.

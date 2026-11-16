@@ -1,0 +1,7 @@
+Better Font Scale for Valenced
+
+Inspired by RazerTexz's BetterFontScale for Aliucord.
+https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale
+
+The Valenced implementation was written independently for Discord's current
+Android chat renderer and React Native UI.

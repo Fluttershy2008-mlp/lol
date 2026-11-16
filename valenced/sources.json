@@ -207,6 +207,13 @@
       "originalVersion": "1.1.0",
       "kind": "native-theme"
     },
+    "dev.fluttershy2008.better-font-scale": {
+      "path": "valenced/plugins/better-font-scale/index.js",
+      "sha256": "5d21fe7e10c08aa5d54eccb31ccf374f34e7a3861f81008e403c401d947e5ed2",
+      "originalVersion": "1.0.0-beta1",
+      "kind": "native-plugin",
+      "upstream": "https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale"
+    },
     "dev.fluttershy2008.long-video-share": {
       "path": "valenced/plugins/long-video-share/index.js",
       "sha256": "a3b0a5f7a8191349f077ebab775896acb1394cab767e26bd080389a06610f034",

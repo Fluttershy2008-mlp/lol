@@ -309,6 +309,31 @@
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "PencilIcon"
     },
+    "dev.fluttershy2008.better-font-scale": {
+      "versions": {
+        "1.0.0-beta1": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.better-font-scale@1.0.0-beta1.zip",
+          "sha256": "10294294119ea025230438ac3e0b3e13062755314096c30997b077ca5f76f6bc",
+          "size": 15400,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": ">=355.2"
+            }
+          }
+        }
+      },
+      "channels": {
+        "latest": "1.0.0-beta1",
+        "beta": "1.0.0-beta1"
+      },
+      "name": "Better Font Scale",
+      "description": "Set separate font sizes for chat, profiles and channel names on Discord for Android.",
+      "author": "Fluttershy2008-mlp <753962426407452713>",
+      "icon": "TextIcon"
+    },
     "dev.fluttershy2008.blocked-user-list": {
       "versions": {
         "1.0.0-beta1": {
