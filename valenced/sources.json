@@ -171,6 +171,10 @@
       "sha256": "858bc74efaa7ad6af8602fcf8de6a3df2a38063e695ce2689d0f91c856c9f17a",
       "originalVersion": "1.0.6",
       "kind": "compatibility-preview",
+      "profileComponents": {
+        "path": "valenced/plugins/view-icons/profile-components.js",
+        "sha256": "d7a4ff58131c279bf6488b8fc973b2f469dc3bee0c7fa0ec8983ebf6f65e5ee5"
+      },
       "sourceRef": "main"
     },
     "dev.fluttershy2008.sunset-shimmer-theme": {
