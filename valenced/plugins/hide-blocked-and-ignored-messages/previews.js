@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: CC0-1.0 */
 // Intercept the preview components themselves. Discord still renders the card,
 // channel row and its actions, including on clients using a different list implementation.
-function installHiddenPreviews(V, filter, isServerRecordSelected) {
+function installHiddenPreviews(V, filter, isServerRecordSelected, getMessage) {
   const { React } = V.metro.common;
   const jsxRuntime = valenced.react.jsxRuntime;
-  if (!jsxRuntime?.afterJSX) return { refresh() {}, stop() {} };
 
   const disposers = [], listeners = new Set(), types = new Set();
   const storage = V.plugin.storage;
   const stores = new Map();
+  const previousReplyPreviews = new WeakMap();
   let active = true;
 
   function refresh() {
@@ -94,6 +94,46 @@ function installHiddenPreviews(V, filter, isServerRecordSelected) {
     const referenced = stores.get('ReferencedMessageStore')?.getMessage(channelId, messageId)?.message;
     return filter.shouldHide(referenced);
   }
+  function projectReply(row, manager) {
+    const preview = row?.message?.referencedMessage;
+    if (row?.type !== 1 || !preview) return row;
+    const { id, channelId } = row.message;
+    // System previews have only a label. Look up the reply's target by ID so
+    // classification works for every language and preserves deleted previews.
+    const reply = getMessage(channelId, id);
+    const reference = reply?.messageReference ?? reply?.message_reference;
+    const targetId = reference?.message_id ?? reference?.messageId;
+    const targetChannel = reference?.channel_id ?? reference?.channelId ?? channelId;
+    const entry = targetId && stores.get('ReferencedMessageStore')?.getMessage(targetChannel, targetId);
+    const target = entry ? entry.message : reply?.referencedMessage ?? reply?.referenced_message
+      ?? (targetId && getMessage(targetChannel, targetId));
+    const hidden = filter.isFilteredUser(target?.author?.id ?? preview.message?.authorId);
+
+    // ChatManager can mark a cached reply NOOP even though the preview changed.
+    // Compare the previous native rows once per changeset to force a rebind only when needed.
+    let changeType = row.changeType;
+    if (changeType === 0) {
+      const previousRows = manager.getPreviousRows?.();
+      let previous;
+      if (Array.isArray(previousRows)) {
+        let previews = previousReplyPreviews.get(previousRows);
+        if (!previews) {
+          previews = new Map();
+          for (const oldRow of previousRows) {
+            if (oldRow?.type === 1 && oldRow.message?.id) {
+              previews.set(oldRow.message.id, Boolean(oldRow.message.referencedMessage));
+            }
+          }
+          previousReplyPreviews.set(previousRows, previews);
+        }
+        previous = previews.get(id);
+      }
+      const wasVisible = previous ?? true;
+      if (wasVisible !== !hidden) changeType = 2;
+    }
+    if (hidden) return { ...row, changeType, message: { ...row.message, referencedMessage: null } };
+    return changeType === row.changeType ? row : { ...row, changeType };
+  }
   function stop() {
     if (!active) return;
     active = false;
@@ -105,8 +145,9 @@ function installHiddenPreviews(V, filter, isServerRecordSelected) {
   }
 
   try {
-    watchStore('ThreadMessageStore', 'modules/threads/ThreadMessageStore.tsx', 'getMostRecentMessage');
     watchStore('ReferencedMessageStore', 'modules/replies/ReferencedMessageStore.tsx', 'getMessage');
+    if (!jsxRuntime?.afterJSX) return { projectReply, refresh, stop };
+    watchStore('ThreadMessageStore', 'modules/threads/ThreadMessageStore.tsx', 'getMostRecentMessage');
     watchPreview('modules/forums/native/posts/ForumPostMessageContent.tsx', ['default'], forumHidden);
     watchPreview('modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx',
       ['ChannelRowPreview', 'NativeChannelRowPreview', 'NativeMessageChannelRowPreview'],
@@ -129,5 +170,5 @@ function installHiddenPreviews(V, filter, isServerRecordSelected) {
         ? { ...element, type: VoiceCarousel, props: { element } } : element));
     });
   } catch (error) { stop(); throw error; }
-  return { refresh, stop };
+  return { projectReply, refresh, stop };
 }

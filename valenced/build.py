@@ -222,7 +222,16 @@ def build(check=False):
                 ("let filter, lists, mentions, pagination, search,", "let previews, filter, lists, mentions, pagination, search,"),
                 ("    hiddenPings?.refresh();", "    hiddenPings?.refresh();\n    previews?.refresh();"),
                 ("      cleanup.push(installChatSettings(V, refresh));", "      cleanup.push(installChatSettings(V, refresh));\n"
-                    "      previews = installHiddenPreviews(V, filter, servers.isServerRecordSelected);\n      cleanup.push(previews.stop);"),
+                    "      previews = installHiddenPreviews(V, filter, servers.isServerRecordSelected, originalGetMessage);\n      cleanup.push(previews.stop);"),
+                ("function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden) {",
+                    "function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden, projectReply) {"),
+                ("      try { rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden); }",
+                    "      try {\n"
+                    "        rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden);\n"
+                    "        for (let i = 0; i < rows.length; i++) rows[i] = projectReply(rows[i], this);\n"
+                    "      }"),
+                ("installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden)",
+                    "installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden, previews.projectReply)"),
                 ("const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };",
                     "const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); previews?.refresh(); };"),
                 ("    filter = lists = mentions = pagination = search =", "    previews = filter = lists = mentions = pagination = search ="),
