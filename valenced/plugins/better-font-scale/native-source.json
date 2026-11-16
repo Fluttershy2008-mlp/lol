@@ -2,7 +2,8 @@
   "minAndroidApi": 24,
   "entryPoint": "dev.fluttershy2008.fontscale.BetterFontScale",
   "sources": {
-    "source/BetterFontScale.java": "58b2f9cece94dc235587d6f0f3b7a518dee1884ffc14430cea68339dfcc0b079"
+    "source/BetterFontScale.java": "bd0834357cacd06d3eed539fc6fea5e03ef17c694ad9df8deec671edb19e61b2",
+    "source/WordSpacing.java": "6277abb1f6cf920b253d42c254b22d5bf5d339ec7a6b177b88ba94aac9ccf0c2"
   },
-  "sha256": "e414068f50e2fbfab98c1691dee347ff6ead4954c01c5cd2382f799c023e2d34"
+  "sha256": "392814f86998d0645a88c3dcc8a9bbcc41caa36874189fe19e0995762059a7c0"
 }

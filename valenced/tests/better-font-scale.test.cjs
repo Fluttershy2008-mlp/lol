@@ -60,9 +60,9 @@ async function load(cache) {
     };
 }
 
-test('native controls share the four validated sizes and preserve zero defaults', async () => {
+test('an older install keeps its sizes and defaults to normal word spacing', async () => {
     const plugin = await load({ messages: 21, chatbox: '16,5', username: 99, timestamp: 0 });
-    assert.deepEqual(plugin.requested, [['dev.fluttershy2008.better-font-scale.apply', [21, 16.5, 0, 0]]]);
+    assert.deepEqual(plugin.requested, [['dev.fluttershy2008.better-font-scale.apply', [21, 16.5, 0, 0, 0]]]);
 });
 
 test('channel label overrides preserve other props and expand the matching list rows', async () => {
@@ -124,7 +124,8 @@ test('sliders preview sizes, preserve decimal entries and save only when request
     const { createWorld, React, Renderer } = require('../../revenge-next/tests/next-harness.cjs');
     const world = createWorld();
     world.U.discord.design.Design.Slider = 'Slider';
-    world.U.modules.native.callNativeMethod = async () => true;
+    const nativeValues = [];
+    world.U.modules.native.callNativeMethod = async (_method, values) => { nativeValues.push([...values]); return true; };
     const plugin = await world.start('better-font-scale', { messages: 16.5, aboutMe: 19.5 });
     let screen;
     await Renderer.act(async () => {
@@ -141,18 +142,31 @@ test('sliders preview sizes, preserve decimal entries and save only when request
     const messagePreview = () => screen.root.findAllByType('Text').find(node =>
         node.props.children === 'Hey, are you free later?').props.style.fontSize;
 
-    assert.equal(sliders().length, 11);
+    assert.equal(sliders().length, 12);
     assert.equal(messagePreview(), 16.5);
     assert.equal(byLabel('TextInput', 'About Me exact size').value, '19.5');
     await Renderer.act(async () => byLabel('Slider', 'Messages slider').onChange(23));
     assert.equal(messagePreview(), 23);
     assert.equal(byLabel('TextInput', 'Messages exact size').value, '23');
     assert.equal(plugin.writes.length, 0);
+    const spacing = () => byLabel('Slider', 'Word Spacing slider');
+    const gap = () => byLabel('View', 'Word spacing preview').style.columnGap;
+    assert.equal(spacing().value, 0);
+    assert.equal(spacing().minValue, -50);
+    assert.equal(spacing().maxValue, 100);
+    const defaultGap = gap();
+    await Renderer.act(async () => spacing().onChange(-20));
+    assert.ok(gap() < defaultGap);
+    await Renderer.act(async () => byLabel('TextInput', 'Word Spacing exact percentage').onChangeText('101'));
+    assert.equal(button('Save').disabled, true);
+    await Renderer.act(async () => byLabel('TextInput', 'Word Spacing exact percentage').onChangeText('−12.5%'));
     await Renderer.act(async () => byLabel('TextInput', 'Messages exact size').onChangeText('23.5'));
     assert.equal(messagePreview(), 23.5);
     await Renderer.act(async () => button('Save').onPress());
     assert.equal(plugin.writes[0].messages, 23.5);
     assert.equal(plugin.writes[0].aboutMe, 19.5);
+    assert.equal(plugin.writes[0].wordSpacing, -12.5);
+    assert.deepEqual(nativeValues.at(-1), [23.5, 0, 0, 0, -12.5]);
 
     await Renderer.act(async () => byLabel('Pressable', 'Reset Messages').onPress());
     assert.equal(byLabel('TextInput', 'Messages exact size').value, '0');
@@ -162,4 +176,5 @@ test('sliders preview sizes, preserve decimal entries and save only when request
     assert.equal(byLabel('TextInput', 'About Me exact size').value, '0');
     await Renderer.act(async () => button('Save').onPress());
     assert.ok(Object.values(plugin.writes[1]).every(value => value === 0));
+    assert.deepEqual(nativeValues.at(-1), [0, 0, 0, 0, 0]);
 });

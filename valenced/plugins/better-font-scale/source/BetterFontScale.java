@@ -3,6 +3,7 @@ package dev.fluttershy2008.fontscale;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Spannable;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewParent;
@@ -16,6 +17,7 @@ import kotlin.jvm.functions.Function1;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,8 @@ public final class BetterFontScale {
     private static final int COMPOSER = 1;
     private static final int AUTHOR = 2;
     private static final int TIMESTAMP = 3;
+    private static final int WORD_SPACING = 4;
+    private static final int SETTING_COUNT = 5;
     private static final String APPLY = "dev.fluttershy2008.better-font-scale.apply";
     private static final String CHAT_VIEW = "com.discord.chat.presentation.message.MessageView";
     private static final String BODY_VIEW = "com.discord.chat.presentation.message.view.MessageContentView";
@@ -53,9 +57,13 @@ public final class BetterFontScale {
         private final Handler main = new Handler(Looper.getMainLooper());
         private final Map<Integer, String> names = new HashMap<Integer, String>();
         private final Map<TextView, Applied> applied = new WeakHashMap<TextView, Applied>();
-        private volatile float[] sizes = new float[4];
+        private final Map<TextView, Boolean> spacedViews = new WeakHashMap<TextView, Boolean>();
+        private final ThreadLocal<Integer> bodyBindDepth = new ThreadLocal<Integer>();
+        private volatile float[] sizes = new float[SETTING_COUNT];
         private volatile XC_MethodHook.Unhook measure;
         private XC_MethodHook.Unhook bindBody;
+        private volatile XC_MethodHook.Unhook wordSpacing;
+        private float lastRefreshedSpacing;
 
         void start(PluginScope scope) {
             try {
@@ -82,34 +90,76 @@ public final class BetterFontScale {
                             || method.getReturnType() != void.class) continue;
                     bindBody = XposedBridge.hookMethod(method, new XC_MethodHook() {
                         @Override protected void beforeHookedMethod(MethodHookParam param) {
+                            Integer depth = bodyBindDepth.get();
+                            bodyBindDepth.set(depth == null ? 1 : depth + 1);
                             float size = sizes[MESSAGE];
                             TextView view = (TextView) param.args[0];
                             if (size > 0 && view != null) resize(view, MESSAGE, size);
                         }
+
+                        @Override protected void afterHookedMethod(MethodHookParam param) {
+                            Integer depth = bodyBindDepth.get();
+                            if (depth == null || depth <= 1) bodyBindDepth.remove();
+                            else bodyBindDepth.set(depth - 1);
+                        }
                     });
                     break;
                 }
+                installWordSpacing(body);
             } catch (ReflectiveOperationException | RuntimeException error) {
                 XposedBridge.log("Better Font Scale: falling back to the message measurement hook: " + error);
             }
             scope.getBridge().registerMethod(APPLY, new Function1<List<?>, Object>() {
                 @Override public Object invoke(List<?> args) {
-                    if (measure == null || args.size() != 4) return false;
-                    final float[] next = new float[4];
-                    for (int i = 0; i < next.length; i++) next[i] = parse(args.get(i));
+                    if (measure == null || (args.size() != 4 && args.size() != SETTING_COUNT)) return false;
+                    final float[] next = new float[SETTING_COUNT];
+                    for (int i = 0; i < WORD_SPACING; i++) next[i] = parse(args.get(i));
+                    if (args.size() == SETTING_COUNT) next[WORD_SPACING] = parseSpacing(args.get(WORD_SPACING));
                     sizes = next;
                     main.post(new Runnable() {
                         @Override public void run() {
                             if (sizes == next) refresh(next);
                         }
                     });
-                    return true;
+                    return next[WORD_SPACING] != 0 && wordSpacing == null ? "word-spacing-unavailable" : true;
                 }
             });
         }
 
+        private void installWordSpacing(final Class<?> body) {
+            try {
+                for (Class<?> type = body; type != null && type != TextView.class; type = type.getSuperclass()) {
+                    for (Method method : type.getDeclaredMethods()) {
+                        Class<?>[] args = method.getParameterTypes();
+                        if (!method.getName().equals("setDraweeSpanStringBuilder") || args.length != 1
+                                || !Spannable.class.isAssignableFrom(args[0])) continue;
+                        wordSpacing = XposedBridge.hookMethod(method, new XC_MethodHook() {
+                            @Override protected void beforeHookedMethod(MethodHookParam param) {
+                                float spacing = sizes[WORD_SPACING];
+                                if (spacing == 0 || !(param.args[0] instanceof Spannable)) return;
+                                TextView view = (TextView) param.thisObject;
+                                boolean message = body.isInstance(view);
+                                // The Android renderer also measures a temporary copy of
+                                // the text for previews. Give it the same gap widths.
+                                if (!message && bodyBindDepth.get() == null) return;
+                                WordSpacing.apply((Spannable) param.args[0], spacing);
+                                if (message) {
+                                    synchronized (spacedViews) {
+                                        spacedViews.put(view, true);
+                                    }
+                                }
+                            }
+                        });
+                        return;
+                    }
+                }
+            } catch (RuntimeException | LinkageError error) {
+                XposedBridge.log("Better Font Scale: word spacing hook unavailable: " + error);
+            }
+        }
+
         void stop() {
-            final float[] defaults = new float[4];
+            final float[] defaults = new float[SETTING_COUNT];
             sizes = defaults;
             if (measure != null) {
                 measure.unhook();
@@ -118,6 +168,10 @@ public final class BetterFontScale {
             if (bindBody != null) {
                 bindBody.unhook();
                 bindBody = null;
+            }
+            if (wordSpacing != null) {
+                wordSpacing.unhook();
+                wordSpacing = null;
             }
             main.post(new Runnable() {
                 @Override public void run() {
@@ -180,6 +234,20 @@ public final class BetterFontScale {
         }
 
         private void refresh(float[] next) {
+            float spacing = next[WORD_SPACING];
+            if (spacing != lastRefreshedSpacing || spacing == 0) {
+                List<TextView> views;
+                synchronized (spacedViews) {
+                    views = new ArrayList<TextView>(spacedViews.keySet());
+                    if (spacing == 0) spacedViews.clear();
+                }
+                for (TextView view : views) {
+                    CharSequence text = view.getText();
+                    if (text instanceof Spannable) WordSpacing.apply((Spannable) text, spacing);
+                }
+                lastRefreshedSpacing = spacing;
+            }
+
             Map<TextView, Applied> previous = new HashMap<TextView, Applied>(applied);
             for (Map.Entry<TextView, Applied> entry : previous.entrySet()) {
                 TextView view = entry.getKey();
@@ -210,6 +278,12 @@ public final class BetterFontScale {
         if (!(value instanceof Number)) return 0;
         double size = ((Number) value).doubleValue();
         return size >= 8 && size <= 48 ? (float) size : 0;
+    }
+
+    private static float parseSpacing(Object value) {
+        if (!(value instanceof Number)) return 0;
+        double percent = ((Number) value).doubleValue();
+        return percent >= -50 && percent <= 100 ? (float) percent : 0;
     }
 
     private static final class Applied {

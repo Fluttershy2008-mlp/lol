@@ -2,6 +2,7 @@
     // SPDX-License-Identifier: MIT
     const fields = {
         messages: 'Messages',
+        wordSpacing: 'Word Spacing',
         chatbox: 'Chatbox',
         username: 'Username',
         aboutMe: 'About Me',
@@ -32,17 +33,20 @@
         12: 'thread', 13: 'voice', 15: 'channel', 16: 'channel' };
     let session;
 
-    function readSize(value) {
+    function readValue(key, value) {
         if (typeof value === 'string') {
-            value = value.trim().replace(',', '.');
-            if (!/^(?:\d+\.?\d*|\.\d+)$/.test(value)) return undefined;
+            value = value.trim().replace(',', '.').replace('−', '-');
+            if (key === 'wordSpacing') value = value.replace(/%$/, '').trim();
+            if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(value)) return undefined;
             value = Number(value);
         }
-        return Number.isFinite(value) && (value === 0 || (value >= 8 && value <= 48)) ? value : undefined;
+        if (!Number.isFinite(value)) return undefined;
+        if (key === 'wordSpacing') return value >= -50 && value <= 100 ? value : undefined;
+        return value === 0 || (value >= 8 && value <= 48) ? value : undefined;
     }
 
     function readSettings(data) {
-        return Object.fromEntries(Object.keys(fields).map(key => [key, readSize(data?.[key]) ?? 0]));
+        return Object.fromEntries(Object.keys(fields).map(key => [key, readValue(key, data?.[key]) ?? 0]));
     }
 
     function installReactHooks(state) {
@@ -210,10 +214,11 @@
         let result;
         try {
             result = await native?.callNativeMethod?.(nativeMethod,
-                [values.messages, values.chatbox, values.username, values.timestamp]);
+                [values.messages, values.chatbox, values.username, values.timestamp, values.wordSpacing]);
         } catch {
             throw new Error(unavailable);
         }
+        if (result === 'word-spacing-unavailable') throw new Error('Word spacing is unavailable on this Discord build.');
         if (result !== true) throw new Error(unavailable);
     }
 
@@ -242,7 +247,7 @@
         const palette = light
             ? { text: '#191A20', muted: '#555665', card: '#EBEBF3', error: '#AF2136' }
             : { text: '#F5F4FA', muted: '#BCBAC9', card: '#292638', error: '#FFB3BE' };
-        const parsed = Object.fromEntries(Object.keys(fields).map(key => [key, readSize(draft[key])]));
+        const parsed = Object.fromEntries(Object.keys(fields).map(key => [key, readValue(key, draft[key])]));
         const invalid = Object.keys(fields).find(key => parsed[key] === undefined);
         const dirty = Object.keys(fields).some(key => parsed[key] !== saved[key]);
         function changeField(key, value) {
@@ -263,7 +268,7 @@
                 state.nativeError = '';
                 setFeedback('Saved. Restart Discord to apply changes everywhere.');
             } catch (error) {
-                setFeedback(error.message || 'Could not save font sizes.');
+                setFeedback(error.message || 'Could not save Better Font Scale settings.');
             } finally {
                 state.busy = false;
                 setSaving(false);
@@ -276,34 +281,45 @@
         }, h(RN.Text, { style: { color: primary ? '#fff' : palette.text, fontSize: 15, fontWeight: '600' } }, label));
 
         function renderField([key, label]) {
-            const [defaultSampleSize, sample] = previews[key];
-            const previewSize = parsed[key] || defaultSampleSize;
+            const spacing = key === 'wordSpacing';
+            const [defaultSampleSize, sample] = previews[spacing ? 'messages' : key];
+            const previewSize = parsed[spacing ? 'messages' : key] || defaultSampleSize;
+            const sliderValue = spacing ? parsed[key] ?? 0 : previewSize;
+            const unit = spacing ? '%' : 'sp';
             const isDefault = parsed[key] === 0;
+            const sampleStyle = { color: palette.muted, fontSize: previewSize, lineHeight: Math.ceil(previewSize * 1.25) };
+            const preview = spacing
+                ? h(RN.View, { accessibilityLabel: 'Word spacing preview', style: {
+                    flexDirection: 'row', flexWrap: 'wrap', columnGap: previewSize * 0.28 * (1 + sliderValue / 100),
+                } }, sample.split(' ').map((word, index) => h(RN.Text, { key: index, style: sampleStyle }, word)))
+                : h(RN.Text, { style: sampleStyle }, sample);
             return h(RN.View, { key, style: { borderRadius: 10, padding: 14, gap: 4, backgroundColor: palette.card } },
                 h(RN.Text, { style: { color: palette.text, fontSize: 15, fontWeight: '600' } }, label),
-                Slider && h(Slider, { accessibilityLabel: label + ' slider', value: previewSize, minValue: 8,
-                    maxValue: 48, step: 1, disabled: saving, formatValue: value => value + ' sp',
+                spacing && h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, 'Adjust the gaps between words in chat messages.'),
+                Slider && h(Slider, { accessibilityLabel: label + ' slider', value: sliderValue,
+                    minValue: spacing ? -50 : 8, maxValue: spacing ? 100 : 48, step: 1, disabled: saving,
+                    formatValue: value => spacing && value > 0 ? '+' + value + '%' : value + (spacing ? '%' : ' sp'),
                     onChange: value => changeField(key, value) }),
                 h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', gap: 10 } },
-                    h(RN.TextInput, { accessibilityLabel: label + ' exact size', value: draft[key],
-                        keyboardType: 'decimal-pad', maxLength: 7, selectTextOnFocus: true, editable: !saving,
+                    h(RN.TextInput, { accessibilityLabel: label + (spacing ? ' exact percentage' : ' exact size'), value: draft[key],
+                        keyboardType: spacing ? 'default' : 'decimal-pad', maxLength: 7, selectTextOnFocus: true, editable: !saving,
                         onChangeText: value => changeField(key, value),
                         style: { color: parsed[key] === undefined ? palette.error : palette.text, fontSize: 16,
                             minWidth: 52, minHeight: 42, paddingVertical: 4 } }),
-                    h(RN.Text, { style: { color: palette.muted, flex: 1 } }, isDefault ? 'Discord default' : 'sp'),
+                    h(RN.Text, { style: { color: palette.muted, flex: 1 } }, isDefault ? 'Discord default' : unit),
                     h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Reset ' + label,
                         disabled: saving || isDefault, onPress: () => changeField(key, 0),
                         style: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, opacity: isDefault ? 0.45 : 1 } },
                         h(RN.Text, { style: { color: palette.text } }, 'Default'))),
-                h(RN.Text, { style: { color: palette.muted, fontSize: previewSize,
-                    lineHeight: Math.ceil(previewSize * 1.25) } }, sample));
+                preview);
         }
-        const message = invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError;
+        const message = invalid === 'wordSpacing' ? 'Word Spacing needs a percentage from −50 to +100.'
+            : invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError;
         return h(RN.View, { style: { flex: 1 } },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', style: { flex: 1 },
                 contentContainerStyle: { padding: 16, gap: 10 } },
                 h(RN.Text, { style: { color: palette.muted, fontSize: 14, marginBottom: 4 } },
-                    'Drag a slider to preview a size or enter an exact value. Use 0 for Discord’s default.'),
+                    'Drag a slider to preview your change or enter an exact value. Use 0 for Discord’s default.'),
                 Object.entries(fields).map(renderField)),
             h(RN.View, { style: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 8 } },
                 h(RN.View, { style: { flexDirection: 'row', gap: 10 } },

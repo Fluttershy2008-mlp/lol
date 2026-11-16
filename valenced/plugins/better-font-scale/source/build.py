@@ -9,7 +9,7 @@ import tempfile
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "source" / "BetterFontScale.java"
+SOURCE_FILES = sorted((ROOT / "source").glob("*.java"))
 STUBS = {
     "app/valenced/plugins/PluginBuilder.java": """package app.valenced.plugins;
         import kotlin.Unit;
@@ -35,6 +35,7 @@ STUBS = {
     "de/robv/android/xposed/XC_MethodHook.java": """package de.robv.android.xposed;
         public abstract class XC_MethodHook {
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {}
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {}
             public static class MethodHookParam { public Object thisObject; public Object[] args; }
             public class Unhook { public void unhook() {} }
         }""",
@@ -59,7 +60,7 @@ def main():
         abi = build / "abi"
         classes = build / "classes"
         subprocess.run([*javac, "-d", abi, *sorted((build / "stubs").rglob("*.java"))], check=True)
-        subprocess.run([*javac, "-cp", f"{sdk}{os.pathsep}{abi}", "-d", classes, SOURCE], check=True)
+        subprocess.run([*javac, "-cp", f"{sdk}{os.pathsep}{abi}", "-d", classes, *SOURCE_FILES], check=True)
         output = build / "dex.zip"
         subprocess.run(["java", "-cp", d8, "com.android.tools.r8.D8", "--min-api", "24", "--lib", sdk,
                         "--classpath", abi, "--output", output, *sorted(classes.rglob("*.class"))], check=True)
@@ -75,7 +76,8 @@ def main():
     metadata = {
         "minAndroidApi": 24,
         "entryPoint": "dev.fluttershy2008.fontscale.BetterFontScale",
-        "sources": {"source/BetterFontScale.java": hashlib.sha256(SOURCE.read_bytes()).hexdigest()},
+        "sources": {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                    for path in SOURCE_FILES},
         "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
     }
     (ROOT / "native-source.json").write_text(json.dumps(metadata, indent=2) + "\n")
