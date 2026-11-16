@@ -15,6 +15,13 @@
         thread: 'Channel Thread Name',
     };
     const defaults = Object.fromEntries(Object.keys(fields).map(key => [key, 0]));
+    const groups = [
+        ['Chat', ['messages', 'wordSpacing', 'chatbox', 'username', 'timestamp']],
+        ['Profiles', ['aboutMe', 'gameStatus', 'profileStatus']],
+        ['Channel list', ['category', 'channel', 'voice', 'thread']],
+    ];
+    const fontRange = [8, 48];
+    const spacingRange = [-50, 100];
     const previews = {
         messages: [16, 'Hey, are you free later?'],
         chatbox: [16, 'Write a message…'],
@@ -41,8 +48,8 @@
             value = Number(value);
         }
         if (!Number.isFinite(value)) return undefined;
-        if (key === 'wordSpacing') return value >= -50 && value <= 100 ? value : undefined;
-        return value === 0 || (value >= 8 && value <= 48) ? value : undefined;
+        const [min, max] = key === 'wordSpacing' ? spacingRange : fontRange;
+        return value === 0 || (value >= min && value <= max) ? value : undefined;
     }
 
     function readSettings(data) {
@@ -234,26 +241,97 @@
         }
     }
 
+    function RangeSlider({ React, RN, palette, label, range, value, format, disabled, onChange }) {
+        const h = React.createElement;
+        const [min, max] = range;
+        const [width, setWidth] = React.useState(0);
+        const touch = React.useRef(null);
+        const inset = 10;
+        const length = Math.max(0, width - inset * 2);
+        const offset = length * (value - min) / (max - min);
+        const clamp = next => Math.min(max, Math.max(min, next));
+
+        function seek(x) {
+            if (!length || !Number.isFinite(x)) return;
+            const next = clamp(Math.round(min + (x - inset) / length * (max - min)));
+            onChange(next);
+        }
+
+        function movement(event, release) {
+            const drag = touch.current;
+            if (!drag || drag.axis === 'vertical') return;
+            const { pageX, pageY } = event.nativeEvent;
+            const dx = pageX - drag.x;
+            const dy = pageY - drag.y;
+            if (!drag.axis && Math.max(Math.abs(dx), Math.abs(dy)) >= 5) {
+                drag.axis = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+            }
+            if (drag.axis === 'horizontal' || (release && !drag.axis)) seek(drag.localX + dx);
+        }
+
+        return h(RN.View, {
+            accessible: true, accessibilityRole: 'adjustable', accessibilityLabel: label + ' slider',
+            accessibilityValue: { min, max, now: Math.round(value), text: format(value) },
+            accessibilityState: { disabled },
+            accessibilityActions: [{ name: 'increment' }, { name: 'decrement' }],
+            onAccessibilityAction: event => {
+                if (disabled) return;
+                const action = event.nativeEvent.actionName;
+                if (action !== 'increment' && action !== 'decrement') return;
+                const next = clamp(value + (action === 'increment' ? 1 : -1));
+                if (next !== value) onChange(next);
+            },
+            onLayout: event => setWidth(event.nativeEvent.layout.width),
+            onStartShouldSetResponder: () => !disabled,
+            onResponderGrant: event => {
+                const { locationX, pageX, pageY } = event.nativeEvent;
+                touch.current = { localX: locationX, x: pageX, y: pageY, axis: null };
+            },
+            onResponderMove: event => movement(event, false),
+            onResponderRelease: event => { movement(event, true); touch.current = null; },
+            onResponderTerminate: () => { touch.current = null; },
+            onResponderTerminationRequest: () => touch.current?.axis !== 'horizontal',
+            style: { height: 44, justifyContent: 'center', direction: 'ltr', opacity: disabled ? 0.5 : 1 },
+        }, h(RN.View, { pointerEvents: 'none', style: {
+            marginHorizontal: inset, height: 4, borderRadius: 2, backgroundColor: palette.track,
+        } }, length > 0 && h(RN.View, {
+            style: { width: offset, height: 4, borderRadius: 2, backgroundColor: palette.accent },
+        })), length > 0 && h(RN.View, { pointerEvents: 'none', style: {
+            position: 'absolute', start: offset, top: 12, width: 20, height: 20, borderRadius: 10,
+            backgroundColor: palette.accent,
+        } }));
+    }
+
     function SettingsComponent({ api }) {
         const { React, ReactNative: RN } = api.unscoped.react;
-        const Slider = api.unscoped.discord.design?.Design?.Slider;
         const h = React.createElement;
         const state = session;
         const saved = state?.values ?? readSettings(api.jsonStorage.cache);
         const [draft, setDraft] = React.useState(() => Object.fromEntries(Object.keys(fields).map(key => [key, String(saved[key])])));
+        const [open, setOpen] = React.useState(null);
         const [feedback, setFeedback] = React.useState('');
         const [saving, setSaving] = React.useState(false);
         const light = api.unscoped.discord.flux?.Stores?.ThemeStore?.theme === 'light';
         const palette = light
-            ? { text: '#191A20', muted: '#555665', card: '#EBEBF3', error: '#AF2136' }
-            : { text: '#F5F4FA', muted: '#BCBAC9', card: '#292638', error: '#FFB3BE' };
+            ? { text: '#22242B', muted: '#4E5664', card: '#F0F2F5', input: '#FFFFFF',
+                line: '#D2D6DE', track: '#B7BEC9', accent: '#4351CC', error: '#AF2136' }
+            : { text: '#F2F4FA', muted: '#C1C8D5', card: '#222C40', input: '#172236',
+                line: '#3A475E', track: '#495872', accent: '#ADB8FF', error: '#FFB3BE' };
+        let SafeAreaView;
+        try {
+            SafeAreaView = api.unscoped.externals?.ReactNativeSafeAreaContext?.ReactNativeSafeAreaContext?.SafeAreaView;
+        } catch {
+            // Older Valenced builds may not expose the safe-area module.
+        }
         const parsed = Object.fromEntries(Object.keys(fields).map(key => [key, readValue(key, draft[key])]));
         const invalid = Object.keys(fields).find(key => parsed[key] === undefined);
         const dirty = Object.keys(fields).some(key => parsed[key] !== saved[key]);
+
         function changeField(key, value) {
-            setDraft(current => ({ ...current, [key]: String(value) }));
+            setDraft(current => current[key] === String(value) ? current : { ...current, [key]: String(value) });
             setFeedback('');
         }
+
         async function save() {
             if (!state?.active || state.busy || invalid || !dirty) return;
             state.busy = true;
@@ -274,62 +352,86 @@
                 setSaving(false);
             }
         }
-        const button = (label, action, disabled, primary) => h(RN.Pressable, {
-            accessibilityRole: 'button', accessibilityState: { disabled }, disabled, onPress: action,
-            style: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 10,
-                backgroundColor: primary ? '#5865F2' : palette.card, opacity: disabled ? 0.5 : 1 },
-        }, h(RN.Text, { style: { color: primary ? '#fff' : palette.text, fontSize: 15, fontWeight: '600' } }, label));
 
-        function renderField([key, label]) {
+        function button(label, action, disabled, primary) {
+            return h(RN.Pressable, {
+                accessibilityRole: 'button', accessibilityState: { disabled }, disabled, onPress: action,
+                style: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 46, borderRadius: 12,
+                    paddingHorizontal: 8, backgroundColor: primary ? '#4D5ADE' : palette.card, opacity: disabled ? 0.46 : 1 },
+            }, h(RN.Text, { style: { color: primary ? '#FFFFFF' : palette.text, fontSize: 15, fontWeight: '600' } }, label));
+        }
+
+        function renderField(key, index) {
+            const label = fields[key];
             const spacing = key === 'wordSpacing';
+            const range = spacing ? spacingRange : fontRange;
             const [defaultSampleSize, sample] = previews[spacing ? 'messages' : key];
+            const value = parsed[key];
             const previewSize = parsed[spacing ? 'messages' : key] || defaultSampleSize;
-            const sliderValue = spacing ? parsed[key] ?? 0 : previewSize;
-            const unit = spacing ? '%' : 'sp';
-            const isDefault = parsed[key] === 0;
-            const sampleStyle = { color: palette.muted, fontSize: previewSize, lineHeight: Math.ceil(previewSize * 1.25) };
+            const sliderValue = spacing ? value ?? 0 : previewSize;
+            const format = number => spacing ? (number > 0 ? '+' : '') + number + '%' : number + ' sp';
+            const isDefault = value === 0;
+            const expanded = open === key;
+            const summary = value === undefined ? 'Invalid' : isDefault ? 'Default' : format(value);
+            const sampleStyle = { color: palette.text, fontSize: previewSize, lineHeight: Math.ceil(previewSize * 1.25) };
             const preview = spacing
-                ? h(RN.View, { accessibilityLabel: 'Word spacing preview', style: {
+                ? h(RN.View, { accessible: true, accessibilityLabel: 'Word spacing preview', style: {
                     flexDirection: 'row', flexWrap: 'wrap', columnGap: previewSize * 0.28 * (1 + sliderValue / 100),
                 } }, sample.split(' ').map((word, index) => h(RN.Text, { key: index, style: sampleStyle }, word)))
                 : h(RN.Text, { style: sampleStyle }, sample);
-            return h(RN.View, { key, style: { borderRadius: 10, padding: 14, gap: 4, backgroundColor: palette.card } },
-                h(RN.Text, { style: { color: palette.text, fontSize: 15, fontWeight: '600' } }, label),
-                spacing && h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, 'Adjust the gaps between words in chat messages.'),
-                Slider && h(Slider, { accessibilityLabel: label + ' slider', value: sliderValue,
-                    minValue: spacing ? -50 : 8, maxValue: spacing ? 100 : 48, step: 1, disabled: saving,
-                    formatValue: value => spacing && value > 0 ? '+' + value + '%' : value + (spacing ? '%' : ' sp'),
-                    onChange: value => changeField(key, value) }),
+            return h(RN.View, { key, style: {
+                borderTopWidth: index ? RN.StyleSheet.hairlineWidth || 1 : 0, borderColor: palette.line,
+            } }, h(RN.Pressable, {
+                accessibilityRole: 'button', accessibilityLabel: label, accessibilityHint: summary,
+                accessibilityState: { expanded }, onPress: () => {
+                    RN.Keyboard.dismiss();
+                    setOpen(current => current === key ? null : key);
+                },
+                style: { minHeight: 52, paddingHorizontal: 14, paddingVertical: 10,
+                    flexDirection: 'row', alignItems: 'center', gap: 10 },
+            }, h(RN.Text, { style: { flex: 1, color: palette.text, fontSize: 15, fontWeight: '600' } }, label),
+            h(RN.Text, { style: { color: value === undefined ? palette.error : palette.muted, fontSize: 13 } }, summary),
+            h(RN.Text, { accessible: false, style: { color: palette.muted, fontSize: 17 } }, expanded ? '⌄' : '›')),
+            expanded && h(RN.View, { style: { paddingHorizontal: 14, paddingBottom: 14, gap: 5 } },
+                spacing && h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, 'Changes the gaps between words in chat messages.'),
+                h(RangeSlider, { React, RN, palette, label, range, value: sliderValue, format, disabled: saving,
+                    onChange: next => changeField(key, next) }),
                 h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', gap: 10 } },
-                    h(RN.TextInput, { accessibilityLabel: label + (spacing ? ' exact percentage' : ' exact size'), value: draft[key],
-                        keyboardType: spacing ? 'default' : 'decimal-pad', maxLength: 7, selectTextOnFocus: true, editable: !saving,
-                        onChangeText: value => changeField(key, value),
-                        style: { color: parsed[key] === undefined ? palette.error : palette.text, fontSize: 16,
-                            minWidth: 52, minHeight: 42, paddingVertical: 4 } }),
-                    h(RN.Text, { style: { color: palette.muted, flex: 1 } }, isDefault ? 'Discord default' : unit),
+                    h(RN.TextInput, { accessibilityLabel: label + (spacing ? ' exact percentage' : ' exact size'),
+                        value: isDefault ? '' : draft[key], placeholder: format(sliderValue), placeholderTextColor: palette.muted,
+                        keyboardType: spacing ? 'default' : 'decimal-pad', maxLength: 7,
+                        selectTextOnFocus: true, editable: !saving,
+                        onChangeText: next => changeField(key, next === '' ? 0 : next),
+                        style: { color: value === undefined ? palette.error : palette.text, fontSize: 15,
+                            backgroundColor: palette.input, borderRadius: 8, minWidth: 80, minHeight: 44, paddingHorizontal: 10 } }),
+                    h(RN.Text, { style: { flex: 1, color: palette.muted, fontSize: 13 } }, spacing ? 'Exact %' : 'Exact size'),
                     h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Reset ' + label,
                         disabled: saving || isDefault, onPress: () => changeField(key, 0),
                         style: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, opacity: isDefault ? 0.45 : 1 } },
-                        h(RN.Text, { style: { color: palette.text } }, 'Default'))),
-                preview);
+                        h(RN.Text, { style: { color: palette.accent, fontWeight: '600' } }, 'Use default'))),
+                h(RN.View, { style: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8,
+                    backgroundColor: palette.input, marginTop: 3 } }, preview)));
         }
+
         const message = invalid === 'wordSpacing' ? 'Word Spacing needs a percentage from −50 to +100.'
             : invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError;
         return h(RN.View, { style: { flex: 1 } },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', style: { flex: 1 },
-                contentContainerStyle: { padding: 16, gap: 10 } },
-                h(RN.Text, { style: { color: palette.muted, fontSize: 14, marginBottom: 4 } },
-                    'Drag a slider to preview your change or enter an exact value. Use 0 for Discord’s default.'),
-                Object.entries(fields).map(renderField)),
-            h(RN.View, { style: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 8 } },
+                contentContainerStyle: { paddingHorizontal: 14, paddingVertical: 14, gap: 18 } },
+                groups.map(([label, keys]) => h(RN.View, { key: label, style: { gap: 6 } },
+                    h(RN.Text, { style: { color: palette.muted, fontSize: 13, fontWeight: '600', paddingHorizontal: 4 } }, label),
+                    h(RN.View, { style: { borderRadius: 12, backgroundColor: palette.card, overflow: 'hidden' } },
+                        keys.map(renderField))))),
+            h(SafeAreaView || RN.View, { ...(SafeAreaView && { edges: ['bottom', 'left', 'right'] }),
+                style: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: SafeAreaView ? 12 : 36, gap: 8 } },
+                message && h(RN.Text, { accessibilityLiveRegion: 'polite',
+                    style: { color: invalid ? palette.error : palette.muted, fontSize: 14 } }, message),
                 h(RN.View, { style: { flexDirection: 'row', gap: 10 } },
                     button('Reset all', () => {
                         setDraft(Object.fromEntries(Object.keys(fields).map(key => [key, '0'])));
                         setFeedback('');
-                    }, saving, false),
-                    button(saving ? 'Saving…' : 'Save', save, saving || !!invalid || !dirty || !state?.active, true)),
-                message && h(RN.Text, { accessibilityLiveRegion: 'polite',
-                    style: { color: invalid ? palette.error : palette.muted, fontSize: 14 } }, message)));
+                    }, saving || Object.values(parsed).every(value => value === 0), false),
+                    button(saving ? 'Saving…' : 'Save', save, saving || !!invalid || !dirty || !state?.active, true))));
     }
 
     return { default: { jsonStorage: { load: true, default: defaults }, start, SettingsComponent } };

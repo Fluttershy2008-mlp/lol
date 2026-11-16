@@ -119,14 +119,14 @@ test('bio, category and profile text receive independent overrides without chang
     assert.equal(status.type(status.props).props.style[1].fontSize, 18);
 });
 
-test('sliders preview sizes, preserve decimal entries and save only when requested', async t => {
+test('Android settings expand one row, map touches to the real ranges and save accepted values', async t => {
     process.env.PLUGIN_TEST_TARGET = 'valenced';
     const { createWorld, React, Renderer } = require('../../revenge-next/tests/next-harness.cjs');
     const world = createWorld();
-    world.U.discord.design.Design.Slider = 'Slider';
+    world.U.externals.ReactNativeSafeAreaContext = { ReactNativeSafeAreaContext: { SafeAreaView: 'NativeSafeArea' } };
     const nativeValues = [];
     world.U.modules.native.callNativeMethod = async (_method, values) => { nativeValues.push([...values]); return true; };
-    const plugin = await world.start('better-font-scale', { messages: 16.5, aboutMe: 19.5 });
+    const plugin = await world.start('better-font-scale', { aboutMe: 19.5 });
     let screen;
     await Renderer.act(async () => {
         screen = Renderer.create(React.createElement(plugin.options.SettingsComponent, { api: plugin.api }));
@@ -135,45 +135,85 @@ test('sliders preview sizes, preserve decimal entries and save only when request
         await Renderer.act(async () => screen.unmount());
         await world.stop(plugin);
     });
-    const sliders = () => screen.root.findAllByType('Slider');
     const byLabel = (type, label) => screen.root.findAllByType(type).find(node => node.props.accessibilityLabel === label).props;
     const button = label => screen.root.findAllByType('Pressable').find(node =>
         node.findAllByType('Text').some(text => text.props.children === label)).props;
+    const open = label => Renderer.act(async () => byLabel('Pressable', label).onPress());
+    const slider = label => byLabel('View', label + ' slider');
+    const input = label => byLabel('TextInput', label);
+    const event = (x, pageY = 50) => ({ nativeEvent: { locationX: x, pageX: 100 + x, pageY } });
+    const measured = { nativeEvent: { layout: { width: 220 } } };
     const messagePreview = () => screen.root.findAllByType('Text').find(node =>
         node.props.children === 'Hey, are you free later?').props.style.fontSize;
 
-    assert.equal(sliders().length, 12);
-    assert.equal(messagePreview(), 16.5);
-    assert.equal(byLabel('TextInput', 'About Me exact size').value, '19.5');
-    await Renderer.act(async () => byLabel('Slider', 'Messages slider').onChange(23));
+    const footer = screen.root.findByType('NativeSafeArea');
+    assert.deepEqual(Array.from(footer.props.edges), ['bottom', 'left', 'right']);
+    assert.equal(footer.findAllByType('Pressable').length, 2);
+    assert.equal(screen.root.findAllByType('TextInput').length, 0);
+    await open('Messages');
+    await Renderer.act(async () => slider('Messages').onLayout(measured));
+    assert.equal(slider('Messages').accessibilityValue.now, 16);
+    assert.equal(input('Messages exact size').value, '');
+    const thumb = () => screen.root.findAllByType('View').find(node => node.props.style?.borderRadius === 10 &&
+        node.props.style?.position === 'absolute').props.style.start;
+    assert.equal(thumb(), 40);
+
+    // Vertical movement over the slider belongs to the scroll view.
+    await Renderer.act(async () => {
+        const control = slider('Messages');
+        control.onResponderGrant(event(50));
+        control.onResponderMove(event(52, 100));
+        assert.equal(control.onResponderTerminationRequest(), true);
+        control.onResponderRelease(event(52, 100));
+    });
+    assert.equal(input('Messages exact size').value, '');
+
+    await Renderer.act(async () => {
+        const control = slider('Messages');
+        control.onResponderGrant(event(50));
+        control.onResponderMove(event(85));
+        assert.equal(control.onResponderTerminationRequest(), false);
+        control.onResponderRelease(event(85));
+    });
     assert.equal(messagePreview(), 23);
-    assert.equal(byLabel('TextInput', 'Messages exact size').value, '23');
+    assert.equal(thumb(), 75);
     assert.equal(plugin.writes.length, 0);
-    const spacing = () => byLabel('Slider', 'Word Spacing slider');
-    const gap = () => byLabel('View', 'Word spacing preview').style.columnGap;
-    assert.equal(spacing().value, 0);
-    assert.equal(spacing().minValue, -50);
-    assert.equal(spacing().maxValue, 100);
-    const defaultGap = gap();
-    await Renderer.act(async () => spacing().onChange(-20));
-    assert.ok(gap() < defaultGap);
-    await Renderer.act(async () => byLabel('TextInput', 'Word Spacing exact percentage').onChangeText('101'));
-    assert.equal(button('Save').disabled, true);
-    await Renderer.act(async () => byLabel('TextInput', 'Word Spacing exact percentage').onChangeText('−12.5%'));
-    await Renderer.act(async () => byLabel('TextInput', 'Messages exact size').onChangeText('23.5'));
+    await Renderer.act(async () => input('Messages exact size').onChangeText('23.5'));
     assert.equal(messagePreview(), 23.5);
+    await open('About Me');
+    assert.equal(screen.root.findAllByType('TextInput').length, 1);
+    assert.equal(input('About Me exact size').value, '19.5');
+    await open('Word Spacing');
+    await Renderer.act(async () => slider('Word Spacing').onLayout(measured));
+    const gap = () => byLabel('View', 'Word spacing preview').style.columnGap;
+    assert.equal(slider('Word Spacing').accessibilityValue.now, 0);
+    assert.ok(Math.abs(thumb() - 200 / 3) < 0.01);
+    const defaultGap = gap();
+    await Renderer.act(async () => {
+        const control = slider('Word Spacing');
+        control.onResponderGrant(event(50));
+        control.onResponderRelease(event(50));
+    });
+    assert.equal(input('Word Spacing exact percentage').value, '-20');
+    assert.ok(gap() < defaultGap);
+    await Renderer.act(async () => slider('Word Spacing').onAccessibilityAction({
+        nativeEvent: { actionName: 'increment' },
+    }));
+    assert.equal(input('Word Spacing exact percentage').value, '-19');
+    await Renderer.act(async () => input('Word Spacing exact percentage').onChangeText('101'));
+    assert.equal(button('Save').disabled, true);
+    await Renderer.act(async () => input('Word Spacing exact percentage').onChangeText('−12.5%'));
     await Renderer.act(async () => button('Save').onPress());
     assert.equal(plugin.writes[0].messages, 23.5);
     assert.equal(plugin.writes[0].aboutMe, 19.5);
     assert.equal(plugin.writes[0].wordSpacing, -12.5);
     assert.deepEqual(nativeValues.at(-1), [23.5, 0, 0, 0, -12.5]);
 
+    await open('Messages');
     await Renderer.act(async () => byLabel('Pressable', 'Reset Messages').onPress());
-    assert.equal(byLabel('TextInput', 'Messages exact size').value, '0');
+    assert.equal(input('Messages exact size').value, '');
     assert.equal(messagePreview(), 16);
-    assert.equal(byLabel('TextInput', 'About Me exact size').value, '19.5');
     await Renderer.act(async () => button('Reset all').onPress());
-    assert.equal(byLabel('TextInput', 'About Me exact size').value, '0');
     await Renderer.act(async () => button('Save').onPress());
     assert.ok(Object.values(plugin.writes[1]).every(value => value === 0));
     assert.deepEqual(nativeValues.at(-1), [0, 0, 0, 0, 0]);
