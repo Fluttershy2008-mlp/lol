@@ -1,3 +1,5 @@
+**Birthday Badge 1.0.0-beta1** adds a cake countdown to profiles with a saved birthday. Open the profile menu and tap **Set birthday** to add a date. [Usage and source](plugins/birthday-badge/README.md).
+
 **Better Font Scale 1.0.0-beta5** adds a compact OpenDyslexic preset and controls for reply size, letter spacing, and line spacing. [Usage and source](plugins/better-font-scale/README.md).
 
 **Streak Tracker 1.0.0-beta4** adds group DM and server streaks under **Settings → Valenced → Streak Tracker → Who to track**. Group chats can show fire badges in Messages. Long-press a tracked server icon to see its streak, shared across its channels. [Usage and source](plugins/streak-tracker/README.md).
