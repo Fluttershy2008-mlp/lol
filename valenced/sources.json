@@ -210,8 +210,14 @@
     "dev.fluttershy2008.birthday-badge": {
       "path": "valenced/plugins/birthday-badge/index.js",
       "sha256": "b047c5f3f0123ff0318cdef91adc5890a0873fd966aa5cc01f7ddc206a65cacf",
-      "originalVersion": "1.0.0-beta1",
-      "kind": "native-plugin"
+      "originalVersion": "1.0.0-beta2",
+      "kind": "native-plugin",
+      "settingsShortcut": {
+        "path": "valenced/settings-shortcut.cjs",
+        "sha256": "5cd712260bb17a62e4b8034bb685ea4017034f017e139b265ced61c37a52fca1",
+        "section": "VALENCED",
+        "title": "Birthday Badge"
+      }
     },
     "dev.fluttershy2008.long-video-share": {
       "path": "valenced/plugins/long-video-share/index.js",

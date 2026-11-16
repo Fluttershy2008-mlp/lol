@@ -5,8 +5,8 @@ then tap **Save**. A cake countdown appears beside their profile badges. It show
 days, switches to hours in the final 24 hours, and shows **Today** on their
 birthday. Tap the cake or use **⋯ → Edit birthday** to edit or remove the date.
 
-You can also add a birthday by ID or manage saved dates in **Settings → Valenced →
-Plugins → Birthday Badge → Settings**. Dates are stored on your device for each
+Open **Settings → Valenced → Birthday Badge** to add a birthday by user ID or
+edit and remove saved dates. Dates are stored on your device for each
 signed-in Discord account. The countdown uses your phone’s timezone and repeats
 yearly. February 29 is observed on February 28 in common years.
 

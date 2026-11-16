@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorld, React, Renderer, ACCOUNT, FRIEND, BLOCKED } = require('../../revenge-next/tests/next-harness.cjs');
 const { installChatButtonsHost } = require('./chat-buttons-fixture.cjs');
+const { installSettingsSection } = require('./settings-fixture.cjs');
 
 const h = React.createElement;
 const slug = 'birthday-badge';
@@ -21,6 +22,7 @@ const saved = (month, day) => ({ accounts: { [ACCOUNT]: { [FRIEND]: { month, day
 async function setup(t, now, initial = {}) {
     const w = createWorld();
     const { patches } = installChatButtonsHost(w);
+    const settings = installSettingsSection(w);
     const jsx = w.U.react.ReactJSXRuntime.jsx;
     w.U.discord.design.Design.AlertModal = ({ title, content, extraContent, actions }) =>
         h('AlertModal', { title }, content, extraContent, actions);
@@ -58,9 +60,11 @@ async function setup(t, now, initial = {}) {
         assert.equal(w.pathWaiters.size, 0);
         assert.equal(patches.size, 0);
         assert.equal(w.stores.UserStore.listeners.size, 0);
+        assert.deepEqual(settings.section.settings, settings.core);
+        assert.equal(w.registeredScreens.size, 0);
         assert.deepEqual(w.errors, []);
     });
-    return { w, plugin, row, mount, menu, edit, enter };
+    return { w, plugin, row, mount, menu, edit, enter, settingsSection: settings.section };
 }
 
 test('cake counts down in days then hours, flips at local midnight and repeats annually', async t => {
@@ -112,10 +116,21 @@ test('the late-loaded profile menu validates birthdays, updates an open badge-fr
     assert.deepEqual(plugin.writes.at(-1), { accounts: { [ACCOUNT]: {} } });
 });
 
-test('settings can add by user ID, maintain separate accounts and clean up an open profile', async t => {
-    const { w, plugin, row, mount, edit, enter } = await setup(t, '2028-02-28T00:00:00+08:00', saved(2, 29));
+test('the Valenced settings row opens saved birthdays, allows adding by ID and keeps accounts separate', async t => {
+    const now = '2028-02-28T00:00:00+08:00';
+    const { w, plugin, row, mount, edit, enter, settingsSection } = await setup(t, now, saved(2, 29));
     const ui = await row(FRIEND);
-    const settings = await mount(h(plugin.options.SettingsComponent, { api: plugin.api }));
+    const key = 'dev.fluttershy2008.birthday-badge.valenced-settings';
+    assert.equal(settingsSection.settings.filter(item => item === key).length, 1);
+    const route = w.registeredScreens.get(key);
+    assert.equal(route.useTitle(), 'Birthday Badge');
+    assert.equal(route.usePredicate(), true);
+    const headers = [];
+    const settings = await mount(h(route.screen.getComponent(), { navigation: { setOptions: value => headers.push(value) } }));
+    assert.equal(headers.at(-1).title, 'Birthday Badge');
+    const savedRows = settings.root.findAllByType('TableRow');
+    assert.equal(savedRows.length, 1);
+    assert.equal(savedRows[0].props.label, 'Test Friend');
     assert.equal(cake(ui), '🎂 24h');
     const editor = await edit(button(settings, 'Add birthday by user ID').props.onPress);
     await enter(editor, { 'Discord user ID': BLOCKED, Month: '3', Day: '1' });
@@ -133,6 +148,8 @@ test('settings can add by user ID, maintain separate accounts and clean up an op
     await Renderer.act(async () => w.advance(day));
     assert.equal(cake(ui), '🎂 Today');
     await Renderer.act(async () => w.stop(plugin));
+    assert.equal(route.usePredicate(), false);
+    assert.ok(!settingsSection.settings.includes(key));
     assert.equal(cake(ui), undefined);
     assert.equal(w.appListeners.size, 0);
     assert.equal(w.timers.size, 0);
