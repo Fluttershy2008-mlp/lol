@@ -313,8 +313,8 @@
     },
     "dev.fluttershy2008.better-font-scale": {
       "path": "valenced/plugins/better-font-scale/index.js",
-      "sha256": "38660b5c1ffa1d052ebc526fae132f229d53bebb66c8300fe90b3a0beec6ee43",
-      "originalVersion": "1.0.0-beta4",
+      "sha256": "4a4b80683175c86d3600ce85646daa9c5db3e4b91c58fc420a5daebd3f26dcde",
+      "originalVersion": "1.0.0-beta5",
       "kind": "native-plugin",
       "upstream": "https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale"
     },

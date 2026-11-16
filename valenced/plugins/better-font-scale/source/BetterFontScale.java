@@ -29,7 +29,10 @@ public final class BetterFontScale {
     private static final int AUTHOR = 2;
     private static final int TIMESTAMP = 3;
     private static final int WORD_SPACING = 4;
-    private static final int SETTING_COUNT = 5;
+    private static final int REPLY = 5;
+    private static final int LETTER_SPACING = 6;
+    private static final int LINE_SPACING = 7;
+    private static final int SETTING_COUNT = 8;
     private static final String APPLY = "dev.fluttershy2008.better-font-scale.apply";
     private static final String CHAT_VIEW = "com.discord.chat.presentation.message.MessageView";
     private static final String BODY_VIEW = "com.discord.chat.presentation.message.view.MessageContentView";
@@ -57,6 +60,7 @@ public final class BetterFontScale {
         private final Handler main = new Handler(Looper.getMainLooper());
         private final Map<Integer, String> names = new HashMap<Integer, String>();
         private final Map<TextView, Applied> applied = new WeakHashMap<TextView, Applied>();
+        private final Map<TextView, ChatSpacing> chatSpacing = new WeakHashMap<TextView, ChatSpacing>();
         private final Map<TextView, Boolean> spacedViews = new WeakHashMap<TextView, Boolean>();
         private final ThreadLocal<Integer> bodyBindDepth = new ThreadLocal<Integer>();
         private volatile float[] sizes = new float[SETTING_COUNT];
@@ -71,10 +75,9 @@ public final class BetterFontScale {
                 measure = XposedBridge.hookMethod(method, new XC_MethodHook() {
                     @Override protected void beforeHookedMethod(MethodHookParam param) {
                         float[] current = sizes;
-                        if (!any(current)) return;
+                        if (!hasTextOverrides(current)) return;
                         TextView view = (TextView) param.thisObject;
-                        int slot = target(view);
-                        if (slot >= 0 && current[slot] > 0) resize(view, slot, current[slot]);
+                        applyText(view, target(view), current);
                     }
                 });
             } catch (ReflectiveOperationException | RuntimeException error) {
@@ -92,9 +95,8 @@ public final class BetterFontScale {
                         @Override protected void beforeHookedMethod(MethodHookParam param) {
                             Integer depth = bodyBindDepth.get();
                             bodyBindDepth.set(depth == null ? 1 : depth + 1);
-                            float size = sizes[MESSAGE];
                             TextView view = (TextView) param.args[0];
-                            if (size > 0 && view != null) resize(view, MESSAGE, size);
+                            if (view != null) applyText(view, target(view), sizes);
                         }
 
                         @Override protected void afterHookedMethod(MethodHookParam param) {
@@ -111,10 +113,16 @@ public final class BetterFontScale {
             }
             scope.getBridge().registerMethod(APPLY, new Function1<List<?>, Object>() {
                 @Override public Object invoke(List<?> args) {
-                    if (measure == null || (args.size() != 4 && args.size() != SETTING_COUNT)) return false;
+                    int count = args.size();
+                    if (measure == null || (count != 4 && count != 5 && count != SETTING_COUNT)) return false;
                     final float[] next = new float[SETTING_COUNT];
-                    for (int i = 0; i < WORD_SPACING; i++) next[i] = parse(args.get(i));
-                    if (args.size() == SETTING_COUNT) next[WORD_SPACING] = parseSpacing(args.get(WORD_SPACING));
+                    for (int i = 0; i < WORD_SPACING; i++) next[i] = parseSize(args.get(i));
+                    if (count > WORD_SPACING) next[WORD_SPACING] = parseRange(args.get(WORD_SPACING), -50, 100);
+                    if (count == SETTING_COUNT) {
+                        next[REPLY] = parseSize(args.get(REPLY));
+                        next[LETTER_SPACING] = parseRange(args.get(LETTER_SPACING), -12, 15);
+                        next[LINE_SPACING] = parseRange(args.get(LINE_SPACING), -20, 50);
+                    }
                     sizes = next;
                     main.post(new Runnable() {
                         @Override public void run() {
@@ -135,14 +143,16 @@ public final class BetterFontScale {
                                 || !Spannable.class.isAssignableFrom(args[0])) continue;
                         wordSpacing = XposedBridge.hookMethod(method, new XC_MethodHook() {
                             @Override protected void beforeHookedMethod(MethodHookParam param) {
-                                float spacing = sizes[WORD_SPACING];
-                                if (spacing == 0 || !(param.args[0] instanceof Spannable)) return;
+                                float[] current = sizes;
+                                if (current[WORD_SPACING] == 0 && !hasChatSpacing(current)) return;
                                 TextView view = (TextView) param.thisObject;
                                 boolean message = body.isInstance(view);
-                                // The Android renderer also measures a temporary copy of
-                                // the text for previews. Give it the same gap widths.
+                                // Discord measures a temporary view before truncating previews.
+                                // It needs the same spacing settings as the displayed view.
                                 if (!message && bodyBindDepth.get() == null) return;
-                                WordSpacing.apply((Spannable) param.args[0], spacing);
+                                if (hasChatSpacing(current)) applyChatSpacing(view, current);
+                                if (current[WORD_SPACING] == 0 || !(param.args[0] instanceof Spannable)) return;
+                                WordSpacing.apply((Spannable) param.args[0], current[WORD_SPACING]);
                                 if (message) {
                                     synchronized (spacedViews) {
                                         spacedViews.put(view, true);
@@ -185,7 +195,7 @@ public final class BetterFontScale {
 
         private int target(TextView view) {
             String type = view.getClass().getName();
-            if (type.equals(BODY_VIEW)) return MESSAGE;
+            if (type.equals(BODY_VIEW)) return resourceName(view).equals("reply_text") ? REPLY : MESSAGE;
             if (type.equals(COMPOSER_VIEW)) return COMPOSER;
             String id = resourceName(view);
             if (id.equals("chat_list_adapter_item_text")) return MESSAGE;
@@ -219,6 +229,27 @@ public final class BetterFontScale {
             return name;
         }
 
+        private void applyText(TextView view, int slot, float[] current) {
+            if (slot < 0) return;
+            if (current[slot] > 0) resize(view, slot, current[slot]);
+            if ((slot == MESSAGE || slot == REPLY || slot == COMPOSER) && hasChatSpacing(current)) {
+                applyChatSpacing(view, current);
+            }
+        }
+
+        private void applyChatSpacing(TextView view, float[] current) {
+            ChatSpacing override;
+            synchronized (chatSpacing) {
+                override = chatSpacing.get(view);
+                if (override == null && hasChatSpacing(current)) {
+                    override = new ChatSpacing();
+                    chatSpacing.put(view, override);
+                }
+                if (!hasChatSpacing(current)) chatSpacing.remove(view);
+            }
+            if (override != null) override.apply(view, current[LETTER_SPACING], current[LINE_SPACING]);
+        }
+
         private void resize(TextView view, int slot, float size) {
             float current = view.getTextSize();
             float pixels = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, size,
@@ -234,6 +265,13 @@ public final class BetterFontScale {
         }
 
         private void refresh(float[] next) {
+            List<TextView> metricViews;
+            synchronized (chatSpacing) {
+                metricViews = new ArrayList<TextView>(chatSpacing.keySet());
+            }
+            for (TextView view : metricViews) {
+                if (view != null) applyChatSpacing(view, next);
+            }
             float spacing = next[WORD_SPACING];
             if (spacing != lastRefreshedSpacing || spacing == 0) {
                 List<TextView> views;
@@ -242,6 +280,7 @@ public final class BetterFontScale {
                     if (spacing == 0) spacedViews.clear();
                 }
                 for (TextView view : views) {
+                    if (view == null) continue;
                     CharSequence text = view.getText();
                     if (text instanceof Spannable) WordSpacing.apply((Spannable) text, spacing);
                 }
@@ -270,20 +309,23 @@ public final class BetterFontScale {
         return Math.abs(first - second) < 0.05f;
     }
 
-    private static boolean any(float[] sizes) {
-        return sizes[0] > 0 || sizes[1] > 0 || sizes[2] > 0 || sizes[3] > 0;
+    private static boolean hasChatSpacing(float[] sizes) {
+        return sizes[LETTER_SPACING] != 0 || sizes[LINE_SPACING] != 0;
     }
 
-    private static float parse(Object value) {
-        if (!(value instanceof Number)) return 0;
-        double size = ((Number) value).doubleValue();
-        return size >= 8 && size <= 48 ? (float) size : 0;
+    private static boolean hasTextOverrides(float[] sizes) {
+        return sizes[MESSAGE] > 0 || sizes[COMPOSER] > 0 || sizes[AUTHOR] > 0 || sizes[TIMESTAMP] > 0
+                || sizes[REPLY] > 0 || hasChatSpacing(sizes);
     }
 
-    private static float parseSpacing(Object value) {
+    private static float parseSize(Object value) {
+        return parseRange(value, 8, 48);
+    }
+
+    private static float parseRange(Object value, int min, int max) {
         if (!(value instanceof Number)) return 0;
-        double percent = ((Number) value).doubleValue();
-        return percent >= -50 && percent <= 100 ? (float) percent : 0;
+        double number = ((Number) value).doubleValue();
+        return number >= min && number <= max ? (float) number : 0;
     }
 
     private static final class Applied {

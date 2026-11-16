@@ -2,8 +2,11 @@
     // SPDX-License-Identifier: MIT
     const fields = {
         messages: 'Messages',
-        wordSpacing: 'Word Spacing',
+        replyPreview: 'Reply Preview',
         chatbox: 'Chatbox',
+        wordSpacing: 'Word Spacing',
+        letterSpacing: 'Letter Spacing',
+        lineSpacing: 'Line Spacing',
         username: 'Username',
         aboutMe: 'About Me',
         gameStatus: 'Game Status',
@@ -16,14 +19,22 @@
     };
     const defaults = Object.fromEntries(Object.keys(fields).map(key => [key, 0]));
     const groups = [
-        ['Chat', ['messages', 'wordSpacing', 'chatbox', 'username', 'timestamp']],
+        ['Chat', ['messages', 'replyPreview', 'chatbox', 'wordSpacing', 'letterSpacing', 'lineSpacing', 'username', 'timestamp']],
         ['Profiles', ['aboutMe', 'gameStatus', 'profileStatus']],
         ['Channel list', ['category', 'channel', 'voice', 'thread']],
     ];
     const fontRange = [8, 48];
-    const spacingRange = [-50, 100];
+    const spacingControls = {
+        wordSpacing: { range: [-50, 100], detail: 'Gaps between words in messages and reply previews.' },
+        letterSpacing: { range: [-12, 15], detail: 'Adjusts the space between letters as a percentage of the current font size.' },
+        lineSpacing: { range: [-20, 50], detail: 'Changes the space between lines in messages and the chatbox.' },
+    };
+    const openDyslexicPreset = {
+        messages: '14', replyPreview: '12', chatbox: '14', wordSpacing: '-35', letterSpacing: '-4', lineSpacing: '-12',
+    };
     const previews = {
         messages: [16, 'Hey, are you free later?'],
+        replyPreview: [12, 'Yep, I can make it.'],
         chatbox: [16, 'Write a message…'],
         username: [16, 'Strawberry Whirl'],
         aboutMe: [14, 'I like baking strawberry treats.'],
@@ -43,12 +54,12 @@
     function readValue(key, value) {
         if (typeof value === 'string') {
             value = value.trim().replace(',', '.').replace('−', '-');
-            if (key === 'wordSpacing') value = value.replace(/%$/, '').trim();
+            if (spacingControls[key]) value = value.replace(/%$/, '').trim();
             if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(value)) return undefined;
             value = Number(value);
         }
         if (!Number.isFinite(value)) return undefined;
-        const [min, max] = key === 'wordSpacing' ? spacingRange : fontRange;
+        const [min, max] = spacingControls[key]?.range ?? fontRange;
         return value === 0 || (value >= min && value <= max) ? value : undefined;
     }
 
@@ -221,7 +232,8 @@
         let result;
         try {
             result = await native?.callNativeMethod?.(nativeMethod,
-                [values.messages, values.chatbox, values.username, values.timestamp, values.wordSpacing]);
+                [values.messages, values.chatbox, values.username, values.timestamp, values.wordSpacing,
+                    values.replyPreview, values.letterSpacing, values.lineSpacing]);
         } catch {
             throw new Error(unavailable);
         }
@@ -332,6 +344,13 @@
             setFeedback('');
         }
 
+        function applyPreset() {
+            RN.Keyboard.dismiss();
+            setDraft(current => ({ ...current, ...openDyslexicPreset }));
+            setOpen('messages');
+            setFeedback('Compact settings ready. Tap Save to apply.');
+        }
+
         async function save() {
             if (!state?.active || state.busy || invalid || !dirty) return;
             state.busy = true;
@@ -363,8 +382,8 @@
 
         function renderField(key, index) {
             const label = fields[key];
-            const spacing = key === 'wordSpacing';
-            const range = spacing ? spacingRange : fontRange;
+            const spacing = spacingControls[key];
+            const range = spacing?.range ?? fontRange;
             const [defaultSampleSize, sample] = previews[spacing ? 'messages' : key];
             const value = parsed[key];
             const previewSize = parsed[spacing ? 'messages' : key] || defaultSampleSize;
@@ -373,12 +392,18 @@
             const isDefault = value === 0;
             const expanded = open === key;
             const summary = value === undefined ? 'Invalid' : isDefault ? 'Default' : format(value);
-            const sampleStyle = { color: palette.text, fontSize: previewSize, lineHeight: Math.ceil(previewSize * 1.25) };
-            const preview = spacing
+            const chatSample = spacing || key === 'messages' || key === 'replyPreview' || key === 'chatbox';
+            const lineFactor = chatSample ? 1 + (parsed.lineSpacing ?? 0) / 100 : 1;
+            const sampleStyle = { color: palette.text, fontSize: previewSize,
+                lineHeight: Math.ceil(previewSize * 1.25 * lineFactor),
+                ...(chatSample && { letterSpacing: previewSize * (parsed.letterSpacing ?? 0) / 100 }),
+            };
+            const preview = key === 'wordSpacing'
                 ? h(RN.View, { accessible: true, accessibilityLabel: 'Word spacing preview', style: {
                     flexDirection: 'row', flexWrap: 'wrap', columnGap: previewSize * 0.28 * (1 + sliderValue / 100),
                 } }, sample.split(' ').map((word, index) => h(RN.Text, { key: index, style: sampleStyle }, word)))
-                : h(RN.Text, { style: sampleStyle }, sample);
+                : h(RN.Text, { style: sampleStyle },
+                    key === 'lineSpacing' ? sample + '\nYep, I can make it.' : sample);
             return h(RN.View, { key, style: {
                 borderTopWidth: index ? RN.StyleSheet.hairlineWidth || 1 : 0, borderColor: palette.line,
             } }, h(RN.Pressable, {
@@ -393,7 +418,7 @@
             h(RN.Text, { style: { color: value === undefined ? palette.error : palette.muted, fontSize: 13 } }, summary),
             h(RN.Text, { accessible: false, style: { color: palette.muted, fontSize: 17 } }, expanded ? '⌄' : '›')),
             expanded && h(RN.View, { style: { paddingHorizontal: 14, paddingBottom: 14, gap: 5 } },
-                spacing && h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, 'Changes the gaps between words in chat messages.'),
+                spacing && h(RN.Text, { style: { color: palette.muted, fontSize: 13 } }, spacing.detail),
                 h(RangeSlider, { React, RN, palette, label, range, value: sliderValue, format, disabled: saving,
                     onChange: next => changeField(key, next) }),
                 h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', gap: 10 } },
@@ -413,11 +438,18 @@
                     backgroundColor: palette.input, marginTop: 3 } }, preview)));
         }
 
-        const message = invalid === 'wordSpacing' ? 'Word Spacing needs a percentage from −50 to +100.'
+        const bounds = spacingControls[invalid]?.range;
+        const message = bounds ? fields[invalid] + ' needs a percentage from ' + bounds.join(' to ') + '.'
             : invalid ? fields[invalid] + ' needs a size from 8 to 48, or 0.' : feedback || state?.nativeError;
         return h(RN.View, { style: { flex: 1 } },
             h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', style: { flex: 1 },
                 contentContainerStyle: { paddingHorizontal: 14, paddingVertical: 14, gap: 18 } },
+                h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Compact OpenDyslexic',
+                    accessibilityHint: 'Loads smaller chat sizes and tighter spacing', onPress: applyPreset, disabled: saving,
+                    style: { borderRadius: 12, backgroundColor: palette.card, padding: 14, gap: 4 } },
+                    h(RN.Text, { style: { color: palette.accent, fontSize: 15, fontWeight: '600' } }, 'Compact OpenDyslexic'),
+                    h(RN.Text, { style: { color: palette.muted, fontSize: 13 } },
+                        'Smaller chat text and tighter spacing for the font you already use.')),
                 groups.map(([label, keys]) => h(RN.View, { key: label, style: { gap: 6 } },
                     h(RN.Text, { style: { color: palette.muted, fontSize: 13, fontWeight: '600', paddingHorizontal: 4 } }, label),
                     h(RN.View, { style: { borderRadius: 12, backgroundColor: palette.card, overflow: 'hidden' } },

@@ -60,9 +60,9 @@ async function load(cache) {
     };
 }
 
-test('an older install keeps its sizes and defaults to normal word spacing', async () => {
+test('an older install keeps its sizes and defaults to the current chat spacing', async () => {
     const plugin = await load({ messages: 21, chatbox: '16,5', username: 99, timestamp: 0 });
-    assert.deepEqual(plugin.requested, [['dev.fluttershy2008.better-font-scale.apply', [21, 16.5, 0, 0, 0]]]);
+    assert.deepEqual(plugin.requested, [['dev.fluttershy2008.better-font-scale.apply', [21, 16.5, 0, 0, 0, 0, 0, 0]]]);
 });
 
 test('channel label overrides preserve other props and expand the matching list rows', async () => {
@@ -207,7 +207,26 @@ test('Android settings expand one row, map touches to the real ranges and save a
     assert.equal(plugin.writes[0].messages, 23.5);
     assert.equal(plugin.writes[0].aboutMe, 19.5);
     assert.equal(plugin.writes[0].wordSpacing, -12.5);
-    assert.deepEqual(nativeValues.at(-1), [23.5, 0, 0, 0, -12.5]);
+    assert.deepEqual(nativeValues.at(-1), [23.5, 0, 0, 0, -12.5, 0, 0, 0]);
+
+    await open('Compact OpenDyslexic');
+    assert.equal(plugin.writes.length, 1);
+    assert.equal(messagePreview(), 14);
+    assert.ok(Math.abs(screen.root.findAllByType('Text').find(node =>
+        node.props.children === 'Hey, are you free later?').props.style.letterSpacing - (-0.56)) < 0.001);
+    await open('Reply Preview');
+    assert.equal(input('Reply Preview exact size').value, '12');
+    await open('Line Spacing');
+    assert.equal(input('Line Spacing exact percentage').value, '-12');
+    assert.ok(screen.root.findAllByType('Text').some(node =>
+        node.props.children === 'Hey, are you free later?\nYep, I can make it.'));
+    await open('Letter Spacing');
+    await Renderer.act(async () => input('Letter Spacing exact percentage').onChangeText('-13'));
+    assert.equal(button('Save').disabled, true);
+    await Renderer.act(async () => input('Letter Spacing exact percentage').onChangeText('-4'));
+    await Renderer.act(async () => button('Save').onPress());
+    assert.equal(plugin.writes[1].aboutMe, 19.5);
+    assert.deepEqual(nativeValues.at(-1), [14, 14, 0, 0, -35, 12, -4, -12]);
 
     await open('Messages');
     await Renderer.act(async () => byLabel('Pressable', 'Reset Messages').onPress());
@@ -215,6 +234,6 @@ test('Android settings expand one row, map touches to the real ranges and save a
     assert.equal(messagePreview(), 16);
     await Renderer.act(async () => button('Reset all').onPress());
     await Renderer.act(async () => button('Save').onPress());
-    assert.ok(Object.values(plugin.writes[1]).every(value => value === 0));
-    assert.deepEqual(nativeValues.at(-1), [0, 0, 0, 0, 0]);
+    assert.ok(Object.values(plugin.writes[2]).every(value => value === 0));
+    assert.deepEqual(nativeValues.at(-1), [0, 0, 0, 0, 0, 0, 0, 0]);
 });
