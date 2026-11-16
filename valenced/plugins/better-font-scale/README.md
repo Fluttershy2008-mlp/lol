@@ -4,6 +4,8 @@ Refresh Fluttershy’s Valenced repository and install **Better Font Scale** fro
 
 Use a slider to preview each of the eleven font sizes. Sliders use whole scaled points from 8 to 48. Tap the number to enter a decimal size. **Default** restores Discord’s current size for one field, and **Reset all** restores every field. You can also enter **0** to use the default. Tap **Save**, then restart Discord to apply updates to all existing screens. Previously saved sizes work with the new controls.
 
+**Word Spacing** adjusts the width of regular gaps between words in chat messages. Move its slider or enter a percentage from −50% to +100%. **0%** restores Discord’s spacing. This setting changes the display and keeps the original message text intact.
+
 The native hooks target Discord’s Android message renderer and composer. The React Native hooks apply to profile text, member activity, and server channel lists. This beta was checked against Discord Android 353.11 native code and 355.5 React Native module layouts. An on-device run is still pending.
 
 Inspired by [RazerTexz’s Aliucord plugin](https://github.com/RazerTexz/my-plugins/tree/main/BetterFontScale).
