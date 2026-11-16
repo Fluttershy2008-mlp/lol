@@ -4,8 +4,17 @@
     const discordEpoch = 1420070400000n;
     const previewPath = 'modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx';
     const previewExports = ['ChannelRowPreview', 'NativeChannelRowPreview', 'NativeMessageChannelRowPreview'];
+    const guildMenuPath = 'modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx';
     const defaults = { showBadges: true, milestoneToasts: true, lossAnimations: true, accounts: {}, selections: {} };
-    const trackAll = { onlySelected: false, userIds: [] };
+    const defaultSelection = { onlySelected: false, userIds: [], allGroups: false, groupIds: [], allGuilds: false, guildIds: [] };
+    const scopes = {
+        dm: { title: 'DMs', label: 'DM', ids: 'userIds', flag: 'onlySelected', toggle: 'Only selected users', input: 'user IDs',
+            placeholder: 'Paste user IDs or mentions', all: 'Tracking all one-to-one DMs.', selected: 'Only the users below can earn new streak days.' },
+        group: { title: 'Group DMs', label: 'group DM', ids: 'groupIds', flag: 'allGroups', toggle: 'Track all group DMs', input: 'group DM IDs',
+            placeholder: 'Paste group DM channel IDs', all: 'Tracking all group DMs.', selected: 'Only the group DMs below can earn new streak days.' },
+        guild: { title: 'Servers', label: 'server', ids: 'guildIds', flag: 'allGuilds', toggle: 'Track all servers', input: 'server IDs',
+            placeholder: 'Paste server IDs', all: 'Tracking all servers.', selected: 'Only the servers below can earn new streak days.' },
+    };
     const tiers = [
         { min: 100, range: '100+ days', name: 'Red', light: ['#9A243B', '#FCE1E5'], dark: ['#FFACB9', '#462131'] },
         { min: 50, range: '50–99 days', name: 'Purple', light: ['#653399', '#EEE3FC'], dark: ['#E1BDFF', '#392750'] },
@@ -30,11 +39,15 @@
         const selections = {};
         for (const [accountId, selection] of Object.entries(value?.selections ?? {})) {
             if (!isId(accountId) || !selection || typeof selection !== 'object') continue;
-            const userIds = Array.isArray(selection.userIds) ? selection.userIds : [];
             selections[accountId] = {
+                allGroups: selection.allGroups === true,
+                allGuilds: selection.allGuilds === true,
                 onlySelected: selection.onlySelected === true,
-                userIds: [...new Set(userIds.filter(id => isId(id) && id !== accountId))],
             };
+            Object.values(scopes).forEach(({ ids }) => {
+                const list = Array.isArray(selection[ids]) ? selection[ids] : [];
+                selections[accountId][ids] = [...new Set(list.filter(id => isId(id) && id !== accountId))];
+            });
         }
         for (const [accountId, records] of Object.entries(value?.accounts ?? {})) {
             if (!isId(accountId)) continue;
@@ -49,6 +62,10 @@
                 };
                 if (record.recipientUsername) streaks[channelId].recipientUsername = validName(record.recipientUsername);
                 if (record.lossShown === true) streaks[channelId].lossShown = true;
+                if (record.kind === 'group' || record.kind === 'guild') {
+                    streaks[channelId].kind = record.kind;
+                    if (validName(record.name)) streaks[channelId].name = validName(record.name);
+                }
             }
             accounts[accountId] = streaks;
         }
@@ -57,12 +74,17 @@
     }
 
     function selectionFor(data, account) {
-        return data?.selections?.[account] ?? trackAll;
+        return data?.selections?.[account] ?? defaultSelection;
     }
 
-    function allowsRecipient(data, account, id) {
+    function tracksAll(selection, kind) {
+        const flag = selection[scopes[kind].flag];
+        return kind === 'dm' ? !flag : flag;
+    }
+
+    function allowsTarget(data, account, kind, id) {
         const selection = selectionFor(data, account);
-        return !selection.onlySelected || selection.userIds.includes(id);
+        return tracksAll(selection, kind) || selection[scopes[kind].ids].includes(id);
     }
 
     function activeDays(record, day) {
@@ -78,11 +100,11 @@
         return typeof value === 'string' && value.trim() ? value.trim().slice(0, 128) : null;
     }
 
-    function paintBadge(h, RN, days, light) {
+    function paintBadge(h, RN, days, light, kind = 'dm') {
         const [color, backgroundColor] = tierColors(days, light);
         const count = days > 999 ? '999+' : String(days);
         return h(RN.View, {
-            accessible: true, accessibilityLabel: days + '-day DM streak',
+            accessible: true, accessibilityLabel: days + '-day ' + scopes[kind].label + ' streak',
             pointerEvents: 'none',
             style: { alignSelf: 'center', flexShrink: 1, maxWidth: 74, minWidth: 0, overflow: 'hidden',
                 backgroundColor, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 2, marginStart: 6 },
@@ -151,10 +173,11 @@
     }
 
     function allowedRecord(session, channelId, record) {
+        if (record.kind) return allowsTarget(session.data, session.account, record.kind, channelId);
         if (!selectionFor(session.data, session.account).onlySelected) return true;
         const id = record.recipientId ?? recipientIdentity(
             session.stores.ChannelStore?.getChannel?.(channelId), record, session.account).id;
-        return allowsRecipient(session.data, session.account, id);
+        return allowsTarget(session.data, session.account, 'dm', id);
     }
 
     function getRecipient(stores, channel, record, account) {
@@ -169,6 +192,12 @@
         return { id, name, username };
     }
 
+    function targetName(stores, kind, id) {
+        if (kind === 'guild') return validName(stores.GuildStore?.getGuild?.(id)?.name);
+        const channel = stores.ChannelStore?.getChannel?.(id);
+        return channel?.type === 3 ? validName(channel.name) : null;
+    }
+
     function trackMessage(session, event) {
         if (!live(session) || !session.data || event.optimistic) return;
         const { message } = event;
@@ -178,7 +207,11 @@
             !isId(message.id) || message.state === 'SENDING' || message.state === 'SEND_FAILED' ||
             (message.type != null && message.type !== 0 && message.type !== 19)) return;
         const channel = session.stores.ChannelStore?.getChannel?.(channelId);
-        if (channel?.type !== 1) return;
+        if (!channel) return;
+        const guildId = channel.guild_id ?? channel.guildId ?? channel.getGuildId?.();
+        const kind = channel.type === 1 ? 'dm' : channel.type === 3 ? 'group' : isId(guildId) ? 'guild' : null;
+        if (!kind) return;
+        const streakId = kind === 'guild' ? guildId : channelId;
 
         // Confirmed Discord message IDs encode the send time, including across midnight.
         const day = localDay(Number((BigInt(message.id) >> 22n) + discordEpoch));
@@ -187,24 +220,26 @@
 
         const { accounts } = session.data;
         const streaks = accounts[sender] ?? {};
-        const previous = streaks[channelId];
+        const previous = streaks[streakId];
         if (previous && previous.lastDay >= day) return;
         const days = previous?.lastDay === day - 1 ? previous.days + 1 : 1;
-        const recipient = getRecipient(session.stores, channel, previous, sender);
-        if (!allowsRecipient(session.data, sender, recipient.id)) return;
+        const recipient = kind === 'dm' ? getRecipient(session.stores, channel, previous, sender) : null;
+        if (!allowsTarget(session.data, sender, kind, recipient ? recipient.id : streakId)) return;
+        const name = recipient ? null : targetName(session.stores, kind, streakId) ?? previous?.name;
         const record = {
             lastDay: day, days, best: Math.max(days, previous?.best ?? 0),
-            recipientId: recipient.id,
-            ...(recipient.username ? { recipientUsername: recipient.username } : {}),
+            recipientId: recipient?.id ?? null,
+            ...(recipient?.username ? { recipientUsername: recipient.username } : {}),
+            ...(kind !== 'dm' ? { kind, ...(name ? { name } : {}) } : {}),
         };
         persist(session, { ...session.data, accounts: {
-            ...accounts, [sender]: { ...streaks, [channelId]: record },
+            ...accounts, [sender]: { ...streaks, [streakId]: record },
         } });
         if (session.data.milestoneToasts && [10, 50, 100].includes(days) && day === session.day) {
-            const text = '🔥 ' + days + '-day DM streak!';
+            const text = '🔥 ' + days + '-day ' + scopes[kind].label + ' streak!';
             try {
                 if (session.RN.ToastAndroid) session.RN.ToastAndroid.show(text, session.RN.ToastAndroid.SHORT);
-                else session.U.discord.actions.ToastActionCreators.open('streak-tracker-' + channelId, { text });
+                else session.U.discord.actions.ToastActionCreators.open('streak-tracker-' + streakId, { text });
             } catch (error) { session.api.logger?.warn?.('Could not show streak milestone', error); }
         }
     }
@@ -233,7 +268,7 @@
                 if (!record || !allowedRecord(session, channelId, record) || record.lossShown || record.lastDay + 2 !== session.day ||
                     session.account !== accountId(session.stores) || localDay(Date.now()) !== session.day) return;
                 const progress = new animated.Value(0);
-                setMotion({ key: lossKey, progress, days: record.days });
+                setMotion({ key: lossKey, progress, days: record.days, kind: record.kind });
                 persist(session, { ...data, accounts: {
                     ...data.accounts, [account]: { ...streaks, [channelId]: { ...record, lossShown: true } },
                 } });
@@ -256,7 +291,7 @@
                 pointerEvents: 'none', accessible: false, importantForAccessibility: 'no-hide-descendants',
                 accessibilityElementsHidden: true, style: { flexShrink: 1, minWidth: 0, maxWidth: 74 },
             }, h(animated.View, { style: { opacity: progressStyle([0, 0.55], [1, 0]) } },
-                paintBadge(h, RN, motion.days, light)),
+                paintBadge(h, RN, motion.days, light, motion.kind)),
             h(animated.View, {
                 style: { position: 'absolute', end: 8, bottom: 0,
                     opacity: progressStyle([0, 0.35, 1], [0, 0.86, 0]),
@@ -269,14 +304,15 @@
             const read = () => {
                 if (!live(session) || !session.data?.showBadges) return 0;
                 const record = session.data.accounts[session.account]?.[streakChannelId];
-                return record && allowedRecord(session, streakChannelId, record) ? activeDays(record, session.day) : 0;
+                return record && record.kind !== 'guild' && allowedRecord(session, streakChannelId, record)
+                    ? activeDays(record, session.day) : 0;
             };
             const readLoss = () => {
                 if (inherited || !animated?.View || !animated.Value || !animated.timing || !live(session) ||
                     !session.foreground || session.reduceMotion || !session.data?.showBadges ||
                     !session.data.lossAnimations || !session.account) return null;
                 const record = session.data.accounts[session.account]?.[streakChannelId];
-                return record && record.lastDay + 2 === session.day && allowedRecord(session, streakChannelId, record)
+                return record && record.kind !== 'guild' && record.lastDay + 2 === session.day && allowedRecord(session, streakChannelId, record)
                     ? session.account + ':' + streakChannelId + ':' + record.lastDay : null;
             };
             const days = React.useSyncExternalStore(subscribe, read, read);
@@ -284,7 +320,8 @@
             const light = React.useSyncExternalStore(subscribe, isLight, isLight);
             const smoke = useSmoke(streakChannelId, lossKey, light);
             if (inherited || (!days && !lossKey)) return streakElement;
-            const badge = days ? paintBadge(h, RN, days, light) : smoke;
+            const kind = session.data?.accounts[session.account]?.[streakChannelId]?.kind;
+            const badge = days ? paintBadge(h, RN, days, light, kind) : smoke;
             return h(ParentBadge.Provider, { value: streakChannelId }, badge
                 ? h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, maxWidth: '100%' } },
                     h(RN.View, { style: { flexShrink: 1, minWidth: 0 } }, streakElement), badge)
@@ -304,14 +341,48 @@
                     const id = props.channel?.id ?? props.channelId ?? props.message?.channel_id ?? props.message?.channelId;
                     if (!isId(id)) return element;
                     const type = props.channel?.type ?? session.stores.ChannelStore?.getChannel?.(id)?.type;
-                    if (type != null && type !== 1) return element;
-                    // Preserve the native element, key and callbacks. A recorded ID
-                    // is always a confirmed DM even when the store is evicted.
-                    return h(PreviewWithStreak, { ...props, key: element.key, streakElement: element, streakChannelId: id });
+                    if (type != null && type !== 1 && type !== 3) return element;
+                    // Preserve the native preview, key and callbacks when decorating it.
+                    return h(PreviewWithStreak, { ...props, key: element.key ?? undefined, streakElement: element, streakChannelId: id });
                 }));
             });
         });
         session.api.cleanup(removeFinder);
+    }
+
+    function installServerMenu(session) {
+        const { api, U, RN, stores } = session;
+        const finders = U.discord.utils?.modules?.finders;
+        if (!finders?.getModuleWithImportedPath || !U.patcher?.instead) return;
+        const read = (account, id) => {
+            if (!live(session) || !session.data?.showBadges || accountId(stores) !== account) return null;
+            const record = session.data.accounts[account]?.[id];
+            return record?.kind === 'guild' && allowsTarget(session.data, account, 'guild', id) ? record : null;
+        };
+        const remove = finders.getModuleWithImportedPath(guildMenuPath, module => {
+            if (!live(session)) return;
+            const method = typeof module?.getGuildsBarGuildMenuItems === 'function' ? 'getGuildsBarGuildMenuItems' : 'default';
+            if (typeof module?.[method] !== 'function') return;
+            api.cleanup(U.patcher.instead(module, method, function (args, original) {
+                const items = Reflect.apply(original, this, args);
+                const value = args[0];
+                const id = typeof value === 'string' ? value : value?.guildId ?? value?.guild?.id ?? value?.id;
+                const account = session.account;
+                if (!isId(id) || !Array.isArray(items)) return items;
+                const day = localDay(Date.now());
+                const days = activeDays(read(account, id), day);
+                if (!days) return items;
+                const item = { label: '🔥 ' + days + '-day server streak', action: () => {
+                    const record = read(account, id);
+                    const count = activeDays(record, localDay(Date.now()));
+                    if (count) RN.Alert.alert(targetName(stores, 'guild', id) ?? 'Server streak',
+                        count + '-day streak · Personal best ' + record.best);
+                } };
+                const group = items.findIndex(Array.isArray);
+                return group < 0 ? [...items, item] : items.map((row, index) => index === group ? [...row, item] : row);
+            }));
+        });
+        api.cleanup(remove);
     }
 
     async function start(api) {
@@ -398,16 +469,36 @@
         }
         try { installBadges(session); }
         catch (error) { api.logger?.warn?.('Could not attach DM streak badges', error); }
+        try { installServerMenu(session); }
+        catch (error) { api.logger?.warn?.('Could not attach server streak menu', error); }
         checkClock();
         changed();
     }
 
-    function TrackedUsers({ session, account, light, panel, heading, text, muted, fg }) {
+    function TrackingSettings(props) {
+        const { session, panel, heading, text, light } = props;
+        const { React, RN } = session;
+        const h = React.createElement;
+        const [kind, setKind] = React.useState('dm');
+        return h(RN.View, { style: panel }, heading('Who to track'),
+            h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 } },
+                Object.entries(scopes).map(([key, scope]) => h(RN.Pressable, {
+                    key, accessibilityRole: 'tab', accessibilityLabel: scope.title, accessibilityState: { selected: key === kind },
+                    style: { borderRadius: 6, justifyContent: 'center', minHeight: 44, paddingHorizontal: 10,
+                        backgroundColor: key === kind ? (light ? '#DADFFB' : '#373E5D') : undefined },
+                    onPress: () => setKind(key),
+                }, text(scope.title, { fontWeight: key === kind ? '700' : '500' })))),
+            h(TrackingList, { ...props, key: kind, kind }));
+    }
+
+    function TrackingList({ session, account, kind, light, text, muted, fg }) {
         const { React, RN } = session;
         const h = React.createElement;
         const [input, setInput] = React.useState('');
         const [status, setStatus] = React.useState('');
         const selection = selectionFor(session.data, account);
+        const scope = scopes[kind];
+        const selectedIds = selection[scope.ids];
         const update = transform => {
             if (!live(session) || account !== accountId(session.stores)) return false;
             const { selections } = session.data;
@@ -416,55 +507,59 @@
             return true;
         };
 
-        function addUsers() {
-            const ids = input.split(/[\s,]+/).filter(Boolean).map(token => token.replace(/^<@!?(\d+)>$/, '$1'));
+        function addIds() {
+            const ids = input.split(/[\s,]+/).filter(Boolean)
+                .map(token => kind === 'dm' ? token.replace(/^<@!?(\d+)>$/, '$1') : token);
             if (!ids.length || ids.some(id => !isId(id))) {
-                setStatus('Paste Discord user IDs or mentions, separated by commas or new lines.');
+                setStatus(kind === 'dm' ? 'Paste Discord user IDs or mentions, separated by commas or new lines.'
+                    : 'Paste ' + scope.input + ', separated by commas or new lines.');
                 return;
             }
             if (ids.includes(account)) {
-                setStatus('Remove your own user ID before adding the list.');
+                setStatus(kind === 'dm' ? 'Remove your own user ID before adding the list.'
+                    : 'Use a ' + scope.label + ' ID here.');
                 return;
             }
-            if (ids.every(id => selection.userIds.includes(id))) {
-                setStatus('Those users are already on your list.');
+            if (ids.every(id => selectedIds.includes(id))) {
+                setStatus('Those IDs are already on your list.');
                 return;
             }
-            if (update(previous => ({ ...previous, userIds: [...new Set([...previous.userIds, ...ids])] }))) {
+            if (update(previous => ({ ...previous, [scope.ids]: [...new Set([...previous[scope.ids], ...ids])] }))) {
                 setInput('');
                 setStatus('');
                 RN.Keyboard?.dismiss();
             }
         }
 
-        return h(RN.View, { style: panel }, heading('Who to track'),
+        const all = tracksAll(selection, kind);
+        return h(RN.View, null,
             h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 } },
-                text('Only selected users', { flex: 1, fontSize: 15, fontWeight: '600' }),
-                h(RN.Switch, { accessibilityLabel: 'Only selected users', value: selection.onlySelected,
-                    onValueChange: enabled => update(previous => ({ ...previous, onlySelected: enabled })) })),
-            text(selection.onlySelected ? 'Only the users below can earn new streak days.' : 'Tracking all one-to-one DMs.',
-                { color: muted, marginBottom: 10 }),
+                text(scope.toggle, { flex: 1, fontSize: 15, fontWeight: '600' }),
+                h(RN.Switch, { accessibilityLabel: scope.toggle, value: selection[scope.flag],
+                    onValueChange: enabled => update(previous => ({ ...previous, [scope.flag]: enabled })) })),
+            text(all ? scope.all : scope.selected, { color: muted, marginBottom: 10 }),
             h(RN.TextInput, {
-                accessibilityLabel: 'Discord user IDs', placeholder: 'Paste user IDs or mentions', placeholderTextColor: muted,
+                accessibilityLabel: 'Discord ' + scope.input, placeholder: scope.placeholder, placeholderTextColor: muted,
                 value: input, onChangeText: value => { setInput(value); setStatus(''); }, multiline: true,
                 autoCapitalize: 'none', autoCorrect: false,
                 style: { color: fg, backgroundColor: light ? '#FFFFFF' : '#191C23', borderRadius: 8,
                     minHeight: 42, maxHeight: 100, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 8 },
             }),
-            h(RN.Button, { title: 'Add user IDs', disabled: !input.trim(), onPress: addUsers }),
+            h(RN.Button, { title: 'Add ' + scope.input, disabled: !input.trim(), onPress: addIds }),
             status ? text(status, { color: muted, marginTop: 8 }, { accessibilityLiveRegion: 'polite' }) : null,
-            selection.userIds.length ? selection.userIds.map(id => {
-                const user = session.stores.UserStore?.getUser?.(id);
-                const name = validName(user?.globalName) ?? validName(user?.global_name) ?? validName(user?.username);
+            selectedIds.length ? selectedIds.map(id => {
+                const user = kind === 'dm' ? session.stores.UserStore?.getUser?.(id) : null;
+                const name = kind === 'dm' ? validName(user?.globalName) ?? validName(user?.global_name) ?? validName(user?.username)
+                    : targetName(session.stores, kind, id);
                 return h(RN.View, { key: id, style: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 } },
                     h(RN.View, { style: { flex: 1, minWidth: 0 } },
                         name ? text(name, { fontWeight: '600' }, { numberOfLines: 1 }) : null,
                         text(id, { color: name ? muted : fg, fontSize: 13 }, { selectable: true })),
                     h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Remove ' + id,
                         style: { paddingHorizontal: 8, minHeight: 44, justifyContent: 'center' },
-                        onPress: () => update(previous => ({ ...previous, userIds: previous.userIds.filter(userId => userId !== id) })) },
+                        onPress: () => update(previous => ({ ...previous, [scope.ids]: previous[scope.ids].filter(savedId => savedId !== id) })) },
                     text('Remove', { color: light ? '#A21D30' : '#FFA4AD', fontWeight: '600' })));
-            }) : selection.onlySelected ? text('Add a user ID to start tracking selected DMs.', { color: muted, marginTop: 8 }) : null);
+            }) : !all ? text('Add ' + scope.input + ' to start tracking.', { color: muted, marginTop: 8 }) : null);
     }
 
     function SettingsComponent({ api }) {
@@ -474,7 +569,7 @@
         const stores = api.unscoped.discord.flux.Stores;
         const [, refreshNames] = React.useReducer(value => value + 1, 0);
         React.useEffect(() => {
-            const removers = [stores.UserStore, stores.ChannelStore, stores.RelationshipStore]
+            const removers = [stores.UserStore, stores.ChannelStore, stores.RelationshipStore, stores.GuildStore]
                 .map(store => watchStore(store, refreshNames));
             return () => removers.forEach(remove => remove());
         }, [stores]);
@@ -531,31 +626,34 @@
 
         return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 32 } },
             session?.error ? paragraph(session.error) : null,
-            data && signedIn ? h(TrackedUsers, { key: signedIn, session, account: signedIn, light, panel, heading, text, muted, fg }) : null,
+            data && signedIn ? h(TrackingSettings, { key: signedIn, session, account: signedIn, light, panel, heading, text, muted, fg }) : null,
             h(RN.View, { style: panel }, heading('Statistics'),
                 h(RN.View, { style: { flexDirection: 'row' } },
                     stat(stats.active.length, 'Active streaks'), stat(stats.best, 'Personal best'), stat(stats.total, 'Active days')),
                 stats.due ? text(stats.due === 1 ? '1 streak needs a message today' : stats.due + ' streaks need a message today',
                     { color: muted, marginTop: 10 }) : null),
-            h(RN.View, { style: panel }, heading('Top 5 DM streaks'),
+            h(RN.View, { style: panel }, heading('Top 5 streaks'),
                 leaderboard.length ? leaderboard.map(({ id, record, days }, index) => {
-                    const channel = stores.ChannelStore?.getChannel?.(id);
-                    const { id: recipientId, name, username } = getRecipient(stores, channel, record, signedIn);
-                    const detail = username && name !== username ? '@' + username : null;
+                    const kind = record.kind ?? 'dm';
+                    const recipient = kind === 'dm' ? getRecipient(stores, stores.ChannelStore?.getChannel?.(id), record, signedIn) : null;
+                    const name = recipient ? recipient.name : targetName(stores, kind, id) ?? record.name;
+                    const detail = recipient ? (recipient.username && name !== recipient.username ? '@' + recipient.username : null)
+                        : kind === 'guild' ? 'Server' : 'Group DM';
+                    const fallback = (detail ?? 'DM') + ' · …' + (recipient?.id ?? id).slice(-4);
                     return h(RN.View, { key: id, style: { flexDirection: 'row', alignItems: 'center', minHeight: 44 } },
                         text(String(index + 1), { color: muted, width: 24, fontVariant: ['tabular-nums'] }),
                         h(RN.View, { style: { flex: 1, minWidth: 0 } },
-                            text(name ?? ('DM · …' + (recipientId ?? id).slice(-4)), { fontWeight: '600' }, { numberOfLines: 1 }),
+                            text(name ?? fallback, { fontWeight: '600' }, { numberOfLines: 1 }),
                             detail ? text(detail, { color: muted, fontSize: 12, marginTop: 2 }, { numberOfLines: 1 }) : null),
-                        paintBadge(h, RN, days, light));
+                        paintBadge(h, RN, days, light, kind));
                 }) : paragraph(!data && !session?.error ? 'Loading streaks…'
                     : signedIn ? 'No active streaks yet.' : 'Sign in to see your streaks.')),
             h(RN.View, { style: panel }, heading('Preferences'),
-                toggle('showBadges', 'Show badges in Messages', 'Display the fire count beside each DM preview.'),
+                toggle('showBadges', 'Show streak badges', 'Show counts on DM previews and in the server menu.'),
                 toggle('lossAnimations', 'Animate expired streaks', 'Fade the badge out with smoke when you miss a day.'),
                 toggle('milestoneToasts', 'Notify at 10, 50 and 100 days', 'Show a short notification when you reach a milestone.')),
             h(RN.View, { style: panel }, heading('How streaks work'),
-                paragraph('Send a message in a one-to-one DM to count today. You have until your phone’s midnight to extend yesterday’s streak. Records are saved on this device.'),
+                paragraph('Send a message in a tracked DM, group DM, or server to count today. All channels in a server share one streak. You have until your phone’s midnight to extend yesterday’s streak.'),
                 h(RN.View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 } },
                     [...tiers].reverse().map(tier => {
                         const [color, backgroundColor] = tierColors(tier.min, light);

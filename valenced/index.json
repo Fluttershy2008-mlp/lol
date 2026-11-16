@@ -2676,14 +2676,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta4": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.streak-tracker@1.0.0-beta4.zip",
+          "sha256": "85123da179d76a0a15ecc5aaca828296899b078037dcc762a541fd7c4d1e14d8",
+          "size": 13995,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta3",
-        "beta": "1.0.0-beta3"
+        "latest": "1.0.0-beta4",
+        "beta": "1.0.0-beta4"
       },
       "name": "Streak Tracker",
-      "description": "Track daily streaks with all DMs or selected Discord users, with fire badges, smoke and a top-five leaderboard.",
+      "description": "Track daily streaks in DMs, group chats and Discord servers. Choose who to track by ID.",
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "icon": "ChatIcon"
     },

@@ -2,10 +2,10 @@
   "format": 1,
   "id": "dev.fluttershy2008.streak-tracker",
   "name": "Streak Tracker",
-  "description": "Track daily streaks with all DMs or selected Discord users, with fire badges, smoke and a top-five leaderboard.",
+  "description": "Track daily streaks in DMs, group chats and Discord servers. Choose who to track by ID.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
   "icon": "ChatIcon",
-  "version": "1.0.0-beta3",
+  "version": "1.0.0-beta4",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }
