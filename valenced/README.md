@@ -1,4 +1,4 @@
-**Better Font Scale 1.0.0-beta4** fixes slider positions and keeps Save above Android’s navigation bar. Tap a setting to open its slider, exact value, and preview. [Usage and source](plugins/better-font-scale/README.md).
+**Better Font Scale 1.0.0-beta5** adds a compact OpenDyslexic preset and controls for reply size, letter spacing, and line spacing. [Usage and source](plugins/better-font-scale/README.md).
 
 **Streak Tracker 1.0.0-beta4** adds group DM and server streaks under **Settings → Valenced → Streak Tracker → Who to track**. Group chats can show fire badges in Messages. Long-press a tracked server icon to see its streak, shared across its channels. [Usage and source](plugins/streak-tracker/README.md).
 

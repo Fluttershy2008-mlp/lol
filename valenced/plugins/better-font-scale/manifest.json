@@ -2,11 +2,11 @@
   "format": 1,
   "id": "dev.fluttershy2008.better-font-scale",
   "name": "Better Font Scale",
-  "description": "Customize font sizes across Discord and adjust word spacing in chat messages on Android.",
+  "description": "Customize Discord font sizes and tighten word, letter and line spacing with a compact OpenDyslexic preset.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
   "contributors": ["RazerTexz <633565155501801472>"],
   "icon": "AccessibilityIcon",
-  "version": "1.0.0-beta4",
+  "version": "1.0.0-beta5",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }

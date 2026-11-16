@@ -362,14 +362,27 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta5": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.better-font-scale@1.0.0-beta5.zip",
+          "sha256": "de0c16f80f3578ccf89df23ee73af0f65ddec121b5cef12477d7616c7290e6ff",
+          "size": 26166,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta4",
-        "beta": "1.0.0-beta4"
+        "latest": "1.0.0-beta5",
+        "beta": "1.0.0-beta5"
       },
       "name": "Better Font Scale",
-      "description": "Customize font sizes across Discord and adjust word spacing in chat messages on Android.",
+      "description": "Customize Discord font sizes and tighten word, letter and line spacing with a compact OpenDyslexic preset.",
       "author": "Fluttershy2008-mlp <753962426407452713>",
       "contributors": [
         "RazerTexz <633565155501801472>"
