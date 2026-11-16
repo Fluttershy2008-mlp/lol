@@ -4,7 +4,8 @@
     const discordEpoch = 1420070400000n;
     const previewPath = 'modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx';
     const previewExports = ['ChannelRowPreview', 'NativeChannelRowPreview', 'NativeMessageChannelRowPreview'];
-    const defaults = { showBadges: true, milestoneToasts: true, lossAnimations: true, accounts: {} };
+    const defaults = { showBadges: true, milestoneToasts: true, lossAnimations: true, accounts: {}, selections: {} };
+    const trackAll = { onlySelected: false, userIds: [] };
     const tiers = [
         { min: 100, range: '100+ days', name: 'Red', light: ['#9A243B', '#FCE1E5'], dark: ['#FFACB9', '#462131'] },
         { min: 50, range: '50–99 days', name: 'Purple', light: ['#653399', '#EEE3FC'], dark: ['#E1BDFF', '#392750'] },
@@ -26,6 +27,15 @@
 
     function normalise(value) {
         const accounts = {};
+        const selections = {};
+        for (const [accountId, selection] of Object.entries(value?.selections ?? {})) {
+            if (!isId(accountId) || !selection || typeof selection !== 'object') continue;
+            const userIds = Array.isArray(selection.userIds) ? selection.userIds : [];
+            selections[accountId] = {
+                onlySelected: selection.onlySelected === true,
+                userIds: [...new Set(userIds.filter(id => isId(id) && id !== accountId))],
+            };
+        }
         for (const [accountId, records] of Object.entries(value?.accounts ?? {})) {
             if (!isId(accountId)) continue;
             const streaks = {};
@@ -43,7 +53,16 @@
             accounts[accountId] = streaks;
         }
         return { showBadges: value?.showBadges !== false, milestoneToasts: value?.milestoneToasts !== false,
-            lossAnimations: value?.lossAnimations !== false, accounts };
+            lossAnimations: value?.lossAnimations !== false, accounts, selections };
+    }
+
+    function selectionFor(data, account) {
+        return data?.selections?.[account] ?? trackAll;
+    }
+
+    function allowsRecipient(data, account, id) {
+        const selection = selectionFor(data, account);
+        return !selection.onlySelected || selection.userIds.includes(id);
     }
 
     function activeDays(record, day) {
@@ -124,10 +143,22 @@
         changed();
     }
 
-    function getRecipient(stores, channel, record, account) {
+    function recipientIdentity(channel, record, account) {
         const recipients = [channel?.rawRecipients, channel?.recipients].filter(Array.isArray).flat();
         const ids = [channel?.getRecipientId?.(), ...recipients.map(user => user?.id ?? user), record?.recipientId];
         const id = ids.find(id => isId(id) && id !== account) ?? null;
+        return { id, recipients };
+    }
+
+    function allowedRecord(session, channelId, record) {
+        if (!selectionFor(session.data, session.account).onlySelected) return true;
+        const id = record.recipientId ?? recipientIdentity(
+            session.stores.ChannelStore?.getChannel?.(channelId), record, session.account).id;
+        return allowsRecipient(session.data, session.account, id);
+    }
+
+    function getRecipient(stores, channel, record, account) {
+        const { id, recipients } = recipientIdentity(channel, record, account);
         const embedded = recipients.find(user => user?.id === id);
         const user = id && stores.UserStore?.getUser?.(id);
         const lastUsername = record?.recipientId === id ? record.recipientUsername : null;
@@ -160,6 +191,7 @@
         if (previous && previous.lastDay >= day) return;
         const days = previous?.lastDay === day - 1 ? previous.days + 1 : 1;
         const recipient = getRecipient(session.stores, channel, previous, sender);
+        if (!allowsRecipient(session.data, sender, recipient.id)) return;
         const record = {
             lastDay: day, days, best: Math.max(days, previous?.best ?? 0),
             recipientId: recipient.id,
@@ -198,7 +230,7 @@
                 const { account, data } = session;
                 const streaks = data.accounts[account];
                 const record = streaks?.[channelId];
-                if (!record || record.lossShown || record.lastDay + 2 !== session.day ||
+                if (!record || !allowedRecord(session, channelId, record) || record.lossShown || record.lastDay + 2 !== session.day ||
                     session.account !== accountId(session.stores) || localDay(Date.now()) !== session.day) return;
                 const progress = new animated.Value(0);
                 setMotion({ key: lossKey, progress, days: record.days });
@@ -234,14 +266,17 @@
 
         function PreviewWithStreak({ streakElement, streakChannelId }) {
             const inherited = React.useContext(ParentBadge) === streakChannelId;
-            const read = () => live(session) && session.data?.showBadges
-                ? activeDays(session.data.accounts[session.account]?.[streakChannelId], session.day) : 0;
+            const read = () => {
+                if (!live(session) || !session.data?.showBadges) return 0;
+                const record = session.data.accounts[session.account]?.[streakChannelId];
+                return record && allowedRecord(session, streakChannelId, record) ? activeDays(record, session.day) : 0;
+            };
             const readLoss = () => {
                 if (inherited || !animated?.View || !animated.Value || !animated.timing || !live(session) ||
                     !session.foreground || session.reduceMotion || !session.data?.showBadges ||
                     !session.data.lossAnimations || !session.account) return null;
                 const record = session.data.accounts[session.account]?.[streakChannelId];
-                return record && record.lastDay + 2 === session.day
+                return record && record.lastDay + 2 === session.day && allowedRecord(session, streakChannelId, record)
                     ? session.account + ':' + streakChannelId + ':' + record.lastDay : null;
             };
             const days = React.useSyncExternalStore(subscribe, read, read);
@@ -313,6 +348,9 @@
         const onUserChange = () => { if (live(session)) refreshClock(session); };
         api.cleanup(watchStore(userStore, onUserChange));
         api.cleanup(watchStore(session.stores.ThemeStore, changed));
+        api.cleanup(watchStore(session.stores.ChannelStore, () => {
+            if (selectionFor(session.data, session.account).onlySelected) changed();
+        }));
         const dispatcher = U.discord.common.flux.Dispatcher;
         const onMessage = event => {
             try { trackMessage(session, event); }
@@ -364,6 +402,71 @@
         changed();
     }
 
+    function TrackedUsers({ session, account, light, panel, heading, text, muted, fg }) {
+        const { React, RN } = session;
+        const h = React.createElement;
+        const [input, setInput] = React.useState('');
+        const [status, setStatus] = React.useState('');
+        const selection = selectionFor(session.data, account);
+        const update = transform => {
+            if (!live(session) || account !== accountId(session.stores)) return false;
+            const { selections } = session.data;
+            const next = transform(selectionFor(session.data, account));
+            persist(session, { ...session.data, selections: { ...selections, [account]: next } });
+            return true;
+        };
+
+        function addUsers() {
+            const ids = input.split(/[\s,]+/).filter(Boolean).map(token => token.replace(/^<@!?(\d+)>$/, '$1'));
+            if (!ids.length || ids.some(id => !isId(id))) {
+                setStatus('Paste Discord user IDs or mentions, separated by commas or new lines.');
+                return;
+            }
+            if (ids.includes(account)) {
+                setStatus('Remove your own user ID before adding the list.');
+                return;
+            }
+            if (ids.every(id => selection.userIds.includes(id))) {
+                setStatus('Those users are already on your list.');
+                return;
+            }
+            if (update(previous => ({ ...previous, userIds: [...new Set([...previous.userIds, ...ids])] }))) {
+                setInput('');
+                setStatus('');
+                RN.Keyboard?.dismiss();
+            }
+        }
+
+        return h(RN.View, { style: panel }, heading('Who to track'),
+            h(RN.View, { style: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 8 } },
+                text('Only selected users', { flex: 1, fontSize: 15, fontWeight: '600' }),
+                h(RN.Switch, { accessibilityLabel: 'Only selected users', value: selection.onlySelected,
+                    onValueChange: enabled => update(previous => ({ ...previous, onlySelected: enabled })) })),
+            text(selection.onlySelected ? 'Only the users below can earn new streak days.' : 'Tracking all one-to-one DMs.',
+                { color: muted, marginBottom: 10 }),
+            h(RN.TextInput, {
+                accessibilityLabel: 'Discord user IDs', placeholder: 'Paste user IDs or mentions', placeholderTextColor: muted,
+                value: input, onChangeText: value => { setInput(value); setStatus(''); }, multiline: true,
+                autoCapitalize: 'none', autoCorrect: false,
+                style: { color: fg, backgroundColor: light ? '#FFFFFF' : '#191C23', borderRadius: 8,
+                    minHeight: 42, maxHeight: 100, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 8 },
+            }),
+            h(RN.Button, { title: 'Add user IDs', disabled: !input.trim(), onPress: addUsers }),
+            status ? text(status, { color: muted, marginTop: 8 }, { accessibilityLiveRegion: 'polite' }) : null,
+            selection.userIds.length ? selection.userIds.map(id => {
+                const user = session.stores.UserStore?.getUser?.(id);
+                const name = validName(user?.globalName) ?? validName(user?.global_name) ?? validName(user?.username);
+                return h(RN.View, { key: id, style: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 } },
+                    h(RN.View, { style: { flex: 1, minWidth: 0 } },
+                        name ? text(name, { fontWeight: '600' }, { numberOfLines: 1 }) : null,
+                        text(id, { color: name ? muted : fg, fontSize: 13 }, { selectable: true })),
+                    h(RN.Pressable, { accessibilityRole: 'button', accessibilityLabel: 'Remove ' + id,
+                        style: { paddingHorizontal: 8, minHeight: 44, justifyContent: 'center' },
+                        onPress: () => update(previous => ({ ...previous, userIds: previous.userIds.filter(userId => userId !== id) })) },
+                    text('Remove', { color: light ? '#A21D30' : '#FFA4AD', fontWeight: '600' })));
+            }) : selection.onlySelected ? text('Add a user ID to start tracking selected DMs.', { color: muted, marginTop: 8 }) : null);
+    }
+
     function SettingsComponent({ api }) {
         const { React, ReactNative: RN } = api.unscoped.react;
         const h = React.createElement;
@@ -389,6 +492,7 @@
 
         const records = Object.entries(data?.accounts[signedIn] ?? {});
         const stats = records.reduce((totals, [id, record]) => {
+            if (!allowedRecord(session, id, record)) return totals;
             const days = activeDays(record, session.day);
             if (days) {
                 totals.active.push({ id, record, days });
@@ -425,8 +529,9 @@
             ]);
         }
 
-        return h(RN.ScrollView, { contentContainerStyle: { padding: 16, paddingBottom: 32 } },
+        return h(RN.ScrollView, { keyboardShouldPersistTaps: 'handled', contentContainerStyle: { padding: 16, paddingBottom: 32 } },
             session?.error ? paragraph(session.error) : null,
+            data && signedIn ? h(TrackedUsers, { key: signedIn, session, account: signedIn, light, panel, heading, text, muted, fg }) : null,
             h(RN.View, { style: panel }, heading('Statistics'),
                 h(RN.View, { style: { flexDirection: 'row' } },
                     stat(stats.active.length, 'Active streaks'), stat(stats.best, 'Personal best'), stat(stats.total, 'Active days')),

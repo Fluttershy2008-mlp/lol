@@ -16,7 +16,7 @@ More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta9**, Friends 
 
 **Auto Quest 1.2.2** keeps concurrent video quests running with native HTTP response fixes, bounded connection retries and automatic recovery after Discord reconnects. Refresh the Valenced repository, update Auto Quest and fully restart Discord. Open **Settings → Valenced → Auto Quest** to see each quest's progress and any specific error code. [Supported quests and setup](valenced/plugins/auto-quest/README.md).
 
-**Streak Tracker 1.0.0-beta2** adds smoke when a streak expires, compact colour-tier fire badges, and better name detection for the top-five dashboard under **Settings → Valenced**. Refresh this repository, update the plugin, then fully restart Discord. [Usage and source](valenced/plugins/streak-tracker/README.md).
+**Streak Tracker 1.0.0-beta3** can track streaks with selected Discord users. Open **Settings → Valenced → Streak Tracker → Who to track** to add user IDs and enable **Only selected users**. Refresh this repository, update the plugin, then fully restart Discord. [Usage and source](valenced/plugins/streak-tracker/README.md).
 
 **Voice Messages 1.0.2** is available for Valenced Android. Refresh this repository and install or update it from **Browse Plugins**. [Usage and source](valenced/plugins/voice-messages/README.md).
 
