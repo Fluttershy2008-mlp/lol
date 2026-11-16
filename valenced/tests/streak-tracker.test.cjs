@@ -123,7 +123,7 @@ test('native settings show saved stats, scope account changes and clear only the
     const ui = await mount(h(page));
     const row = await mount(preview(Plain, dm));
     const toggle = label => ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === label);
-    const clear = () => ui.root.findByType('Button').props.onPress();
+    const clear = () => ui.root.findAllByType('Button').find(node => node.props.title === 'Clear streak history').props.onPress();
     assert.ok(text(ui).includes('Test Friend'));
     await send();
     await send();
@@ -253,4 +253,84 @@ test('leaderboard ranks five DMs, resolves changing names and keeps large badges
     assert.notEqual(badge().props.style.backgroundColor, red);
     assert.equal(row.root.findAllByType('Text').find(node => node.props.children === '🔥 999+').props.numberOfLines, 1);
     assert.ok(text(row).includes('A native preview'));
+});
+
+test('selected user IDs gate tracking, notifications, badges and dashboard while preserving history', async t => {
+    const otherDm = '300000000000000026';
+    const initial = { accounts: { [ACCOUNT]: {
+        [dm]: { lastDay: day - 1, days: 9, best: 9, recipientId: null },
+        [otherDm]: { lastDay: day - 1, days: 9, best: 9, recipientId: BLOCKED },
+    } } };
+    const { w, item, mount, send, Plain, preview } = await setup(t, initial, { reduceMotion: false });
+    w.channels[otherDm] = { id: otherDm, type: 1, recipients: [BLOCKED] };
+    const row = await mount(preview(Plain, dm));
+    const otherRow = await mount(preview(Plain, otherDm));
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    const mode = () => ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Only selected users');
+    const select = value => Renderer.act(async () => mode().props.onValueChange(value));
+    const enter = value => Renderer.act(async () => ui.root.findByType('TextInput').props.onChangeText(value));
+    const add = () => Renderer.act(async () => ui.root.findAllByType('Button').find(node => node.props.title === 'Add user IDs').props.onPress());
+    assert.deepEqual(fire(row), ['🔥 9']);
+    assert.deepEqual(fire(otherRow), ['🔥 9']);
+    assert.equal(mode().props.value, false);
+
+    await select(true);
+    assert.deepEqual(fire(row), []);
+    assert.deepEqual(fire(ui), []);
+    await enter('not-a-user');
+    await add();
+    assert.ok(text(ui).includes('Paste Discord user IDs or mentions, separated by commas or new lines.'));
+    await enter(ACCOUNT);
+    await add();
+    assert.ok(text(ui).includes('Remove your own user ID before adding the list.'));
+    await enter(FRIEND + ',\n<@!' + FRIEND + '>,' + otherDm + ',');
+    await add();
+    assert.deepEqual(item.writes.at(-1).selections[ACCOUNT].userIds, [FRIEND, otherDm]);
+    assert.deepEqual(fire(row), ['🔥 9']);
+    assert.deepEqual(fire(ui), ['🔥 9']);
+    assert.deepEqual(fire(otherRow), []);
+
+    await send({ channel: otherDm });
+    await send({ sender: FRIEND });
+    assert.deepEqual(w.toasts, []);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][otherDm].lastDay, day - 1);
+    await send();
+    await send();
+    assert.deepEqual(fire(row), ['🔥 10']);
+    assert.deepEqual(w.toasts, ['🔥 10-day DM streak!']);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][dm].recipientId, FRIEND);
+
+    await Renderer.act(async () => ui.root.findAllByType('Pressable')
+        .find(node => node.props.accessibilityLabel === 'Remove ' + FRIEND).props.onPress());
+    assert.deepEqual(fire(row), []);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][dm].days, 10);
+    await select(false);
+    assert.deepEqual(fire(row), ['🔥 10']);
+    assert.deepEqual(fire(otherRow), ['🔥 9']);
+});
+
+test('the user selection survives restart and settings callbacks cannot mutate another account', async t => {
+    const initial = { selections: { [ACCOUNT]: { onlySelected: true, userIds: [FRIEND, FRIEND, 'invalid', ACCOUNT] } } };
+    const { w, item, mount, send } = await setup(t, initial);
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    const toggle = () => ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Only selected users');
+    assert.equal(toggle().props.value, true);
+    assert.equal(ui.root.findAllByType('Pressable').length, 1);
+    const stale = toggle().props.onValueChange;
+    await send();
+    await Renderer.act(async () => w.setAccount(FRIEND));
+    assert.equal(toggle().props.value, false);
+    assert.equal(ui.root.findAllByType('Pressable').length, 0);
+    await Renderer.act(async () => stale(false));
+    await Renderer.act(async () => toggle().props.onValueChange(true));
+    const saved = item.writes.at(-1);
+    assert.deepEqual(saved.selections[ACCOUNT], { onlySelected: true, userIds: [FRIEND] });
+    assert.deepEqual(saved.selections[FRIEND], { onlySelected: true, userIds: [] });
+    await Renderer.act(async () => w.stop(item));
+    await Renderer.act(async () => w.setAccount(ACCOUNT));
+    let restarted;
+    await Renderer.act(async () => { restarted = await w.start(slug, saved); });
+    const reopened = await mount(h(restarted.options.SettingsComponent, { api: restarted.api }));
+    assert.equal(reopened.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Only selected users').props.value, true);
+    assert.deepEqual(fire(reopened), ['🔥 1']);
 });

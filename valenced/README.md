@@ -1,4 +1,4 @@
-**Streak Tracker 1.0.0-beta2** adds smoke when a streak expires, compact orange, purple and red badges in Messages, and improved recipient names in the top-five leaderboard. Manage badges, smoke and milestones under **Settings → Valenced → Streak Tracker**. [Usage and source](plugins/streak-tracker/README.md).
+**Streak Tracker 1.0.0-beta3** adds **Who to track** under **Settings → Valenced → Streak Tracker**. Paste Discord user IDs and turn on **Only selected users** to limit streaks to that list. [Usage and source](plugins/streak-tracker/README.md).
 
 **Voice Messages 1.0.2** adds a record and import panel to the microphone slot in an empty composer. Preview the clip and send it as a Discord voice message. [Usage and source](plugins/voice-messages/README.md).
 
