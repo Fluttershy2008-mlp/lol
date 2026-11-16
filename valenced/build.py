@@ -140,6 +140,25 @@ def build(check=False):
             raise RuntimeError(f"Missing source bundle: {source_path}")
         source = source_path.read_text()
         slug = "addon-list" if directory.name == "addonList" else directory.name
+        adapted_source = source
+        if slug == "view-icons":
+            profile_path = HERE / "plugins" / slug / "profile-components.js"
+            profile_source = profile_path.read_text()
+            for old, new in (
+                ('    function resolveModules() {', profile_source + '\n    function resolveModules() {'),
+                ('ActionSheetRow = optional(() => findByProps("ActionSheetRow")?.ActionSheetRow);',
+                 'ActionSheetRow = optional(() => componentExport(findByProps("ActionSheetRow")?.ActionSheetRow));'),
+                ('            if (ActionSheetRow.Icon) {\n'
+                 '                props.icon = React.createElement(ActionSheetRow.Icon, { source: imageIcon });',
+                 '            // Metro can wrap the icon in a module namespace.\n'
+                 '            const Icon = componentExport(ActionSheetRow.Icon);\n'
+                 '            if (Icon) {\n'
+                 '                props.icon = React.createElement(Icon, { source: imageIcon });'),
+            ):
+                if adapted_source.count(old) != 1:
+                    raise RuntimeError("ViewIcons profile component adapter needs updating")
+                adapted_source = adapted_source.replace(old, new)
+            legacy["hash"] = hashlib.sha256(adapted_source.encode()).hexdigest()
         version = config.get("pluginVersions", {}).get(slug, config["portVersion"])
         source_ref = config.get("sourceRefs", {}).get(slug, config["sourceCommit"])
         manifest = manifest_for(slug, legacy, version)
@@ -148,7 +167,7 @@ def build(check=False):
             manifest["description"] = "Valenced preview. " + shortcut["description"]
         metadata = {"id": manifest["id"], "legacyManifest": legacy,
                     "repository": config["repositoryUrl"], "host": "valenced", "version": version}
-        transformed = source.rstrip().rstrip(";")
+        transformed = adapted_source.rstrip().rstrip(";")
         # These legacy plugins announce every onLoad, including app restarts.
         # Remove only the enabled notification from their Valenced packages;
         # action results and unsupported-menu errors must still reach the user.
@@ -265,6 +284,11 @@ def build(check=False):
         source_info[manifest["id"]] = {"path": str(source_path.relative_to(ROOT)),
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "originalVersion": legacy["version"],
             "kind": "compatibility-preview"}
+        if slug == "view-icons":
+            source_info[manifest["id"]]["profileComponents"] = {
+                "path": profile_path.relative_to(ROOT).as_posix(),
+                "sha256": hashlib.sha256(profile_source.encode()).hexdigest(),
+            }
         if slug == "hide-blocked-and-ignored-messages":
             for name, path, content in (("settings", settings_path, settings_source), ("previews", previews_path, previews_source)):
                 source_info[manifest["id"]][name] = {

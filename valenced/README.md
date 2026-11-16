@@ -6,7 +6,9 @@
 
 **InfoCommands 1.0.0-beta8** adds Vencord-style Friends, Blocked and Ignored tabs, join date, language, verification level, copyable vanity invites, and tappable server images. Press and hold a server icon and tap **Server Info**. Refresh this repository, update **InfoCommands** and fully restart Discord. [Usage and source](../info-commands/README.md).
 
-**ViewIcons 1.0.0-beta5** opens **View Server Icon** and **View Server Banner** after the server menu closes. Refresh the repository, update ViewIcons and fully restart Discord.
+**ViewIcons 1.0.0-beta6** unwraps profile sheet icon exports before rendering menu rows. This fixes a reproduced React component error in the Valenced profile sheet. Refresh the repository, update ViewIcons and fully restart Discord.
+
+**ViewIcons 1.0.0-beta5** opens **View Server Icon** and **View Server Banner** after the server menu closes.
 
 **ViewIcons 1.0.0-beta4** adds **View Avatar** and **View Banner** to the **⋯** menu on user profiles. The menu also shows **View Server Avatar** and **View Avatar Decoration** when available. Refresh the repository, update ViewIcons and fully restart Discord.
 

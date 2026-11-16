@@ -137,6 +137,34 @@ test('ViewIcons adds user actions to grouped context menus', async t => {
     assert.deepEqual(w.imagePaths(), [`/avatars/${FRIEND}/user.webp`]);
 });
 
+test('ViewIcons lazy profiles render wrapped icon exports and fall back when an export is unusable', async t => {
+    for (const wrapped of [true, false]) {
+        const w = scenario(t);
+        function ActionSheetRow({ label, icon, iconSource }) {
+            return h(w.RN.View, { iconSource }, h(w.RN.Text, null, label), icon);
+        }
+        const Icon = ({ source }) => h(w.RN.Image, { source });
+        ActionSheetRow.Icon = wrapped ? { default: Icon } : { unresolved: true };
+        w.U.discord.design.Design.ActionSheetRow = { default: ActionSheetRow };
+        const sheet = { default: () => h(w.RN.View, null,
+            [h(ActionSheetRow, { key: 'native', label: 'Native profile action' })]) };
+        await w.start('view-icons');
+        await w.sheets.openLazy(Promise.resolve(sheet), 'UserProfile', { userId: FRIEND });
+
+        let ui;
+        await Renderer.act(async () => { ui = Renderer.create(h(sheet.default)); });
+        await Renderer.act(async () => {
+            const rows = ui.root.findAllByType(ActionSheetRow);
+            assert.deepEqual(rows.map(row => row.props.label), ['Native profile action', 'View Avatar']);
+            assert.equal(rows[1].props.icon?.type, wrapped ? Icon : undefined);
+            assert.equal(rows[1].props.iconSource, wrapped ? undefined : 1);
+            rows[1].props.onPress();
+        });
+        await Renderer.act(async () => ui.unmount());
+        assert.equal(w.imagePaths().length, 1);
+    }
+});
+
 test('ViewIcons opens server images after the guild popout dismisses', async t => {
     const w = scenario(t);
     let visible;
