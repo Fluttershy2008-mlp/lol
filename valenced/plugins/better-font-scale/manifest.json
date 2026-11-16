@@ -5,8 +5,8 @@
   "description": "Customize font sizes across Discord and adjust word spacing in chat messages on Android.",
   "author": "Fluttershy2008-mlp <753962426407452713>",
   "contributors": ["RazerTexz <633565155501801472>"],
-  "icon": "TextIcon",
-  "version": "1.0.0-beta3",
+  "icon": "AccessibilityIcon",
+  "version": "1.0.0-beta4",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }

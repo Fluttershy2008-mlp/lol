@@ -18,7 +18,7 @@ More Alts! remains at **1.0.0-beta8**, InfoCommands at **1.0.0-beta9**, Friends 
 
 **Streak Tracker 1.0.0-beta4** adds opt-in group DM and server streaks. Open **Settings → Valenced → Streak Tracker → Who to track** to choose chats by ID. Refresh this repository, update the plugin, then fully restart Discord. [Usage and source](valenced/plugins/streak-tracker/README.md).
 
-**Better Font Scale 1.0.0-beta3** adds a Word Spacing slider and preview for chat messages. Use **0%** for Discord’s default. [Usage and source](valenced/plugins/better-font-scale/README.md).
+**Better Font Scale 1.0.0-beta4** fixes slider positions and keeps Save above Android’s navigation bar. [Usage and source](valenced/plugins/better-font-scale/README.md).
 
 **Voice Messages 1.0.2** is available for Valenced Android. Refresh this repository and install or update it from **Browse Plugins**. [Usage and source](valenced/plugins/voice-messages/README.md).
 
