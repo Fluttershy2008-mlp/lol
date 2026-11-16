@@ -2,7 +2,7 @@
 
 Refresh Fluttershy’s Valenced repository and install **Better Font Scale** from **Browse Plugins**. Enable the plugin, fully restart Discord, then open the plugin’s settings from its card.
 
-Set an individual size for Messages, Chatbox, Username, About Me, Game Status, Profile Status, Timestamp, Channel Category Name, Channel Name, Voice Channel Name, or Channel Thread Name. Sizes are in scaled points (8–48), with decimals supported. **0** uses Discord’s current default for that field. Tap **Save**, then restart Discord to apply updates to all existing screens. **Reset all** fills in zero for every field. Tap **Save** to confirm the reset.
+Use a slider to preview each of the eleven font sizes. Sliders use whole scaled points from 8 to 48. Tap the number to enter a decimal size. **Default** restores Discord’s current size for one field, and **Reset all** restores every field. You can also enter **0** to use the default. Tap **Save**, then restart Discord to apply updates to all existing screens. Previously saved sizes work with the new controls.
 
 The native hooks target Discord’s Android message renderer and composer. The React Native hooks apply to profile text, member activity, and server channel lists. This beta was checked against Discord Android 353.11 native code and 355.5 React Native module layouts. An on-device run is still pending.
 

@@ -6,7 +6,7 @@
   "author": "Fluttershy2008-mlp <753962426407452713>",
   "contributors": ["RazerTexz <633565155501801472>"],
   "icon": "TextIcon",
-  "version": "1.0.0-beta1",
+  "version": "1.0.0-beta2",
   "dependencies": {
     "valenced.api": { "version": ">=1 <2" },
     "discord": { "version": "*" }
