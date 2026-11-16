@@ -313,8 +313,8 @@
     },
     "dev.fluttershy2008.streak-tracker": {
       "path": "valenced/plugins/streak-tracker/index.js",
-      "sha256": "225ec04a15197efd48f73ecebdd4ce154a1344a29aeb4b4932639cb636c7179d",
-      "originalVersion": "1.0.0-beta3",
+      "sha256": "4b4db8c4d900d8f5b45f9168bc18eb62fa2e38d877844d3a9fb637ab3d7453ee",
+      "originalVersion": "1.0.0-beta4",
       "kind": "native-plugin",
       "upstream": "https://github.com/TermitJs/Streak-Tracker-for-Discord",
       "settingsShortcut": {

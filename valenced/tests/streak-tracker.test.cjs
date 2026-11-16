@@ -3,7 +3,7 @@ process.env.PLUGIN_TEST_TARGET = 'valenced';
 process.env.TZ = 'Asia/Singapore';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorld, React, Renderer, ACCOUNT, FRIEND, BLOCKED, CHANNEL } = require('../../revenge-next/tests/next-harness.cjs');
+const { createWorld, React, Renderer, ACCOUNT, FRIEND, BLOCKED, CHANNEL, GUILD } = require('../../revenge-next/tests/next-harness.cjs');
 const { installChatButtonsHost } = require('./chat-buttons-fixture.cjs');
 const { installSettingsSection } = require('./settings-fixture.cjs');
 
@@ -129,10 +129,10 @@ test('native settings show saved stats, scope account changes and clear only the
     await send();
     assert.deepEqual(w.toasts, ['🔥 10-day DM streak!']);
     assert.deepEqual(fire(ui), ['🔥 10']);
-    await Renderer.act(async () => toggle('Show badges in Messages').props.onValueChange(false));
+    await Renderer.act(async () => toggle('Show streak badges').props.onValueChange(false));
     assert.deepEqual(fire(row), []);
     assert.deepEqual(fire(ui), ['🔥 10']);
-    await Renderer.act(async () => toggle('Show badges in Messages').props.onValueChange(true));
+    await Renderer.act(async () => toggle('Show streak badges').props.onValueChange(true));
     assert.deepEqual(fire(row), ['🔥 10']);
 
     clear();
@@ -315,17 +315,19 @@ test('the user selection survives restart and settings callbacks cannot mutate a
     const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
     const toggle = () => ui.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Only selected users');
     assert.equal(toggle().props.value, true);
-    assert.equal(ui.root.findAllByType('Pressable').length, 1);
+    const removals = () => ui.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel?.startsWith('Remove '));
+    assert.equal(removals().length, 1);
     const stale = toggle().props.onValueChange;
     await send();
     await Renderer.act(async () => w.setAccount(FRIEND));
     assert.equal(toggle().props.value, false);
-    assert.equal(ui.root.findAllByType('Pressable').length, 0);
+    assert.equal(removals().length, 0);
     await Renderer.act(async () => stale(false));
     await Renderer.act(async () => toggle().props.onValueChange(true));
     const saved = item.writes.at(-1);
-    assert.deepEqual(saved.selections[ACCOUNT], { onlySelected: true, userIds: [FRIEND] });
-    assert.deepEqual(saved.selections[FRIEND], { onlySelected: true, userIds: [] });
+    const rest = { allGroups: false, groupIds: [], allGuilds: false, guildIds: [] };
+    assert.deepEqual(saved.selections[ACCOUNT], { ...rest, onlySelected: true, userIds: [FRIEND] });
+    assert.deepEqual(saved.selections[FRIEND], { ...rest, onlySelected: true, userIds: [] });
     await Renderer.act(async () => w.stop(item));
     await Renderer.act(async () => w.setAccount(ACCOUNT));
     let restarted;
@@ -333,4 +335,92 @@ test('the user selection survives restart and settings callbacks cannot mutate a
     const reopened = await mount(h(restarted.options.SettingsComponent, { api: restarted.api }));
     assert.equal(reopened.root.findAllByType('Switch').find(node => node.props.accessibilityLabel === 'Only selected users').props.value, true);
     assert.deepEqual(fire(reopened), ['🔥 1']);
+});
+
+test('group and server streaks opt in independently and use the group channel or server ID', async t => {
+    const otherGroup = '300000000000000027', thread = '300000000000000028';
+    const otherGuild = '400000000000000002', otherChannel = '300000000000000029';
+    const { w, item, mount, send, Native, preview } = await setup(t);
+    w.channels[group].name = 'Study group';
+    w.channels[otherGroup] = { id: otherGroup, type: 3, name: 'Another group' };
+    w.channels[thread] = { id: thread, type: 11, guildId: GUILD };
+    w.channels[otherChannel] = { id: otherChannel, type: 0, guild_id: otherGuild };
+    const originalMenu = Object.freeze([Object.freeze([{ label: 'Native item' }])]);
+    const builder = { default: () => originalMenu };
+    const original = builder.default;
+    w.addModule(builder, 'modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx');
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    const groupRow = await mount(preview(Native, group));
+    const otherRow = await mount(preview(Native, otherGroup));
+    const activateTab = name => Renderer.act(async () => ui.root.findAllByType('Pressable')
+        .find(node => node.props.accessibilityRole === 'tab' && node.props.accessibilityLabel === name).props.onPress());
+    async function add(id, title) {
+        await Renderer.act(async () => ui.root.findByType('TextInput').props.onChangeText(id));
+        await Renderer.act(async () => ui.root.findAllByType('Button').find(node => node.props.title === title).props.onPress());
+    }
+    const toggle = (label, value) => Renderer.act(async () => ui.root.findAllByType('Switch')
+        .find(node => node.props.accessibilityLabel === label).props.onValueChange(value));
+    const menu = id => builder.default({ guild: { id } })[0];
+
+    await send({ channel: group });
+    await send({ channel: CHANNEL });
+    assert.equal(item.writes.length, 0);
+    assert.equal(menu(GUILD).length, 1);
+    await activateTab('Group DMs');
+    await add(group, 'Add group DM IDs');
+    await send({ channel: group });
+    await send({ channel: group, at: time - 1000 });
+    await send({ channel: otherGroup });
+    assert.deepEqual(fire(groupRow), ['🔥 1']);
+    assert.deepEqual(fire(otherRow), []);
+    assert.ok(text(ui).includes('Study group'));
+
+    await activateTab('Servers');
+    await add(GUILD, 'Add server IDs');
+    await send({ channel: CHANNEL });
+    await send({ channel: thread, type: 19 });
+    await send({ channel: otherChannel });
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][GUILD].days, 1);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][CHANNEL], undefined);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][thread], undefined);
+    assert.equal(item.writes.at(-1).accounts[ACCOUNT][otherGuild], undefined);
+    assert.equal(menu(GUILD)[1].label, '🔥 1-day server streak');
+    assert.equal(menu(otherGuild).length, 1);
+    assert.equal(originalMenu[0].length, 1);
+
+    await Renderer.act(async () => w.advance(2000));
+    await send({ channel: thread, at: time + 2000 });
+    assert.equal(menu(GUILD)[1].label, '🔥 2-day server streak');
+    const action = menu(GUILD)[1].action;
+    action();
+    assert.deepEqual(w.alerts.at(-1), ['Test Guild', '2-day streak · Personal best 2']);
+    await Renderer.act(async () => w.setAccount(FRIEND));
+    action();
+    assert.equal(w.alerts.length, 1);
+    assert.equal(menu(GUILD).length, 1);
+    await Renderer.act(async () => w.setAccount(ACCOUNT));
+    await activateTab('Servers');
+    await toggle('Track all servers', true);
+    await send({ channel: otherChannel, at: time + 2000 });
+    assert.equal(menu(otherGuild)[1].label, '🔥 1-day server streak');
+    await toggle('Track all servers', false);
+    assert.equal(menu(otherGuild).length, 1);
+    await Renderer.act(async () => w.stop(item));
+    assert.equal(builder.default, original);
+});
+
+test('the server streak menu composes with ViewIcons and respects the badge switch', async t => {
+    const initial = { selections: { [ACCOUNT]: { allGuilds: true } } };
+    const { w, item, mount, send } = await setup(t, initial);
+    await w.start('view-icons');
+    w.guilds[GUILD].icon = 'server';
+    const module = { getGuildsBarGuildMenuItems: () => [{ label: 'Native item' }] };
+    w.addModule(module, 'modules/guilds_bar/native/utils/getGuildsBarGuildMenuItems.tsx');
+    await send({ channel: CHANNEL });
+    const labels = () => Array.from(module.getGuildsBarGuildMenuItems(GUILD), row => row.label).sort();
+    assert.deepEqual(labels(), ['Native item', 'View Server Icon', '🔥 1-day server streak']);
+    const ui = await mount(h(item.options.SettingsComponent, { api: item.api }));
+    await Renderer.act(async () => ui.root.findAllByType('Switch')
+        .find(node => node.props.accessibilityLabel === 'Show streak badges').props.onValueChange(false));
+    assert.deepEqual(labels(), ['Native item', 'View Server Icon']);
 });
