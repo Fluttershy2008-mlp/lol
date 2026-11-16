@@ -1,3 +1,5 @@
+**Streak Tracker 1.0.0-beta1** tracks daily one-to-one DMs, shows a fire count in Messages, and keeps a leaderboard under **Settings → Valenced → Streak Tracker**. [Usage and source](plugins/streak-tracker/README.md).
+
 **Voice Messages 1.0.2** adds a record and import panel to the microphone slot in an empty composer. Preview the clip and send it as a Discord voice message. [Usage and source](plugins/voice-messages/README.md).
 
 **InfoCommands 1.0.0-beta9** reduces Server Info scrolling and tab-switching work. It batches store updates, counts channels only while Overview is visible, and uses smaller still previews. Tap the icon or banner to view the full-size image. Refresh the repository, update InfoCommands and restart Discord.

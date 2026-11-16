@@ -1,0 +1,5 @@
+Streak Tracker for Valenced
+
+Inspired by Streak Tracker for Discord by TermitJs.
+https://github.com/TermitJs/Streak-Tracker-for-Discord
+The Valenced implementation uses its own React Native and Discord Flux code.
