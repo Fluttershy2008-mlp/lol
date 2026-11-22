@@ -89,6 +89,57 @@ test('forum cards and both DM list renderers omit blocked previews without hidin
   assert.equal(text(ui).filter(value => value === 'Blocked message').length, 3);
 });
 
+test('search shows the native message preview for whitelisted blocked and ignored users', async t => {
+  const { w, item, message, mount, stop, jsx } = await scene(t, {
+    whitelistEnabled: true, whitelistedIds: [BLOCKED, IGNORED], hiddenServerIds: [GUILD],
+  });
+  const relationship = w.stores.RelationshipStore;
+  const NativeChannelRowPreview = ({ message, lineClamp }) => h(w.RN.Text, null, `${message.content} (${lineClamp})`);
+  const NativeMessageChannelRowPreview = React.memo(function Preview(props) {
+    const { message } = props;
+    if (relationship.isBlocked(message.author.id)) return h(w.RN.Text, null, 'Blocked message');
+    if (relationship.isIgnored(message.author.id)) return h(w.RN.Text, null, 'Ignored message');
+    return jsx(NativeChannelRowPreview, props);
+  });
+  function RowContent({ message, isSpoilerHidden }) {
+    return isSpoilerHidden ? h(w.RN.Text, null, 'Spoiler hidden')
+      : jsx(NativeMessageChannelRowPreview, { message, lineClamp: 2 });
+  }
+  const MessageRow = React.memo(props => h(RowContent, props));
+  const HeaderlessMessageRow = React.memo(props => h(RowContent, props));
+  w.addModule({ NativeChannelRowPreview, NativeMessageChannelRowPreview }, channelPath);
+  w.addModule({ default: MessageRow, HeaderlessMessageRow },
+    'modules/search/native/components/list/rows/MessageRow.tsx');
+  const forAuthor = (id, suffix, props = {}) => Object.freeze({
+    ...message(id), id: `90000000000000000${suffix}`, content: `search hit ${suffix}`, type: 0, ...props,
+  });
+  const blocked = forAuthor(BLOCKED, 1, { channel_id: DM });
+  const ignored = forAuthor(IGNORED, 2);
+  const spoiler = forAuthor(BLOCKED, 3);
+  const system = forAuthor(BLOCKED, 4, { type: 6, channel_id: DM });
+  const outsideSearch = forAuthor(BLOCKED, 5, { channel_id: DM });
+  const ui = await mount(h(React.Fragment, null,
+    jsx(MessageRow, { message: blocked }),
+    jsx(HeaderlessMessageRow, { message: ignored }),
+    jsx(MessageRow, { message: spoiler, isSpoilerHidden: true }),
+    jsx(MessageRow, { message: system }),
+    jsx(NativeMessageChannelRowPreview, { message: outsideSearch, lineClamp: 1 })));
+  await Renderer.act(async () => w.addModule({ isMessageContentPreviewable: msg => msg.type === 0 },
+    'modules/message_previews/useFormattedMessagePreview.tsx'));
+  assert.deepEqual(text(ui), ['search hit 1 (2)', 'search hit 2 (2)', 'Spoiler hidden', 'Blocked message', 'Blocked message']);
+  assert.equal(relationship.isBlocked(BLOCKED), true);
+  assert.equal(relationship.isIgnored(IGNORED), true);
+  assert.equal(w.stores.MessageStore.getMessages(CHANNEL).length, 0);
+
+  const settings = await mount(h(item.options.SettingsComponent, { api: item.api }));
+  await change(settings, 'Show whitelisted users', false);
+  assert.deepEqual(text(ui), ['Spoiler hidden']);
+  await change(settings, 'Show whitelisted users', true);
+  assert.deepEqual(text(ui), ['search hit 1 (2)', 'search hit 2 (2)', 'Spoiler hidden', 'Blocked message', 'Blocked message']);
+  await stop();
+  assert.deepEqual(text(ui), ['Blocked message', 'Ignored message', 'Spoiler hidden', 'Blocked message', 'Blocked message']);
+});
+
 test('late thread stores suppress a hidden last message and parent message, then restore a visible update', async t => {
   const s = await scene(t), { w, message, mount, jsx } = s;
   let last, referenced;

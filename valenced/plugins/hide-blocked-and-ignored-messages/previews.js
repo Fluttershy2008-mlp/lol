@@ -4,12 +4,14 @@
 function installHiddenPreviews(V, filter, isServerRecordSelected, getMessage) {
   const { React } = V.metro.common;
   const jsxRuntime = valenced.react.jsxRuntime;
+  const SearchMessage = React.createContext(null);
 
   const disposers = [], listeners = new Set(), types = new Set();
   const storage = V.plugin.storage;
   const stores = new Map();
   const previousReplyPreviews = new WeakMap();
   let active = true;
+  let isMessageContentPreviewable;
 
   function refresh() {
     for (const listener of listeners) listener();
@@ -18,10 +20,25 @@ function installHiddenPreviews(V, filter, isServerRecordSelected, getMessage) {
     listeners.add(listener);
     return () => listeners.delete(listener);
   }
-  function Preview({ element, isHidden }) {
-    const read = () => active && isHidden(element.props);
-    const hidden = React.useSyncExternalStore(subscribe, read, read);
-    return hidden ? null : element;
+  function SearchResult({ element }) {
+    return React.createElement(SearchMessage.Provider, { value: element.props?.message?.id ?? null }, element);
+  }
+  function Preview({ element, isHidden, nativeSearchPreview }) {
+    const searchMessageId = React.useContext(SearchMessage);
+    const { message } = element.props;
+    const read = () => {
+      if (!active) return element.type;
+      if (nativeSearchPreview && searchMessageId !== null && message?.id === searchMessageId
+        && isUserWhitelisted(storage, message.author?.id)) {
+        // Use Discord's content renderer directly. The outer preview otherwise
+        // replaces content with a relationship placeholder, even in search.
+        return isMessageContentPreviewable?.(message) ? nativeSearchPreview : element.type;
+      }
+      return isHidden(element.props) ? null : element.type;
+    };
+    const type = React.useSyncExternalStore(subscribe, read, read);
+    if (type === null) return null;
+    return type === element.type ? element : { ...element, type };
   }
   function readVoiceFilter() {
     return active && storage.hideServerVoiceActivity !== false ? storage.hiddenServerIds : null;
@@ -55,15 +72,15 @@ function installHiddenPreviews(V, filter, isServerRecordSelected, getMessage) {
       if (active) callback(module);
     }));
   }
+  function patchPreview(type, isHidden, nativeSearchPreview) {
+    if (!type || types.has(type)) return;
+    own(jsxRuntime.afterJSX(type, element => active && element
+      ? { ...element, type: Preview, props: { element, isHidden, nativeSearchPreview } } : element));
+    types.add(type);
+  }
   function watchPreview(path, keys, isHidden) {
     watch(path, module => {
-      for (const key of keys) {
-        const type = module?.[key];
-        if (!type || types.has(type)) continue;
-        own(jsxRuntime.afterJSX(type, element => active && element
-          ? { ...element, type: Preview, props: { element, isHidden } } : element));
-        types.add(type);
-      }
+      for (const key of keys) patchPreview(module?.[key], isHidden);
     });
   }
   function watchStore(name, path, method) {
@@ -148,10 +165,26 @@ function installHiddenPreviews(V, filter, isServerRecordSelected, getMessage) {
     watchStore('ReferencedMessageStore', 'modules/replies/ReferencedMessageStore.tsx', 'getMessage');
     if (!jsxRuntime?.afterJSX) return { projectReply, refresh, stop };
     watchStore('ThreadMessageStore', 'modules/threads/ThreadMessageStore.tsx', 'getMostRecentMessage');
+    watch('modules/search/native/components/list/rows/MessageRow.tsx', module => {
+      for (const type of new Set([module?.default, module?.HeaderlessMessageRow])) {
+        if (!type || types.has(type)) continue;
+        own(jsxRuntime.afterJSX(type, element => active && element
+          ? { ...element, type: SearchResult, props: { element } } : element));
+        types.add(type);
+      }
+    });
+    watch('modules/message_previews/useFormattedMessagePreview.tsx', module => {
+      if (typeof module?.isMessageContentPreviewable !== 'function') return;
+      isMessageContentPreviewable = module.isMessageContentPreviewable;
+      refresh();
+    });
     watchPreview('modules/forums/native/posts/ForumPostMessageContent.tsx', ['default'], forumHidden);
-    watchPreview('modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx',
-      ['ChannelRowPreview', 'NativeChannelRowPreview', 'NativeMessageChannelRowPreview'],
-      ({ message }) => filter.shouldHide(message));
+    watch('modules/main_tabs_v2/native/shared_components/ChannelRowPreview.tsx', module => {
+      const hidden = ({ message }) => filter.shouldHide(message);
+      patchPreview(module?.ChannelRowPreview, hidden);
+      patchPreview(module?.NativeChannelRowPreview, hidden);
+      patchPreview(module?.NativeMessageChannelRowPreview, hidden, module?.NativeChannelRowPreview);
+    });
     watchPreview('modules/threads/native/components/ThreadBrowserRowSubtext.tsx', ['ThreadSubtext'], threadHidden);
     watchPreview('modules/threads/native/components/ThreadParentMessage.tsx', ['ThreadChannelStarterMessage'], threadStarterHidden);
     const carouselPath = 'modules/main_tabs_v2/native/shared_components/happening_now/';
