@@ -111,3 +111,21 @@ test('native reply rows lose only the blocked or ignored preview and update when
   w.stores.RelationshipStore.emitChange();
   assert.deepEqual(render(), [['Blocked message', 2], [null, 0], ['Ordinary preview', 0], ['Original message was deleted', 0]]);
 });
+
+test('native changesets rebind a shifted row and give unwrapped messages their own author header', async t => {
+  const w = createWorld(), ChatManager = makeManager();
+  w.addModule({ default: ChatManager }, path);
+  const item = await w.start('hide-blocked-and-ignored-messages', { whitelistEnabled: true, whitelistedIds: [BLOCKED] });
+  t.after(async () => { await w.stop(item); assert.deepEqual(w.errors, []); });
+  const manager = new ChatManager();
+  const previous = [message('previous', FRIEND)];
+  manager.getPreviousRows = () => previous;
+  const shifted = message('shifted', BLOCKED);
+  manager.createRow({ ...shifted });
+  assert.deepEqual(manager.rows.map(row => [row.message.id, row.message.authorId, row.changeType]),
+    [['shifted', BLOCKED, 2]]);
+  const child = { ...message('child', BLOCKED), message: { ...message('child', BLOCKED).message, isFirst: false } };
+  manager.createRow(group([child]));
+  assert.equal(manager.rows[1].message.isFirst, true);
+  assert.equal(child.message.isFirst, false);
+});

@@ -14,8 +14,9 @@ const threadStorePath = 'modules/threads/ThreadMessageStore.tsx';
 const referencedStorePath = 'modules/replies/ReferencedMessageStore.tsx';
 const DM = '300000000000000007', GROUP = '300000000000000008', THREAD = '300000000000000009';
 
-async function scene(t, options) {
+async function scene(t, options, setUp = () => {}) {
   const w = createWorld(), fixture = installChatButtonsHost(w);
+  setUp(w);
   const item = await w.start(plugin, options);
   const views = [];
   const mount = async element => {
@@ -138,6 +139,73 @@ test('search shows the native message preview for whitelisted blocked and ignore
   assert.deepEqual(text(ui), ['search hit 1 (2)', 'search hit 2 (2)', 'Spoiler hidden', 'Blocked message', 'Blocked message']);
   await stop();
   assert.deepEqual(text(ui), ['Blocked message', 'Ignored message', 'Spoiler hidden', 'Blocked message', 'Blocked message']);
+});
+
+test('rapid search taps preserve the requested preview, author and native jump target', async t => {
+  let chatCollection;
+  const { w, mount, stop, jsx, message } = await scene(t, {
+    whitelistEnabled: true, whitelistedIds: [BLOCKED], hiddenServerIds: [GUILD],
+  }, world => {
+    const store = world.stores.MessageStore;
+    const getMessages = store.getMessages.bind(store);
+    store.getMessages = id => id === CHANNEL && chatCollection ? chatCollection : getMessages(id);
+  });
+  const hit = Object.freeze({ ...message(BLOCKED), blocked: true });
+  const neighbor = Object.freeze({ ...message(FRIEND), id: '900000000000000003' });
+  const older = Object.freeze({ ...message(FRIEND, DM), id: '900000000000000004' });
+  const fetchMessages = function (channelId, around) { return { channelId, around }; };
+  const actions = { fetchMessages };
+  w.addModule({ default: actions }, 'actions/native/MessagePreviewActionCreators.tsx');
+  let preview;
+  w.dispatcher.subscribe('LOAD_MESSAGES_AROUND_SUCCESS', event => { preview = event; });
+  const complete = (channelId, around, messages) => w.dispatcher.dispatch({
+    type: 'LOAD_MESSAGES_AROUND_SUCCESS', channelId, around, messages,
+  });
+  const ChatPreview = () => null;
+  const MessagePreview = props => jsx(ChatPreview, props);
+  w.addModule({ ChatPreview }, 'components_native/common/ChatPreview.tsx');
+  w.addModule({ default: MessagePreview }, 'components_native/common/MessagePreview.tsx');
+  const renderPreview = () => jsx(MessagePreview, { channelId: CHANNEL,
+    messages: preview.messages, jumpToChatProps: { jumpTargetId: preview.around } });
+  actions.fetchMessages(DM, older.id);
+  await complete(DM, older.id, [older]);
+  const ui = await mount(renderPreview());
+  await Renderer.act(async () => {
+    assert.deepEqual(actions.fetchMessages(CHANNEL, hit.id), { channelId: CHANNEL, around: hit.id });
+  });
+  const props = () => ui.root.findByType(ChatPreview).props;
+  assert.equal(props().messages, null);
+  assert.equal(props().jumpToChatProps.jumpTargetId, hit.id);
+  await complete(CHANNEL, hit.id, Object.freeze([neighbor, hit]));
+  await complete(DM, older.id, [older]);
+  await complete(CHANNEL, neighbor.id, [neighbor]);
+  await Renderer.act(async () => ui.update(renderPreview()));
+  assert.equal(preview.around, hit.id);
+  assert.equal(props().jumpToChatProps.jumpTargetId, hit.id);
+  assert.deepEqual(props().messages.map(m => [m.id, m.author.id, m.blocked]), [[hit.id, BLOCKED, false]]);
+  assert.equal(hit.blocked, true);
+
+  chatCollection = { _array: [neighbor, hit] };
+  assert.deepEqual(w.stores.MessageStore.getMessages(CHANNEL)._array, []);
+  chatCollection = { ...chatCollection, jumpTargetId: hit.id };
+  const opened = w.stores.MessageStore.getMessages(CHANNEL);
+  assert.deepEqual(opened._array.map(m => [m.id, m.author.id, m.blocked]), [[hit.id, BLOCKED, false]]);
+  assert.equal(opened.jumpTargetId, hit.id);
+  class ChatManager {
+    rows = [];
+    createRow(row) { this.rows.push(row); return row; }
+  }
+  w.addModule({ default: ChatManager }, 'modules/messages/native/renderer/ChatManager.tsx');
+  const manager = new ChatManager();
+  manager.messages = opened;
+  const createRow = m => manager.createRow({ type: 1, message: { id: m.id, channelId: CHANNEL, authorId: m.author.id } });
+  createRow(neighbor);
+  createRow(hit);
+  assert.deepEqual(manager.rows.map(row => [row.message.id, row.message.authorId]), [[hit.id, BLOCKED]]);
+  await stop();
+  assert.equal(actions.fetchMessages, fetchMessages);
+  await complete(DM, older.id, [older]);
+  assert.equal(preview.around, older.id);
 });
 
 test('late thread stores suppress a hidden last message and parent message, then restore a visible update', async t => {
