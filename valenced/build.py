@@ -223,15 +223,38 @@ def build(check=False):
                 ("    hiddenPings?.refresh();", "    hiddenPings?.refresh();\n    previews?.refresh();"),
                 ("      cleanup.push(installChatSettings(V, refresh));", "      cleanup.push(installChatSettings(V, refresh));\n"
                     "      previews = installHiddenPreviews(V, filter, servers.isServerRecordSelected, originalGetMessage);\n      cleanup.push(previews.stop);"),
+                ("lists = createCollectionFilter(filter.shouldHide, () => {",
+                    "lists = createCollectionFilter((message, collection) =>\n"
+                    "      !previews?.isJumpTarget(message, collection) && filter.shouldHide(message), () => {"),
+                ("raw.filter(message => !shouldHide(message)).map(projectMessage)",
+                    "raw.filter(message => !shouldHide(message, collection)).map(projectMessage)"),
+                ("    }, mentions.project);",
+                    "    }, message => mentions.project(previews ? previews.projectMessage(message) : message));"),
+                ("          try { filter.observe(args[0]); hiddenPings?.observe(args[0]); } catch {}",
+                    "          if (!previews.acceptSearchEvent(args[0])) return Promise.resolve();\n"
+                    "          try { filter.observe(args[0]); hiddenPings?.observe(args[0]); } catch {}"),
                 ("function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden) {",
-                    "function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden, projectReply) {"),
+                    "function installNativeRows(V, storage, isFilteredUser, isServerMessageHidden, previews) {"),
                 ("      try { rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden); }",
                     "      try {\n"
-                    "        rows = projectNativeRows(args[0], storage, isFilteredUser, isServerMessageHidden);\n"
-                    "        for (let i = 0; i < rows.length; i++) rows[i] = projectReply(rows[i], this);\n"
+                    "        rows = projectNativeRows(args[0], storage, isFilteredUser, message =>\n"
+                    "          !previews.isJumpTarget(message, this.messages) && isServerMessageHidden(message));\n"
+                    "      }"),
+                ("      if (rows.length === 1 && rows[0] === args[0]) return original.apply(this, args);\n"
+                    "      let result;\n"
+                    "      for (const row of rows) result = original.apply(this, [row, ...args.slice(1)]);",
+                    "      let result;\n"
+                    "      for (const row of rows) {\n"
+                    "        let projected = row;\n"
+                    "        try {\n"
+                    "          const reply = previews.projectReply(row, this);\n"
+                    "          projected = previews.rebindNativeRow(reply, this, row !== args[0] &&\n"
+                    "            (args[0]?.type === 2 || args[0]?.type === 6));\n"
+                    "        } catch {}\n"
+                    "        result = original.apply(this, projected === args[0] ? args : [projected, ...args.slice(1)]);\n"
                     "      }"),
                 ("installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden)",
-                    "installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden, previews.projectReply)"),
+                    "installNativeRows(V, storage, filter.isFilteredUser, servers.isServerMessageHidden, previews)"),
                 ("const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); };",
                     "const relationshipsChanged = () => { refreshMessages(); channelMembers?.refresh(); previews?.refresh(); };"),
                 ("    filter = lists = mentions = pagination = search =", "    previews = filter = lists = mentions = pagination = search ="),
