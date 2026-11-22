@@ -18,6 +18,8 @@
 
 **Chat Buttons 1.0.13** restores the compact composer icon and menu from 1.0.11. Refresh the repository, update Chat Buttons and restart Discord.
 
+**Hide Blocked & Ignored Messages 1.0.0-beta25** shows message content in Discord search for blocked or ignored IDs under **Whitelisted users**. Refresh the repository, update the plugin, restart Discord, and run the search again.
+
 **Hide Blocked & Ignored Messages 1.0.0-beta24** hides the “Blocked message” and “Ignored message” previews above visible replies in chat. The preview follows the existing blocked, ignored, and whitelist settings. Turn off **Hide replies to them** to keep other users’ replies visible. Refresh the repository, update the plugin, and restart Discord.
 
 **Hide Blocked & Ignored Messages 1.0.0-beta23** adds **Hide voice activity from selected servers** under **Server filters**. It uses the same server IDs and works independently of the message filter. On upgrade, the new switch starts with your previous message filter setting.
