@@ -297,6 +297,51 @@ def build(check=False):
                 if transformed.count(old) != 1:
                     raise RuntimeError("AutoText React key bridge needs updating")
                 transformed = transformed.replace(old, new)
+        if directory.name == "valid-user":
+            labels_path = HERE / "plugins" / slug / "mention-labels.js"
+            labels_source = labels_path.read_text()
+            manifest["description"] = (
+                "Shows usernames for unresolved user mentions in messages, bot log embeds, replies, forwards and components. "
+                "Tap a mention to open the user's profile."
+            )
+            for old, new in (
+                ("function createPlugin(V) {", labels_source + "\nfunction createPlugin(V) {"),
+                ("let autoScanner, mentionTaps,", "let autoScanner, mentionTaps, mentionLabels,"),
+                ("onResolved: refresh", "onResolved: () => { refresh(); mentionLabels?.refresh(); }"),
+                ("if (!active || storage.autoResolve === false || !message) return;\n        if (!ensureResolver()) return;",
+                 "if (!active || !message) return;"),
+                ("for (const id of extractMentionIds(message)) if (autoIds.size < 100) autoIds.add(id);",
+                 "const ids = extractMentionIds(message);\n"
+                 "        mentionLabels?.observe(message.id, channel, ids);\n"
+                 "        if (storage.autoResolve === false || !ensureResolver()) return;\n"
+                 "        for (const id of ids) if (autoIds.size < 100) autoIds.add(id);"),
+                ("function installMentionTaps(V, { isActive, open }) {",
+                 "function installMentionTaps(V, { isActive, open, decorateLabel }) {"),
+                ("if (!live() || typeof element?.props?.onTapMention !== 'function') return element;\n"
+                 "        return V.metro.common.React.cloneElement(element, { onTapMention: wrap(element.props.onTapMention) });",
+                 "if (!live()) return element;\n"
+                 "        if (typeof element?.props?.onTapMention === 'function') {\n"
+                 "            element = V.metro.common.React.cloneElement(element, { onTapMention: wrap(element.props.onTapMention) });\n"
+                 "        }\n"
+                 "        return decorateLabel(element);"),
+                ("mentionTaps = installMentionTaps(V, { isActive: () => active, open: openMention });",
+                 "mentionLabels = installValidUserLabels(V, { users, getChannel: () => selected?.getChannelId?.(),\n"
+                 "                getAccount: () => !loggedOut && users.getCurrentUser?.()?.id,\n"
+                 "                autoResolve: () => storage.autoResolve !== false,\n"
+                 "                lookup: id => { if (ensureResolver()) void resolver.resolve(id).catch(() => {}); } });\n"
+                 "            mentionTaps = installMentionTaps(V, { isActive: () => active, open: openMention,\n"
+                 "                decorateLabel: mentionLabels.decorate });"),
+                ("tapSequence++; pendingTap = null; mentionTaps?.stop(); mentionTaps = null;",
+                 "tapSequence++; pendingTap = null; mentionTaps?.stop(); mentionTaps = null;\n"
+                 "        mentionLabels?.stop(); mentionLabels = null;"),
+                (r'${result.status === "resolved" ? "\n\nIf the old mention stays visible, switch channels and return." : ""}', ""),
+                (". If a resolved mention has not redrawn, switch channels and return.", "."),
+                ("Runs automatically when Revenge starts, messages load, you switch channels, or you return to the app.",
+                 "Shows usernames in messages and bot logs as mentions resolve."),
+            ):
+                if transformed.count(old) != 1:
+                    raise RuntimeError("ValidUser mention label integration needs updating")
+                transformed = transformed.replace(old, new)
         factory = "function(vendetta, setTimeout, clearTimeout, setInterval, clearInterval) { return (\n" + transformed + "\n); }"
         script = "(() => {\n" + plugin_runtime + "\nreturn { default: createValencedPlugin(" + factory + ", " + json.dumps(metadata, ensure_ascii=False) + ") };\n})()\n"
         if shortcut:
@@ -320,6 +365,11 @@ def build(check=False):
             source_info[manifest["id"]]["profileComponents"] = {
                 "path": profile_path.relative_to(ROOT).as_posix(),
                 "sha256": hashlib.sha256(profile_source.encode()).hexdigest(),
+            }
+        if slug == "valid-user":
+            source_info[manifest["id"]]["mentionLabels"] = {
+                "path": labels_path.relative_to(ROOT).as_posix(),
+                "sha256": hashlib.sha256(labels_source.encode()).hexdigest(),
             }
         if slug == "hide-blocked-and-ignored-messages":
             for name, path, content in (("settings", settings_path, settings_source), ("previews", previews_path, previews_source)):
