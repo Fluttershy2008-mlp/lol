@@ -60,7 +60,7 @@
 
 **Scrollbar 1.0.0-beta1:** optional side scrollbar for long message histories, with left/right position, thumb size, colour and inverted scroll support. Other scrollable screens can be enabled experimentally. Native chat views that do not expose compatible scrolling methods may not support the handle. Refresh the repository, install Scrollbar, then restart Discord. Android handset testing is still required.
 
-**ValidUser 1.0.0-beta5** shows `@username` when Discord resolves a raw user mention in messages, bot log embeds, replies, forwards or component text. The plugin refreshes the affected chat rows and keeps mentions tappable. Discord still controls which accounts it returns. Refresh the repo, update ValidUser and fully restart Discord.
+**ValidUser 1.0.0-beta6** also labels user mentions inside verification embeds. The plugin can display the handle supplied by the bot when the `User` and `User ID` fields agree and Discord has yet to return the account. Resolved mentions still show `@username` in bot logs, messages, replies, forwards and component text. Refresh the repo, update ValidUser and fully restart Discord.
 
 **Rainbow Dash · Sonic Collage 1.1.0:** new bundled Rainbow Dash collage wallpaper, sky-blue/navy colours, rainbow accents, a darker Clear Chat option and matching Sonic/Clear font packs. Refresh the repo, update Rainbow Dash, restart Discord, then choose the theme under **Themes → Colors** and **Rainbow Dash · Sonic** under **Fonts**. [Setup and credits](themes/rainbow-dash/README.md).
 

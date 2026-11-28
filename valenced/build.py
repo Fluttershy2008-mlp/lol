@@ -312,7 +312,7 @@ def build(check=False):
                  "if (!active || !message) return;"),
                 ("for (const id of extractMentionIds(message)) if (autoIds.size < 100) autoIds.add(id);",
                  "const ids = extractMentionIds(message);\n"
-                 "        mentionLabels?.observe(message.id, channel, ids);\n"
+                 "        mentionLabels?.observe(message, channel, ids);\n"
                  "        if (storage.autoResolve === false || !ensureResolver()) return;\n"
                  "        for (const id of ids) if (autoIds.size < 100) autoIds.add(id);"),
                 ("function installMentionTaps(V, { isActive, open }) {",

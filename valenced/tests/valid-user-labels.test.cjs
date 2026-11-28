@@ -11,6 +11,14 @@ const mention = (id = USER, extra = {}) => ({ type: 'mention', parsedUserId: id,
     content: [{ type: 'text', content: `<@${id}>` }], ...extra });
 const label = ast => ast[0].content[0].content;
 const row = message => ({ type: 1, changeType: 0, message: { id: LOG, channelId: CHANNEL, ...message } });
+const text = content => ({ type: 'text', content });
+function verification(value, id = USER) {
+    return { type: 'rich', title: [text('Verification Approved')], fields: [
+        { rawName: 'User', rawValue: `submitted_user\n(<@${USER}>)`, name: [text('User')], value },
+        { name: [text('User ID')], value: [text(id)] },
+        { name: [text('Score')], value: [text('4/4')] },
+    ] };
+}
 async function advance(w, duration) {
     for (let elapsed = 0; elapsed < duration; elapsed += 50) {
         await w.advance(50);
@@ -117,6 +125,60 @@ test('a denied lookup leaves its native label in place and does not block the ot
     assert.equal(resolved[1].content[0].content, '@second.user');
     assert.equal(f.w.calls.filter(([kind]) => kind === 'http').length, 2);
     assert.deepEqual(f.w.toasts, []);
+});
+
+test('an already-rendered verification embed uses its paired User and User ID fields even when profile lookup fails', async t => {
+    const f = fixture(t, () => ({ status: 404, body: {} }));
+    const token = mention();
+    const embed = verification([text('submitted_user\n('), token, text(')')]);
+    const original = row({ embeds: [embed] });
+    f.w.messages.push({ id: LOG, channel_id: CHANNEL, embeds: [{ fields: [
+        { name: 'User', value: `submitted_user\n(<@${USER}>)` },
+        { name: 'User ID', value: USER },
+    ] }] });
+    await f.w.start('valid-user');
+    f.mount(original);
+    await advance(f.w, 200);
+    assert.equal(f.redraws.length, 1);
+    const rendered = f.nativeRows[0].message.embeds[0].fields;
+    assert.equal(rendered[0].value[1].content[0].content, '@submitted_user');
+    assert.equal(rendered[0].value[1].parsedUserId, USER);
+    assert.equal(rendered[0].value[1].userId, undefined);
+    assert.equal(rendered[0].rawValue, embed.fields[0].rawValue);
+    assert.equal(rendered[1], embed.fields[1]);
+    assert.equal(rendered[2], embed.fields[2]);
+    assert.equal(token.content[0].content, `<@${USER}>`);
+    assert.equal(f.w.users[USER], undefined);
+    assert.equal(f.w.calls.some(([kind, data]) => kind === 'dispatch' && data.type === 'USER_UPDATE'), false);
+    f.w.users[USER] = { id: USER, username: 'current_user' };
+    f.w.stores.UserStore.emitChange();
+    await advance(f.w, 100);
+    const updated = f.nativeRows.at(-1).message.embeds[0].fields[0].value[1];
+    assert.equal(updated.content[0].content, '@current_user');
+    assert.equal(updated.userId, USER);
+});
+
+test('verification display also covers literal mention tokens and prefers a username from Discord', async t => {
+    const { w, chat } = fixture(t);
+    w.users[USER] = { id: USER, username: 'current_user' };
+    await w.start('valid-user', { autoResolve: false });
+    const fields = [text('submitted_user\n('), { type: 'inlineCode', content: `<@${USER}>` }, text(')')];
+    const original = row({ embeds: [verification(fields), verification(`submitted_user\n(<@!${USER}>)`)] });
+    const rendered = chat.createRow(original).message.embeds;
+    assert.equal(rendered[0].fields[0].value[1].content, '@current_user');
+    assert.equal(rendered[0].fields[0].value[1].type, 'inlineCode');
+    assert.equal(rendered[1].fields[0].value, 'submitted_user\n(@current_user)');
+    assert.equal(fields[1].content, `<@${USER}>`);
+});
+
+test('a mismatched or ambiguous verification ID never supplies a label to a mention', async t => {
+    const { w, chat } = fixture(t);
+    await w.start('valid-user', { autoResolve: false });
+    const value = [text('submitted_user\n('), mention(), text(')')];
+    const ambiguous = verification(value);
+    ambiguous.fields.push({ name: [text('User ID')], value: [text(OTHER)] });
+    const mismatched = row({ embeds: [verification(value, OTHER), ambiguous], content: [mention()] });
+    assert.equal(chat.createRow(mismatched), mismatched);
 });
 
 test('a mounted native text display updates its serialized AST without replacing its tap behavior', async t => {

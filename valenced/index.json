@@ -3020,11 +3020,24 @@
               "version": "*"
             }
           }
+        },
+        "1.0.0-beta6": {
+          "url": "https://raw.githubusercontent.com/Fluttershy2008-mlp/lol/main/valenced/pool/dev.fluttershy2008.valid-user@1.0.0-beta6.zip",
+          "sha256": "813452c185d21328696a4269f1adfc06b9d116402754854015825571aefe4d81",
+          "size": 28237,
+          "dependencies": {
+            "valenced.api": {
+              "version": ">=1 <2"
+            },
+            "discord": {
+              "version": "*"
+            }
+          }
         }
       },
       "channels": {
-        "latest": "1.0.0-beta5",
-        "beta": "1.0.0-beta5"
+        "latest": "1.0.0-beta6",
+        "beta": "1.0.0-beta6"
       },
       "name": "ValidUser (Valenced)",
       "description": "Shows usernames for unresolved user mentions in messages, bot log embeds, replies, forwards and components. Tap a mention to open the user's profile.",

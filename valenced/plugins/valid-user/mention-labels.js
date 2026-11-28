@@ -1,3 +1,33 @@
+function verificationFieldText(node, depth = 0) {
+    if (depth > 8 || node == null) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(child => verificationFieldText(child, depth + 1)).join('');
+    if (node.type === 'br' || node.type === 'newline') return '\n';
+    return verificationFieldText(node.content, depth + 1);
+}
+
+function verificationFieldHint(fields) {
+    if (!Array.isArray(fields)) return;
+    let userField, idField;
+    for (const field of fields) {
+        const label = verificationFieldText(field?.rawName ?? field?.name).trim().toLowerCase();
+        if (label === 'user') {
+            if (userField) return;
+            userField = field;
+        } else if (label === 'user id') {
+            if (idField) return;
+            idField = field;
+        }
+    }
+    if (!userField || !idField) return;
+    const id = verificationFieldText(idField.rawValue ?? idField.value).trim();
+    if (!validId(id)) return;
+    const handleAndMention = /^@?([a-z0-9._]{2,32})\s*\(\s*`?<@!?([1-9]\d{16,19})>`?\s*\)$/i;
+    const match = handleAndMention.exec(verificationFieldText(userField.rawValue).trim())
+        ?? handleAndMention.exec(verificationFieldText(userField.value).trim());
+    if (match?.[2] === id) return { field: userField, id, name: match[1] };
+}
+
 // Project names into Discord's native render data, leaving cached ASTs and messages intact.
 function projectValidUserLabels(model, username) {
     const mentionToken = /<@!?([1-9]\d{16,19})>/g;
@@ -7,23 +37,32 @@ function projectValidUserLabels(model, username) {
     const literalBranches = new Set(['embeds', 'fields', 'components', 'footer', 'accessory']);
     const opaqueNodes = new Set(['text', 'inlineCode', 'codeBlock', 'code', 'link', 'url', 'autolink']);
 
-    function visit(node, literal, depth) {
+    function replaceTokens(text, hint) {
+        if (typeof text !== 'string' || !text.includes('<@')) return text;
+        return text.replace(mentionToken, (token, id) => {
+            if (hint && id !== hint.id) return token;
+            const name = username(id) ?? hint?.name;
+            return name ? '@' + name : token;
+        });
+    }
+
+    function visit(node, literal, depth, hint) {
         if (depth > 24 || node == null) return node;
-        if (typeof node === 'string') {
-            return literal && node.includes('<@') ? node.replace(mentionToken, (token, id) => {
-                const name = username(id);
-                return name ? '@' + name : token;
-            }) : node;
-        }
+        if (typeof node === 'string') return literal ? replaceTokens(node, hint) : node;
         if (typeof node !== 'object') return node;
         if (Array.isArray(node)) {
             let updated;
             node.forEach((child, index) => {
-                const next = visit(child, literal, depth + 1);
+                const next = visit(child, literal, depth + 1, hint);
                 if (next !== child) (updated ??= node.slice())[index] = next;
             });
             return updated ?? node;
         }
+        if (hint?.field === node) {
+            const value = visit(node.value, true, depth + 1, { id: hint.id, name: hint.name });
+            return value === node.value ? node : { ...node, value };
+        }
+        if (hint?.field) hint = undefined;
         if (node.type === 'mention') {
             if (node.roleId != null || node.roleName != null) return node;
             const id = node.parsedUserId ?? node.userId;
@@ -31,8 +70,16 @@ function projectValidUserLabels(model, username) {
             if (!validId(id) || !Array.isArray(node.content) || node.content.length !== 1 || label?.type !== 'text') return node;
             // Preserve names Discord already rendered, including guild nicknames.
             if (node.userId && label.content !== `<@${id}>` && label.content !== `<@!${id}>`) return node;
-            const name = username(id);
-            return name ? { ...node, userId: id, content: [{ ...label, content: '@' + name }] } : node;
+            const resolved = username(id);
+            const name = resolved ?? (id === hint?.id ? hint.name : undefined);
+            if (!name) return node;
+            // An embed label is useful even if Discord won't return the profile.
+            // Keep its existing parsed user ID and let profile taps resolve normally.
+            return { ...node, ...(resolved ? { userId: id } : {}), content: [{ ...label, content: '@' + name }] };
+        }
+        if (hint && (node.type === 'text' || node.type === 'inlineCode')) {
+            const content = replaceTokens(node.content, hint);
+            return content === node.content ? node : { ...node, content };
         }
         if (opaqueNodes.has(node.type)) return node;
 
@@ -42,7 +89,8 @@ function projectValidUserLabels(model, username) {
             // Plain display fields can contain literal tokens, but AST text nodes are
             // already parsed and may be escaped Markdown or examples.
             const value = node[key];
-            const next = visit(value, literal || literalBranches.has(key), depth + 1);
+            const next = visit(value, literal || literalBranches.has(key), depth + 1,
+                key === 'fields' ? verificationFieldHint(value) : hint);
             if (next !== value) (updated ??= { ...node })[key] = next;
         }
         return updated ?? node;
@@ -92,9 +140,15 @@ function installValidUserLabels(V, { users, getChannel, getAccount, autoResolve,
             if (syncSession()) {
                 const changed = new Set();
                 for (const [id, entry] of rows) {
-                    if (entry.signature !== signature(entry.ids) && (entry.signature != null || hasName(entry.ids))) changed.add(id);
+                    if (entry.signature !== signature(entry.ids)
+                        && (entry.signature != null || entry.hasVerificationLabel || hasName(entry.ids))) changed.add(id);
                 }
-                redraw(changed);
+                if (redraw(changed)) {
+                    for (const id of changed) {
+                        const entry = rows.get(id);
+                        if (entry?.signature == null) entry.signature = signature(entry.ids);
+                    }
+                }
             }
             const ids = [...pending];
             pending.clear();
@@ -112,10 +166,13 @@ function installValidUserLabels(V, { users, getChannel, getAccount, autoResolve,
         if (rows.size >= 400 && !rows.has(id)) rows.delete(rows.keys().next().value);
         rows.set(id, entry);
     }
-    function observe(id, channel, ids) {
+    function observe(message, channel, ids) {
+        const id = message.id;
         if (!ids.length || !syncSession() || channel !== channelId || !validId(id) || rows.has(id)) return;
-        remember(id, { ids });
-        if (hasName(ids)) schedule();
+        const hasVerificationLabel = Array.isArray(message.embeds)
+            && message.embeds.some(embed => verificationFieldHint(embed.fields));
+        remember(id, { ids, hasVerificationLabel });
+        if (hasVerificationLabel || hasName(ids)) schedule();
     }
     function projectRow(row, depth = 0) {
         if (depth > 8 || !row) return row;
@@ -127,11 +184,12 @@ function installValidUserLabels(V, { users, getChannel, getAccount, autoResolve,
         const model = row.message, ids = new Set();
         const next = projectValidUserLabels(model, id => { ids.add(id); return username(id); });
         if (syncSession() && model.channelId === channelId && validId(model.id)) {
-            const observed = [...ids], prior = rows.get(model.id), key = signature(observed);
-            if (ids.size || prior) remember(model.id, { ids: observed, signature: key, projected: next !== model });
+            const observed = [...ids], prior = rows.get(model.id), key = signature(observed), projected = next !== model;
+            if (ids.size || prior) remember(model.id, { ids: observed, signature: key, projected });
             queue(observed);
             // Native chat can reuse a NOOP row even when its rendered mention changed.
-            if (row.changeType === 0 && (next !== model || prior?.projected) && prior?.signature !== key) {
+            if (row.changeType === 0 && (projected || prior?.projected)
+                && (prior?.signature !== key || prior?.projected !== projected)) {
                 return { ...row, message: next, changeType: 2 };
             }
         }

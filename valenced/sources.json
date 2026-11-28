@@ -166,7 +166,7 @@
       "kind": "compatibility-preview",
       "mentionLabels": {
         "path": "valenced/plugins/valid-user/mention-labels.js",
-        "sha256": "43bfa78fe7e163b0f67540fa185e29dceeafafede4d5d33ccd17b41db345eae8"
+        "sha256": "981cfd377aae05ffcb6bfd126dc505e2dcdb8629e36f01216fbc20854f3067d3"
       },
       "sourceRef": "main"
     },
